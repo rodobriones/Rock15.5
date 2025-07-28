@@ -227,7 +227,18 @@ namespace Rock.Lava.Fluid
         {
             if ( _templateOptions == null )
             {
-                _templateOptions = new TemplateOptions();
+                /*
+                     7/25/2025 - NA
+
+                     Resolved a failing unit test (LavaDataDictionary_WithKeysDifferingOnlyByCase_ReturnsMatchingValueForKey)
+                     by setting ModelNamesComparer to StringComparer.Ordinal. According to Fluid's documentation, this should enable
+                     case-sensitive key matching, but the change did not have the expected effect so I asked here:
+                     https://github.com/sebastienros/fluid/pull/681#issuecomment-2891948387
+                     and they fixed that bug in Fluid v2.25.
+
+                     Reason: Investigating Fluid behavior related to case-sensitive dictionary key resolution.
+                */
+                _templateOptions = new TemplateOptions { ModelNamesComparer = StringComparer.Ordinal };
 
                 // Re-register the basic Liquid filters implemented by Fluid using CamelCase rather than the default snakecase.
                 HideSnakeCaseFilters( _templateOptions );
@@ -643,11 +654,37 @@ namespace Rock.Lava.Fluid
                 encoder = NullEncoder.Default;
             }
 
+            /*
+                 7/25/2025 - NA
+
+                 We were calling a recently obsoleted Render method: template.Render( templateContext.FluidContext, encoder, writer )
+                 In an attempt to replace that with another recommended method, we discovered it causes the integration tests
+                 listed below to fail:
+                
+                 result.Text = template.Render( templateContext.FluidContext, encoder, false );
+
+                   - ReturnTag_AtRootLevel_TerminatesRenderingImmediately
+                   - ReturnTag_InForLoop_TerminatesDocumentRenderImmediately
+                   - ReturnTag_InNestedBlock_TerminatesRenderingImmediately
+
+                 Alternatively, we might be able to use this other RenderAsync method, but we would need to decide if
+                 the isolateContext should be true or false in Rock:
+                    var task = template.RenderAsync( writer, templateContext.FluidContext, encoder, isolateContext: ???);
+
+                 Reason: See https://github.com/sebastienros/fluid/issues/811 and
+                         [Obsolete("Use Render(this IFluidTemplate template, TextWriter writer, TemplateContext context, TextEncoder encoder) instead. This method will be removed in a future version.")]
+            */
+
             using ( var writer = new StringWriter( sb ) )
             {
                 try
                 {
-                    template.Render( templateContext.FluidContext, encoder, writer );
+                    // template.Render( templateContext.FluidContext, encoder, writer ); <-- This is now Obsolete.
+                    var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
+                    if ( !task.IsCompletedSuccessfully )
+                    {
+                        task.AsTask().GetAwaiter().GetResult();
+                    }
 
                     writer.Flush();
                     result.Text = sb.ToString();

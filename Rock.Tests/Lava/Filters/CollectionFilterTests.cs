@@ -36,6 +36,26 @@ namespace Rock.Tests.Lava.Filters
         List<string> _TestOrderedList = new List<string>() { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
         List<string> _TestDuplicateStringList = new List<string>() { "Item 1", "Item 2 (duplicate)", "Item 2 (duplicate)", "Item 2 (duplicate)", "Item 3" };
 
+        /// <summary>
+        /// Verifies the resolution of Issue #6281 (https://github.com/SparkDevNetwork/Rock/issues/6281)
+        /// </summary>
+        [TestMethod]
+        public void ForLoop_IndexAndRIndex_CorrectValues()
+        {
+            var template = @"
+{%- assign fruits = 'A, B, C' | Split: ', ' -%}
+{% for item in fruits %}
+    {{ item }} - index: {{ forloop.index }}, index0: {{ forloop.index0 }}, rindex: {{ forloop.rindex }}, rindex0: {{ forloop.rindex0 }}, first: {{ forloop.first }}, last: {{ forloop.last }}.
+{% endfor %}
+";
+            var expectedOutput = @"
+A - index: 1, index0: 0, rindex: 3, rindex0: 2, first: true, last: false.
+B - index: 2, index0: 1, rindex: 2, rindex0: 1, first: false, last: false.
+C - index: 3, index0: 2, rindex: 1, rindex0: 0, first: false, last: true.
+";
+            TestHelper.AssertTemplateOutput( typeof( FluidEngine ), expectedOutput, template, ignoreWhitespace: true );
+        }
+
         [TestMethod]
         public void Compact_DocumentationExample_ProducesExpectedOutput()
         {

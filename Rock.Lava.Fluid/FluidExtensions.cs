@@ -238,11 +238,15 @@ namespace Rock.Lava.Fluid
             }
             else if ( value is ArrayValue )
             {
-                var fieldInfo = value.GetType().GetField( "_value", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance );
+                /*
+                     7/25/2025 - NA
 
-                var values = ( IEnumerable<FluidValue> ) fieldInfo.GetValue( value );
+                     Changed to this after updating Fluid to v2.25 in order to correct a series of broken unit tests,
+                     such as AddToArray_AddToStringCollection_AppendsNewItem and others affected by internal behavior changes.
 
-                return values.Select( a => a.ToRealObjectValue() ).ToList();
+                     Reason: Align with Fluid v2.25 updates and restore unit test compatibility.
+                */
+                return ( ( ArrayValue ) value ).Values.Select( a => a.ToRealObjectValue() ).ToList();
             }
             else if ( value is NumberValue nv )
             {

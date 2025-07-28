@@ -170,6 +170,7 @@ namespace Rock.Lava.Blocks
 
             newContext.SetMergeFields( context.GetMergeFields() );
             newContext.SetInternalFields( context.GetInternalFields() );
+            newContext.SetEnabledCommands( context.GetEnabledCommands() );
 
             // Resolve the inner template.
             var result = engine.RenderTemplate( lavaTemplate, LavaRenderParameters.WithContext( newContext ) );

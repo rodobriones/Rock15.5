@@ -33,6 +33,7 @@
     <PackageReference Include="EF6.TagWith" Version="1.2.1" />
     <PackageReference Include="EntityFramework" Version="6.4.4" />
     <PackageReference Include="FirebaseAdmin" Version="2.4.0" />
+    <PackageReference Include="Fluid.Core" Version="2.25.0" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="2.4.0" />
     <PackageReference Include="Hashids.net" Version="1.4.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.4.9.5" />
@@ -87,7 +88,7 @@
     <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
     <PackageReference Include="System.Text.Json" Version="9.0.6" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
-    <PackageReference Include="TimeZoneConverter" Version="6.0.1" />
+    <PackageReference Include="TimeZoneConverter" Version="7.0.0" />
     <PackageReference Include="Twilio" Version="5.1.0" />
     <PackageReference Include="UAParser" Version="3.1.44" />
     <PackageReference Include="xxHashSharp" Version="1.0.0" />

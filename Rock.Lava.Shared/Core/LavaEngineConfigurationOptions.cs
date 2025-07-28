@@ -65,5 +65,10 @@ namespace Rock.Lava
         /// Gets or sets a flag indicating if dynamic shortcodes should be imported from the target database.
         /// </summary>
         public bool InitializeDynamicShortcodes { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if the Liquid {% liquid %} tag should be allowed in templates.
+        /// </summary>
+        public bool AllowLiquidTag { get; set; } = true;
     }
 }

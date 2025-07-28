@@ -535,6 +535,52 @@ WELCOME TO THE LAVA TAG
             TestHelper.AssertTemplateOutput( typeof( FluidEngine ), expectedOutput, template, ignoreWhitespace: true );
         }
 
+        [TestMethod]
+        public void LavaTag_WithInnerForLoopAndContinue()
+        {
+            // The Lava/Liquid tag can span multiple lines, so we need to ensure that the open/close tokens are correctly detected.
+            var source = @"
+{% lava 
+    for i in (1..5)
+        if i > 3
+            continue
+        endif
+        echo i
+    endfor
+%}";
+
+            var expectedOutput = @"
+123
+";
+            TestHelper.ExecuteForActiveEngines( ( engine ) =>
+            {
+                TestHelper.AssertTemplateOutput( engine, expectedOutput, source, ignoreWhitespace: true );
+            } );
+        }
+
+        [TestMethod]
+        public void LavaTag_WithOuterForLoopAndContinue()
+        {
+            // The Lava/Liquid tag can span multiple lines, so we need to ensure that the open/close tokens are correctly detected.
+            var source = @"
+{%- for i in (1..5) -%}
+    {%- lava 
+        if i > 3
+            continue
+        endif
+        echo i
+    -%}
+{%- endfor -%}";
+
+            var expectedOutput = @"
+123
+";
+            TestHelper.ExecuteForActiveEngines( ( engine ) =>
+            {
+                TestHelper.AssertTemplateOutput( engine, expectedOutput, source, ignoreWhitespace: true );
+            } );
+        }
+
         #endregion
 
         #region Raw Tag

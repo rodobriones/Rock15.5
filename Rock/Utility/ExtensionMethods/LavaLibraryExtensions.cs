@@ -518,10 +518,9 @@ namespace Rock
 
                 var context = LavaService.NewRenderContext();
 
-                context.SetEnabledCommands( enabledLavaCommands, "," );
-
                 context.SetMergeField( "CurrentPerson", currentPersonOverride );
                 context.SetMergeFields( mergeObjects );
+                context.SetEnabledCommands( enabledLavaCommands, "," );
 
                 var result = LavaService.RenderTemplate( content, LavaRenderParameters.WithContext( context ) );
 
