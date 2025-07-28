@@ -734,6 +734,9 @@ Guess 3 was 0.5 from the target number!<br>
 
         /// <summary>
         /// Valid numeric values should return a numeric result.
+        /// Previously, "3.0" Times "2.0" would produce "6.00" but this change in Fluid
+        /// appears to try to match Shopify's precison behavior: 
+        /// https://github.com/sebastienros/fluid/commit/818062a0d41d175fd5c8d309f2397286b9fd2635
         /// </summary>
         [DataTestMethod]
         [DataRow( "3", "2", "6" )]
