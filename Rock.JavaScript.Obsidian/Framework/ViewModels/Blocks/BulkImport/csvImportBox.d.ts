@@ -21,8 +21,13 @@
 // </copyright>
 //
 
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
 /** The initialization data for the Bulk Import Tool block. */
 export type CsvImportBox = {
     /** Gets or sets the Encrypted Root Folder. */
     rootFolder?: string | null;
+
+    /** Gets or sets the list of previous sources for the import. */
+    sources?: ListItemBag[] | null;
 };

@@ -111,6 +111,10 @@ namespace Rock.Blocks.BulkImport
             var box = new CsvImportBox();
 
             box.RootFolder = Rock.Security.Encryption.EncryptString( GetSlingshotRootFolder() );
+            box.Sources = new PersonService( this.RockContext )
+                    .GetForeignKeys()
+                    .Select( foreignKey => new ListItemBag { Text = foreignKey, Value = foreignKey } )
+                    .ToList();
 
             return box;
         }

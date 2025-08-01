@@ -17,39 +17,44 @@
                     <hr class="section-header-hr">
                 </div>
 
-                <DropDownList label="Data Type" :items="dataTypes" />
+                <DropDownList v-model="dataType" label="Data Type" :items="dataTypes" :showBlankItem="false" />
 
                 <!-- v-if choose old source -->
-                <template v-if="true">
-                    <RadioButtonList ID="rblpreviousSourceDescription"
-                                     Label="Previous Source Descriptions"
-                                     RepeatDirection="Horizontal"
-                                     Required="true"
-                                     Help="If you are importing data from a source that has already been run once, select the matching description below. Otherwise, if this is a different source than those shown, choose to add a new source description." />
+                <template v-if="usePreviousSourceDescription">
+                    <RadioButtonList v-model="selectedPreviousSourceDescription"
+                                     :items="previousSourceDescriptions"
+                                     label="Previous Source Descriptions"
+                                     horizontal
+                                     rules="required"
+                                     help="If you are importing data from a source that has already been run once, select the matching description below. Otherwise, if this is a different source than those shown, choose to add a new source description." />
 
-                    <RockButton :btnType="BtnType.Link" class="mb-4" @click="lbAddSourceDescription_Click">
+                    <RockButton :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = false">
                         <small>Add Additional Source Description</small>
                     </RockButton>
                 </template>
 
-                <!-- TODO v-if new source -->
-                <TextBox v-model="sourceDescription"
-                         label="Source Description"
-                         help="Describe where this data came from. We'll store what you type as a setting so if you import data from this system again we'll be able to match people you've already imported. (e.g.: 'former-chms', 'mailchimp', etc.)" />
+                <template v-else>
+                    <TextBox v-model="typedSourceDescription"
+                             label="Source Description"
+                             help="Describe where this data came from. We'll store what you type as a setting so if you import data from this system again we'll be able to match people you've already imported. (e.g.: 'former-chms', 'mailchimp', etc.)" />
 
-                <!-- TODO v-if -->
-                <RockButton :btnType="BtnType.Link" class="mb-4" @cllick="lbChooseSourceDescription_Click">
-                    <small>Choose Previous Source Description</small>
-                </RockButton>
+                    <!-- TODO v-if -->
+                    <RockButton :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = true">
+                        <small>Choose Previous Source Description</small>
+                    </RockButton>
+                </template>
 
                 <Rock:NotificationBox v-if="errorsInFile" class="mt-4" alertType="danger" />
 
-                <FileUploader formGroupCssClass="mt-4"
-                              OnFileUploaded="fupCSVFile_FileUploaded"
-                              OnFileRemoved="fupCSVFile_FileRemoved"
-                              RootFolder="~/App_Data/SlingshotFiles"
-                              IsBinaryFile="false"
-                              label="CSV File" />
+                <FileUploader v-model="importFile"
+                              formGroupCssClass="mt-4"
+                              label="CSV File"
+                              :isBinaryFile="false"
+                              :rootFolder="config.rootFolder ?? ''"
+                              :uploadAsTemporary="false"
+                              :allowMultipleUploads="false"
+                              @update:modelValue="onFileUploaded"
+                              @fileRemoved="onFileRemoved" />
 
                 <CheckBox v-model="allowUpdatingExistingRecords"
                           formGroupCssClass="mt-4"
@@ -167,14 +172,15 @@
 </template>
 
 <script setup lang="ts">
-    import { ref } from "vue";
+    import { computed, ref } from "vue";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import FileUploader from "@Obsidian/Controls/fileUploader.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
-    import { useConfigurationValues, useInvokeBlockAction, useBlockActionUrl } from "@Obsidian/Utility/block";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { CsvImportBox } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportBox";
     import Panel from "@Obsidian/Controls/panel.obs";
     import { BtnType } from "@Obsidian/Enums/Controls/btnType";
@@ -190,22 +196,16 @@
     // #region Values
 
     const errorMessage = ref("");
-    const foreignSystemKey = ref("");
-    const foreignSystemKeyInfo = ref<{ alertType: string; message: string; details?: string; } | null>(null);
-    const slingshotFile = ref<ListItemBag | null>(null);
+
+    const importFile = ref<ListItemBag | null>(null);
     const slingshotFileInfo = ref("");
     const additionalFilesInfo = ref("");
     const importUpdateType = ref("AlwaysUpdate");
-    const showAdditionalNotes = ref(false);
-    const progressMessage = ref("");
     const showActions = ref(false);
     const showNotificationBox = ref<boolean>(false);
     const notificationMessageType = ref<string>("info");
     const notificationMessage = ref<string>("");
-    const panelTitle = ref<string>("Bulk Import Tool");
-    const blockActionUrl = useBlockActionUrl();
     const slingshotFullPath = ref<string>("");
-    const showForeignSystemDetails = ref<boolean>(false);
 
     const importProgressMessage = ref<string>("");
     const importProgressResults = ref<string>("");
@@ -213,6 +213,18 @@
     const isImporting = ref<boolean>(false);
 
     const dataTypes = ref<ListItemBag[]>([{ value: "People", text: "People" }]);
+    const dataType = ref<string | undefined | null>(dataTypes.value[0].value);
+
+    const previousSourceDescriptions = config.sources ?? undefined;
+    const selectedPreviousSourceDescription = ref<string | undefined>(previousSourceDescriptions?.length ? previousSourceDescriptions[0].value ?? undefined : undefined);
+    const typedSourceDescription = ref<string>("");
+    const usePreviousSourceDescription = ref<boolean>((previousSourceDescriptions?.length ?? 0) > 0);
+    const selectedSourceDescription = computed(() => {
+        return usePreviousSourceDescription.value ? selectedPreviousSourceDescription.value ?? "" : typedSourceDescription.value;
+    });
+
+    const allowUpdatingExistingRecords = ref<boolean>(true);
+
 
     let realTimeConnectionId = "";
 
@@ -393,7 +405,7 @@
     }
 
     async function startImport(importType: string): Promise<void> {
-        if (!slingshotFile.value) {
+        if (!importFile.value) {
             errorMessage.value = "Please select a slingshot file.";
             return;
         }

@@ -15,6 +15,10 @@
 // </copyright>
 //
 
+using System.Collections.Generic;
+
+using Rock.ViewModels.Utility;
+
 namespace Rock.ViewModels.Blocks.BulkImport
 {
     /// <summary>
@@ -27,5 +31,10 @@ namespace Rock.ViewModels.Blocks.BulkImport
         /// Gets or sets the Encrypted Root Folder.
         /// </summary>
         public string RootFolder { get; set; }
+
+        /// <summary>
+        /// Gets or sets the list of previous sources for the import.
+        /// </summary>
+        public List<ListItemBag> Sources { get; set; } = new List<ListItemBag>();
     }
 }
