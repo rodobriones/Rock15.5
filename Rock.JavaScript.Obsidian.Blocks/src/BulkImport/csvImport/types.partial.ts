@@ -23,4 +23,10 @@ export type StepOneResults = {
     allowUpdatingExistingRecords: boolean;
     importFile: ListItemBag;
     csvColumns: string[];
+    personFieldOptions: ListItemBag[];
+    recordCount: number;
+};
+
+export type StepTwoResults = {
+    columnMappings: Record<string, string>;
 };

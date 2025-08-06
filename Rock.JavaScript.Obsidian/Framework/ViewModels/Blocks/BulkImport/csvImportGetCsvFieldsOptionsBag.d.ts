@@ -25,7 +25,4 @@
 export type CsvImportGetCsvFieldsOptionsBag = {
     /** Gets or sets the name of the file to be read. */
     fileName?: string | null;
-
-    /** Gets or sets the encrypted root folder path where the file to be read resides. */
-    rootFolder?: string | null;
 };

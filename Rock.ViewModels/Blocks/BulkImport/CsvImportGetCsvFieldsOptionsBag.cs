@@ -23,11 +23,6 @@ namespace Rock.ViewModels.Blocks.BulkImport
     public class CsvImportGetCsvFieldsOptionsBag
     {
         /// <summary>
-        /// Gets or sets the encrypted root folder path where the file to be read resides.
-        /// </summary>
-        public string RootFolder { get; set; }
-
-        /// <summary>
         /// Gets or sets the name of the file to be read.
         /// </summary>
         public string FileName { get; set; }

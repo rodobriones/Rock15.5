@@ -21,16 +21,8 @@
 // </copyright>
 //
 
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
-
-/** The request parameters for starting a bulk import. */
-export type CsvImportGetCsvFieldsResultsBag = {
-    /** Gets or sets the encrypted root folder path where the file to be deleted resides. */
-    csvColumns?: string[] | null;
-
-    /** Gets or sets the name of the file to be deleted. */
-    personFields?: ListItemBag[] | null;
-
-    /** Number of rows of data in the CSV file. */
-    recordCount: number;
+/** The request parameters for validating whether the mappings between */
+export type CsvImportValidateMappingsOptionsBag = {
+    /** A map of column names (the key) to the name of the Person field (the value) that the column should be mapped to. */
+    columnMappings?: Record<string, string> | null;
 };

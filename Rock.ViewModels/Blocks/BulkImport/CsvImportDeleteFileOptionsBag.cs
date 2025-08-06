@@ -23,11 +23,6 @@ namespace Rock.ViewModels.Blocks.BulkImport
     public class CsvImportDeleteFileOptionsBag
     {
         /// <summary>
-        /// Gets or sets the encrypted root folder path where the file to be deleted resides.
-        /// </summary>
-        public string RootFolder { get; set; }
-
-        /// <summary>
         /// Gets or sets the name of the file to be deleted.
         /// </summary>
         public string FileName { get; set; }

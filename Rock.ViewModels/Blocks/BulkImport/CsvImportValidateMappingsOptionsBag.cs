@@ -17,28 +17,16 @@
 
 using System.Collections.Generic;
 
-using Rock.ViewModels.Utility;
-
 namespace Rock.ViewModels.Blocks.BulkImport
 {
     /// <summary>
-    /// The request parameters for starting a bulk import.
+    /// The request parameters for validating whether the mappings between
     /// </summary>
-    public class CsvImportGetCsvFieldsResultsBag
+    public class CsvImportValidateMappingsOptionsBag
     {
         /// <summary>
-        /// Gets or sets the encrypted root folder path where the file to be deleted resides.
+        /// A map of column names (the key) to the name of the Person field (the value) that the column should be mapped to.
         /// </summary>
-        public List<string> CsvColumns { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name of the file to be deleted.
-        /// </summary>
-        public List<ListItemBag> PersonFields { get; set; }
-
-        /// <summary>
-        /// Number of rows of data in the CSV file.
-        /// </summary>
-        public int RecordCount { get; set; }
+        public Dictionary<string, string> ColumnMappings { get; set; }
     }
 }

@@ -16,6 +16,7 @@
 //
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -34,6 +35,7 @@ using Rock.Utility;
 using Rock.ViewModels.Blocks.BulkImport;
 using Rock.ViewModels.Utility;
 using Rock.Web;
+using Rock.Web.Cache;
 
 namespace Rock.Blocks.BulkImport
 {
@@ -77,12 +79,79 @@ namespace Rock.Blocks.BulkImport
 
         #endregion Keys
 
+        /// <summary>
+        /// The properties that should be mapped to by fields in the csv. Not having one of these fields mapped to a csv column will result in an error
+        /// </summary>
+        private static readonly string[] requiredFields = {
+            CSVHeaders.FamilyId,
+            CSVHeaders.FamilyRole,
+            CSVHeaders.FirstName,
+            CSVHeaders.Id,
+            CSVHeaders.LastName
+        };
+
+        /// <summary>
+        /// It is optional to map these properties to a column in the csv.
+        /// </summary>
+        private static readonly string[] optionalFields = {
+            CSVHeaders.AnniversaryDate,
+            CSVHeaders.Birthdate,
+            CSVHeaders.CampusId,
+            CSVHeaders.CampusName,
+            CSVHeaders.ConnectionStatus,
+            CSVHeaders.CreatedDateTime,
+            CSVHeaders.Email,
+            CSVHeaders.EmailPreference,
+            CSVHeaders.Gender,
+            CSVHeaders.GiveIndividually,
+            CSVHeaders.Grade,
+            CSVHeaders.HomeAddressCity,
+            CSVHeaders.HomeAddressCountry,
+            CSVHeaders.HomeAddressPostalCode,
+            CSVHeaders.HomeAddressState,
+            CSVHeaders.HomeAddressStreet1,
+            CSVHeaders.HomeAddressStreet2,
+            CSVHeaders.HomePhone,
+            CSVHeaders.InactiveReason,
+            CSVHeaders.IsDeceased,
+            CSVHeaders.IsSMSEnabled,
+            CSVHeaders.MaritalStatus,
+            CSVHeaders.MiddleName,
+            CSVHeaders.MobilePhone,
+            CSVHeaders.ModifiedDateTime,
+            CSVHeaders.NickName,
+            CSVHeaders.Note,
+            CSVHeaders.RecordStatus,
+            CSVHeaders.TitleValueId,
+            CSVHeaders.Suffix
+        };
+
+        private static readonly HashSet<string> allowedPeronsAttributeFieldTypeClassNames = new HashSet<string> { "Rock.Field.Types.TextFieldType",
+            "Rock.Field.Types.BooleanFieldType",
+            "Rock.Field.Types.IntegerFieldType",
+            "Rock.Field.Types.DateFieldType"
+        };
+
+        private const string ROCK_ATTRIBUTES_OPTION_NAME = "Attributes";
+        private const string FIELD_OPTION_NAME = "Field";
+
         #region Methods
 
         /// <inheritdoc/>
         public override object GetObsidianBlockInitialization()
         {
             var box = GetBoxOptions();
+
+            // delete all the csv files in the root directory on start up to ensure that no residual files are present before the upload
+            string directoryPath = GetSlingshotPhysicalRootFolder();
+            try
+            {
+                Directory.EnumerateFiles( directoryPath, "*.csv" ).ToList().ForEach( f => File.Delete( f ) );
+            }
+            catch ( Exception )
+            {
+                // Ignore. Not much can be done about it.
+            }
 
             return box;
         }
@@ -95,8 +164,6 @@ namespace Rock.Blocks.BulkImport
         {
             string virtualPath = "~/App_Data/SlingshotFiles";
             string physicalPath = HostingEnvironment.MapPath( virtualPath );
-            //string physicalRootFolder = AppDomain.CurrentDomain.BaseDirectory;
-            //string physicalPath = Path.Combine( physicalRootFolder, "App_Data", "SlingshotFiles" );
 
             if ( !Directory.Exists( physicalPath ) )
             {
@@ -104,6 +171,15 @@ namespace Rock.Blocks.BulkImport
             }
 
             return virtualPath;
+        }
+
+        /// <summary>
+        /// Gets the root folder physical path for slingshot files.
+        /// </summary>
+        /// <returns>The physical path to the slingshot files directory.</returns>
+        private string GetSlingshotPhysicalRootFolder()
+        {
+            return HostingEnvironment.MapPath( GetSlingshotRootFolder() ).TrimEnd( '/' ) + "/";
         }
 
         /// <summary>
@@ -123,19 +199,14 @@ namespace Rock.Blocks.BulkImport
             return box;
         }
 
-        private string GetFilePath( string encryptedPath, string fileName )
+        private string GetCsvFilePath( string fileName )
         {
-            var folder = HostingEnvironment.MapPath( Rock.Security.Encryption.DecryptString( encryptedPath ).TrimEnd( '/' ) + "/" );
-            return folder + fileName;
+            return GetSlingshotPhysicalRootFolder() + fileName;
         }
 
-        private void DeleteFile( string encryptedPath, string fileName )
+        private void DeleteCsvFile( string fileName )
         {
-            DeleteFile( GetFilePath( encryptedPath, fileName ) );
-        }
-
-        private void DeleteFile( string fullPath )
-        {
+            var fullPath = GetCsvFilePath( fileName );
             try
             {
                 if ( File.Exists( fullPath ) )
@@ -149,32 +220,65 @@ namespace Rock.Blocks.BulkImport
             }
         }
 
+        private List<ListItemBag> CreateListItemBagsDropDown()
+        {
+            var rockAttributeArray = AttributeCache.GetPersonAttributes( allowedPeronsAttributeFieldTypeClassNames )
+                .Select( attribute => new ListItemBag { Text = attribute.Name, Value = attribute.Key } ) // attribute key is used by the Slingshot Importer to map the attributes.
+                .ToList();
+
+            foreach ( ListItemBag rockAttribute in rockAttributeArray )
+            {
+                rockAttribute.Category = ROCK_ATTRIBUTES_OPTION_NAME;
+            }
+
+            ListItemBag[] requiredFieldslistItems = requiredFields.Select( name => new ListItemBag { Text = name, Value = name } )
+                .ToArray();
+            foreach ( ListItemBag listItem in requiredFieldslistItems )
+            {
+                listItem.Category = FIELD_OPTION_NAME;
+            }
+
+            ListItemBag[] optionalFieldslistItems = optionalFields.Select( name => new ListItemBag { Text = name, Value = name } )
+                .ToArray();
+            foreach ( ListItemBag listItem in optionalFieldslistItems )
+            {
+                listItem.Category = FIELD_OPTION_NAME;
+            }
+
+            return requiredFieldslistItems
+                .Concat( optionalFieldslistItems )
+                .Concat( rockAttributeArray )
+                .ToList();
+        }
+
         #endregion
 
         #region Block Actions
 
-
         /// <summary>
         /// Deletes a file from the slingshot root folder. Should be called when the "remove" button is clicked on the file uploader
         /// </summary>
-        /// <param name="options">Data on the file location and name</param>
+        /// <param name="options">Data about the file</param>
         [BlockAction]
         public BlockActionResult DeleteFile( CsvImportDeleteFileOptionsBag options )
         {
-            DeleteFile( options.RootFolder, options.FileName );
+            DeleteCsvFile( options.FileName );
             return ActionOk();
         }
 
-
+        /// <summary>
+        /// Get data about the uploaded CSV file, including the column names and number of rows.
+        /// </summary>
+        /// <param name="options">Data about the file</param>
         [BlockAction]
         public BlockActionResult GetCsvFields( CsvImportGetCsvFieldsOptionsBag options )
         {
-            if ( options.RootFolder.IsNullOrWhiteSpace() || options.FileName.IsNullOrWhiteSpace() || !options.FileName.EndsWith( ".csv" ) )
+            if ( options.FileName.IsNullOrWhiteSpace() || !options.FileName.EndsWith( ".csv" ) )
             {
                 return ActionBadRequest( "Please select a valid CSV file." );
             }
 
-            var csvFileName = GetFilePath( options.RootFolder, options.FileName );
+            var csvFileName = GetCsvFilePath( options.FileName );
 
             if ( !File.Exists( csvFileName ) )
             {
@@ -220,7 +324,7 @@ namespace Rock.Blocks.BulkImport
             }
             catch ( Exception )
             {
-                DeleteFile( csvFileName );
+                DeleteCsvFile( options.FileName );
                 return ActionBadRequest( "An error occurred while parsing the CSV file. Refresh the page and try again." );
             }
 
@@ -228,9 +332,30 @@ namespace Rock.Blocks.BulkImport
             {
                 CsvColumns = fieldHeaders.ToList(),
                 RecordCount = recordsCount,
+                PersonFields = CreateListItemBagsDropDown()
             } );
         }
 
+        /// <summary>
+        /// Validates the column mappings to ensure all required fields are mapped.
+        /// </summary>
+        /// <param name="options">A map of column names (the key) to the name of the Person field (the value) that the column should be mapped to.</param>
+        [BlockAction]
+        public BlockActionResult ValidateMappings( CsvImportValidateMappingsOptionsBag options )
+        {
+            bool containsAllRequiredFields = options.ColumnMappings
+                .Values
+                .ToHashSet()
+                .IsSupersetOf( requiredFields );
+
+            if ( !containsAllRequiredFields )
+            {
+                var missingRequiredFields = requiredFields.Except( options.ColumnMappings.Values );
+                return ActionBadRequest( "Not all required fields have been mapped. Please provide mappings for: \n" + string.Join( ", ", missingRequiredFields ) );
+            }
+
+            return ActionOk();
+        }
 
         /// <summary>
         /// Starts the import process.
@@ -399,111 +524,6 @@ namespace Rock.Blocks.BulkImport
             }
         }
 
-        /// <summary>
-        /// Checks if a foreign system key has been used before.
-        /// </summary>
-        /// <param name="foreignSystemKey">The foreign system key to check.</param>
-        /// <returns>Information about the foreign system key usage.</returns>
-        [BlockAction]
-        public BlockActionResult CheckForeignSystemKey( string foreignSystemKey )
-        {
-            if ( string.IsNullOrWhiteSpace( foreignSystemKey ) )
-            {
-                return ActionBadRequest( "Foreign system key is required." );
-            }
-
-            var tableList = Rock.Slingshot.BulkImporter.TablesThatHaveForeignSystemKey( foreignSystemKey );
-            var foreignSystemKeyList = BulkImporter.UsedForeignSystemKeys();
-
-            var result = new
-            {
-                HasBeenUsed = tableList.Any(),
-                Tables = tableList,
-                UsedKeys = foreignSystemKeyList
-            };
-
-            return ActionOk( result );
-        }
-
-        /// <summary>
-        /// Handles the Click event of the Download Log Button.
-        /// </summary>
-        [BlockAction]
-        public BlockActionResult DownloadLog()
-        {
-            string physicalRootFolder = AppDomain.CurrentDomain.BaseDirectory;
-            string slingshotFilesDir = Path.Combine( physicalRootFolder, "App_Data", "SlingshotFiles" );
-            string filePath = Path.Combine( slingshotFilesDir, "slingshot-errors.log" );
-
-            if ( !Directory.Exists( slingshotFilesDir ) )
-            {
-                Directory.CreateDirectory( slingshotFilesDir );
-            }
-
-            var ms = new MemoryStream();
-            if ( File.Exists( filePath ) )
-            {
-                using ( var fileStream = new FileStream( filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ) )
-                {
-                    fileStream.CopyTo( ms );
-                }
-            }
-            ms.Seek( 0, SeekOrigin.Begin );
-
-            return new FileBlockActionResult( ms, "text/plain", "slingshot-errors.log" );
-        }
-
-        [BlockAction]
-        public BlockActionResult GetFileInfo( string filePath )
-        {
-            if ( string.IsNullOrWhiteSpace( filePath ) )
-            {
-                return ActionBadRequest( "File path is required." );
-            }
-
-            string physicalRootFolder = AppDomain.CurrentDomain.BaseDirectory;
-            string slingshotFilesDir = Path.Combine( physicalRootFolder, "App_Data", "SlingshotFiles" );
-            string physicalFilePath = Path.Combine( slingshotFilesDir, Path.GetFileName( filePath ) );
-
-            if ( !File.Exists( physicalFilePath ) )
-            {
-                return ActionBadRequest( "File not found." );
-            }
-
-            FileInfo fileInfo = new FileInfo( physicalFilePath );
-            var result = new
-            {
-                fileName = fileInfo.Name,
-                size = Math.Round( ( decimal ) fileInfo.Length / 1024 / 1024, 2 ),
-                createdDateTime = fileInfo.CreationTime.ToString(),
-                fullPath = fileInfo.FullName
-            };
-
-            return ActionOk( result );
-        }
-
-        [BlockAction]
-        public BlockActionResult GetImageFiles( string prefix )
-        {
-            if ( string.IsNullOrWhiteSpace( prefix ) )
-            {
-                return ActionBadRequest( "File prefix is required." );
-            }
-
-            string physicalRootFolder = AppDomain.CurrentDomain.BaseDirectory;
-            string slingshotFilesDir = Path.Combine( physicalRootFolder, "App_Data", "SlingshotFiles" );
-
-            if ( !Directory.Exists( slingshotFilesDir ) )
-            {
-                return ActionOk( new string[] { } );
-            }
-
-            var imageFiles = Directory.EnumerateFiles( slingshotFilesDir, prefix + "*.images.slingshot" )
-                                    .Select( path => Path.GetFileName( path ) )
-                                    .ToList();
-
-            return ActionOk( imageFiles );
-        }
 
         #endregion
     }

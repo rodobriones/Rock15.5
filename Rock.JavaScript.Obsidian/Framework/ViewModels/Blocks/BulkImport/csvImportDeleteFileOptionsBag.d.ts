@@ -25,7 +25,4 @@
 export type CsvImportDeleteFileOptionsBag = {
     /** Gets or sets the name of the file to be deleted. */
     fileName?: string | null;
-
-    /** Gets or sets the encrypted root folder path where the file to be deleted resides. */
-    rootFolder?: string | null;
 };

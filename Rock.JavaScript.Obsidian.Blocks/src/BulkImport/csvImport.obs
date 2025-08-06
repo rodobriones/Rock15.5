@@ -1,45 +1,68 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <Panel title="CSV Import" class="panel panel-block">
-        <!-- TODO v-if main page-->
-        <StepOne v-if="step === 1" :config="config" @stepFinished="onStepOneFinished" />
+        <StepOne v-if="step === 1"
+                 :config="config"
+                 @stepFinished="onStepOneFinished" />
+        <StepTwo v-else-if="step === 2"
+                 :config="config"
+                 :csvColumns="csvColumns"
+                 :personFieldOptions="personFieldOptions"
+                 :recordCount="recordCount"
+                 @stepFinished="onStepTwoFinished" />
     </Panel>
 </template>
 
 <script setup lang="ts">
     import { computed, ref, watch } from "vue";
     import Panel from "@Obsidian/Controls/panel.obs";
-    import StepOne from "./stepOne.partial.obs";
+    import StepOne from "./csvImport/stepOne.partial.obs";
+    import StepTwo from "./csvImport/stepTwo.partial.obs";
     import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { CsvImportBox } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportBox";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import { getTopic } from "@Obsidian/Utility/realTime";
     import { TaskActivityProgressStatusBag } from "@Obsidian/ViewModels/Utility/taskActivityProgressStatusBag";
-    import { StepOneResults } from "./csvImport/types.partial";
+    import { StepOneResults, StepTwoResults } from "./csvImport/types.partial";
 
     const config = useConfigurationValues<CsvImportBox>();
     const invokeBlockAction = useInvokeBlockAction();
 
     const step = ref<number>(1);
 
+    // #region Step 1
+
     const dataType = ref<string>("");
     const sourceDescription = ref<string>("");
     const allowUpdatingExistingRecords = ref<boolean>(false);
     const importFile = ref<ListItemBag>();
     const csvColumns = ref<string[]>([]);
+    const personFieldOptions = ref<ListItemBag[]>([]);
+    const recordCount = ref<number>();
 
     let realTimeConnectionId: string = "";
 
     function onStepOneFinished(data: StepOneResults): void {
-        dataType.value = data.dataType as string;
-        sourceDescription.value = data.sourceDescription as string;
-        allowUpdatingExistingRecords.value = data.allowUpdatingExistingRecords as boolean;
-        importFile.value = data.importFile as ListItemBag;
-        csvColumns.value = data.csvColumns as string[];
+        dataType.value = data.dataType;
+        sourceDescription.value = data.sourceDescription;
+        allowUpdatingExistingRecords.value = data.allowUpdatingExistingRecords;
+        importFile.value = data.importFile;
+        csvColumns.value = data.csvColumns;
+        personFieldOptions.value = data.personFieldOptions;
+        recordCount.value = data.recordCount;
         step.value = 2;
     }
 
+    // #endregion
 
+    // #region Step 2
+
+    function onStepTwoFinished(data: StepTwoResults): void {
+        console.debug("Step two finished:", data.columnMappings);
+        step.value = 3;
+    }
+
+    // #endregion
 
 
     /**
