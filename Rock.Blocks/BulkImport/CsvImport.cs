@@ -23,6 +23,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Web.Hosting;
 
+using CsvHelper;
+
 using Rock.Attribute;
 using Rock.Model;
 using Rock.RealTime;
@@ -93,6 +95,8 @@ namespace Rock.Blocks.BulkImport
         {
             string virtualPath = "~/App_Data/SlingshotFiles";
             string physicalPath = HostingEnvironment.MapPath( virtualPath );
+            //string physicalRootFolder = AppDomain.CurrentDomain.BaseDirectory;
+            //string physicalPath = Path.Combine( physicalRootFolder, "App_Data", "SlingshotFiles" );
 
             if ( !Directory.Exists( physicalPath ) )
             {
@@ -119,9 +123,114 @@ namespace Rock.Blocks.BulkImport
             return box;
         }
 
+        private string GetFilePath( string encryptedPath, string fileName )
+        {
+            var folder = HostingEnvironment.MapPath( Rock.Security.Encryption.DecryptString( encryptedPath ).TrimEnd( '/' ) + "/" );
+            return folder + fileName;
+        }
+
+        private void DeleteFile( string encryptedPath, string fileName )
+        {
+            DeleteFile( GetFilePath( encryptedPath, fileName ) );
+        }
+
+        private void DeleteFile( string fullPath )
+        {
+            try
+            {
+                if ( File.Exists( fullPath ) )
+                {
+                    File.Delete( fullPath );
+                }
+            }
+            catch
+            {
+                // Just Ignore
+            }
+        }
+
         #endregion
 
         #region Block Actions
+
+
+        /// <summary>
+        /// Deletes a file from the slingshot root folder. Should be called when the "remove" button is clicked on the file uploader
+        /// </summary>
+        /// <param name="options">Data on the file location and name</param>
+        [BlockAction]
+        public BlockActionResult DeleteFile( CsvImportDeleteFileOptionsBag options )
+        {
+            DeleteFile( options.RootFolder, options.FileName );
+            return ActionOk();
+        }
+
+
+        [BlockAction]
+        public BlockActionResult GetCsvFields( CsvImportGetCsvFieldsOptionsBag options )
+        {
+            if ( options.RootFolder.IsNullOrWhiteSpace() || options.FileName.IsNullOrWhiteSpace() || !options.FileName.EndsWith( ".csv" ) )
+            {
+                return ActionBadRequest( "Please select a valid CSV file." );
+            }
+
+            var csvFileName = GetFilePath( options.RootFolder, options.FileName );
+
+            if ( !File.Exists( csvFileName ) )
+            {
+                return ActionBadRequest( "CSV file not found." );
+            }
+
+            string[] fieldHeaders;
+            int recordsCount = 0;
+
+            try
+            {
+                // get the headers -- this needs to be moved to CSVReader class
+                using ( StreamReader csvFileStream = File.OpenText( csvFileName ) )
+                {
+                    CsvReader csvReader = new CsvReader( csvFileStream );
+                    csvReader.Configuration.HasHeaderRecord = true;
+                    csvReader.Read();
+                    fieldHeaders = csvReader.FieldHeaders;
+                    string duplicateHeadersList = fieldHeaders.GroupBy( fh => fh )
+                        .Where( g => g.Count() > 1 )
+                        .Select( y => y.Key )
+                        .ToList()
+                        .AsDelimited( ", ", " and " );
+                    bool headerContainsDuplicate = !string.IsNullOrEmpty( duplicateHeadersList );
+                    if ( headerContainsDuplicate )
+                    {
+                        return ActionBadRequest( $"The file has duplicated headers: {duplicateHeadersList}. Please fix it and upload again." );
+                    }
+                }
+
+                // get the number of records in the csv file -- this needs to be moved to CSVReader class
+                using ( StreamReader csvFileStream = File.OpenText( csvFileName ) )
+                {
+                    while ( csvFileStream.ReadLine() != null )
+                    {
+                        ++recordsCount;
+                    }
+                    if ( recordsCount > 0 )
+                    {
+                        recordsCount--;
+                    }
+                }
+            }
+            catch ( Exception )
+            {
+                DeleteFile( csvFileName );
+                return ActionBadRequest( "An error occurred while parsing the CSV file. Refresh the page and try again." );
+            }
+
+            return ActionOk( new CsvImportGetCsvFieldsResultsBag
+            {
+                CsvColumns = fieldHeaders.ToList(),
+                RecordCount = recordsCount,
+            } );
+        }
+
 
         /// <summary>
         /// Starts the import process.

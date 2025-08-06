@@ -1,236 +1,46 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-
-    <Panel title="CSV Import" class="panel panel-block" hasCollapse><!-- TODO remove hasCollapse-->
-
-        <!-- TODO: dismissable? Move? -->
-        <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
-
+    <Panel title="CSV Import" class="panel panel-block">
         <!-- TODO v-if main page-->
-        <div class="row">
-            <div class="col-md-7">
-                <div class="rock-header">
-                    <h3 class="title">Comma Separated File Import</h3>
-                    <span class="description">The first step is to upload your comma delimited file. We'll then allow you to map the columns to fields in Rock. The first
-                        row of your file must contain headers for each column.
-                    </span>
-                    <hr class="section-header-hr">
-                </div>
-
-                <DropDownList v-model="dataType" label="Data Type" :items="dataTypes" :showBlankItem="false" />
-
-                <!-- v-if choose old source -->
-                <template v-if="usePreviousSourceDescription">
-                    <RadioButtonList v-model="selectedPreviousSourceDescription"
-                                     :items="previousSourceDescriptions"
-                                     label="Previous Source Descriptions"
-                                     horizontal
-                                     rules="required"
-                                     help="If you are importing data from a source that has already been run once, select the matching description below. Otherwise, if this is a different source than those shown, choose to add a new source description." />
-
-                    <RockButton :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = false">
-                        <small>Add Additional Source Description</small>
-                    </RockButton>
-                </template>
-
-                <template v-else>
-                    <TextBox v-model="typedSourceDescription"
-                             label="Source Description"
-                             help="Describe where this data came from. We'll store what you type as a setting so if you import data from this system again we'll be able to match people you've already imported. (e.g.: 'former-chms', 'mailchimp', etc.)" />
-
-                    <!-- TODO v-if -->
-                    <RockButton :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = true">
-                        <small>Choose Previous Source Description</small>
-                    </RockButton>
-                </template>
-
-                <Rock:NotificationBox v-if="errorsInFile" class="mt-4" alertType="danger" />
-
-                <FileUploader v-model="importFile"
-                              formGroupCssClass="mt-4"
-                              label="CSV File"
-                              :isBinaryFile="false"
-                              :rootFolder="config.rootFolder ?? ''"
-                              :uploadAsTemporary="false"
-                              :allowMultipleUploads="false"
-                              @update:modelValue="onFileUploaded"
-                              @fileRemoved="onFileRemoved" />
-
-                <CheckBox v-model="allowUpdatingExistingRecords"
-                          formGroupCssClass="mt-4"
-                          label="Allow Updating Existing Matched Records"
-                          help="When enabled, records in the database that match the imported data (first name, last name, and email) will be updated. Otherwise, only new records will be added." />
-
-                <RockButton class="btn btn-primary mt-3" @click="btnStart_Click">Start</RockButton>
-            </div>
-            <div class="col-md-5">
-                <div class="well">
-                    <h4 class="mt-0 mb-1">Required Fields </h4>
-                    When uploading data about people you'll need to include the following information. These should be separate columns on your CSV
-                    file. The name of the field doesn't matter as you'll be able to map it later.
-
-                    <ol>
-                        <li>Id - Some form of unique identifier for the person. This should come from your former system.</li>
-                        <li>Family Id - This field should be an unique value for each family. This tells us who is in the same family.</li>
-                        <li>Family Role - This column should have the values of Adult or Child.</li>
-                        <li>First Name - The individual's first name.</li>
-                        <li>Last Name - The individual's last name.</li>
-                    </ol>
-
-                    <h4 class="mt-4 mb-1">Optional Fields</h4>
-                    <p>You may optionally add the following fields.</p>
-
-                    <ol>
-                        <li>Nick Name - The individual's nick name.</li>
-                        <li>Middle Name - The individual's middle name.</li>
-                        <li>Suffix - The person's suffix.
-                            <br />
-                            <asp:Label ID="lsuffixlist" runat="server" />
-                        </li>
-                        <li>Home Phone - The individual's home phone number.
-                            <br />
-                            (480-555-1234)
-                        </li>
-                        <li>Mobile Phone - The individuals's mobile phone number.
-                            <br />
-                            (480-555-1234)
-                        </li>
-                        <li>Is SMS Enabled - Whether the individual allows SMS messages to be sent to them. (True,False)</li>
-                        <li>Email - The individual's email address.</li>
-                        <li>Email Preference - The permissions you have been granted to email the individual.
-                            <br />
-                            <asp:Label ID="lemailPreferenceList" runat="server" />
-                        </li>
-                        <li>Gender - The gender of the individual.
-                            <br />
-                            <asp:Label ID="lgenderList" runat="server" />
-                        </li>
-                        <li>Marital Status - The marital status of the individual.
-                            <br />
-                            <asp:Label ID="lmaritalStatusList" runat="server" />
-                        </li>
-                        <li>Birthdate - The individual's birthdate. </li>
-                        <li>Anniversary Date - The marriage anniversary date of the individual.</li>
-                        <li>Record Status - Whether the person is active or not.
-                            <br />
-                            <asp:Label ID="lrecordStatusList" runat="server" />
-                        </li>
-                        <li>Inactive Reason - The reason why the person is inactive.</li>
-                        <li>Is Deceased - Determines whether the person is deceased.
-                            <br />
-                            (True,False)
-                        </li>
-                        <li>Connection Status - The connection type the individual has to your organization. This must match the connection statuses you have in Rock.
-                            <br />
-                            <asp:Label ID="lconnectionStatusList" runat="server" />
-                        </li>
-                        <li>Grade - The grade of the individual.
-                            <br />
-                            <asp:Label ID="lgrade" runat="server" />
-                        </li>
-                        <li>Home Address Street 1 - The first line of their home street address.</li>
-                        <li>Home Address Street 2 - The second line of their home street address.</li>
-                        <li>Home Address City - The city of their home address.</li>
-                        <li>Home Address State - The state of their home address.
-                            <br />
-                            (CA, AZ, etc.)
-                        </li>
-                        <li>Home Address Postal Code - The postal code of their home address.</li>
-                        <li>Home Address Country - The country of their home address.
-                            <br />
-                            (US)
-                        </li>
-                        <li>Created Date Time - The date and time the record was originally created.
-                            <br />
-                            (1/1/2020 9:12:34 AM)
-                        </li>
-                        <li>Modified Date Time - The date and time the record was last modified.
-                            <br />
-                            (5/1/2020 9:12:34 AM)
-                        </li>
-                        <li>Note - A note that you would like to add to the person.</li>
-                        <li>Campus Id - The Rock campus id for the individual. Must supply the Campus Name if the Campus Id is given.</li>
-                        <li>Campus Name - The Rock campus name for the individual. Must supply the Campus Id if the Campus Name is given. This will update if it does not exist.</li>
-                        <li>Give Individually - Determines if the person gives with the family or as an individual.
-                            <br />
-                            (True, False)
-                        </li>
-                    </ol>
-
-                    <h4 class="mt-4 mb-1">Additional Fields</h4>
-                    <p>
-                        You can provide as many other additional fields as you'd like. We'll allow you to match these to attributes in
-                        Rock. You'll want to make sure that these Rock attributes exist.
-                    </p>
-                    <p>
-                        You can also choose to ignore columns on your CSV file.
-                    </p>
-                </div>
-            </div>
-        </div>
+        <StepOne v-if="step === 1" :config="config" @stepFinished="onStepOneFinished" />
     </Panel>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from "vue";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
-    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
-    import FileUploader from "@Obsidian/Controls/fileUploader.obs";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
-    import TextBox from "@Obsidian/Controls/textBox.obs";
-    import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import { computed, ref, watch } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import StepOne from "./stepOne.partial.obs";
     import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { CsvImportBox } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportBox";
-    import Panel from "@Obsidian/Controls/panel.obs";
-    import { BtnType } from "@Obsidian/Enums/Controls/btnType";
-    import { BtnSize } from "@Obsidian/Enums/Controls/btnSize";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import { getTopic } from "@Obsidian/Utility/realTime";
     import { TaskActivityProgressStatusBag } from "@Obsidian/ViewModels/Utility/taskActivityProgressStatusBag";
-    import { AlertType } from "@Obsidian/Enums/Controls/alertType";
+    import { StepOneResults } from "./csvImport/types.partial";
 
     const config = useConfigurationValues<CsvImportBox>();
     const invokeBlockAction = useInvokeBlockAction();
 
-    // #region Values
+    const step = ref<number>(1);
 
-    const errorMessage = ref("");
+    const dataType = ref<string>("");
+    const sourceDescription = ref<string>("");
+    const allowUpdatingExistingRecords = ref<boolean>(false);
+    const importFile = ref<ListItemBag>();
+    const csvColumns = ref<string[]>([]);
 
-    const importFile = ref<ListItemBag | null>(null);
-    const slingshotFileInfo = ref("");
-    const additionalFilesInfo = ref("");
-    const importUpdateType = ref("AlwaysUpdate");
-    const showActions = ref(false);
-    const showNotificationBox = ref<boolean>(false);
-    const notificationMessageType = ref<string>("info");
-    const notificationMessage = ref<string>("");
-    const slingshotFullPath = ref<string>("");
+    let realTimeConnectionId: string = "";
 
-    const importProgressMessage = ref<string>("");
-    const importProgressResults = ref<string>("");
-    const importAlertType = ref<AlertType>(AlertType.Info);
-    const isImporting = ref<boolean>(false);
-
-    const dataTypes = ref<ListItemBag[]>([{ value: "People", text: "People" }]);
-    const dataType = ref<string | undefined | null>(dataTypes.value[0].value);
-
-    const previousSourceDescriptions = config.sources ?? undefined;
-    const selectedPreviousSourceDescription = ref<string | undefined>(previousSourceDescriptions?.length ? previousSourceDescriptions[0].value ?? undefined : undefined);
-    const typedSourceDescription = ref<string>("");
-    const usePreviousSourceDescription = ref<boolean>((previousSourceDescriptions?.length ?? 0) > 0);
-    const selectedSourceDescription = computed(() => {
-        return usePreviousSourceDescription.value ? selectedPreviousSourceDescription.value ?? "" : typedSourceDescription.value;
-    });
-
-    const allowUpdatingExistingRecords = ref<boolean>(true);
+    function onStepOneFinished(data: StepOneResults): void {
+        dataType.value = data.dataType as string;
+        sourceDescription.value = data.sourceDescription as string;
+        allowUpdatingExistingRecords.value = data.allowUpdatingExistingRecords as boolean;
+        importFile.value = data.importFile as ListItemBag;
+        csvColumns.value = data.csvColumns as string[];
+        step.value = 2;
+    }
 
 
-    let realTimeConnectionId = "";
 
-    // #endregion
-
-    // #region Functions
 
     /**
      * Initialize the real-time engine and start monitoring for updates to the
@@ -247,205 +57,21 @@
             realTimeConnectionId = topic.connectionId ?? "";
         });
 
-        topic.on("taskStarted", onImportStarted);
-        topic.on("taskCompleted", onImportCompleted);
-        topic.on("updateTaskProgress", (data: TaskActivityProgressStatusBag) => {
-            if (data?.message) {
-                importProgressMessage.value = data.message;
-            }
-        });
-        topic.on("updateTaskLog", (data) => {
-            if (data?.message) {
-                importProgressResults.value = data.message;
-            }
+        topic.on("taskStarted", onRealtimeUpdate);
+        topic.on("taskCompleted", onRealtimeUpdate);
+        topic.on("updateTaskProgress", onRealtimeUpdate);
+        topic.on("updateTaskLog", onRealtimeUpdate);
+        topic.onMessage((...args) => {
+            console.debug("Real-time message received:", ...args);
         });
 
         realTimeConnectionId = topic.connectionId ?? "";
     }
 
-    function onImportStarted(_bag: TaskActivityProgressStatusBag): void {
-        isImporting.value = true;
-        importProgressMessage.value = "Starting import...";
-        importAlertType.value = AlertType.Info;
-        importProgressResults.value = "";
+    function onRealtimeUpdate(...args): void {
+        // Handle real-time updates
+        console.debug("Real-time update received:", ...args);
     }
-
-    function onImportCompleted(bag: TaskActivityProgressStatusBag): void {
-        isImporting.value = false;
-        importProgressMessage.value = bag.message || "Import completed";
-
-        if (bag.errors?.length) {
-            importAlertType.value = AlertType.Danger;
-            importProgressResults.value = bag.errors.join("\n");
-        }
-        else if (bag.warnings?.length) {
-            importAlertType.value = AlertType.Warning;
-            importProgressResults.value = bag.warnings.join("\n");
-        }
-        else {
-            importAlertType.value = AlertType.Info;
-        }
-    }
-
-    async function onCheckForeignSystemKey(): Promise<void> {
-        if (!foreignSystemKey.value) {
-            return;
-        }
-
-        const result = await invokeBlockAction<{ hasBeenUsed: boolean; tables: string[]; usedKeys: string[]; }>("CheckForeignSystemKey", {
-            foreignSystemKey: foreignSystemKey.value
-        });
-
-        if (result.isSuccess && result.data) {
-            let message = "";
-            let alertType = "default";
-
-            if (result.data.hasBeenUsed) {
-                message = `Foreign System Key <strong>${foreignSystemKey.value}</strong> has already been used. Import again to insert any new records that are detected, and update any person records that have changed.`;
-                alertType = "info";
-            }
-            else {
-                message = `OK. Foreign System Key <strong>${foreignSystemKey.value}</strong> has not been used to import data.`;
-                alertType = "success";
-            }
-
-            if (result.data.usedKeys.length > 0) {
-                if (message) {
-                    message += "<br /><br />";
-                }
-                message += "The following ForeignSystemKeys have been used from previous imports:<br /><br />" + result.data.usedKeys.join("<br />");
-            }
-            else {
-                if (message) {
-                    message += "<br /><br />";
-                }
-                message += "No ForeignSystemKeys have been used from previous imports";
-            }
-
-            message += "<br />";
-
-            foreignSystemKeyInfo.value = {
-                alertType,
-                message,
-                details: result.data.tables.join("<br />")
-            };
-
-            showNotificationBox.value = true;
-            notificationMessageType.value = alertType;
-            notificationMessage.value = message;
-        }
-        else {
-            errorMessage.value = result.errorMessage ?? "Unknown error while checking foreign system key.";
-        }
-    }
-
-    async function onFileUploaded(value: ListItemBag | undefined): Promise<void> {
-        if (!value?.text) {
-            slingshotFileInfo.value = "";
-            showActions.value = false;
-            return;
-        }
-
-        const fileName = value.text;
-        if (!fileName.toLowerCase().endsWith(".slingshot")) {
-            slingshotFileInfo.value = `<div class='alert alert-warning'>${fileName} is not a slingshot file. Please select a valid slingshot file.</div>`;
-            return;
-        }
-
-        if (fileName.toLowerCase().endsWith(".images.slingshot")) {
-            return;
-        }
-
-        const result = await invokeBlockAction<{ fileName: string; size: number; createdDateTime: string; extension: string; fullPath: string; }>("GetFileInfo", {
-            filePath: fileName
-        });
-
-        if (result.isSuccess && result.data) {
-            const date = new Date(result.data.createdDateTime);
-            const formattedDateTime = date.toLocaleString("en-US", {
-                month: "numeric",
-                day: "numeric",
-                year: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true
-            });
-
-            slingshotFileInfo.value = `<dl>
-                <dt>File Name</dt><dd>${result.data.fileName}</dd>
-                <dt>Date/Time</dt><dd>${formattedDateTime}</dd>
-                <dt>Size (MB)</dt><dd>${result.data.size.toFixed(2)}</dd>
-            </dl>`;
-
-            slingshotFullPath.value = result.data.fullPath;
-            showActions.value = true;
-
-            const mainFileNamePrefix = result.data.fileName.replace(".slingshot", "");
-            const imageFiles = await invokeBlockAction<string[]>("GetImageFiles", {
-                prefix: mainFileNamePrefix
-            });
-
-            if (imageFiles.isSuccess && imageFiles.data && imageFiles.data.length > 0) {
-                additionalFilesInfo.value = `<label>Additional Files</label>: ${imageFiles.data.join(", ")}`;
-            }
-            else {
-                additionalFilesInfo.value = "";
-            }
-        }
-        else {
-            slingshotFileInfo.value = `<div class='alert alert-warning'>Error getting file information: ${result.errorMessage}</div>`;
-            showActions.value = false;
-        }
-    }
-
-    function onFileRemoved(): void {
-        slingshotFileInfo.value = "";
-        additionalFilesInfo.value = "";
-        showActions.value = false;
-    }
-
-    async function startImport(importType: string): Promise<void> {
-        if (!importFile.value) {
-            errorMessage.value = "Please select a slingshot file.";
-            return;
-        }
-
-        if (!foreignSystemKey.value) {
-            errorMessage.value = "Please enter a foreign system key.";
-            return;
-        }
-
-        errorMessage.value = "";
-
-        const result = await invokeBlockAction("StartImport", {
-            request: {
-                ForeignSystemKey: foreignSystemKey.value,
-                SlingshotFilePath: slingshotFullPath.value,
-                ImportType: importType,
-                ImportUpdateType: importUpdateType.value,
-                SessionId: realTimeConnectionId
-            }
-        });
-
-        if (!result.isSuccess) {
-            errorMessage.value = result.errorMessage ?? "Unknown error while starting import.";
-            importAlertType.value = AlertType.Danger;
-        }
-    }
-
-    function onImport(): void {
-        startImport("Import");
-    }
-
-    function onImportPhotos(): void {
-        startImport("Photos");
-    }
-
-    // #endregion
-
-    // #region Event Handlers
-
-    // #endregion
 
     // Initialize real-time connection when component mounts
     startRealTime();
