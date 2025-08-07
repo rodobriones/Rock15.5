@@ -1458,3 +1458,8 @@ a.rock-bookmark {
   flex-direction: row-reverse;
   justify-content: flex-start;
 }
+
+.borderless-panel {
+  border: none;
+  border-radius: 0;
+}

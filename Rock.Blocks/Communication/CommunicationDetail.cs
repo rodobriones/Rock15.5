@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+using System.Text;
 
 using Rock.Attribute;
 using Rock.Constants;
@@ -28,6 +29,7 @@ using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
 using Rock.Security.SecurityGrantRules;
+using Rock.Tasks;
 using Rock.Utility;
 using Rock.ViewModels.Blocks.Communication.CommunicationDetail;
 using Rock.ViewModels.Controls;
@@ -651,7 +653,22 @@ namespace Rock.Blocks.Communication
 
                 RockContext.SaveChanges();
 
-                outcomeMessage = $"The {CommunicationFriendlyName} has been approved.";
+                var outcomeMessageSb = new StringBuilder( $"The {CommunicationFriendlyName} has been approved" );
+
+                if ( !communication.FutureSendDateTime.HasValue || communication.FutureSendDateTime.Value <= RockDateTime.Now )
+                {
+                    // Go ahead and send the communication.
+                    var processSendCommunicationMsg = new ProcessSendCommunication.Message
+                    {
+                        CommunicationId = communication.Id,
+                    };
+
+                    processSendCommunicationMsg.Send();
+
+                    outcomeMessageSb.Append( " and queued for sending" );
+                }
+
+                outcomeMessage = $"{outcomeMessageSb}.";
             }
             else
             {

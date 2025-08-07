@@ -1232,6 +1232,11 @@ a.rock-bookmark {
   justify-content: flex-start;
 }
 
+.borderless-panel {
+  border: none;
+  border-radius: 0;
+}
+
 /*# sourceMappingURL=theme.css.map */
 
 /* CSS Overrides Bottom Start */

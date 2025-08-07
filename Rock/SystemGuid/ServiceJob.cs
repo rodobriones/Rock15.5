@@ -533,5 +533,10 @@ namespace Rock.SystemGuid
         /// The job to run Post v18.0 Data Migrations to update the Nameless Locations.
         /// </summary>
         public const string DATA_MIGRATIONS_180_UPDATE_NAMELESS_LOCATIONS = "6C3EE640-A442-4F9C-92ED-23E353BA8509";
+
+        /// <summary>
+        /// The job for processing communication flows. <see cref="Rock.Jobs.ProcessCommunicationFlows"/>
+        /// </summary>
+        public const string PROCESS_COMMUNICATION_FLOWS = "8D79FB3B-F0B1-4B57-A8DA-EEE46B38A08B";
     }
 }

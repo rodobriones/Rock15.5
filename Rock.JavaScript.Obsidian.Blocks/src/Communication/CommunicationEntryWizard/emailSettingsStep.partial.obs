@@ -2,7 +2,7 @@
 <template>
     <div ref="emailSettingsStepElement"
          class="email-settings-step">
-        <Panel :hasFullscreen="true"
+        <Panel hasFullscreen
                panelBodyCssClass="panel-body-wizard"
                :title="title"
                type="block">

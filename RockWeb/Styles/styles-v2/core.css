@@ -309,6 +309,10 @@ th {
   --color-sequential-9: #AFEECB;
   --color-sequential-10: #C9F4DC;
   --color-sequential-11: #E4F9ED;
+  --color-gender-male-bg: #E8F3FC;
+  --color-gender-female-bg: #FCE8FA;
+  --color-gender-male-text: #1A8AE5;
+  --color-gender-female-text: #DE69C3;
   --font-size-xsmall: 12px;
   --font-size-small: 14px;
   --font-size-regular: 16px;
@@ -3172,11 +3176,24 @@ input[type=button].btn-block {
   color: var(--color-interface-strong);
   background-color: var(--color-interface-softer);
   transition: 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  --size: 32px;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  margin: 0 0 0 var(--spacing-small);
+  font-size: calc(var(--size) * 0.5);
+  transition: 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 @media (max-width: 768px) {
   .theme-toggle {
     font-size: 1em;
     padding: 6px;
+  }
+}
+@media (min-width: 768px) {
+  .theme-toggle {
+    --size: 40px;
+    padding: 20px;
   }
 }
 .theme-toggle:hover {
@@ -6670,7 +6687,7 @@ td.grid-col-actions {
 .grid-actions .btn-grid-action {
   padding: 5px 7px;
   margin: 0 0 0 2px;
-  font-size: var(--font-size-regular);
+  font-size: 20px;
   border: 0;
   box-shadow: none;
   transition: color 250ms;
@@ -30127,6 +30144,10 @@ tbody .collapse.in {
   line-height: 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.nav-item .ti {
+  font-size: 1.2em;
 }
 
 .fa-fw,

@@ -150,6 +150,9 @@
                         <i class="ti ti-clock align-self-center"></i>
                         {{ getFormattedDateTime(row.futureSendDateTime) }}
                     </template>
+                    <template v-else>
+                        {{ getFormattedDateTime(row.createdDateTime) }}
+                    </template>
                 </div>
             </template>
         </Column>
@@ -510,8 +513,11 @@
         if (r.sendDateTime) {
             return r.sendDateTime;
         }
+        else if (r.futureSendDateTime) {
+            return r.futureSendDateTime;
+        }
 
-        return r.futureSendDateTime ?? "";
+        return r.createdDateTime ?? "";
     }
 
     /**
@@ -525,8 +531,11 @@
         if (r.sendDateTime) {
             return getFormattedDateTime(r.sendDateTime);
         }
+        else if (r.futureSendDateTime) {
+            return getFormattedDateTime(r.futureSendDateTime);
+        }
 
-        return getFormattedDateTime(r.futureSendDateTime ?? "");
+        return getFormattedDateTime(r.createdDateTime ?? "");
     }
 
     /**

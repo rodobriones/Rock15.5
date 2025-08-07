@@ -16,7 +16,7 @@
 
         <div class="row">
             <div class="col-md-6">
-                <TextBox v-model="iconCssClass" label="Icon CSS Class" />
+                <IconPicker v-model="iconCssClass" label="Icon CSS Class" />
             </div>
             <div class="col-md-6">
                 <CategoryPicker v-model="category" label="Category" :entityTypeGuid="EntityType.GroupRequirementType" />
@@ -213,6 +213,7 @@
     import { BtnSize } from "@Obsidian/Enums/Controls/btnSize";
     import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
+    import IconPicker from "@Obsidian/Controls/iconPicker.obs";
 
     const props = defineProps({
         modelValue: {

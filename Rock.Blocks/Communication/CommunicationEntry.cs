@@ -1591,7 +1591,7 @@ namespace Rock.Blocks.Communication
 
             foreach ( var template in new CommunicationTemplateService( rockContext )
                 .Queryable().AsNoTracking()
-                .Where( a => a.IsActive )
+                .Where( a => a.IsActive && a.UsageType == null ) // By default, exclude templates with a specified usage type (e.g., Communication Flows)
                 .OrderBy( t => t.Name ) )
             {
                 if ( template == null || !template.IsAuthorized( Authorization.VIEW, currentPerson ) )

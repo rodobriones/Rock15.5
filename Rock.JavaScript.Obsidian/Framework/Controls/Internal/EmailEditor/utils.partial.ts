@@ -365,7 +365,7 @@ export function getComponentIconHtml(componentTypeName: EditorComponentTypeName)
         case "title":
             return createIconElement("ti ti-typography");
         case "video":
-            return createIconElement("ti");
+            return createIconElement("ti ti-player-play");
         case "button":
             return `
 <div style="background-color: var(--color-interface-strong); width: 60px; border-radius: var(--border-radius-base);">
@@ -1680,7 +1680,7 @@ export function getVideoComponentHelper(): ComponentMigrationHelper & {
 
                     // Create the v2-alpha structure
                     newComponent.innerHTML =
-`<tbody>
+                        `<tbody>
     <tr>
         <td>
             <table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" class="border-wrapper border-wrapper-for-video" style="border-collapse: separate !important;">

@@ -842,7 +842,7 @@ td.grid-col-actions {
   .btn-grid-action {
     padding:          5px 7px; // Need to hard coded so that the action btn in the group scheduler takes more space, for the "filter options" button to fit in 
     margin:           0 0 0 2px;
-    font-size:        var(--font-size-regular);
+    font-size:        20px;
     border:           0;
     box-shadow:       none;
     transition:       color 250ms;

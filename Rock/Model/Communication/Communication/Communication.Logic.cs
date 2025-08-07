@@ -1021,16 +1021,18 @@ INNER JOIN @DuplicateRecipients dr
                 return;
             }
 
-            // only alter the Recipient list if it the communication hasn't sent a message to any recipients yet
-            if ( communication.SendDateTime.HasValue == false )
+            // Only alter the recipient list if Rock hasn't already begun sending to recipients.
+            using ( var rockContext = new RockContext() )
             {
-                using ( var activity = ObservabilityHelper.StartActivity( "COMMUNICATION: Send > Prepare Recipient List" ) )
-                {
-                    activity?.AddTag( "rock.communication.id", communication.Id );
-                    activity?.AddTag( "rock.communication.name", communication.Name );
+                var hasSendingBegun = GetOrSetHasSendingBegun( communication.Id, rockContext );
 
-                    using ( var rockContext = new RockContext() )
+                if ( !communication.SendDateTime.HasValue && !hasSendingBegun )
+                {
+                    using ( var activity = ObservabilityHelper.StartActivity( "COMMUNICATION: Send > Prepare Recipient List" ) )
                     {
+                        activity?.AddTag( "rock.communication.id", communication.Id );
+                        activity?.AddTag( "rock.communication.name", communication.Name );
+
                         /*
                             1/2/2024 - JPH
 
@@ -1091,16 +1093,18 @@ INNER JOIN @DuplicateRecipients dr
                 return;
             }
 
-            // only alter the Recipient list if it the communication hasn't sent a message to any recipients yet
-            if ( communication.SendDateTime.HasValue == false )
+            // Only alter the recipient list if Rock hasn't already begun sending to recipients.
+            using ( var rockContext = new RockContext() )
             {
-                using ( var activity = ObservabilityHelper.StartActivity( "COMMUNICATION: Send Async > Prepare Recipient List" ) )
-                {
-                    activity?.AddTag( "rock.communication.id", communication.Id );
-                    activity?.AddTag( "rock.communication.name", communication.Name );
+                var hasSendingBegun = GetOrSetHasSendingBegun( communication.Id, rockContext );
 
-                    using ( var rockContext = new RockContext() )
+                if ( !communication.SendDateTime.HasValue && !hasSendingBegun )
+                {
+                    using ( var activity = ObservabilityHelper.StartActivity( "COMMUNICATION: Send Async > Prepare Recipient List" ) )
                     {
+                        activity?.AddTag( "rock.communication.id", communication.Id );
+                        activity?.AddTag( "rock.communication.name", communication.Name );
+
                         /*
                             1/2/2024 - JPH
 
@@ -1175,6 +1179,40 @@ INNER JOIN @DuplicateRecipients dr
 
                 rockContext.SaveChanges();
             }
+        }
+
+        /// <summary>
+        /// Gets whether Rock has already begun sending this communication to any of its recipients.
+        /// </summary>
+        /// <param name="communicationId">The communication identifier.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns>Whether Rock has already begun sending this communication to any of its recipients.</returns>
+        /// <remarks>
+        /// If sending hasn't already begun, one of the recipient's <see cref="CommunicationRecipient.FirstSendAttemptDateTime"/>
+        /// will be set to <see cref="RockDateTime.Now"/> to indicate that sending has begun.
+        /// </remarks>
+        public static bool GetOrSetHasSendingBegun( int communicationId, RockContext rockContext )
+        {
+            var communicationRecipient = new CommunicationRecipientService( rockContext )
+                .Queryable()
+                .Where( cr =>
+                    cr.CommunicationId == communicationId
+                )
+                .OrderByDescending( cr => cr.FirstSendAttemptDateTime.HasValue )
+                .FirstOrDefault();
+
+            if ( communicationRecipient?.FirstSendAttemptDateTime.HasValue == true )
+            {
+                return true;
+            }
+
+            if ( communicationRecipient != null )
+            {
+                communicationRecipient.FirstSendAttemptDateTime = RockDateTime.Now;
+                rockContext.SaveChanges();
+            }
+
+            return false;
         }
 
         /// <summary>

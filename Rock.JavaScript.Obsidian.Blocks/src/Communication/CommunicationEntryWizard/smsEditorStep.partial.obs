@@ -1,7 +1,7 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <div class="sms-editor-step">
-        <Panel :hasFullscreen="true"
+        <Panel hasFullscreen
                panelBodyCssClass="panel-body-wizard"
                type="block">
             <template #title>

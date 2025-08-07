@@ -95,7 +95,7 @@ namespace Rock.Blocks.Communication
 
     [BooleanField( "Send When Approved",
         Key = AttributeKey.SendWhenApproved,
-        Description = "Should communication be sent once it's approved (vs. just being queued for scheduled job to send)?",
+        Description = @"When enabled, the block will send the communication immediately if it matches the approval criteria. If this is set to false, the block will not send the email and instead will defer the sending to the next run of the ""Send Communications"" job.",
         DefaultBooleanValue = true,
         Order = 6 )]
 
@@ -376,7 +376,7 @@ namespace Rock.Blocks.Communication
                 var communicationTemplateInfoList = GetCommunicationTemplateInfoList(
                     this.RockContext,
                     // Only include non-legacy templates or the template associated with the current communication.
-                    communicationTemplateQuery => communicationTemplateQuery.Where( ct => ct.Version != CommunicationTemplateVersion.Legacy || ( communicationTemplateId.HasValue && ct.Id == communicationTemplateId.Value ) )
+                    communicationTemplateQuery => communicationTemplateQuery.Where( ct => ( ct.Version != CommunicationTemplateVersion.Legacy && ct.UsageType == null ) || ( communicationTemplateId.HasValue && ct.Id == communicationTemplateId.Value ) )
                 );
                 var communicationTemplateDetailBag = GetCommunicationTemplateDetailBag( communication, communicationTemplateInfoList, currentPerson );
                 var communicationBag = GetCommunicationBag( this.RockContext, communication, communicationTemplateDetailBag?.Guid, currentPerson );

@@ -53,7 +53,7 @@
                   :key=role.idKey>
             <div v-if="role.idKey"
                  class="panel-inline">
-                <div class="panel-heading">
+                <div class="panel-heading panel-heading-bottom">
                     <h1 class="panel-title d-inline-block mr-2">
                         {{ pluralize(role.name ?? "") }}
                     </h1>
@@ -188,13 +188,13 @@
 }
 
 .male-label {
-    background-color: #E8F3FC;
-    color: #1A8AE5;
+    background-color: var(--color-gender-male-bg);
+    color: var(--color-gender-male-text);
 }
 
 .female-label {
-    background-color: #FCE8FA;
-    color: #DE69C3;
+    background-color: var(--color-gender-female-bg);
+    color: var(--color-gender-female-text);
 }
 
 .unknown-label {
@@ -222,20 +222,22 @@
 
 .panel-inline .panel-heading {
     padding: 8px 16px;
-    /* background-color: rgba(245, 245, 245, 0.8); */
     background-color: var(--color-interface-softer);
-    border: 1px solid var(--color-interface-soft);
+    border-top: 1px solid var(--color-interface-soft);
     border-radius: 0;
+}
+
+.panel-body > .panel-inline:first-of-type > .panel-heading {
+    border-top: none;
+}
+
+.panel-inline .panel-heading.panel-heading-bottom {
+    border-bottom: 1px solid var(--color-interface-soft);
 }
 
 .panel-inline .panel-title {
     font-size: 14px;
     font-weight: 600
-}
-
-.panel-drawer + .group-role-members .panel-heading,
-.group-role-members:first-child .panel-heading {
-    border-top: 0
 }
 
 .placement-capacity-label {
@@ -249,15 +251,15 @@
 }
 
 .role-count.over-under-role-capacity {
-    color: var(--color-danger);
+    color: var(--color-danger-strong);
 }
 
 .male-badge {
-    background-color: #1A8AE5 !important;
+    background-color: var(--color-gender-male-text) !important;
 }
 
 .female-badge {
-    background-color: #DE69CE !important;
+    background-color: var(--color-gender-female-text) !important;
 }
 
 .unknown-badge {
@@ -266,20 +268,20 @@
 }
 
 .status-over {
-    background-color: #d4442e !important;
+    background-color: var(--color-danger-strong) !important;
 }
 
 .status-at {
-    background-color: #ee7624 !important;
+    background-color: var(--color-critical-strong) !important;
 }
 
 .status-near {
-    background-color: #ffc870 !important;
+    background-color: var(--color-warning-strong) !important;
     color: black;
 }
 
 .status-under {
-    background-color: #16c98d !important;
+    background-color: var(--color-success-strong) !important;
 }
 
 .group-role-wrapper {
