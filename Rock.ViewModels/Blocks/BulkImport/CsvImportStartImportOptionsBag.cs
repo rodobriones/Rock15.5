@@ -20,13 +20,28 @@ using System.Collections.Generic;
 namespace Rock.ViewModels.Blocks.BulkImport
 {
     /// <summary>
-    /// The request parameters for validating whether the mappings between
+    /// The request parameters for importing the CSV data
     /// </summary>
-    public class CsvImportValidateMappingsOptionsBag
+    public class CsvImportStartImportOptionsBag
     {
         /// <summary>
         /// Gets or sets a map of Person fields (the key) to the name of the CSV column namee (the value) that the column should be mapped to.
         /// </summary>
         public Dictionary<string, string> ColumnMappings { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether existing records should be updated if a match is found.
+        /// </summary>
+        public bool AllowUpdatingExisting { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the name of the CSV file with the import data.
+        /// </summary>
+        public string FileName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the description of the source of the data being imported.
+        /// </summary>
+        public string SourceDescription { get; set; }
     }
 }

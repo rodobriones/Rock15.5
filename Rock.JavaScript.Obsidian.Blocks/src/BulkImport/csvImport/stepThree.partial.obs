@@ -76,38 +76,38 @@
     const columnMappings = ref<Record<string, string>>({});
     const submissionErrors = ref<string>("");
 
-    async function onSubmit(): Promise<void> {
-        console.debug("Step two finished:", columnMappings.value);
+    // async function onSubmit(): Promise<void> {
+    //     console.debug("Step two finished:", columnMappings.value);
 
-        // Reset submission errors
-        submissionErrors.value = "";
+    //     // Reset submission errors
+    //     submissionErrors.value = "";
 
-        const result = await invokeBlockAction("ValidateMappings", {
-            options: {
-                columnMappings: invertObject(columnMappings.value)
-            } as CsvImportValidateMappingsOptionsBag
-        });
+    //     const result = await invokeBlockAction("ValidateMappings", {
+    //         options: {
+    //             columnMappings: invertObject(columnMappings.value)
+    //         } as CsvImportValidateMappingsOptionsBag
+    //     });
 
-        if (!result.isSuccess) {
-            submissionErrors.value = result.errorMessage ?? "Unknown error while reading CSV file.";
-            return;
-        }
-        else {
-            emit("stepFinished", {
-                columnMappings: invertObject(columnMappings.value)
-            });
-        }
-    }
+    //     if (!result.isSuccess) {
+    //         submissionErrors.value = result.errorMessage ?? "Unknown error while reading CSV file.";
+    //         return;
+    //     }
+    //     else {
+    //         emit("stepFinished", {
+    //             columnMappings: invertObject(columnMappings.value)
+    //         });
+    //     }
+    // }
 
-    // We need to swap the keys and values in the mapping object. On the client side, it really only
-    // works to have the key be the column and the value be the person property, but everything on
-    // the server expects the opposite.
-    function invertObject(obj: Record<string, string>): Record<string, string> {
-        const inverted: Record<string, string> = {};
-        for (const key in obj) {
-            inverted[obj[key]] = key;
-        }
-        return inverted;
-    }
+    // // We need to swap the keys and values in the mapping object. On the client side, it really only
+    // // works to have the key be the column and the value be the person property, but everything on
+    // // the server expects the opposite.
+    // function invertObject(obj: Record<string, string>): Record<string, string> {
+    //     const inverted: Record<string, string> = {};
+    //     for (const key in obj) {
+    //         inverted[obj[key]] = key;
+    //     }
+    //     return inverted;
+    // }
 
 </script>

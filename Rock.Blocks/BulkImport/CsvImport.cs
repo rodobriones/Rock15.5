@@ -18,7 +18,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -28,10 +27,7 @@ using CsvHelper;
 
 using Rock.Attribute;
 using Rock.Model;
-using Rock.RealTime;
-using Rock.RealTime.Topics;
 using Rock.Slingshot;
-using Rock.Utility;
 using Rock.ViewModels.Blocks.BulkImport;
 using Rock.ViewModels.Utility;
 using Rock.Web;
@@ -45,44 +41,16 @@ namespace Rock.Blocks.BulkImport
     [DisplayName( "CSV Import" )]
     [Category( "CSV Import" )]
     [Description( "Block to import data into Rock using CSV files." )]
-    //[IconCssClass( "ti ti-users" )]
+    [IconCssClass( "ti ti-file-type-csv" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
-
-    // TODO
-    [IntegerField(
-        "Person Record Import Batch Size",
-        Description = "If importing more than this many records, the import will be broken up into smaller batches to optimize memory use. If you run into memory utilization problems while importing a large number of records, consider decreasing this value. (A value less than 1 will result in the default of 25,000 records.)",
-        Key = AttributeKey.PersonRecordImportBatchSize,
-        DefaultIntegerValue = 25000,
-        IsRequired = true,
-        Order = 0 )]
-
-    [IntegerField(
-        "Financial Record Import Batch Size",
-        Description = "If importing more than this many records, the import will be broken up into smaller batches to optimize memory use. If you run into memory utilization problems while importing a large number of records, consider decreasing this value. (A value less than 1 will result in the default of 100,000 records.)",
-        Key = AttributeKey.FinancialRecordImportBatchSize,
-        DefaultIntegerValue = 100000,
-        IsRequired = true,
-        Order = 1 )]
-
     [Rock.SystemGuid.BlockTypeGuid( "02AAEE07-0E6B-4A85-9CE3-D59ADC71DCF8" )]
     [Rock.SystemGuid.EntityTypeGuid( "3E6B0AB8-182B-4C16-9E32-BAC0E02F1A43" )]
     public class CsvImport : RockBlockType
     {
-        #region Keys
-
-        private static class AttributeKey
-        {
-            public const string PersonRecordImportBatchSize = "PersonRecordImportBatchSize";
-            public const string FinancialRecordImportBatchSize = "FinancialRecordImportBatchSize";
-        }
-
-        #endregion Keys
-
         /// <summary>
         /// The properties that should be mapped to by fields in the csv. Not having one of these fields mapped to a csv column will result in an error
         /// </summary>
-        private static readonly string[] requiredFields = {
+        private static readonly string[] RequiredFields = {
             CSVHeaders.FamilyId,
             CSVHeaders.FamilyRole,
             CSVHeaders.FirstName,
@@ -93,7 +61,7 @@ namespace Rock.Blocks.BulkImport
         /// <summary>
         /// It is optional to map these properties to a column in the csv.
         /// </summary>
-        private static readonly string[] optionalFields = {
+        private static readonly string[] OptionalFields = {
             CSVHeaders.AnniversaryDate,
             CSVHeaders.Birthdate,
             CSVHeaders.CampusId,
@@ -126,7 +94,7 @@ namespace Rock.Blocks.BulkImport
             CSVHeaders.Suffix
         };
 
-        private static readonly HashSet<string> allowedPeronsAttributeFieldTypeClassNames = new HashSet<string> { "Rock.Field.Types.TextFieldType",
+        private static readonly HashSet<string> AllowedPersonAttributeFieldTypeClassNames = new HashSet<string> { "Rock.Field.Types.TextFieldType",
             "Rock.Field.Types.BooleanFieldType",
             "Rock.Field.Types.IntegerFieldType",
             "Rock.Field.Types.DateFieldType"
@@ -222,7 +190,7 @@ namespace Rock.Blocks.BulkImport
 
         private List<ListItemBag> CreateListItemBagsDropDown()
         {
-            var rockAttributeArray = AttributeCache.GetPersonAttributes( allowedPeronsAttributeFieldTypeClassNames )
+            var rockAttributeArray = AttributeCache.GetPersonAttributes( AllowedPersonAttributeFieldTypeClassNames )
                 .Select( attribute => new ListItemBag { Text = attribute.Name, Value = attribute.Key } ) // attribute key is used by the Slingshot Importer to map the attributes.
                 .ToList();
 
@@ -231,14 +199,14 @@ namespace Rock.Blocks.BulkImport
                 rockAttribute.Category = ROCK_ATTRIBUTES_OPTION_NAME;
             }
 
-            ListItemBag[] requiredFieldslistItems = requiredFields.Select( name => new ListItemBag { Text = name, Value = name } )
+            ListItemBag[] requiredFieldslistItems = RequiredFields.Select( name => new ListItemBag { Text = name, Value = name } )
                 .ToArray();
             foreach ( ListItemBag listItem in requiredFieldslistItems )
             {
                 listItem.Category = FIELD_OPTION_NAME;
             }
 
-            ListItemBag[] optionalFieldslistItems = optionalFields.Select( name => new ListItemBag { Text = name, Value = name } )
+            ListItemBag[] optionalFieldslistItems = OptionalFields.Select( name => new ListItemBag { Text = name, Value = name } )
                 .ToArray();
             foreach ( ListItemBag listItem in optionalFieldslistItems )
             {
@@ -344,13 +312,13 @@ namespace Rock.Blocks.BulkImport
         public BlockActionResult ValidateMappings( CsvImportValidateMappingsOptionsBag options )
         {
             bool containsAllRequiredFields = options.ColumnMappings
-                .Values
+                .Keys
                 .ToHashSet()
-                .IsSupersetOf( requiredFields );
+                .IsSupersetOf( RequiredFields );
 
             if ( !containsAllRequiredFields )
             {
-                var missingRequiredFields = requiredFields.Except( options.ColumnMappings.Values );
+                var missingRequiredFields = RequiredFields.Except( options.ColumnMappings.Keys );
                 return ActionBadRequest( "Not all required fields have been mapped. Please provide mappings for: \n" + string.Join( ", ", missingRequiredFields ) );
             }
 
@@ -363,165 +331,108 @@ namespace Rock.Blocks.BulkImport
         /// <param name="request">The import request containing necessary parameters.</param>
         /// <returns>A result indicating success or failure of the import operation.</returns>
         [BlockAction]
-        public BlockActionResult StartImport( BulkImportRequest request )
+        public BlockActionResult StartImport( CsvImportStartImportOptionsBag options )
         {
-            if ( request == null )
+            //return ActionBadRequest( "Import request is required." );
+
+            var columnMappings = options.ColumnMappings;
+
+
+
+            const string defaultDataType = "People";
+            bool containsAllRequiredFields = columnMappings
+                .Keys
+                .ToHashSet()
+                .IsSupersetOf( RequiredFields );
+            if ( !containsAllRequiredFields )
             {
-                return ActionBadRequest( "Import request is required." );
+                var missingRequiredFields = RequiredFields.Except( columnMappings.Keys );
+                return ActionBadRequest( "Not all required fields have been mapped. Please provide mappings for: \n" + string.Join( "\n", missingRequiredFields ) );
             }
 
-            var physicalSlingshotFile = request.SlingshotFilePath;
-            if ( string.IsNullOrWhiteSpace( physicalSlingshotFile ) )
+            var bulkImportType = options.AllowUpdatingExisting ? BulkImporter.ImportUpdateType.AlwaysUpdate : BulkImporter.ImportUpdateType.AddOnly;
+
+            var personCSVFileName = GetCsvFilePath( options.FileName );
+
+            string sourceDescription = options.SourceDescription;
+
+            var csvSlingshotImporter = new CsvSlingshotImporter( personCSVFileName, sourceDescription, defaultDataType, bulkImportType, CSVSlingshotImporter_OnProgress );
+            ViewState[ViewStateKey.CSVImporterErrorsFilePath] = csvSlingshotImporter.ErrorCSVfilename;
+
+            var task = new Task( () =>
             {
-                return ActionBadRequest( "Slingshot file path is required." );
-            }
-
-            if ( !File.Exists( physicalSlingshotFile ) )
-            {
-                return ActionBadRequest( "Slingshot file not found." );
-            }
-
-            var importTask = new Task( async () =>
-            {
-                // Wait a little so the browser can render and start listening to events
-                Task.Delay( 1000 ).Wait();
-
-                var stopwatch = Stopwatch.StartNew();
-                long totalMilliseconds = 0;
-
-                BulkImporter.ImportUpdateType importUpdateType;
-
-                switch ( request.ImportUpdateType )
-                {
-                    case "AddOnly":
-                        importUpdateType = BulkImporter.ImportUpdateType.AddOnly;
-                        break;
-                    case "MostRecentWins":
-                        importUpdateType = BulkImporter.ImportUpdateType.MostRecentWins;
-                        break;
-                    default:
-                        importUpdateType = BulkImporter.ImportUpdateType.AlwaysUpdate;
-                        break;
-                }
-
-                var taskChannelName = $"BulkImport:{physicalSlingshotFile}";
-
-                var topic = RealTimeHelper.GetTopicContext<ITaskActivityProgress>();
-
-                await topic.Channels.AddToChannelAsync( request.SessionId, taskChannelName );
-
-                var progressReporter = topic.Clients.Channel( taskChannelName );
-                var progress = new TaskActivityProgress( progressReporter, "Bulk Import" );
-                progress.StartTask( "Starting import..." );
-
-                var slingshotImporter = new SlingshotImporter( physicalSlingshotFile, request.ForeignSystemKey, importUpdateType, ( sender, e ) =>
-                {
-                    var importer = sender as SlingshotImporter;
-                    string progressMessage = string.Empty;
-                    var progressResults = new DescriptionList();
-
-                    if ( e is string )
-                    {
-                        progressMessage = e.ToString();
-                    }
-
-                    var exceptionsCopy = importer.Exceptions.ToArray();
-                    if ( exceptionsCopy.Any() )
-                    {
-                        if ( exceptionsCopy.Count() > 50 )
-                        {
-                            var exceptionsSummary = exceptionsCopy.GroupBy( a => a.GetBaseException().Message ).Select( a => a.Key + "(" + a.Count().ToString() + ")" );
-                            progressResults.Add( "Exceptions", string.Join( Environment.NewLine, exceptionsSummary ) );
-                        }
-                        else
-                        {
-                            progressResults.Add( "Exception", string.Join( Environment.NewLine, exceptionsCopy.Select( a => a.Message ).ToArray() ) );
-                        }
-                    }
-
-                    var resultsCopy = importer.Results.ToArray();
-                    foreach ( var result in resultsCopy )
-                    {
-                        progressResults.Add( result.Key, result.Value );
-                    }
-
-                    progressReporter.UpdateTaskProgress( new TaskActivityProgressUpdateBag { Message = progressMessage } );
-
-                    if ( !string.IsNullOrEmpty( progressResults.Html ) )
-                    {
-                        progress.LogMessage( progressResults.Html );
-                    }
-                } );
-
-                var personChunkSize = GetAttributeValue( AttributeKey.PersonRecordImportBatchSize ).AsInteger();
-                var financialTransactionChunkSize = GetAttributeValue( AttributeKey.FinancialRecordImportBatchSize ).AsInteger();
-
-                if ( personChunkSize > 0 )
-                {
-                    slingshotImporter.PersonChunkSize = personChunkSize;
-                }
-                if ( financialTransactionChunkSize > 0 )
-                {
-                    slingshotImporter.FinancialTransactionChunkSize = financialTransactionChunkSize;
-                }
-
                 try
                 {
-                    switch ( request.ImportType )
-                    {
-                        case "Photos":
-                            slingshotImporter.TEST_UseSampleLocalPhotos = false;
-                            slingshotImporter.DoImportPhotos();
-                            break;
-                        case "All":
-                            slingshotImporter.DoImport();
-                            slingshotImporter.TEST_UseSampleLocalPhotos = false;
-                            slingshotImporter.DoImportPhotos();
-                            break;
-                        default:
-                            slingshotImporter.DoImport();
-                            break;
-                    }
-
-                    stopwatch.Stop();
-                    totalMilliseconds = stopwatch.ElapsedMilliseconds;
-
-                    if ( slingshotImporter.Exceptions.Any() )
-                    {
-                        slingshotImporter.Results.Add( "ERRORS", string.Join( Environment.NewLine, slingshotImporter.Exceptions.Select( a => a.Message ).ToArray() ) );
-                        var errors = slingshotImporter.Exceptions.Select( a => a.Message ).ToList();
-                        progress.StopTask( "Import failed with errors", errors );
-                        return;
-                    }
-
-                    progress.StopTask( $"{request.ImportType} Complete: [{totalMilliseconds}ms]" );
+                    csvSlingshotImporter.CreateIntermediateCSVFiles( columnMappings, UploadedCSVOnLineRead );
+                    csvSlingshotImporter.DoImport();
+                    csvSlingshotImporter.AddPersonCSVImportErrorNotes();
                 }
-                catch ( Exception ex )
+                catch ( Exception exception )
                 {
-                    ExceptionLogService.LogException( ex );
-                    if ( slingshotImporter.Exceptions != null )
-                    {
-                        slingshotImporter.Exceptions.Add( ex.GetBaseException() );
-                    }
-                    progress.StopTask( "ERROR: " + ex.Message, new[] { ex.Message } );
-                    throw;
+                    _hubContext.Clients.All.receiveUploadedCSVInvalidException( this.SignalRNotificationKey, exception.Message );
                 }
                 finally
                 {
-                    // TODO: DELETE FILES
-                    progress.Dispose();
+                    csvSlingshotImporter.ClearRedundantFilesAfterImport();
                 }
             } );
 
-            try
+            ScriptManager.GetCurrent( Page )
+                .RegisterPostBackControl( btnDownloadErrorCSV );
+
+            task.Start();
+
+            return ActionOk( new
             {
-                importTask.Start();
-                return ActionOk();
-            }
-            catch ( Exception ex )
+                ErrorCsvFileName = csvSlingshotImporter.ErrorCSVfilename
+            } );
+        }
+
+        /// <summary>
+        /// Handles the ProgressChanged event of the BackgroundWorker control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="ProgressChangedEventArgs"/> instance containing the event data.</param>
+        private void CSVSlingshotImporter_OnProgress( object sender, object e )
+        {
+            var csvSlingshotImporter = sender as CsvSlingshotImporter;
+
+            bool isPersonImportMessage = e is string && e.ToString().StartsWith( "Bulk Importing Person" );
+
+            if ( !isPersonImportMessage )
             {
-                return ActionBadRequest( ex.Message );
+                return;
             }
+
+            string progressMessage = e.ToString();
+            DescriptionList progressResults = new DescriptionList();
+
+            var exceptionsCopy = csvSlingshotImporter.Exceptions.ToArray();
+            if ( exceptionsCopy.Any() )
+            {
+                if ( exceptionsCopy.Count() > 50 )
+                {
+                    var exceptionsSummary = exceptionsCopy
+                        .GroupBy( a => a.GetBaseException().Message )
+                        .Select( a => a.Key + "(" + a.Count().ToString() + ")" );
+                    progressResults.Add( "Exceptions", string.Join( Environment.NewLine, exceptionsSummary ) );
+                }
+                else
+                {
+                    progressResults.Add( "Exception", string.Join( Environment.NewLine, exceptionsCopy.Select( a => a.Message ).ToArray() ) );
+                }
+            }
+
+            string personImportKey = "Person Import";
+            if ( csvSlingshotImporter.Results.ContainsKey( personImportKey ) )
+                progressResults.Add( personImportKey, csvSlingshotImporter.Results[personImportKey] );
+
+            _hubContext.Clients.All.receiveCSVNotification( this.SignalRNotificationKey, progressMessage, progressResults.Html.ConvertCrLfToHtmlBr(), csvSlingshotImporter.HasErrors );
+        }
+
+        private void UploadedCSVOnLineRead( object sender, object readLineCount )
+        {
+            _hubContext.Clients.All.receiveCSVLineReadNotification( this.SignalRNotificationKey, readLineCount, ViewState[ViewStateKey.RecordCount] );
         }
 
 
