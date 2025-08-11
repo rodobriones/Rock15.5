@@ -27,6 +27,8 @@ using CsvHelper;
 
 using Rock.Attribute;
 using Rock.Model;
+using Rock.RealTime.Topics;
+using Rock.RealTime;
 using Rock.Slingshot;
 using Rock.ViewModels.Blocks.BulkImport;
 using Rock.ViewModels.Utility;
@@ -333,43 +335,105 @@ namespace Rock.Blocks.BulkImport
         [BlockAction]
         public BlockActionResult StartImport( CsvImportStartImportOptionsBag options )
         {
-            //return ActionBadRequest( "Import request is required." );
-
-            var columnMappings = options.ColumnMappings;
-
-
-
             const string defaultDataType = "People";
-            bool containsAllRequiredFields = columnMappings
-                .Keys
-                .ToHashSet()
-                .IsSupersetOf( RequiredFields );
-            if ( !containsAllRequiredFields )
-            {
-                var missingRequiredFields = RequiredFields.Except( columnMappings.Keys );
-                return ActionBadRequest( "Not all required fields have been mapped. Please provide mappings for: \n" + string.Join( "\n", missingRequiredFields ) );
-            }
-
+            var columnMappings = options.ColumnMappings;
             var bulkImportType = options.AllowUpdatingExisting ? BulkImporter.ImportUpdateType.AlwaysUpdate : BulkImporter.ImportUpdateType.AddOnly;
-
             var personCSVFileName = GetCsvFilePath( options.FileName );
-
             string sourceDescription = options.SourceDescription;
 
-            var csvSlingshotImporter = new CsvSlingshotImporter( personCSVFileName, sourceDescription, defaultDataType, bulkImportType, CSVSlingshotImporter_OnProgress );
-            ViewState[ViewStateKey.CSVImporterErrorsFilePath] = csvSlingshotImporter.ErrorCSVfilename;
+            var taskChannelName = $"BulkImport:{personCSVFileName}";
+            var topic = RealTimeHelper.GetTopicContext<ICsvImportActivityProgress>();
+            var progressReporter = topic.Clients.Channel( taskChannelName );
 
-            var task = new Task( () =>
+            var csvSlingshotImporter = new CsvSlingshotImporter( personCSVFileName, sourceDescription, defaultDataType, bulkImportType, ( sender, e ) =>
             {
+                var importer = sender as CsvSlingshotImporter;
+
+                bool isPersonImportMessage = e is string && e.ToString().StartsWith( "Bulk Importing Person" );
+
+                if ( !isPersonImportMessage )
+                {
+                    return;
+                }
+
+                string progressMessage = e.ToString();
+                DescriptionList progressResults = new DescriptionList();
+
+                var exceptionsCopy = importer.Exceptions.ToArray();
+                var errorMessage = "";
+                if ( exceptionsCopy.Any() )
+                {
+                    List<string> exceptionsSummary;
+                    if ( exceptionsCopy.Count() > 50 )
+                    {
+                        exceptionsSummary = exceptionsCopy
+                            .GroupBy( a => a.GetBaseException().Message )
+                            .Select( a => a.Key + "(" + a.Count().ToString() + ")" )
+                            .ToList();
+                    }
+                    else
+                    {
+                        exceptionsSummary = exceptionsCopy.Select( a => a.Message ).ToList();
+                    }
+
+                    errorMessage = string.Join( "<br>", exceptionsSummary );
+                }
+
+                string personImportKey = "Person Import";
+                if ( importer.Results.ContainsKey( personImportKey ) )
+                {
+                    progressResults.Add( personImportKey, importer.Results[personImportKey] );
+                }
+
+                if ( importer.HasErrors )
+                {
+                    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
+                    {
+                        TaskName = "import",
+                        Error = errorMessage.IsNullOrWhiteSpace() ? "Unknown Error" : errorMessage
+                    } );
+                }
+                else if ( progressResults.Html.IsNotNullOrWhiteSpace() )
+                {
+                    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
+                    {
+                        TaskName = "import",
+                        Message = progressResults.Html.ConvertCrLfToHtmlBr()
+                    } );
+                }
+
+                progressReporter.UpdateTaskProgress( new CsvImportActivityProgressStatusBag
+                {
+                    TaskName = "import",
+                    Message = progressMessage
+                } );
+
+            } );
+
+            var task = new Task( async () =>
+            {
+                await topic.Channels.AddToChannelAsync( options.SessionId, taskChannelName );
+
                 try
                 {
-                    csvSlingshotImporter.CreateIntermediateCSVFiles( columnMappings, UploadedCSVOnLineRead );
+                    csvSlingshotImporter.CreateIntermediateCSVFiles( columnMappings, ( sender, readLineCount ) =>
+                    {
+                        progressReporter.UpdateTaskProgress( new CsvImportActivityProgressStatusBag
+                        {
+                            TaskName = "preparation",
+                            CompletionPercentage = ( decimal ) ( ( int ) readLineCount ) / options.RecordCount * 100,
+                        } );
+                    } );
                     csvSlingshotImporter.DoImport();
                     csvSlingshotImporter.AddPersonCSVImportErrorNotes();
                 }
                 catch ( Exception exception )
                 {
-                    _hubContext.Clients.All.receiveUploadedCSVInvalidException( this.SignalRNotificationKey, exception.Message );
+                    await progressReporter.TaskErrored( new CsvImportActivityProgressStatusBag
+                    {
+                        TaskName = "import",
+                        Error = $"An error occurred while importing the data: {exception.Message}"
+                    } );
                 }
                 finally
                 {
@@ -377,64 +441,14 @@ namespace Rock.Blocks.BulkImport
                 }
             } );
 
-            ScriptManager.GetCurrent( Page )
-                .RegisterPostBackControl( btnDownloadErrorCSV );
-
             task.Start();
 
             return ActionOk( new
             {
+                // TODO
                 ErrorCsvFileName = csvSlingshotImporter.ErrorCSVfilename
             } );
         }
-
-        /// <summary>
-        /// Handles the ProgressChanged event of the BackgroundWorker control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="ProgressChangedEventArgs"/> instance containing the event data.</param>
-        private void CSVSlingshotImporter_OnProgress( object sender, object e )
-        {
-            var csvSlingshotImporter = sender as CsvSlingshotImporter;
-
-            bool isPersonImportMessage = e is string && e.ToString().StartsWith( "Bulk Importing Person" );
-
-            if ( !isPersonImportMessage )
-            {
-                return;
-            }
-
-            string progressMessage = e.ToString();
-            DescriptionList progressResults = new DescriptionList();
-
-            var exceptionsCopy = csvSlingshotImporter.Exceptions.ToArray();
-            if ( exceptionsCopy.Any() )
-            {
-                if ( exceptionsCopy.Count() > 50 )
-                {
-                    var exceptionsSummary = exceptionsCopy
-                        .GroupBy( a => a.GetBaseException().Message )
-                        .Select( a => a.Key + "(" + a.Count().ToString() + ")" );
-                    progressResults.Add( "Exceptions", string.Join( Environment.NewLine, exceptionsSummary ) );
-                }
-                else
-                {
-                    progressResults.Add( "Exception", string.Join( Environment.NewLine, exceptionsCopy.Select( a => a.Message ).ToArray() ) );
-                }
-            }
-
-            string personImportKey = "Person Import";
-            if ( csvSlingshotImporter.Results.ContainsKey( personImportKey ) )
-                progressResults.Add( personImportKey, csvSlingshotImporter.Results[personImportKey] );
-
-            _hubContext.Clients.All.receiveCSVNotification( this.SignalRNotificationKey, progressMessage, progressResults.Html.ConvertCrLfToHtmlBr(), csvSlingshotImporter.HasErrors );
-        }
-
-        private void UploadedCSVOnLineRead( object sender, object readLineCount )
-        {
-            _hubContext.Clients.All.receiveCSVLineReadNotification( this.SignalRNotificationKey, readLineCount, ViewState[ViewStateKey.RecordCount] );
-        }
-
 
         #endregion
     }

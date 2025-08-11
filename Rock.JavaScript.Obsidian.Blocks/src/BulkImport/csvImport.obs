@@ -8,25 +8,26 @@
                  :config="config"
                  :csvColumns="csvColumns"
                  :personFieldOptions="personFieldOptions"
-                 :recordCount="recordCount"
+                 :recordCount="recordCount ?? 0"
                  @stepFinished="onStepTwoFinished" />
+        <StepThree v-else-if="step === 3"
+                   :config="config"
+                   v-bind="stepThreeProps" />
     </Panel>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref, watch } from "vue";
+    import { computed, ref } from "vue";
     import Panel from "@Obsidian/Controls/panel.obs";
     import StepOne from "./csvImport/stepOne.partial.obs";
     import StepTwo from "./csvImport/stepTwo.partial.obs";
-    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import StepThree from "./csvImport/stepThree.partial.obs";
+    import { useConfigurationValues } from "@Obsidian/Utility/block";
     import { CsvImportBox } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportBox";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
-    import { getTopic } from "@Obsidian/Utility/realTime";
-    import { TaskActivityProgressStatusBag } from "@Obsidian/ViewModels/Utility/taskActivityProgressStatusBag";
     import { StepOneResults, StepTwoResults } from "./csvImport/types.partial";
 
     const config = useConfigurationValues<CsvImportBox>();
-    const invokeBlockAction = useInvokeBlockAction();
 
     const step = ref<number>(1);
 
@@ -39,8 +40,6 @@
     const csvColumns = ref<string[]>([]);
     const personFieldOptions = ref<ListItemBag[]>([]);
     const recordCount = ref<number>();
-
-    let realTimeConnectionId: string = "";
 
     function onStepOneFinished(data: StepOneResults): void {
         dataType.value = data.dataType;
@@ -57,45 +56,25 @@
 
     // #region Step 2
 
+    const columnMappings = ref<Record<string, string>>({});
+
     function onStepTwoFinished(data: StepTwoResults): void {
         console.debug("Step two finished:", data.columnMappings);
+        columnMappings.value = data.columnMappings;
         step.value = 3;
     }
 
     // #endregion
 
+    // #region Step 3
 
-    /**
-     * Initialize the real-time engine and start monitoring for updates to the
-     * proxy connection status messages.
-     */
-    async function startRealTime(): Promise<void> {
-        const topic = await getTopic("Rock.RealTime.Topics.TaskActivityProgressTopic");
+    const stepThreeProps = computed(() => ({
+        columnMappings: columnMappings.value,
+        recordCount: recordCount.value ?? 0,
+        allowUpdatingExisting: allowUpdatingExistingRecords.value,
+        fileName: importFile.value?.text ?? "",
+        sourceDescription: sourceDescription.value
+    }));
 
-        topic.onDisconnected(async () => {
-            await startRealTime();
-        });
-
-        topic.onReconnected(async () => {
-            realTimeConnectionId = topic.connectionId ?? "";
-        });
-
-        topic.on("taskStarted", onRealtimeUpdate);
-        topic.on("taskCompleted", onRealtimeUpdate);
-        topic.on("updateTaskProgress", onRealtimeUpdate);
-        topic.on("updateTaskLog", onRealtimeUpdate);
-        topic.onMessage((...args) => {
-            console.debug("Real-time message received:", ...args);
-        });
-
-        realTimeConnectionId = topic.connectionId ?? "";
-    }
-
-    function onRealtimeUpdate(...args): void {
-        // Handle real-time updates
-        console.debug("Real-time update received:", ...args);
-    }
-
-    // Initialize real-time connection when component mounts
-    startRealTime();
+    // #endregion
 </script>

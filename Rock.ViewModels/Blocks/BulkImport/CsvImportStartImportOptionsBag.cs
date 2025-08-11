@@ -43,5 +43,16 @@ namespace Rock.ViewModels.Blocks.BulkImport
         /// Gets or sets the description of the source of the data being imported.
         /// </summary>
         public string SourceDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of records that will be imported.
+        /// This is used to provide feedback to the user about how many records are being processed.
+        /// </summary>
+        public int RecordCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the identifier of the realtime session so messages can be sent to a specific block.
+        /// </summary>
+        public string SessionId { get; set; }
     }
 }

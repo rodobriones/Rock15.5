@@ -21,8 +21,20 @@
 // </copyright>
 //
 
-/** The request parameters for validating whether the mappings between */
-export type CsvImportValidateMappingsOptionsBag = {
-    /** Gets or sets a map of Person fields (the key) to the name of the CSV column namee (the value) that the column should be mapped to. */
-    columnMappings?: Record<string, string> | null;
+/** Contains information about the starting or stopping of a task. */
+export type CsvImportActivityProgressStatusBag = {
+    /** The percentage of completion for the task, from 0 to 100. */
+    completionPercentage: number;
+
+    /** An error the task encountered while running. */
+    error?: string | null;
+
+    /** A message indicating the current state of this task. */
+    message?: string | null;
+
+    /** The name of the task. */
+    taskName?: string | null;
+
+    /** A collection of warnings the task encountered while running. */
+    warnings?: string[] | null;
 };

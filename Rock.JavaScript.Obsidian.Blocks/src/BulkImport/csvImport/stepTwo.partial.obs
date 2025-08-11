@@ -46,7 +46,6 @@
     import { CsvImportValidateMappingsOptionsBag } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportValidateMappingsOptionsBag";
 
     defineProps({
-        /** The foreign system key to use for this import. */
         config: {
             type: Object as PropType<CsvImportBox>,
             required: true
@@ -77,8 +76,6 @@
     const submissionErrors = ref<string>("");
 
     async function onSubmit(): Promise<void> {
-        console.debug("Step two finished:", columnMappings.value);
-
         // Reset submission errors
         submissionErrors.value = "";
 

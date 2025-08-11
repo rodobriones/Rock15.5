@@ -21,8 +21,26 @@
 // </copyright>
 //
 
-/** The request parameters for validating whether the mappings between */
-export type CsvImportValidateMappingsOptionsBag = {
+/** The request parameters for importing the CSV data */
+export type CsvImportStartImportOptionsBag = {
+    /** Gets or sets a value indicating whether existing records should be updated if a match is found. */
+    allowUpdatingExisting: boolean;
+
     /** Gets or sets a map of Person fields (the key) to the name of the CSV column namee (the value) that the column should be mapped to. */
     columnMappings?: Record<string, string> | null;
+
+    /** Gets or sets the name of the CSV file with the import data. */
+    fileName?: string | null;
+
+    /**
+     * Gets or sets the number of records that will be imported.
+     * This is used to provide feedback to the user about how many records are being processed.
+     */
+    recordCount: number;
+
+    /** Gets or sets the identifier of the realtime session so messages can be sent to a specific block. */
+    sessionId?: string | null;
+
+    /** Gets or sets the description of the source of the data being imported. */
+    sourceDescription?: string | null;
 };
