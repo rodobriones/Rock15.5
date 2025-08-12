@@ -149,7 +149,7 @@ namespace Rock.Blocks.BulkImport
         /// <returns>The physical path to the slingshot files directory.</returns>
         private string GetSlingshotPhysicalRootFolder()
         {
-            return HostingEnvironment.MapPath( GetSlingshotRootFolder() ).TrimEnd( '/' ) + "/";
+            return HostingEnvironment.MapPath( GetSlingshotRootFolder() );
         }
 
         /// <summary>
@@ -171,7 +171,7 @@ namespace Rock.Blocks.BulkImport
 
         private string GetCsvFilePath( string fileName )
         {
-            return GetSlingshotPhysicalRootFolder() + fileName;
+            return GetSlingshotPhysicalRootFolder().TrimEnd( '/' ).TrimEnd( '\\' ) + "/" + fileName.TrimStart( '/' ).TrimStart( '\\' );
         }
 
         private void DeleteCsvFile( string fileName )
@@ -392,6 +392,7 @@ namespace Rock.Blocks.BulkImport
                         TaskName = "import",
                         Error = errorMessage.IsNullOrWhiteSpace() ? "Unknown Error" : errorMessage
                     } );
+                    return;
                 }
                 else if ( progressResults.Html.IsNotNullOrWhiteSpace() )
                 {
@@ -400,9 +401,10 @@ namespace Rock.Blocks.BulkImport
                         TaskName = "import",
                         Message = progressResults.Html.ConvertCrLfToHtmlBr()
                     } );
+                    return;
                 }
 
-                progressReporter.UpdateTaskProgress( new CsvImportActivityProgressStatusBag
+                progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
                 {
                     TaskName = "import",
                     Message = progressMessage
@@ -443,11 +445,32 @@ namespace Rock.Blocks.BulkImport
 
             task.Start();
 
-            return ActionOk( new
+            var rootFolder = GetSlingshotPhysicalRootFolder();
+            var errorCsvFileName = csvSlingshotImporter.ErrorCSVfilename.Replace( rootFolder, "" );
+
+            return ActionOk( new { ErrorCsvFileName = errorCsvFileName } );
+        }
+
+        [BlockAction]
+        public void DownloadErrorCsv( string errorCsvFileName )
+        {
+            System.Web.HttpResponse response = System.Web.HttpContext.Current.Response;
+            response.ClearHeaders();
+            response.ClearContent();
+            response.Clear();
+            response.ContentType = "text/csv";
+            response.Charset = "";
+            response.AddHeader( "content-disposition", "attachment; filename=errors.csv" );
+
+            string filePath = GetCsvFilePath( errorCsvFileName );
+            if ( File.Exists( filePath ) )
             {
-                // TODO
-                ErrorCsvFileName = csvSlingshotImporter.ErrorCSVfilename
-            } );
+                response.TransmitFile( filePath );
+            }
+
+            response.Flush();
+            response.SuppressContent = true;
+            System.Web.HttpContext.Current.ApplicationInstance.CompleteRequest();
         }
 
         #endregion

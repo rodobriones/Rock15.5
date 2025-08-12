@@ -14,7 +14,7 @@
                 {{ preparationLogMessage }}
             </NotificationBox>
 
-            <ProgressBar v-if="preparationProgress > 0" :percent="preparationProgress" />
+            <ProgressBar v-if="preparationProgress > 0" :percent="preparationProgress" showCompletionText />
 
             <div class="progress-bar js-progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemax="0">0%</div>
         </div>
@@ -28,7 +28,7 @@
                 {{ importLogMessage }}
             </NotificationBox>
 
-            <ProgressBar v-if="importProgress > 0" :percent="importProgress" />
+            <ProgressBar v-if="importProgress > 0" :percent="importProgress" showCompletionText />
 
         </div>
         <div id="import-csv-success" v-if="completed == 'success'">
@@ -95,10 +95,6 @@
         }
     });
 
-    const emit = defineEmits<{
-        (e: "stepFinished", data: StepTwoResults): void;
-    }>();
-
     const invokeBlockAction = useInvokeBlockAction();
     const completed = ref<"exception" | "success" | "error" | undefined>();
     const errorMessage = ref("");
@@ -117,10 +113,6 @@
      */
     async function startRealTime(): Promise<void> {
         const topic = await getTopic("Rock.RealTime.Topics.CsvImportActivityProgress");
-
-        topic.onDisconnected(async () => {
-            await startRealTime();
-        });
 
         topic.onReconnected(async () => {
             realTimeConnectionId = topic.connectionId ?? "";
@@ -199,17 +191,17 @@
 
     async function downloadErrorCsv(): Promise<void> {
         // TODO
-        const result = await invokeBlockAction("DownloadErrorFile", {});
+        const result = await invokeBlockAction("DownloadErrorCsv", {
+            errorCsvFileName: errorCsvFileName.value
+        });
 
         if (!result.isSuccess || !result.data) {
             console.error("DOWNLOAD ERROR FILE ERROR", result);
             errorMessage.value = result.errorMessage ?? "Unknown error while downloading error CSV file.";
             return;
         }
-        else {
-            const url = result.data as string;
-            window.open(url, "_blank");
-        }
+
+        // HOW DO I ACTUALLY DOWNLOAD?
     }
 
 
