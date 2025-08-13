@@ -21,13 +21,15 @@
 // </copyright>
 //
 
-import { CommunicationEntryWizardCommunicationBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationEntryWizard/communicationEntryWizardCommunicationBag";
+import { Guid } from "@Obsidian/Types";
 
-/** Bag containing information to get email preview HTML for the Communication Entry Wizard block. */
-export type CommunicationEntryWizardGetEmailPreviewHtmlBag = {
-    /** Gets or sets the communication. */
-    communication?: CommunicationEntryWizardCommunicationBag | null;
+export type StepTypeTransferBag = {
+    /** Gets or sets the step status mappings for the transfer. */
+    stepStatusMappings?: Record<string, string> | null;
 
-    /** Gets or sets the preview HTML. */
-    previewHtml?: string | null;
+    /** Gets or sets the IdKey for the Step Type that is being transferred. */
+    stepTypeIdKey?: string | null;
+
+    /** Gets or sets a Step Program. */
+    targetStepProgramGuid?: Guid | null;
 };

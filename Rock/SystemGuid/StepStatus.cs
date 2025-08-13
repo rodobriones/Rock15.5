@@ -14,22 +14,23 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 
-namespace Rock.ViewModels.Blocks.Communication.CommunicationEntryWizard
+namespace Rock.SystemGuid
 {
     /// <summary>
-    /// Bag containing information to get email preview HTML for the Communication Entry Wizard block.
+    /// Guids for Step Statuses.
     /// </summary>
-    public class CommunicationEntryWizardGetEmailPreviewHtmlBag
+    public static class StepStatus
     {
         /// <summary>
-        /// Gets or sets the communication.
+        /// In Progress Step Status
         /// </summary>
-        public CommunicationEntryWizardCommunicationBag Communication { get ;set; }
+        public const string IN_PROGRESS = "8013C752-31AA-46C6-9B55-BCFBE57C0577";
 
         /// <summary>
-        /// Gets or sets the preview HTML.
+        /// Complete Step Status
         /// </summary>
-        public string PreviewHtml { get; set; }
+        public const string COMPLETE = "359D3CE0-E144-491E-8C3B-2A2BCE55C04B";
     }
 }
