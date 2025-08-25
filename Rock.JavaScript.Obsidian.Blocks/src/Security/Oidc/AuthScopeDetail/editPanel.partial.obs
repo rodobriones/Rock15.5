@@ -1,7 +1,5 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <NotificationBox v-if="isSystem" alertType="info" v-html="isSystemMessage"></NotificationBox>
-
     <fieldset>
         <div class="row">
             <div class="col-md-6">
@@ -31,7 +29,6 @@
 
 <script setup lang="ts">
     import { PropType, ref, watch } from "vue";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
@@ -70,7 +67,6 @@
     const name = propertyRef(props.modelValue.bag?.name ?? "", "Name");
     const publicName = propertyRef(props.modelValue.bag?.publicName ?? "", "PublicName");
     const isSystem = propertyRef(props.modelValue.bag?.isSystem ?? false, "IsSystem");
-    const isSystemMessage = "<strong>Note</strong> Because this auth scope is used by Rock, editing is restricted.";
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().

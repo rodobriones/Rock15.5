@@ -1,5 +1,7 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
+    <NotificationBox v-if="infoMessage" alertType="info" v-html="infoMessage"></NotificationBox>
+
     <NotificationBox v-if="blockError" alertType="warning" v-html="blockError"></NotificationBox>
 
     <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
@@ -53,6 +55,7 @@
 
     // #region Values
 
+    const infoMessage = ref("");
     const blockError = ref("");
     const errorMessage = ref("");
 
@@ -67,6 +70,12 @@
         blockConfig: config,
         entity: authScopeEditBag
     });
+
+    infoMessage.value = (
+        authScopeViewBag.value?.isSystem === true
+            ? "<strong>Note</strong> Because this auth scope is used by Rock, editing is restricted."
+            : ""
+    );
 
     // #endregion
 
