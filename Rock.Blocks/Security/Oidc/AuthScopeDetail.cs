@@ -166,9 +166,21 @@ namespace Rock.Blocks.Security.Oidc
         /// <inheritdoc/>
         protected override AuthScopeBag GetEntityBagForView( AuthScope entity )
         {
-            // There is no View for this control, only Edit and Add
+            if ( entity == null )
+            {
+                return null;
+            }
 
-            return GetEntityBagForEdit(entity);
+            var bag = GetCommonEntityBag( entity );
+
+            if ( entity.Attributes == null )
+            {
+                entity.LoadAttributes( RockContext );
+            }
+
+            bag.LoadAttributesAndValuesForPublicView( entity, RequestContext.CurrentPerson, enforceSecurity: true );
+
+            return bag;
         }
 
         //// <inheritdoc/>
