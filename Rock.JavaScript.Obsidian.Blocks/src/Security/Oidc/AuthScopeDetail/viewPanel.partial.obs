@@ -1,10 +1,6 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <fieldset>
-        <NotificationBox v-if="isSystem" alertType="info">
-            <strong>Note</strong> Because this auth scope is used by Rock, editing is not enabled.
-        </NotificationBox>
-
         <ValueDetailList :modelValue="topValues" />
 
         <div class="row">
@@ -24,7 +20,6 @@
 
 <script setup lang="ts">
     import { computed, PropType, ref } from "vue";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import ValueDetailList from "@Obsidian/Controls/valueDetailList.obs";
     import { ValueDetailListItemBuilder } from "@Obsidian/Core/Controls/valueDetailListItemBuilder";
@@ -53,8 +48,6 @@
 
     // #region Computed Values
 
-    const isSystem = computed((): boolean => props.modelValue?.isSystem ?? false);
-
     /** The values to display full-width at the top of the block. */
     const topValues = computed((): ValueDetailListItem[] => {
         const valueBuilder = new ValueDetailListItemBuilder();
@@ -72,6 +65,14 @@
 
         if (!props.modelValue) {
             return valueBuilder.build();
+        }
+
+        if (props.modelValue.name) {
+            valueBuilder.addTextValue("Name", props.modelValue.name);
+        }
+
+        if (props.modelValue.publicName) {
+            valueBuilder.addTextValue("Public Name", props.modelValue.publicName);
         }
 
         return valueBuilder.build();
