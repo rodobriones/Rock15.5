@@ -1,54 +1,67 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <Grid :definition="config.gridDefinition ?? undefined"
-          :data="gridDataSource"
-          keyField="idKey"
-          title="External Application List"
-          itemTerm="ExternalApplication"
-          :entityTypeGuid="EntityType.DefinedValue"
-          :showLaunchWorkflow="false"
-          stickyHeader
-          liveUpdates>
+    <Panel title="External Application List"
+           type="block"
+           :hasNoBodyPadding="true">
+        <Grid :definition="config.gridDefinition ?? undefined"
+              :data="gridDataSource"
+              keyField="idKey"
+              itemTerm="ExternalApplication"
+              :entityTypeGuid="EntityType.DefinedValue"
+              :showLaunchWorkflow="false"
+              :hideFilterHeaderRow="true"
+              :isTitleHidden="true"
+              :isFooterHidden="true"
+              liveUpdates>
 
-        <HtmlColumn name="iconHtml"
-                    title="Icon"
-                    field="iconHtml"
-                    :filter="textValueFilter"
-                    visiblePriority="xs"
-                    columnType="html"
-                    width="120px" />
+            <HtmlColumn name="iconHtml"
+                        field="iconHtml"
+                        :filter="textValueFilter"
+                        visiblePriority="xs"
+                        columnType="html"
+                        width="120px" />
 
-        <TextColumn name="value"
-                    title="Name"
-                    field="value"
-                    :filter="textValueFilter"
-                    visiblePriority="xs" />
-
-        <TextColumn name="vendor"
-                    title="Vendor"
-                    field="vendor"
-                    :filter="textValueFilter"
-                    visiblePriority="xs" />
-
-        <TextColumn name="description"
-                    title="Description"
-                    field="description"
-                    :filter="textValueFilter"
+            <Column name="infoColumn"
+                    columnType="custom"
                     visiblePriority="md"
-                    width="65%" />
+                    width=65%>
+                <template #format="{ row }">
+                    <td>
+                        <h4>
+                            {{ row.value }}
+                            <small>
+                                {{ row.vendor }}
+                            </small>
+                        </h4>
+                        {{ row.description }}
+                    </td>
+                </template>
+            </Column>
 
-        <ButtonColumn name="download"
-                      tooltip="Download"
-                      :iconClass="downloadButtonIcon"
-                      visiblePriority="md"
-                      @click="onDownloadClick" />
-    </Grid>
+            <Column name="downloadColumn"
+                    columnType="custom"
+                    visiblePriority="md"
+                    width="120px">
+                <template #format="{ row }">
+                    <td data-priority="1">
+                        <a href="javascript:void(0);"
+                           class="btn btn-action btn-xs"
+                           @click="onDownloadClick(row.idKey)">
+                            <i class="ti ti-download"></i>
+                            Download
+                        </a>
+                    </td>
+                </template>
+            </Column>
+        </Grid>
+    </Panel>
 </template>
 
 <script setup lang="ts">
     import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
-    import Grid, { ButtonColumn, HtmlColumn, TextColumn, textValueFilter } from "@Obsidian/Controls/grid";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import Grid, { Column, ButtonColumn, HtmlColumn, TextColumn, textValueFilter } from "@Obsidian/Controls/grid";
     import { ListBlockBox } from "@Obsidian/ViewModels/Blocks/listBlockBox";
     import { ExternalApplicationListOptionsBag } from "@Obsidian/ViewModels/Blocks/Administration/ExternalApplicationList/externalApplicationListOptionsBag";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
@@ -61,8 +74,6 @@
 
     const gridDataSource = ref<Promise<GridDataBag>>();
     let gridData: GridDataBag | undefined;
-
-    const downloadButtonIcon = "ti ti-download";
 
     // #endregion
 
