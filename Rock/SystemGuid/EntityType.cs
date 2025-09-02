@@ -214,6 +214,11 @@ namespace Rock.SystemGuid
         public const string CONNECTION_WORKFLOW = "4EB8711F-7301-4699-A223-0505A7CEB20A";
 
         /// <summary>
+        /// The guid for the Rock.Model.OutreachTool entity
+        /// </summary>
+        public const string CONTACT = "A2FBB846-2511-4760-B912-928775BFC6D6";
+
+        /// <summary>
         /// The guid for the Rock.Model.ContentCollection entity
         /// </summary>
         public const string CONTENT_COLLECTION = "AD7B9219-1B47-4164-9DD1-90F0AF588CB8";
