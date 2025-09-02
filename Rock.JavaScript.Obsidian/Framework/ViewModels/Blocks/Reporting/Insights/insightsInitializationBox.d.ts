@@ -22,12 +22,16 @@
 //
 
 import { InsightsChartDataBag } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsChartDataBag";
+import { InsightsChartOptionsBag } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsChartOptionsBag";
 import { InsightsOptionsBag } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsOptionsBag";
 
 /** Contains all the initialization information for the Insights block. */
 export type InsightsInitializationBox = {
     /** Passes all attached Insights Chart Data Bags to the front end. */
     chartDataBags?: InsightsChartDataBag[] | null;
+
+    /** Passes all attached Insights Chart Options Bags to the front end. */
+    chartOptionsBags?: Record<string, InsightsChartOptionsBag> | null;
 
     /**
      * Gets or sets the error message. A non-empty value indicates that
