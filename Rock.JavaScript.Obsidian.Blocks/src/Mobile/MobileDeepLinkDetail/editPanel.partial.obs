@@ -1,0 +1,154 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <fieldset>
+        <div class="row">
+            <div class="col-md-6">
+                <TextBox v-model="linkRoutePrefix"
+                         rules="required"
+                         label="Route"
+                         help="The web route you want to deep link to your mobile application. Follows the deep link path prefix."
+                         :disabled=true />
+                <TextBox v-model="linkRoute"
+                         rules="required"
+                         :disabled=false />
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <PagePicker v-model="mobilePage"
+                            rules="required"
+                            label="Mobile Page"
+                            help="The mobile page you want the web route to direct to." />
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <Toggle v-model="usesUrlAsFallback"
+                        label="Fallback Method"
+                        help="If someone goes to a deep link, and they do not have the mobile application installed or are on a different platform, you can either redirect them to a page directly or to an external URL. The route and query string parameters that were initially passed in will be passed along."
+                        trueText="URL"
+                        falseText="Page"
+                        btnSize="xs" />
+            </div>
+        </div>
+        <div v-if="usesUrlAsFallback === 'Url'" class="row">
+            <div class="col-md-6">
+                <UrlLinkBox v-model="webFallbackPageUrl"
+                            rules="required"
+                            label="Fallback URL"
+                            help="The URL to fallback to, if you included route paramters (ex: {GroupGuid}) in the route, they will be replaced in the fallback URL, if included." />
+            </div>
+        </div>
+        <div v-else class="row">
+            <div class="col-md-6">
+                <PagePicker v-model="webFallbackPage"
+                            rules="required"
+                            label="Fallback Page"
+                            help="The page to fallback to." />
+            </div>
+        </div>
+
+    </fieldset>
+</template>
+
+<script setup lang="ts">
+    import { PropType, watch, computed } from "vue";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import PagePicker from "@Obsidian/Controls/pagePicker.obs";
+    import { setPropertiesBoxValue, watchPropertyChanges } from "@Obsidian/Utility/block";
+    import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
+    import { MobileDeepLinkDetailBag } from "@Obsidian/ViewModels/Blocks/Mobile/MobileDeepLinkDetail/mobileDeepLinkDetailBag";
+    import { MobileDeepLinkDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Mobile/MobileDeepLinkDetail/mobileDeepLinkDetailOptionsBag";
+    import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
+    import { toGuidOrNull } from "@Obsidian/Utility/guid";
+    import { PageRouteValueBag } from "@Obsidian/ViewModels/Rest/Controls/pageRouteValueBag";
+
+    const props = defineProps({
+        modelValue: {
+            type: Object as PropType<ValidPropertiesBox<MobileDeepLinkDetailBag>>,
+            required: true
+        },
+
+        options: {
+            type: Object as PropType<MobileDeepLinkDetailOptionsBag>,
+            required: true
+        },
+    });
+
+    const emit = defineEmits<{
+        (e: "update:modelValue", value: ValidPropertiesBox<MobileDeepLinkDetailBag>): void,
+        (e: "propertyChanged", value: string): void
+    }>();
+
+    // #region Values
+    const linkRoutePrefix = propertyRef(props.modelValue.bag?.route?.split("/")[0] ?? "", "Route Prefix");
+    const linkRoute = propertyRef(props.modelValue.bag?.route?.split("/")[1] ?? "", "Route");
+    const mobilePageGuid = propertyRef(props.modelValue.bag?.mobilePageGuid ?? "", "Mobile Page");
+    const usesUrlAsFallback = propertyRef(props.modelValue.bag?.usesUrlAsFallback ?? "page", "Uses Fallback Page");
+    const webFallbackPageGuid = propertyRef(props.modelValue.bag?.webFallbackPageGuid ?? "", "Web Fallback Page");
+    const webFallbackPageUrl = propertyRef(props.modelValue.bag?.webFallbackPageUrl ?? "", "Web Fallback URL");
+
+    // The properties that are being edited. This should only contain
+    // objects returned by propertyRef().
+    const propRefs = [
+        linkRoutePrefix,
+        linkRoute,
+        mobilePageGuid,
+        usesUrlAsFallback,
+        webFallbackPageGuid,
+        webFallbackPageUrl
+    ];
+    // #endregion
+
+    // #region Computed Values
+    const mobilePage = computed<PageRouteValueBag | null | undefined>(() => {
+        return mobilePageGuid.value
+            ? { page: { value: mobilePageGuid.value } } as PageRouteValueBag
+            : null;
+    });
+
+    const webFallbackPage = computed<PageRouteValueBag | null | undefined>(() => {
+        return webFallbackPageGuid.value
+            ? { page: { value: webFallbackPageGuid.value } } as PageRouteValueBag
+            : null;
+    });
+    // #endregion
+
+    // #region Functions
+
+    // #endregion
+
+    // #region Event Handlers
+
+    // #endregion
+
+    // Watch for parental changes in our model value and update all our values.
+    watch(() => props.modelValue, () => {
+        updateRefValue(linkRoutePrefix, props.modelValue.bag?.route?.split("/")[0] ?? "");
+        updateRefValue(linkRoute, props.modelValue.bag?.route?.split("/")[1] ?? "");
+        updateRefValue(mobilePageGuid, props.modelValue.bag?.mobilePageGuid ?? "");
+        updateRefValue(usesUrlAsFallback, props.modelValue.bag?.usesUrlAsFallback ?? "page");
+        updateRefValue(webFallbackPageGuid, props.modelValue.bag?.webFallbackPageGuid ?? "");
+        updateRefValue(webFallbackPageUrl, props.modelValue.bag?.webFallbackPageUrl ?? "");
+    });
+
+    // Determines which values we want to track changes on (defined in the
+    // array) and then emit a new object defined as newValue.
+    watch([...propRefs], () => {
+        const newValue: ValidPropertiesBox<MobileDeepLinkDetailBag> = {
+            bag: { ...props.modelValue.bag } as MobileDeepLinkDetailBag
+        };
+
+        setPropertiesBoxValue(newValue, "route", linkRoute.value);
+        setPropertiesBoxValue(newValue, "mobilePageGuid", toGuidOrNull(mobilePage.value?.page?.value));
+        setPropertiesBoxValue(newValue, "usesUrlAsFallback", usesUrlAsFallback.value as boolean);
+        setPropertiesBoxValue(newValue, "webFallbackPageGuid", toGuidOrNull(webFallbackPage.value?.page?.value));
+        setPropertiesBoxValue(newValue, "webFallbackPageUrl", webFallbackPageUrl.value);
+
+        emit("update:modelValue", newValue);
+    });
+
+    // Watch for any changes to props that represent properties and then
+    // automatically emit which property changed.
+    watchPropertyChanges(propRefs, emit);
+</script>
