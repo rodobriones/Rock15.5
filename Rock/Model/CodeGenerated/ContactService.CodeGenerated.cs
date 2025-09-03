@@ -129,6 +129,7 @@ namespace Rock.Model
             target.NextConnectionDate = source.NextConnectionDate;
             target.NextPrayerDate = source.NextPrayerDate;
             target.OwnerPersonAliasId = source.OwnerPersonAliasId;
+            target.PhotoId = source.PhotoId;
             target.PrayerCadence = source.PrayerCadence;
             target.PrayerNote = source.PrayerNote;
             target.relationshipFocus = source.relationshipFocus;

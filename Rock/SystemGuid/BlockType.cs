@@ -83,6 +83,11 @@ namespace Rock.SystemGuid
         public const string CONNECTION_OPPORTUNITY_SIGNUP = "C7FCE3B7-704B-43C0-AF96-5A70EB7F70D9";
 
         /// <summary>
+        /// The add contact Block Type GUID
+        /// </summary>
+        public const string ADD_CONTACT = "DE2F490D-2598-40E8-8170-4753DDC0A0B0";
+
+        /// <summary>
         /// Content Channel View Block Type Guid
         /// </summary>
         public const string CONTENT_CHANNEL_VIEW = "143A2345-3E26-4ED0-A2FE-42AAF11B4C0F";

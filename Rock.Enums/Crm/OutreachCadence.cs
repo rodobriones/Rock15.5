@@ -17,11 +17,12 @@
 
 namespace Rock.Enums.Crm
 {
+
     /// <summary>
-    /// The prayer cadence of the contact.
+    /// The connection cadence of the contact.
     /// </summary>
     [Enums.EnumDomain( "CRM" )]
-    public enum PrayerCadence
+    public enum OutreachCadence
     {
         /// <summary>
         /// Weekly prayer cadence.

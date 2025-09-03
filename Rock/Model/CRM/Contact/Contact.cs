@@ -43,6 +43,12 @@ namespace Rock.Model
         public string LastName { get; set; }
 
         /// <summary>
+        /// Gets or sets the photo identifier.
+        /// </summary>
+        [DataMember]
+        public int? PhotoId { get; set; }
+
+        /// <summary>
         /// Gets ro sets the birth day.
         /// </summary>
         [DataMember]
@@ -102,7 +108,7 @@ namespace Rock.Model
         /// Gets or sets the prayer cadence.
         /// </summary>
         [DataMember]
-        public PrayerCadence PrayerCadence { get; set; }
+        public OutreachCadence PrayerCadence { get; set; }
 
         /// <summary>
         /// Gets or sets the next prayer date.
@@ -114,7 +120,7 @@ namespace Rock.Model
         /// Gets or sets the connection cadence.
         /// </summary>
         [DataMember]
-        public ConnectionCadence ConnectionCadence { get; set; }
+        public OutreachCadence ConnectionCadence { get; set; }
 
         /// <summary>
         /// Gets or sets the next connection date.
@@ -224,6 +230,12 @@ namespace Rock.Model
         [DataMember]
         public virtual PersonAlias OwnerPersonAlias { get; set; }
 
+        /// <summary>
+        /// Gets or sets the photo <see cref="Rock.Model.BinaryFile"/>.
+        /// </summary>
+        [DataMember]
+        public virtual BinaryFile Photo { get; set; }
+
         #endregion
     }
 
@@ -240,6 +252,7 @@ namespace Rock.Model
         public ContactConfiguration()
         {
             this.HasRequired( c => c.OwnerPersonAlias ).WithMany().HasForeignKey( c => c.OwnerPersonAliasId ).WillCascadeOnDelete( false );
+            this.HasOptional( c => c.Photo ).WithMany().HasForeignKey( c => c.PhotoId ).WillCascadeOnDelete( false );
         }
     }
 

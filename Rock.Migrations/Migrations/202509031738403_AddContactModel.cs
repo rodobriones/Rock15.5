@@ -37,6 +37,7 @@ namespace Rock.Migrations
                         OwnerPersonAliasId = c.Int(nullable: false),
                         FirstName = c.String(maxLength: 50),
                         LastName = c.String(maxLength: 50),
+                        PhotoId = c.Int(),
                         BirthDay = c.Int(),
                         BirthMonth = c.Int(),
                         BirthYear = c.Int(),
@@ -71,7 +72,9 @@ namespace Rock.Migrations
                     })
                 .PrimaryKey(t => t.Id)
                 .ForeignKey("dbo.PersonAlias", t => t.OwnerPersonAliasId)
+                .ForeignKey("dbo.BinaryFile", t => t.PhotoId)
                 .Index(t => t.OwnerPersonAliasId)
+                .Index(t => t.PhotoId)
                 .Index(t => t.Guid, unique: true);
             
         }
@@ -81,8 +84,10 @@ namespace Rock.Migrations
         /// </summary>
         public override void Down()
         {
+            DropForeignKey("dbo.Contact", "PhotoId", "dbo.BinaryFile");
             DropForeignKey("dbo.Contact", "OwnerPersonAliasId", "dbo.PersonAlias");
             DropIndex("dbo.Contact", new[] { "Guid" });
+            DropIndex("dbo.Contact", new[] { "PhotoId" });
             DropIndex("dbo.Contact", new[] { "OwnerPersonAliasId" });
             DropTable("dbo.Contact");
         }
