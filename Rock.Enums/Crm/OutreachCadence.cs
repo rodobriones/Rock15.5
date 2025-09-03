@@ -32,7 +32,7 @@ namespace Rock.Enums.Crm
         /// <summary>
         /// Every other week prayer cadence.
         /// </summary>
-        EveryOtherWeeks = 1,
+        EveryOtherWeek = 1,
 
         /// <summary>
         /// Monthly prayer cadence.
@@ -42,7 +42,7 @@ namespace Rock.Enums.Crm
         /// <summary>
         /// Every other month prayer cadence.
         /// </summary>
-        EveryOtherMonths = 3,
+        EveryOtherMonth = 3,
 
         /// <summary>
         /// Quarterly prayer cadence.
