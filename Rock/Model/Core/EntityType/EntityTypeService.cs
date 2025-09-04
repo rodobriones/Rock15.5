@@ -480,6 +480,17 @@ namespace Rock.Model
                         if ( !entityTypeService.AlreadyExists( entityType.Name ) )
                         {
                             entityTypeService.Add( entityType );
+
+                            // Since this new entitytype could be an Obsidian block getting ready to chop/swap
+                            // an existing webforms block, check to see if we need to do any conversions.
+                            // It will perform the conversion if needed, otherwise it will just return.
+
+                            var blockType = CheckAndStageObsidianBlockConversion( Type.GetType( entityType.AssemblyName ), entityType, rockContext );
+                            if ( blockType == null )
+                            {
+                                // If the blockType was not returned, that means a conversion did not get staged.
+                                // TODO: Do we need to log this?
+                            }
                         }
                     }
                 }
@@ -507,6 +518,30 @@ namespace Rock.Model
                 {
                     EntityTypeCache.Get( entityTypeModel );
                 }
+            }
+        }
+
+        /// <summary>
+        /// This will check to see if the provided entityType is an Obsidian block that has a MigrationStrategyAttribute.
+        /// NOTE: It's the responsiblity of the caller to call SaveChanges on the rockContext to save changes to the database
+        /// context.
+        /// </summary>
+        /// <param name="entityType"></param>
+        /// <param name="rockContext"></param>
+        private static BlockType CheckAndStageObsidianBlockConversion( Type type, EntityType entityType, RockContext rockContext )
+        {
+            // Pseudo-code:
+            //    1. Reflect to see if this block has a MigrationStrategyAttribute
+            //    2. If so, call BlockTypeService's MigrateWebFormsBlockToObsidianBlock method
+            var migrationStrategy = type.GetCustomAttribute<Rock.Obsidian.MigrationStrategyAttribute>( inherit: false )?.Strategy;
+            if ( migrationStrategy != null )
+            {
+                var blockTypeGuidFromAttribute = type.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+                return BlockTypeService.StageMigrateWebFormsToObsidianBlock( blockTypeGuidFromAttribute, entityType, migrationStrategy, rockContext );
+            }
+            else
+            {
+                return null;
             }
         }
 
