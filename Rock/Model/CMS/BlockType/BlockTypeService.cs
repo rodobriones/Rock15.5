@@ -465,7 +465,7 @@ namespace Rock.Model
 
                                 Reason: Ensure attributes declared on code-behind classes are visible to generated subclasses.
                             */
-                            var blockTypeGuidFromAttribute = blockCompiledType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+                            var blockTypeGuidFromAttribute = blockCompiledType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: true )?.Guid;
                             if ( blockTypeGuidFromAttribute != null && blockType.Guid != blockTypeGuidFromAttribute.Value )
                             {
                                 blockType.Guid = blockTypeGuidFromAttribute.Value;
