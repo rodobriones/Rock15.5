@@ -24,7 +24,6 @@ using System.Reflection;
 using System.Threading;
 
 using Rock.Attribute;
-using Rock.Blocks;
 using Rock.Cms;
 using Rock.Data;
 using Rock.Enums.Blocks;
@@ -192,8 +191,6 @@ namespace Rock.Model
 
             // Get the Block Entity Type
             int? blockEntityTypeId = EntityTypeCache.Get( typeof( Block ) ).Id;
-
-            var duplicateBlockTypeGuidsToObsidianChop = new Dictionary<Guid, List<BlockType>>();
 
             // for each BlockType
             foreach ( var type in rockBlockTypes.Values )
