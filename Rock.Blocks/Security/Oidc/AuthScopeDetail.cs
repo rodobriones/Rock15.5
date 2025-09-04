@@ -321,11 +321,6 @@ namespace Rock.Blocks.Security.Oidc
         [BlockAction]
         public BlockActionResult Save( ValidPropertiesBox<AuthScopeBag> box )
         {
-            if ( box.Bag.IsSystem )
-            {
-                return ActionBadRequest( "Because this auth scope is used by Rock, editing is restricted." );
-            }
-
             var entityService = new AuthScopeService( RockContext );
 
             if ( !TryGetEntityForEditAction( box.Bag.IdKey, out var entity, out var actionError ) )
@@ -346,6 +341,23 @@ namespace Rock.Blocks.Security.Oidc
             }
 
             var isNew = entity.Id == 0;
+
+            if ( entity.IsSystem )
+            {
+                var originalEntity = entityService.Get( entity.Id );
+                if ( originalEntity != null )
+                {
+                    // If it is a system entity, override all values with original except Public Name.
+                    entity.Name = originalEntity.Name;
+                    entity.IsActive = originalEntity.IsActive;
+                    entity.IsSystem = true;
+                }
+                else
+                {
+                    return ActionBadRequest( "An error occured while retrieving the original system scope. Preventing save to prevent data corruption." );
+                }
+            }
+
 
             RockContext.WrapTransaction( () =>
             {

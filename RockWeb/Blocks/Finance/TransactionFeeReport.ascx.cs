@@ -191,7 +191,7 @@ namespace RockWeb.Blocks.Finance
 {[kpis style:'card' columncount:'3']}
   [[ kpi icon:'ti-list' value:'{{TotalFeeCoverageAmount | FormatAsCurrency }}' label:'{{TotalFeeCoverageLabel}}' color:'blue-500']][[ endkpi ]]
   [[ kpi icon:'ti-credit-card' value:'{{CreditCardFeeCoverageAmount | FormatAsCurrency }}' label:'{{CreditFeeCoverageLabel}}' color:'green-500']][[ endkpi ]]
-  [[ kpi icon:'ti-bash-banknote' value:'{{ACHFeeCoverageAmount | FormatAsCurrency }}' label:'{{ACHFeeCoverageLabel}}' color:'indigo-500' ]][[ endkpi ]]
+  [[ kpi icon:'ti-cash-banknote' value:'{{ACHFeeCoverageAmount | FormatAsCurrency }}' label:'{{ACHFeeCoverageLabel}}' color:'indigo-500' ]][[ endkpi ]]
 {[endkpis]}";
 
             var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage );

@@ -1,10 +1,5 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <NotificationBox v-if="infoMessage" alertType="info" v-html="infoMessage"></NotificationBox>
-
-    <NotificationBox v-if="blockError" alertType="warning" v-html="blockError"></NotificationBox>
-
-    <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
 
     <DetailBlock v-if="!blockError"
                  v-model:mode="panelMode"
@@ -21,10 +16,22 @@
                  @edit="onEdit"
                  @save="onSave">
         <template #view>
+            <NotificationBox v-if="infoMessage" alertType="info" v-html="infoMessage"></NotificationBox>
+
+            <NotificationBox v-if="blockError" alertType="warning" v-html="blockError"></NotificationBox>
+
+            <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
+
             <ViewPanel :modelValue="authScopeViewBag" :options="options" />
         </template>
 
         <template #edit>
+            <NotificationBox v-if="infoMessage" alertType="info" v-html="infoMessage"></NotificationBox>
+
+            <NotificationBox v-if="blockError" alertType="warning" v-html="blockError"></NotificationBox>
+
+            <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
+
             <EditPanel v-model="authScopeEditBag" :options="options" :isSystem="isSystem" @propertyChanged="baseBlock.onPropertyChanged" />
         </template>
     </DetailBlock>
@@ -86,10 +93,10 @@
      */
     const panelName = computed((): string => {
         if (panelMode.value === DetailPanelMode.Edit) {
-            return "Edit Scope Detail";
+            return "Edit Scope";
         }
 
-        return "View Scope Detail";
+        return "View Scope";
     });
 
     /**
