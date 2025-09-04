@@ -108,7 +108,9 @@ namespace Rock.Model
         {
             target.Id = source.Id;
             target.AdditionalNote = source.AdditionalNote;
-            target.BaptismDate = source.BaptismDate;
+            target.BaptismDay = source.BaptismDay;
+            target.BaptismMonth = source.BaptismMonth;
+            target.BaptismYear = source.BaptismYear;
             target.Baptized = source.Baptized;
             target.BirthDay = source.BirthDay;
             target.BirthMonth = source.BirthMonth;
@@ -120,6 +122,7 @@ namespace Rock.Model
             target.FirstName = source.FirstName;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.Gender = source.Gender;
             target.HasAcceptedJesus = source.HasAcceptedJesus;
             target.InstagramProfileUrl = source.InstagramProfileUrl;
             target.LastName = source.LastName;
@@ -134,7 +137,9 @@ namespace Rock.Model
             target.PrayerNote = source.PrayerNote;
             target.relationshipFocus = source.relationshipFocus;
             target.RelationshipStrength = source.RelationshipStrength;
-            target.SalvationDate = source.SalvationDate;
+            target.SalvationDay = source.SalvationDay;
+            target.SalvationMonth = source.SalvationMonth;
+            target.SalvationYear = source.SalvationYear;
             target.TikTokProfileUrl = source.TikTokProfileUrl;
             target.WeddingAnniversaryDay = source.WeddingAnniversaryDay;
             target.WeddingAnniversaryMonth = source.WeddingAnniversaryMonth;

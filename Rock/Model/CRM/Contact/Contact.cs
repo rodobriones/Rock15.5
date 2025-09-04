@@ -43,6 +43,12 @@ namespace Rock.Model
         public string LastName { get; set; }
 
         /// <summary>
+        /// Gets or sets the gender.
+        /// </summary>
+        [DataMember]
+        public Gender Gender { get; set; }
+
+        /// <summary>
         /// Gets or sets the photo identifier.
         /// </summary>
         [DataMember]
@@ -132,7 +138,7 @@ namespace Rock.Model
         /// Gets or sets the relationship focus.
         /// </summary>
         [DataMember]
-        public RelationshipFocus? relationshipFocus { get; set; }
+        public RelationshipFocus relationshipFocus { get; set; }
 
         /// <summary>
         /// Gets or sets the connection note.
@@ -162,10 +168,22 @@ namespace Rock.Model
         public bool? HasAcceptedJesus { get; set; }
 
         /// <summary>
-        /// Gets or sets the date/time when the contact accepted Jesus as their personal savior.
+        /// Gets or sets the day of the salvation day.
         /// </summary>
         [DataMember]
-        public DateTime? SalvationDate { get; set; }
+        public int? SalvationDay { get; set; }
+
+        /// <summary>
+        /// Gets or sets the month of the salvation month.
+        /// </summary>
+        [DataMember]
+        public int? SalvationMonth { get; set; }
+
+        /// <summary>
+        /// Gets or sets the year of the salvation year.
+        /// </summary>
+        [DataMember]
+        public int? SalvationYear { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether this contact has been baptized.
@@ -174,10 +192,22 @@ namespace Rock.Model
         public bool? Baptized { get; set; }
 
         /// <summary>
-        /// Gets or sets the date/time when the contact was baptized.
+        /// Gets or sets the baptism day.
         /// </summary>
         [DataMember]
-        public DateTime? BaptismDate { get; set; }
+        public int? BaptismDay { get; set; }
+
+        /// <summary>
+        /// Gets or sets the baptism month.
+        /// </summary>
+        [DataMember]
+        public int? BaptismMonth { get; set; }
+
+        /// <summary>
+        /// Gets or sets the baptism year.
+        /// </summary>
+        [DataMember]
+        public int? BaptismYear { get; set; }
 
         /// <summary>
         /// Gets or sets the date/time of the last relationship check-in.

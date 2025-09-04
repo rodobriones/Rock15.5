@@ -15,6 +15,7 @@
 // </copyright>
 //
 using Rock.Common.Mobile.Enums;
+using Rock.Enums.Crm;
 using Rock.Enums.Mobile;
 using Rock.Web.Cache;
 
@@ -377,6 +378,165 @@ namespace Rock.Mobile
                 default:
                     return Rock.Common.Mobile.Enums.Beacon.LocationPermissionStatus.Always;
             }
+        }
+    }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
+    /// </summary>
+    public static class MobileExtensionRelationshipStrength
+    {
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Crm.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
+        /// </summary>
+        /// <param name="strength"></param>
+        /// <returns></returns>
+        public static Enums.Crm.RelationshipStrength ToNative( this Rock.Common.Mobile.Enums.RelationshipStrength strength )
+        {
+            switch ( strength )
+            {
+                case Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem:
+                    return Enums.Crm.RelationshipStrength.GettingToKnowThem;
+                case Rock.Common.Mobile.Enums.RelationshipStrength.CasualAcquaintance:
+                    return Enums.Crm.RelationshipStrength.CasualAcquaintance;
+                case Rock.Common.Mobile.Enums.RelationshipStrength.GrowingConnection:
+                    return Enums.Crm.RelationshipStrength.GrowingConnection;
+                case Rock.Common.Mobile.Enums.RelationshipStrength.TrustedRelationship:
+                    return Enums.Crm.RelationshipStrength.TrustedRelationship;
+                case Rock.Common.Mobile.Enums.RelationshipStrength.DeepAndMeaningfulConnection:
+                    return Enums.Crm.RelationshipStrength.DeepAndMeaningfulConnection;
+                default:
+                    return Enums.Crm.RelationshipStrength.GettingToKnowThem;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Crm.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
+        /// </summary>
+        /// <param name="strength"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.RelationshipStrength ToMobile( this Enums.Crm.RelationshipStrength strength )
+        {
+            switch ( strength )
+            {
+                case Enums.Crm.RelationshipStrength.GettingToKnowThem:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem;
+                case Enums.Crm.RelationshipStrength.CasualAcquaintance:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.CasualAcquaintance;
+                case Enums.Crm.RelationshipStrength.GrowingConnection:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.GrowingConnection;
+                case Enums.Crm.RelationshipStrength.TrustedRelationship:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.TrustedRelationship;
+                case Enums.Crm.RelationshipStrength.DeepAndMeaningfulConnection:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.DeepAndMeaningfulConnection;
+                default:
+                    return Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/>.
+    /// </summary>
+    public static class MobileExtensionRelationShipFocus
+    {
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/> to a web native <see cref="Enums.Crm.RelationshipFocus"/>.
+        /// </summary>
+        /// <param name="focus"></param>
+        /// <returns></returns>
+        public static Enums.Crm.RelationshipFocus ToNative( this Rock.Common.Mobile.Enums.RelationshipFocus focus )
+        {
+            switch ( focus )
+            {
+                case Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith:
+                    return Enums.Crm.RelationshipFocus.InvitationToFaith;
+                case Rock.Common.Mobile.Enums.RelationshipFocus.DeepeningFaith:
+                    return Enums.Crm.RelationshipFocus.DeepeningFaith;
+                case Rock.Common.Mobile.Enums.RelationshipFocus.EncouragementAndCare:
+                    return Enums.Crm.RelationshipFocus.EncouragementAndCare;
+                case Rock.Common.Mobile.Enums.RelationshipFocus.RestorationAndHealing:
+                    return Enums.Crm.RelationshipFocus.RestorationAndHealing;
+                default:
+                    return Enums.Crm.RelationshipFocus.InvitationToFaith;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Crm.RelationshipFocus"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/>.
+        /// </summary>
+        /// <param name="focus"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.RelationshipFocus ToMobile( this Enums.Crm.RelationshipFocus focus )
+        {
+            switch ( focus )
+            {
+                case Enums.Crm.RelationshipFocus.InvitationToFaith:
+                    return Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith;
+                case Enums.Crm.RelationshipFocus.DeepeningFaith:
+                    return Rock.Common.Mobile.Enums.RelationshipFocus.DeepeningFaith;
+                case Enums.Crm.RelationshipFocus.EncouragementAndCare:
+                    return Rock.Common.Mobile.Enums.RelationshipFocus.EncouragementAndCare;
+                case Enums.Crm.RelationshipFocus.RestorationAndHealing:
+                    return Rock.Common.Mobile.Enums.RelationshipFocus.RestorationAndHealing;
+                default:
+                    return Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/>.
+    /// </summary>
+    public static class MobileExtensionOutreachCadence
+    {
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/> to a web native <see cref="Enums.Crm.OutreachCadence"/>.
+        /// </summary>
+        /// <param name="cadence"></param>
+        /// <returns></returns>
+        public static Enums.Crm.OutreachCadence ToNative( this Rock.Common.Mobile.Enums.OutreachCadence cadence )
+        {
+            switch ( cadence )
+            {
+                case Rock.Common.Mobile.Enums.OutreachCadence.Weekly:
+                    return Enums.Crm.OutreachCadence.Weekly;
+                case Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek:
+                    return Enums.Crm.OutreachCadence.EveryOtherWeek;
+                case Rock.Common.Mobile.Enums.OutreachCadence.Monthly:
+                    return Enums.Crm.OutreachCadence.Monthly;
+                case Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherMonth:
+                    return Enums.Crm.OutreachCadence.EveryOtherMonth;
+                case Rock.Common.Mobile.Enums.OutreachCadence.Quarterly:
+                    return Enums.Crm.OutreachCadence.Quarterly;
+                default:
+                    return Enums.Crm.OutreachCadence.EveryOtherWeek;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Crm.OutreachCadence"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/>.
+        /// </summary>
+        /// <param name="cadence"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.OutreachCadence ToMobile( this Enums.Crm.OutreachCadence cadence )
+        {
+            switch ( cadence )
+            {
+                case Enums.Crm.OutreachCadence.Weekly:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.Weekly;
+                case Enums.Crm.OutreachCadence.EveryOtherWeek:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek;
+                case Enums.Crm.OutreachCadence.Monthly:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.Monthly;
+                case Enums.Crm.OutreachCadence.EveryOtherMonth:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherMonth;
+                case Enums.Crm.OutreachCadence.Quarterly:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.Quarterly;
+                default:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek;
+            }
+
         }
     }
 }
