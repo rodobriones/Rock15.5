@@ -24,8 +24,10 @@ using System.Reflection;
 using System.Threading;
 
 using Rock.Attribute;
+using Rock.Blocks;
 using Rock.Cms;
 using Rock.Data;
+using Rock.Enums.Blocks;
 using Rock.Enums.Cms;
 using Rock.Observability;
 using Rock.Web.Cache;
@@ -191,6 +193,8 @@ namespace Rock.Model
             // Get the Block Entity Type
             int? blockEntityTypeId = EntityTypeCache.Get( typeof( Block ) ).Id;
 
+            var duplicateBlockTypeGuidsToObsidianChop = new Dictionary<Guid, List<BlockType>>();
+
             // for each BlockType
             foreach ( var type in rockBlockTypes.Values )
             {
@@ -201,11 +205,19 @@ namespace Rock.Model
                     {
                         using ( var rockContext = new RockContext() )
                         {
+                            var blockTypeGuidFromAttribute = type.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+
                             var entityTypeId = EntityTypeCache.Get( type, true, rockContext ).Id;
                             var blockTypeService = new BlockTypeService( rockContext );
                             var blockType = blockTypeService.Queryable()
                                 .FirstOrDefault( b => b.EntityTypeId == entityTypeId );
 
+                            if ( blockType == null && blockTypeGuidFromAttribute != null )
+                            {
+                                blockType = CheckAndProcessObsidianConversion( type, blockTypeGuidFromAttribute, entityTypeId, blockTypeService );
+                            }
+
+                            // Otherwise...
                             if ( blockType == null )
                             {
                                 // Create new BlockType record and save it
@@ -217,7 +229,6 @@ namespace Rock.Model
                             // Update Name, Category, and Description based on block's attribute definitions
                             blockType.Name = Reflection.GetDisplayName( type ) ?? string.Empty;
 
-                            var blockTypeGuidFromAttribute = type.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
                             if ( blockTypeGuidFromAttribute != null && blockType.Guid != blockTypeGuidFromAttribute.Value )
                             {
                                 blockType.Guid = blockTypeGuidFromAttribute.Value;
@@ -264,6 +275,64 @@ namespace Rock.Model
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Check if the block type is being converted from a webforms block to an obsidian block, and if it
+        /// is, process the conversion by hijacking the existing webforms block type.  If it's a Chop
+        /// conversion, then delete the webforms block files from the filesystem.
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="blockTypeGuidFromAttribute"></param>
+        /// <param name="entityTypeId"></param>
+        /// <param name="blockTypeService"></param>
+        /// <returns></returns>
+        private static BlockType CheckAndProcessObsidianConversion( Type type, Guid? blockTypeGuidFromAttribute, int entityTypeId, BlockTypeService blockTypeService )
+        {
+            // This could be a chop... check to see if this block is already registered
+            // without the EntityTypeId.  If it is, we'll hijack it for Obsidian.
+            //
+            // Note: If the webforms block wants to stay around (ie, a swap), a developer needs
+            //       change its [Rock.SystemGuid.BlockTypeGuid(...)] to a new value.
+            BlockType blockType = blockTypeService.Queryable().FirstOrDefault( b => b.Guid == blockTypeGuidFromAttribute.Value );
+            if ( blockType != null )
+            {
+                // You are now Obsidian:
+                blockType.EntityTypeId = entityTypeId;
+
+                // If this is a Chop migration strategy, then we delete the webforms blocktype from the filesystem.
+                var obsidianConversion = type.GetCustomAttribute<Rock.Obsidian.MigrationStrategyAttribute>( inherit: false )?.Strategy;
+                if ( obsidianConversion != null && obsidianConversion.Value == MigrationStrategy.Chop )
+                {
+                    DeleteBlockTypeFiles( blockType.Path );
+                }
+
+                blockType.Path = null;
+                BlockTypeCache.FlushItem( blockType.Id );
+            }
+
+            return blockType;
+        }
+
+        /// <summary>
+        /// Deletes the block type files from the file system.
+        /// This can/should be removed once the Obsidian conversion is complete.
+        /// </summary>
+        /// <param name="path"></param>
+        private static void DeleteBlockTypeFiles( string path )
+        {
+            var blockTypeFilePath = path?
+                .Replace( '/', Path.DirectorySeparatorChar )
+                .Replace( "~", AppDomain.CurrentDomain.BaseDirectory ) ?? "";
+            if ( File.Exists( blockTypeFilePath ) )
+            {
+                File.Delete( blockTypeFilePath );
+            }
+            var sourceCodeBlockTypeFilePath = blockTypeFilePath + ".cs";
+            if ( File.Exists( sourceCodeBlockTypeFilePath ) )
+            {
+                File.Delete( sourceCodeBlockTypeFilePath );
             }
         }
 
