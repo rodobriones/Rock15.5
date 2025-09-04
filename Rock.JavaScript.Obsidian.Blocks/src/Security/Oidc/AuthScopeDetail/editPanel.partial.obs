@@ -10,7 +10,7 @@
             </div>
 
             <div class="col-md-6">
-                <CheckBox v-model="isActive"
+                <CheckBox v-model="isActiveChecked"
                           label="Active"
                           :disabled="isSystem" />
             </div>
@@ -18,8 +18,7 @@
         <div class="row">
             <div class="col-md-6">
                 <TextBox v-model="publicName"
-                         label="Public Name"
-                         :disabled="isSystem" />
+                         label="Public Name" />
             </div>
         </div>
 
@@ -67,6 +66,12 @@
     const name = propertyRef(props.modelValue.bag?.name ?? "", "Name");
     const publicName = propertyRef(props.modelValue.bag?.publicName ?? "", "PublicName");
     const isSystem = propertyRef(props.modelValue.bag?.isSystem ?? false, "IsSystem");
+
+    // If the entity is new (idKey === "0"), then we always want the active
+    // checkbox to be checked by default.
+    const isActiveChecked = props.modelValue?.bag?.idKey === ""
+                            ? true
+                            : propertyRef(props.modelValue.bag?.isActive ?? false, "IsActive").value;
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
