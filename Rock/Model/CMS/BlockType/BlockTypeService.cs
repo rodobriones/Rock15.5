@@ -421,7 +421,7 @@ namespace Rock.Model
                             */
                             if ( blockTypeGuidFromAttribute == null && blockCompiledType.Namespace == "ASP" )
                             {
-                                blockTypeGuidFromAttribute = blockCompiledType.UnderlyingSystemType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+                                blockTypeGuidFromAttribute = blockCompiledType.BaseType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
                             }
 
                             if ( blockTypeGuidFromAttribute != null && blockType.Guid != blockTypeGuidFromAttribute.Value )
