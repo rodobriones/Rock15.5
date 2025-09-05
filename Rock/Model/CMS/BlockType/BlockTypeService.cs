@@ -26,7 +26,6 @@ using System.Threading;
 using Rock.Attribute;
 using Rock.Cms;
 using Rock.Data;
-using Rock.Enums.Blocks;
 using Rock.Enums.Cms;
 using Rock.Observability;
 using Rock.Web.Cache;
@@ -39,7 +38,6 @@ namespace Rock.Model
     /// </summary>
     public partial class BlockTypeService
     {
-        private const string ROSLYN_COMPILED_NAMESPACE = "ASP";
         /// <summary>
         /// Gets a <see cref="Rock.Model.BlockType"/> by its Guid.
         /// </summary>
@@ -69,6 +67,11 @@ namespace Rock.Model
         {
             return Queryable().Where( t => t.Path == path );
         }
+
+        /// <summary>
+        /// Constant that holds the namespace of Roslyn compilied user controls.
+        /// </summary>
+        private const string ROSLYN_COMPILED_NAMESPACE = "ASP";
 
         /// <summary>
         /// Lock obj to make sure that we aren't compiling more than one BlockType at a time. This prevents
@@ -203,11 +206,10 @@ namespace Rock.Model
                     {
                         using ( var rockContext = new RockContext() )
                         {
-                            var blockTypeGuidFromAttribute = type.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
-
                             var entityTypeId = EntityTypeCache.Get( type, true, rockContext ).Id;
                             var blockTypeService = new BlockTypeService( rockContext );
-                            var blockType = blockTypeService.Queryable().FirstOrDefault( b => b.EntityTypeId == entityTypeId );
+                            var blockType = blockTypeService.Queryable()
+                                .FirstOrDefault( b => b.EntityTypeId == entityTypeId );
 
                             if ( blockType == null )
                             {
@@ -220,6 +222,7 @@ namespace Rock.Model
                             // Update Name, Category, and Description based on block's attribute definitions
                             blockType.Name = Reflection.GetDisplayName( type ) ?? string.Empty;
 
+                            var blockTypeGuidFromAttribute = type.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
                             if ( blockTypeGuidFromAttribute != null && blockType.Guid != blockTypeGuidFromAttribute.Value )
                             {
                                 blockType.Guid = blockTypeGuidFromAttribute.Value;
@@ -282,7 +285,7 @@ namespace Rock.Model
         /// This method stages updates only and does not call <c>SaveChanges()</c>.
         /// </remarks>
         /// 
-        internal static void StageMigrateWebFormsToObsidianBlock( Dictionary<Guid, EntityType> blocksTypesToCheck, RockContext rockContext )
+        internal static void StagePossibleMigrateWebFormsToObsidianBlock( Dictionary<Guid, EntityType> blocksTypesToCheck, RockContext rockContext )
         {
             var blockTypeService = new BlockTypeService( rockContext );
             var webFormBlocksToMigrateToObsidian = blockTypeService.Queryable()
@@ -295,9 +298,24 @@ namespace Rock.Model
                 {
                     var entityType = blocksTypesToCheck[block.Guid];
 
+                    // We need to use the entityType and not the entityType.Id because the entityType.Id
+                    // may not be set if the entityType was just added.
                     block.EntityType = entityType;
                     block.Path = null;
                     BlockTypeCache.FlushItem( block.Id );
+
+                    // Look for older blocktypes that were formerly using that EntityId
+                    // and remove them.
+                    if ( entityType.Id != 0 )
+                    {
+                        var oldBlockTypes = blockTypeService.Queryable()
+                            .Where( b => b.Id != block.Id && b.EntityTypeId == entityType.Id );
+                        foreach ( var oldBlockType in oldBlockTypes )
+                        {
+                            blockTypeService.Delete( oldBlockType );
+                            BlockTypeCache.FlushItem( oldBlockType.Id );
+                        }
+                    }
                 }
             }
         }

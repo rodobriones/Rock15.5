@@ -356,7 +356,6 @@ namespace Rock.Model
 
                 foreach ( var oldEntityType in reflectedEntityTypesThatNoLongerExist )
                 {
-
                     Type foundType = null;
                     // if this isn't one of the EntityTypes that we self-register,
                     // see if it was manually registered first (with EntityTypeCache.Get(Type type, bool createIfNotExists))
@@ -484,7 +483,8 @@ namespace Rock.Model
                     }
                 }
 
-                // Now we need take all the EntityTypes that are still in the system (new and existing)
+                // Obsidian chop/swap?
+                // Now we need to take all the EntityTypes that are still in the system (new and existing)
                 // and check if any are taking over an existing webforms block's blocktype for conversion to Obsidian.
                 var combinedNewAndExistingEntityTypes = new List<EntityType>(
                     reflectedEntityTypesThatStillExist.Count + entityTypesFromReflection.Count
@@ -522,10 +522,10 @@ namespace Rock.Model
 
         /// <summary>
         /// Scans the provided <paramref name="entityTypes"/> for types marked with
-        /// <see cref="Rock.SystemGuid.BlockTypeGuidAttribute"/>. For each discovered GUID, stages a migration
+        /// <see cref="Rock.SystemGuid.BlockTypeGuidAttribute"/>. For each discovered GUID, stages a possible migration
         /// of any matching legacy WebForms block type so it can be converted to an Obsidian block type.
         ///
-        /// NOTE: It's the responsiblity of the caller to call SaveChanges on the rockContext to save changes to the database
+        /// NOTE: It's the responsiblity of the caller to call SaveChanges on the rockContext to save changes to the database.
         /// </summary>
         /// <param name="reflectedTypeLookupByName">Lookup of entity type name to reflected <see cref="Type"/> used to inspect attributes.</param>
         /// <param name="entityTypes">The entity types to inspect for <see cref="Rock.SystemGuid.BlockTypeGuidAttribute"/> values.</param>
@@ -551,7 +551,7 @@ namespace Rock.Model
 
             if ( blockTypeDictionary.Any() )
             {
-                BlockTypeService.StageMigrateWebFormsToObsidianBlock( blockTypeDictionary, rockContext );
+                BlockTypeService.StagePossibleMigrateWebFormsToObsidianBlock( blockTypeDictionary, rockContext );
             }
         }
 
