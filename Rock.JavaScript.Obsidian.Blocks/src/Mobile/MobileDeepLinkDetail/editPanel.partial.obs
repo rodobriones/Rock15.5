@@ -3,14 +3,17 @@
     <fieldset>
         <div class="row">
             <div class="col-md-6">
-                <TextBox v-model="linkRoutePrefix"
+                <TextBox v-model="route"
                          rules="required"
                          label="Route"
                          help="The web route you want to deep link to your mobile application. Follows the deep link path prefix."
-                         :disabled=true />
-                <TextBox v-model="linkRoute"
-                         rules="required"
-                         :disabled=false />
+                         :disabled="false">
+                    <template #inputGroupPrepend>
+                        <span class="input-group-addon">
+                            {{ formattedRoutePrefix }}
+                        </span>
+                    </template>
+                </TextBox>
             </div>
         </div>
         <div class="row">
@@ -31,7 +34,7 @@
                         btnSize="xs" />
             </div>
         </div>
-        <div v-if="usesUrlAsFallback === 'Url'" class="row">
+        <div v-if="usesUrlAsFallback === true" class="row">
             <div class="col-md-6">
                 <UrlLinkBox v-model="webFallbackPageUrl"
                             rules="required"
@@ -55,12 +58,13 @@
     import { PropType, watch, computed } from "vue";
     import TextBox from "@Obsidian/Controls/textBox.obs";
     import PagePicker from "@Obsidian/Controls/pagePicker.obs";
+    import UrlLinkBox from "@Obsidian/Controls/urlLinkBox.obs";
+    import Toggle from "@Obsidian/Controls/toggle.obs";
     import { setPropertiesBoxValue, watchPropertyChanges } from "@Obsidian/Utility/block";
     import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
     import { MobileDeepLinkDetailBag } from "@Obsidian/ViewModels/Blocks/Mobile/MobileDeepLinkDetail/mobileDeepLinkDetailBag";
     import { MobileDeepLinkDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Mobile/MobileDeepLinkDetail/mobileDeepLinkDetailOptionsBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
-    import { toGuidOrNull } from "@Obsidian/Utility/guid";
     import { PageRouteValueBag } from "@Obsidian/ViewModels/Rest/Controls/pageRouteValueBag";
 
     const props = defineProps({
@@ -81,37 +85,29 @@
     }>();
 
     // #region Values
-    const linkRoutePrefix = propertyRef(props.modelValue.bag?.route?.split("/")[0] ?? "", "Route Prefix");
-    const linkRoute = propertyRef(props.modelValue.bag?.route?.split("/")[1] ?? "", "Route");
-    const mobilePageGuid = propertyRef(props.modelValue.bag?.mobilePageGuid ?? "", "Mobile Page");
-    const usesUrlAsFallback = propertyRef(props.modelValue.bag?.usesUrlAsFallback ?? "page", "Uses Fallback Page");
-    const webFallbackPageGuid = propertyRef(props.modelValue.bag?.webFallbackPageGuid ?? "", "Web Fallback Page");
+    const route = propertyRef(props.modelValue.bag?.route ?? "", "Route");
+    const mobilePage = propertyRef(props.modelValue.bag?.mobilePage ?? {} as PageRouteValueBag, "Mobile Page");
+    const usesUrlAsFallback = propertyRef(props.modelValue.bag?.usesUrlAsFallback ?? false, "Uses Fallback Page");
+    const webFallbackPage = propertyRef(props.modelValue.bag?.webFallbackPage ?? {} as PageRouteValueBag, "Web Fallback Page");
     const webFallbackPageUrl = propertyRef(props.modelValue.bag?.webFallbackPageUrl ?? "", "Web Fallback URL");
+
+    const formattedRoutePrefix = computed((): string => {
+        return `/${props.modelValue.bag?.pathPrefix}/`;
+    });
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
     const propRefs = [
-        linkRoutePrefix,
-        linkRoute,
-        mobilePageGuid,
+        route,
+        mobilePage,
         usesUrlAsFallback,
-        webFallbackPageGuid,
+        webFallbackPage,
         webFallbackPageUrl
     ];
     // #endregion
 
     // #region Computed Values
-    const mobilePage = computed<PageRouteValueBag | null | undefined>(() => {
-        return mobilePageGuid.value
-            ? { page: { value: mobilePageGuid.value } } as PageRouteValueBag
-            : null;
-    });
 
-    const webFallbackPage = computed<PageRouteValueBag | null | undefined>(() => {
-        return webFallbackPageGuid.value
-            ? { page: { value: webFallbackPageGuid.value } } as PageRouteValueBag
-            : null;
-    });
     // #endregion
 
     // #region Functions
@@ -124,11 +120,10 @@
 
     // Watch for parental changes in our model value and update all our values.
     watch(() => props.modelValue, () => {
-        updateRefValue(linkRoutePrefix, props.modelValue.bag?.route?.split("/")[0] ?? "");
-        updateRefValue(linkRoute, props.modelValue.bag?.route?.split("/")[1] ?? "");
-        updateRefValue(mobilePageGuid, props.modelValue.bag?.mobilePageGuid ?? "");
-        updateRefValue(usesUrlAsFallback, props.modelValue.bag?.usesUrlAsFallback ?? "page");
-        updateRefValue(webFallbackPageGuid, props.modelValue.bag?.webFallbackPageGuid ?? "");
+        updateRefValue(route, props.modelValue.bag?.route ?? "");
+        updateRefValue(mobilePage, props.modelValue.bag?.mobilePage ?? {} as PageRouteValueBag);
+        updateRefValue(usesUrlAsFallback, props.modelValue.bag?.usesUrlAsFallback ?? false);
+        updateRefValue(webFallbackPage, props.modelValue.bag?.webFallbackPage ?? {} as PageRouteValueBag);
         updateRefValue(webFallbackPageUrl, props.modelValue.bag?.webFallbackPageUrl ?? "");
     });
 
@@ -139,10 +134,10 @@
             bag: { ...props.modelValue.bag } as MobileDeepLinkDetailBag
         };
 
-        setPropertiesBoxValue(newValue, "route", linkRoute.value);
-        setPropertiesBoxValue(newValue, "mobilePageGuid", toGuidOrNull(mobilePage.value?.page?.value));
+        setPropertiesBoxValue(newValue, "route", route.value);
+        setPropertiesBoxValue(newValue, "mobilePage", mobilePage.value);
         setPropertiesBoxValue(newValue, "usesUrlAsFallback", usesUrlAsFallback.value as boolean);
-        setPropertiesBoxValue(newValue, "webFallbackPageGuid", toGuidOrNull(webFallbackPage.value?.page?.value));
+        setPropertiesBoxValue(newValue, "webFallbackPage", webFallbackPage.value);
         setPropertiesBoxValue(newValue, "webFallbackPageUrl", webFallbackPageUrl.value);
 
         emit("update:modelValue", newValue);

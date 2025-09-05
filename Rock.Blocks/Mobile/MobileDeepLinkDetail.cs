@@ -25,6 +25,8 @@ using AngleSharp.Dom;
 
 using Lucene.Net.Support;
 
+using Mono.CSharp;
+
 using Rock.Attribute;
 using Rock.Common.Mobile;
 using Rock.Constants;
@@ -34,6 +36,7 @@ using Rock.Model;
 using Rock.Security;
 using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail;
+using Rock.ViewModels.Rest.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 
@@ -53,7 +56,6 @@ namespace Rock.Blocks.Mobile
     {
         #region Fields
 
-        private bool _isModifying;
         private string _friendlyName = "Mobile Deep Link Detail";
 
         #endregion Fields
@@ -82,10 +84,6 @@ namespace Rock.Blocks.Mobile
         {
             var siteId = PageParameter( PageParameterKey.SiteId ).AsIntegerOrNull();
             var deepLinkRouteGuid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull();
-
-            // If we are modifying, there will be a page parameter passed containing the Guid of the route that we are modifying.
-            Guid? deepLinkGuid = PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull();
-            _isModifying = deepLinkGuid != null ? true : false;
 
             // Pull the site, settings, and route to ensure they exists and we have permission to view/edit them.
             var siteService = new SiteService( RockContext );
@@ -118,17 +116,27 @@ namespace Rock.Blocks.Mobile
         /// <param name="box">The box to be populated.</param>
         private void SetBoxInitialEntityState( MobileDeepLinkDetailInitializationBox box, Site site, AdditionalSiteSettings additionalSettings )
         {
-            if ( string.IsNullOrEmpty( PageParameter( PageParameterKey.DeepLinkRouteGuid ) ) )
+            DeepLinkRoute mdlRoute;
+            var mdlRoutes = additionalSettings.DeepLinkRoutes;
+            var isViewable = BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson );
+            box.IsEditable = BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
+
+            // If Adding new deep link, short circuit
+            if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() == null)
             {
-                box.ErrorMessage = $"No {_friendlyName} Guid was specified.";
-                return;
+                if ( box.IsEditable )
+                {
+                    box.Bag = new MobileDeepLinkDetailBag();
+                    box.Bag.PathPrefix = additionalSettings.DeepLinkPathPrefix;
+                    return;
+                }
             }
 
-            var mdlRoutes = additionalSettings.DeepLinkRoutes;
-            var mdlRoute = mdlRoutes.First( route => route.Guid == PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() );
-
-            var isExistingMobileDeepLink = mdlRoutes.First( route => route.Guid == PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() ) != null;
-            if ( !isExistingMobileDeepLink )
+            try
+            {
+                mdlRoute = mdlRoutes.First( route => route.Guid == PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() );
+            }
+            catch ( InvalidOperationException ) // If guid is invalid guid or not associated with any route for the site.
             {
                 box.ErrorMessage = $"The {_friendlyName} with the specified Guid was not found.";
                 return;
@@ -144,9 +152,6 @@ namespace Rock.Blocks.Mobile
                 WebFallbackPageGuid = mdlRoute.WebFallbackPageGuid,
                 WebFallbackPageUrl = mdlRoute.WebFallbackPageUrl,
             };
-
-            var isViewable = BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson );
-            box.IsEditable = BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
 
             // New entity is being created, default to edit as only choice.
             if ( box.IsEditable )
@@ -221,16 +226,32 @@ namespace Rock.Blocks.Mobile
                 return null;
             }
 
+            PageRouteValueBag mobilePage = GetMobilePageRouteValueBag( mobileDeepLink );
+
+            PageRouteValueBag webFallbackPage = null;
+            var webFallbackUrl = string.Empty;
+
+            if ( mobileDeepLink.UsesUrlAsFallback )
+            {
+                webFallbackPage = null;
+                webFallbackUrl = mobileDeepLink.WebFallbackPageUrl;
+            }
+            else
+            {
+                webFallbackPage = GetWebFallbackPageRouteValueBag( mobileDeepLink );
+                webFallbackUrl = null;
+            }
+
             return new MobileDeepLinkDetailBag
             {
                 SiteId = mobileDeepLink.SiteId,
-                RouteGuid = mobileDeepLink.RouteGuid,
+                RouteGuid = mobileDeepLink.RouteGuid.Value,
                 PathPrefix = pathPrefix,
                 Route = mobileDeepLink.Route,
-                MobilePageGuid = mobileDeepLink.MobilePageGuid,
+                MobilePage = mobilePage,
                 UsesUrlAsFallback = mobileDeepLink.UsesUrlAsFallback,
-                WebFallbackPageGuid = mobileDeepLink.WebFallbackPageGuid,
-                WebFallbackPageUrl = mobileDeepLink.WebFallbackPageUrl,
+                WebFallbackPage = webFallbackPage,
+                WebFallbackPageUrl = webFallbackUrl,
             };
         }
 
@@ -288,20 +309,23 @@ namespace Rock.Blocks.Mobile
             errorMessage = null;
 
             bool isUrlUsedAsFallback = bag.UsesUrlAsFallback;
-            bool isFallbackPageUrlValid = bag.WebFallbackPageUrl.IsNullOrWhiteSpace() == false
+            bool isFallbackPageUrlValid = bag.WebFallbackPageUrl != null
+                                          && bag.WebFallbackPageUrl.IsNullOrWhiteSpace() == false
                                           && string.IsNullOrEmpty( bag.WebFallbackPageUrl ) == false;
-            bool isFallbackPageGuidValid = Guid.TryParse( bag.WebFallbackPageGuid.ToString(), out _ )
-                                           && bag.WebFallbackPageGuid != null
-                                           && bag.WebFallbackPageGuid != Guid.Empty;
+            bool isFallbackPageGuidValid = bag.WebFallbackPage != null
+                                           && bag.WebFallbackPage.Page != null
+                                           && Guid.TryParse( bag.WebFallbackPage.Page.Value, out _ )
+                                           && bag.WebFallbackPage.Page.Value.AsGuidOrNull() != null
+                                           && bag.WebFallbackPage.Page.Value.AsGuidOrNull() != Guid.Empty;
 
             // Ensure everything is valid before saving.
-            if ( isUrlUsedAsFallback && isFallbackPageUrlValid )
+            if ( isUrlUsedAsFallback && !isFallbackPageUrlValid )
             {
                 errorMessage = "The fallback toggle was set to URL, but a Fallback URL was not provided.";
                 return false;
             }
 
-            if ( !isUrlUsedAsFallback && isFallbackPageGuidValid )
+            if ( !isUrlUsedAsFallback && !isFallbackPageGuidValid )
             {
                 errorMessage = "The fallback toggle was set to Page, but a Fallback Page was not selected.";
                 return false;
@@ -313,7 +337,7 @@ namespace Rock.Blocks.Mobile
                 return false;
             }
 
-            if ( bag.MobilePageGuid == null || bag.MobilePageGuid == Guid.Empty )
+            if ( bag.MobilePage.Page.Value.AsGuidOrNull() == null || bag.MobilePage.Page.Value.AsGuidOrNull() == Guid.Empty )
             {
                 errorMessage = "A Mobile Page is required.";
                 return false;
@@ -322,7 +346,120 @@ namespace Rock.Blocks.Mobile
             return true;
         }
 
+
+
+        /// <summary>
+        /// Saves the deep link.
+        /// </summary>
+        private BlockActionResult SaveDeepLink(MobileDeepLinkDetailBag bag)
+        {
+            if ( ValidateMobileDeepLinkDetailBag(bag, out string errorMessage) == false )
+            {
+                return ActionBadRequest( errorMessage );
+            }
+
+            using ( var context = new RockContext() )
+            {
+                var pageService = new PageService( context );
+                var siteService = new SiteService( context );
+
+                // Get the site settings for this specific site.
+                var site = siteService.Get( PageParameter( "SiteId" ) );
+                var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
+
+                // Generate the guid for our route, and get the guid for the mobile page corresponding to it.
+                Guid guid = Guid.NewGuid();
+
+                // If page parameters contains Guid, change our guid var to match the one we are modifying,
+                // then delete it from our route list, so we don't make a duplicate
+                if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() != null )
+                {
+                    // We actually checked whether this is null in our ConfigureContent(), so we know it exists.
+                    guid = PageParameter( "DeepLinkRouteGuid" ).AsGuid();
+                    var refRoute = additionalSettings.DeepLinkRoutes.Where( r => r.Guid == guid ).First();
+                    additionalSettings.DeepLinkRoutes.Remove( refRoute );
+                }
+
+                var routeAlreadyExists = additionalSettings.DeepLinkRoutes.Any( r => r.Route == bag.Route );
+                if ( guid != PageParameter( "DeepLinkRouteGuid" ).AsGuid() && routeAlreadyExists )
+                {
+                    return ActionBadRequest( $"The route: '{bag.Route}' already exists. Please choose a non-conflicting route." );
+                }
+
+                Guid? webFallbackPageGuid;
+                string webFallbackPageUrl;
+
+                // Clear the selection of the fallback page picker. 
+                if ( bag.UsesUrlAsFallback )
+                {
+                    webFallbackPageGuid = null;
+                    webFallbackPageUrl = bag.WebFallbackPageUrl;
+                }
+                // Clear the selection of the fallback URL textbox.
+                else
+                {
+                    webFallbackPageGuid = bag.WebFallbackPage.Page.Value.AsGuidOrNull();
+                    webFallbackPageUrl = string.Empty;
+                }
+
+                var route = new DeepLinkRoute
+                {
+                    Guid = guid,
+                    Route = bag.Route.Trim( '/' ),
+                    UsesUrlAsFallback = bag.UsesUrlAsFallback,
+                    MobilePageGuid = bag.MobilePage.Page.Value.AsGuid(),
+                    WebFallbackPageGuid = webFallbackPageGuid,
+                    WebFallbackPageUrl = webFallbackPageUrl
+                };
+
+                // Add the route and save the settings.
+                additionalSettings.DeepLinkRoutes.Add( route );
+                site.AdditionalSettings = additionalSettings.ToJson();
+                context.SaveChanges();
+
+                return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
+                {
+                    Bag = bag,
+                    ValidProperties = bag.GetType().GetProperties().Select( p => p.Name ).ToList()
+                } );
+            }
+        }
+
         #endregion Methods > Block Action Helpers
+
+        #region Methods > Helpers
+
+        private static PageRouteValueBag GetMobilePageRouteValueBag( MobileDeepLink mobileDeepLink )
+        {
+            var mobilePageCache = PageCache.Get( mobileDeepLink.MobilePageGuid.Value );
+            PageRouteValueBag mobilePage = new PageRouteValueBag
+            {
+                Page = new ListItemBag
+                {
+                    Value = mobileDeepLink.MobilePageGuid.ToString(),
+                    Text = mobilePageCache.InternalName,
+                },
+                Route = new ListItemBag { },
+            };
+            return mobilePage;
+        }
+
+        private static PageRouteValueBag GetWebFallbackPageRouteValueBag( MobileDeepLink mobileDeepLink )
+        {
+            var webFallbackPageCache = PageCache.Get( mobileDeepLink.WebFallbackPageGuid.Value );
+            PageRouteValueBag webFallbackPage = new PageRouteValueBag
+            {
+                Page = new ListItemBag
+                {
+                    Value = mobileDeepLink.WebFallbackPageGuid.ToString(),
+                    Text = webFallbackPageCache.InternalName,
+                },
+                Route = new ListItemBag { },
+            };
+            return webFallbackPage;
+        }
+
+        #endregion
 
         #endregion Methods
 
@@ -362,28 +499,39 @@ namespace Rock.Blocks.Mobile
                 var routes = additionalSettings.DeepLinkRoutes;
                 var route = routes.First( r => r.Guid == deepLinkGuid ) ?? null;
 
+                if ( route == null )
+                {
+                    return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
+                }
+
+                var mobileDeepLink = new MobileDeepLink
+                {
+                    SiteId = site.Id,
+                    RouteGuid = route.Guid,
+                    Route = route.Route,
+                    MobilePageGuid = route.MobilePageGuid,
+                    UsesUrlAsFallback = route.UsesUrlAsFallback,
+                    WebFallbackPageGuid = route.WebFallbackPageGuid,
+                    WebFallbackPageUrl = route.WebFallbackPageUrl,
+                };
+
                 bag.SiteId = site.Id;
                 bag.RouteGuid = route.Guid;
                 bag.PathPrefix = additionalSettings.DeepLinkPathPrefix;
                 bag.Route = route.Route;
-                bag.MobilePageGuid = route.MobilePageGuid;
+                bag.MobilePage = GetMobilePageRouteValueBag(mobileDeepLink);
                 bag.UsesUrlAsFallback = route.UsesUrlAsFallback;
-                bag.WebFallbackPageGuid = route.WebFallbackPageGuid;
-                bag.WebFallbackPageUrl = route.WebFallbackPageUrl;
 
-                var newRoute = new DeepLinkRoute
+                if ( mobileDeepLink.UsesUrlAsFallback )
                 {
-                    Guid = bag.RouteGuid.Value,
-                    Route = bag.Route.Trim( '/' ),
-                    UsesUrlAsFallback = bag.UsesUrlAsFallback,
-                    MobilePageGuid = bag.MobilePageGuid.Value,
-                    WebFallbackPageGuid = bag.WebFallbackPageGuid,
-                    WebFallbackPageUrl = bag.WebFallbackPageUrl,
-                };
-
-                additionalSettings.DeepLinkRoutes.Add( newRoute ); // TODO: Creating duplicates here when editing existing route.
-                site.AdditionalSettings = additionalSettings.ToJson();
-                RockContext.SaveChanges();
+                    bag.WebFallbackPage = null;
+                    bag.WebFallbackPageUrl = route.WebFallbackPageUrl;
+                }
+                else
+                {
+                    bag.WebFallbackPage = GetWebFallbackPageRouteValueBag( mobileDeepLink );
+                    bag.WebFallbackPageUrl = null;
+                }
             }
 
             return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
@@ -401,44 +549,7 @@ namespace Rock.Blocks.Mobile
         [BlockAction]
         public BlockActionResult Save( ValidPropertiesBox<MobileDeepLinkDetailBag> box )
         {
-            if ( !ValidateMobileDeepLinkDetailBag( box.Bag, out var validationMessage ) )
-            {
-                return ActionBadRequest( validationMessage );
-            }
-
-            using ( var context = new RockContext() )
-            {
-                var pageService = new PageService( RockContext );
-                var siteService = new SiteService( RockContext );
-
-                var site = siteService.Get( PageParameter( "SiteId" ) );
-                var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
-
-                if ( site == null )
-                {
-                    return ActionBadRequest( "Site not found." );
-                }
-
-                var route = new DeepLinkRoute
-                {
-                    Guid = box.Bag.RouteGuid.Value,
-                    Route = box.Bag.Route.Trim( '/' ),
-                    UsesUrlAsFallback = box.Bag.UsesUrlAsFallback,
-                    MobilePageGuid = box.Bag.MobilePageGuid.Value,
-                    WebFallbackPageGuid = box.Bag.WebFallbackPageGuid,
-                    WebFallbackPageUrl = box.Bag.WebFallbackPageUrl,
-                };
-
-                additionalSettings.DeepLinkRoutes.Add( route ); // TODO: Creating duplicates here when editing existing route.
-                site.AdditionalSettings = additionalSettings.ToJson();
-                RockContext.SaveChanges();
-            }
-
-            return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
-            {
-                Bag = box.Bag,
-                ValidProperties = box.Bag.GetType().GetProperties().Select( p => p.Name ).ToList()
-            } );
+            return SaveDeepLink(box.Bag);
         }
 
         #endregion Block Actions

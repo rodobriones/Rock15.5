@@ -65,19 +65,19 @@
             valueBuilder.addTextValue("Route", `/${props.modelValue.pathPrefix}/${props.modelValue.route}`);
         }
 
-        if (props.modelValue.mobilePageGuid) {
-            valueBuilder.addTextValue("Mobile Page", props.modelValue.mobilePageGuid);
+        if (props.modelValue.mobilePage) {
+            valueBuilder.addTextValue("Mobile Page", props.modelValue.mobilePage.page?.text ?? "");
         }
 
         if (props.modelValue.usesUrlAsFallback !== undefined) {
             valueBuilder.addTextValue("Fallback Method", props.modelValue.usesUrlAsFallback ? "URL" : "Page");
         }
 
-        if (props.modelValue.webFallbackPageGuid) {
-            valueBuilder.addTextValue("Web Fallback Page", props.modelValue.webFallbackPageGuid);
+        if (props.modelValue.usesUrlAsFallback === false && props.modelValue.webFallbackPage) {
+            valueBuilder.addTextValue("Web Fallback Page", props.modelValue.webFallbackPage.page?.text ?? "");
         }
 
-        if (props.modelValue.webFallbackPageUrl) {
+        if (props.modelValue.usesUrlAsFallback === true && props.modelValue.webFallbackPageUrl) {
             valueBuilder.addTextValue("Web Fallback URL", props.modelValue.webFallbackPageUrl);
         }
 

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using Rock.ViewModels.Rest.Controls;
+
 namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
 {
 
@@ -20,7 +22,7 @@ namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
         /// <summary>
         /// Gets or sets the GUID of the deep link route.
         /// </summary>
-        public Guid? RouteGuid { get; set; }
+        public Guid RouteGuid { get; set; }
 
         /// <summary>
         /// Gets or sets the path prefix for the site's deep links.
@@ -35,7 +37,7 @@ namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
         /// <summary>
         /// Gets or sets the GUID of the mobile page.
         /// </summary>
-        public Guid? MobilePageGuid { get; set; }
+        public PageRouteValueBag MobilePage { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the URL is used as a fallback.
@@ -45,7 +47,7 @@ namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
         /// <summary>
         /// Gets or sets the GUID of the web fallback page.
         /// </summary>
-        public Guid? WebFallbackPageGuid { get; set; }
+        public PageRouteValueBag WebFallbackPage { get; set; }
 
         /// <summary>
         /// Gets or sets the URL of the web fallback page.

@@ -22,11 +22,12 @@
 //
 
 import { Guid } from "@Obsidian/Types";
+import { PageRouteValueBag } from "@Obsidian/ViewModels/Rest/Controls/pageRouteValueBag";
 
 /** Represents a mobile page with its unique identifier and name. */
 export type MobileDeepLinkDetailBag = {
     /** Gets or sets the GUID of the mobile page. */
-    mobilePageGuid?: Guid | null;
+    mobilePage?: PageRouteValueBag | null;
 
     /** Gets or sets the path prefix for the site's deep links. */
     pathPrefix?: string | null;
@@ -35,7 +36,7 @@ export type MobileDeepLinkDetailBag = {
     route?: string | null;
 
     /** Gets or sets the GUID of the deep link route. */
-    routeGuid?: Guid | null;
+    routeGuid: Guid;
 
     /** Gets or sets the identifier of the site. */
     siteId: number;
@@ -44,7 +45,7 @@ export type MobileDeepLinkDetailBag = {
     usesUrlAsFallback: boolean;
 
     /** Gets or sets the GUID of the web fallback page. */
-    webFallbackPageGuid?: Guid | null;
+    webFallbackPage?: PageRouteValueBag | null;
 
     /** Gets or sets the URL of the web fallback page. */
     webFallbackPageUrl?: string | null;
