@@ -255,6 +255,10 @@
   border-bottom-left-radius: 0;
 }
 
+.input-group:has(.ant-select:last-child) .form-control {
+  height: 38px;
+}
+
 // ===================== END BORDER =====================
 
 

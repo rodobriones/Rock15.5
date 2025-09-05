@@ -645,6 +645,10 @@
   .note-btn-group > .note-btn {
     border-radius: 0;
   }
+
+  .note-btn-group > .note-btn.btn-codeview {
+    border-top-left-radius: var(--rounded-small);
+  }
 }
 
 .note-btn {

@@ -338,6 +338,10 @@
     display: block;
 }
 
+.grid-cell > .label:empty {
+    display: none;
+}
+
 .grid-select-field {
     min-width: 60px;
 }

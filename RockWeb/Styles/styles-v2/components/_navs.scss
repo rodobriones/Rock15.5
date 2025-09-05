@@ -310,6 +310,10 @@
   }
 }
 
+.nav-tabs + .tab-content {
+  margin-top: var(--spacing-small);
+}
+
 // =================== END TAB CONTENT ===================
 
 
