@@ -191,9 +191,14 @@ namespace Rock.Blocks.Mobile
         /// <returns>A dictionary of key names and URL values.</returns>
         private Dictionary<string, string> GetBoxNavigationUrls()
         {
+            var pageParams = new Dictionary<string, string>
+            {
+                { "Tab", "Deep Links" }
+            };
+
             return new Dictionary<string, string>
             {
-                [NavigationUrlKey.ParentPage] = this.GetParentPageUrl()
+                { NavigationUrlKey.ParentPage, GetPageUrlWithoutLastSegment( pageParams ) }
             };
         }
 
@@ -457,6 +462,53 @@ namespace Rock.Blocks.Mobile
                 Route = new ListItemBag { },
             };
             return webFallbackPage;
+        }
+
+        /// <summary>
+        /// Gets the page URL up to but not including the last URL segment.
+        /// </summary>
+        /// <returns>The base URL without the last segment.</returns>
+        private string GetPageUrlWithoutLastSegment( IDictionary<string, string> queryParams = null )
+        {
+            var parameters = queryParams != null ? new Dictionary<string, string>( queryParams ) : new Dictionary<string, string>();
+
+            // Add in the original page parameters if they have not already
+            // been set in the new query parameters.
+            foreach ( var queryParam in this.RequestContext.GetPageParameters() )
+            {
+                // Skip any page parameters that are internal usage.
+                if ( queryParam.Key == "PageId" )
+                {
+                    continue;
+                }
+
+                parameters.TryAdd( queryParam.Key, queryParam.Value );
+            }
+
+            var url = new Rock.Web.PageReference( this.PageCache.Guid.ToString(), parameters ).BuildUrl();
+
+            if ( string.IsNullOrEmpty( url ) )
+            {
+                return url;
+            }
+
+            // Remove trailing slash if present
+            url = url.TrimEnd( '/' );
+
+            // Find the last slash before any query string
+            var queryIndex = url.IndexOf( '?' );
+            var path = queryIndex >= 0 ? url.Substring( 0, queryIndex ) : url;
+            var query = queryIndex >= 0 ? url.Substring( queryIndex ) : string.Empty;
+
+            var lastSlashIndex = path.LastIndexOf( '/' );
+            if ( lastSlashIndex > -1 )
+            {
+                // Remove the last segment from the path, but keep the query string
+                return path.Substring( 0, lastSlashIndex ) + query;
+            }
+
+            // If no slash found, return empty string (no segments)
+            return string.Empty;
         }
 
         #endregion

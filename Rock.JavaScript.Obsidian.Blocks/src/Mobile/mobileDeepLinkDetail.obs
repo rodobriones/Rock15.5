@@ -11,7 +11,7 @@
                  :name="panelName"
                  :labels="blockLabels"
                  :entityKey="entityKey"
-                 :entityTypeName="'Mobile Deep Link'"
+                 :entityTypeName="'Deep Link'"
                  :isAuditHidden="false"
                  :isBadgesVisible="true"
                  :isDeleteVisible="false"
@@ -87,10 +87,10 @@
      */
     const panelName = computed((): string => {
         if (panelMode.value === DetailPanelMode.Edit) {
-            return "Edit Deep Links";
+            return "Edit Deep Link";
         }
 
-        return "View Deep Links";
+        return "View Deep Link";
     });
 
     /**
@@ -185,13 +185,9 @@
         });
 
         if (result.isSuccess && result.data) {
-            if (result.statusCode === 200 && typeof result.data === "object") {
-                mobileDeepLinkViewBag.value = result.data.bag;
-
-                return true;
-            }
-            else if (result.statusCode === 201 && typeof result.data === "string") {
-                return result.data;
+            // Always redirect to parent page after save
+            if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
+                return config.navigationUrls[NavigationUrlKey.ParentPage];
             }
         }
 
