@@ -1,7 +1,8 @@
 ﻿using System.ComponentModel;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Crm.AddContact;
+using Rock.Common.Mobile.Blocks.Outreach.AddContact;
+using Rock.Common.Mobile.ViewModel;
 using Rock.Data;
 using Rock.Mobile;
 using Rock.Model;
@@ -18,10 +19,36 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [Description( "Allows you to add contact." )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
+    #region Block Attributes
+
+    [MobileNavigationActionField( "Post Delete Action",
+        Description = "The navigation action to perform when the delete button is pressed.",
+        IsRequired = false,
+        DefaultValue = MobileNavigationActionFieldAttribute.PopSinglePageValue,
+        Key = AttributeKey.PostSave,
+        Order = 0 )]
+
+    #endregion
+
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_ADD_CONTACT_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.ADD_CONTACT )]
     public class AddContact : RockBlockType
     {
+        #region Keys
+
+        /// <summary>
+        /// Attribute Keys
+        /// </summary>
+        private static class AttributeKey
+        {
+            /// <summary>
+            /// The post save action
+            /// </summary>
+            public const string PostSave = "PostSave";
+        }
+
+        #endregion
+
         #region Block Actions
 
         /// <summary>
@@ -82,6 +109,20 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             RockContext.SaveChanges();
 
             return ActionOk();
+        }
+
+        #endregion
+
+
+        #region IRockMobileBlockType Implementation
+
+        /// <inheritdoc/>
+        public override object GetMobileConfigurationValues()
+        {
+            return new Rock.Common.Mobile.Blocks.Outreach.AddContact.Configuration
+            {
+                PostSave = GetAttributeValue( AttributeKey.PostSave ).FromJsonOrNull<MobileNavigationActionViewModel>() ?? new MobileNavigationActionViewModel(),
+            };
         }
 
         #endregion
