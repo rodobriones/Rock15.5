@@ -1636,7 +1636,7 @@ namespace RockWeb.Blocks.Finance
                     }
                     else
                     {
-                        financialTransactionDetailQuery = financialTransactionDetailQuery.Where( a => a.Transaction.TransactionDateTime.HasValue );
+                        financialTransactionDetailQuery = financialTransactionDetailQuery.Where( a => a.Transaction.TransactionDateTime.HasValue || a.Transaction.Status == "ChargeFailed" );
                     }
 
                     if ( hideTransactionsInPendingBatches )
@@ -1694,7 +1694,9 @@ namespace RockWeb.Blocks.Finance
                             EntityId = a.EntityId,
                             EntityTypeId = a.EntityTypeId
                         },
-                        Summary = a.Transaction.FutureProcessingDateTime.HasValue ? "[charge pending] " + a.Summary : a.Transaction.Summary,
+                        Summary =
+                            a.Transaction.Status == "ChargeFailed" ? "<span class='label label-danger'>failed</span> " + a.Transaction.StatusMessage + "<br>" + a.Transaction.Summary : 
+                                a.Transaction.FutureProcessingDateTime.HasValue ? "[charge pending] " + a.Summary : a.Transaction.Summary,
                         FinancialPaymentDetail = a.Transaction.FinancialPaymentDetailId != null ? new PaymentDetailInfo
                         {
                             Id = a.Transaction.FinancialPaymentDetail.Id,
@@ -1719,7 +1721,7 @@ namespace RockWeb.Blocks.Finance
                     }
                     else
                     {
-                        financialTransactionQuery = financialTransactionQuery.Where( a => a.TransactionDateTime.HasValue );
+                        financialTransactionQuery = financialTransactionQuery.Where( a => a.TransactionDateTime.HasValue || a.Status == "ChargeFailed" );
                     }
 
                     if ( hideTransactionsInPendingBatches )
@@ -1766,7 +1768,8 @@ namespace RockWeb.Blocks.Finance
                             Status = a.Status,
                             SettledDate = a.SettledDate,
                             SettledGroupId = a.SettledGroupId,
-                            Summary = a.FutureProcessingDateTime.HasValue ? "[charge pending] " + a.Summary : a.Summary,
+                            Summary = a.Status == "ChargeFailed" ? "<span class='label label-danger'>failed</span> " + a.StatusMessage + "<br>" + a.Summary :
+                                a.FutureProcessingDateTime.HasValue ? "[charge pending] " + a.Summary : a.Summary,
                             FinancialPaymentDetail = new PaymentDetailInfo { Id = a.Id, CreditCardTypeValueId = a.FinancialPaymentDetail.CreditCardTypeValueId, CurrencyTypeValueId = a.FinancialPaymentDetail.CurrencyTypeValueId },
                             ForeignCurrencyCodeValueId = a.ForeignCurrencyCodeValueId,
                             FinancialGatewayId = a.FinancialGatewayId,
