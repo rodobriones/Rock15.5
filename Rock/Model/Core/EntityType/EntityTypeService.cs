@@ -484,8 +484,16 @@ namespace Rock.Model
                     }
                 }
 
-                CheckAndStageObsidianBlockConversion( reflectedTypeLookupByName, reflectedEntityTypesThatStillExist, rockContext );
+                // Now we need take all the EntityTypes that are still in the system (new and existing)
+                // and check if any are taking over an existing webforms block's blocktype for conversion to Obsidian.
+                var combinedNewAndExistingEntityTypes = new List<EntityType>(
+                    reflectedEntityTypesThatStillExist.Count + entityTypesFromReflection.Count
+                );
+                combinedNewAndExistingEntityTypes.AddRange( reflectedEntityTypesThatStillExist );
+                combinedNewAndExistingEntityTypes.AddRange( entityTypesFromReflection.Values );
+                CheckAndStageObsidianBlockConversion( reflectedTypeLookupByName, combinedNewAndExistingEntityTypes, rockContext );
 
+                // Lastly, save all the modified entitytypes and the potential block type changes (from Obsidian conversion).
                 try
                 {
                     rockContext.SaveChanges();
@@ -537,7 +545,7 @@ namespace Rock.Model
                 var blockTypeGuidFromAttribute = reflectedType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
                 if ( blockTypeGuidFromAttribute != null )
                 {
-                    blockTypeDictionary.Add( blockTypeGuidFromAttribute.Value, entityType );
+                    blockTypeDictionary.AddOrReplace( blockTypeGuidFromAttribute.Value, entityType );
                 }
             }
 

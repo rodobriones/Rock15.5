@@ -39,6 +39,7 @@ namespace Rock.Model
     /// </summary>
     public partial class BlockTypeService
     {
+        private const string ROSLYN_COMPILED_NAMESPACE = "ASP";
         /// <summary>
         /// Gets a <see cref="Rock.Model.BlockType"/> by its Guid.
         /// </summary>
@@ -408,18 +409,20 @@ namespace Rock.Model
                             var blockTypeGuidFromAttribute = blockCompiledType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
 
                             /*
-                                9/4/2025 - N.A.
+                                9/5/2025 - N.A.
 
-                                Changed attribute inheritance from false to true. In Web Site–style projects, Roslyn will
-                                emit a runtime subclass (e.g., "ASP.*") that inherits from the code-behind class (for
-                                webform user controls). If the attribute is declared on the code-behind class, then calling 
-                                GetCustomAttribute(inherit: false) on the generated subclass would return null.
+                                In Web Site–style projects, Roslyn generates a runtime subclass (e.g., "ASP.*") 
+                                that inherits from the code-behind class (our WebForm user controls). When this 
+                                occurs, calling GetCustomAttribute(inherit: false) on this generated subclass 
+                                returns null.
 
-                                Therefore we will use the BaseType to look for the attribute in this case.
+                                To address this, we inspect the *BaseType* for the BlockTypeGuid attribute so
+                                that attributes declared on code-behind classes are still recognized.
 
-                                Reason: Ensure attributes declared on code-behind classes are visible to generated subclasses.
+                                Reason: Ensure attributes defined on code-behind classes are accessible 
+                                from generated subclasses.
                             */
-                            if ( blockTypeGuidFromAttribute == null && blockCompiledType.Namespace == "ASP" )
+                            if ( blockTypeGuidFromAttribute == null && blockCompiledType.Namespace == ROSLYN_COMPILED_NAMESPACE )
                             {
                                 blockTypeGuidFromAttribute = blockCompiledType.BaseType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
                             }
