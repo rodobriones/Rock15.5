@@ -415,7 +415,7 @@ namespace Rock.Model
                                 webform user controls). If the attribute is declared on the code-behind class, then calling 
                                 GetCustomAttribute(inherit: false) on the generated subclass would return null.
 
-                                Therefore we will use the UnderlyingSystemType to look for the attribute in this case.
+                                Therefore we will use the BaseType to look for the attribute in this case.
 
                                 Reason: Ensure attributes declared on code-behind classes are visible to generated subclasses.
                             */
