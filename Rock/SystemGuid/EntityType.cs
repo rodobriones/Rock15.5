@@ -463,7 +463,7 @@ namespace Rock.SystemGuid
         public const string MOBILE_ANSWER_TO_PRAYER_BLOCK_TYPE = "759AFCA0-9E0B-4A22-A402-CD4499F2A457";
 
         /// <summary>
-        /// The Guid for the entity <see cref="Rock.Blocks.Types.Mobile.Crm.AddContact"/>
+        /// The Guid for the entity <see cref="Blocks.Types.Mobile.Outreach.AddContact"/>
         /// </summary>
         public const string MOBILE_ADD_CONTACT_BLOCK_TYPE = "2742790B-031B-4CF3-9489-B84E50EA99BA";
 

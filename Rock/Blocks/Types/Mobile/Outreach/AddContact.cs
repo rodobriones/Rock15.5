@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.Linq;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Crm.AddContact;
@@ -7,7 +6,7 @@ using Rock.Data;
 using Rock.Mobile;
 using Rock.Model;
 
-namespace Rock.Blocks.Types.Mobile.Crm
+namespace Rock.Blocks.Types.Mobile.Outreach
 {
 
     /// <summary>
@@ -17,10 +16,10 @@ namespace Rock.Blocks.Types.Mobile.Crm
     [Category( "Mobile > Crm" )]
     [IconCssClass( "ti ti-address-book" )]
     [Description( "Allows you to add contact." )]
-    [SupportedSiteTypes( Model.SiteType.Mobile )]
+    [SupportedSiteTypes( SiteType.Mobile )]
 
-    [Rock.SystemGuid.EntityTypeGuid( Rock.SystemGuid.EntityType.MOBILE_ADD_CONTACT_BLOCK_TYPE )]
-    [Rock.SystemGuid.BlockTypeGuid( Rock.SystemGuid.BlockType.ADD_CONTACT )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_ADD_CONTACT_BLOCK_TYPE )]
+    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.ADD_CONTACT )]
     public class AddContact : RockBlockType
     {
         #region Block Actions
@@ -32,7 +31,6 @@ namespace Rock.Blocks.Types.Mobile.Crm
         [BlockAction]
         public BlockActionResult SaveContact( SaveContactBag saveContactBag )
         {
-
             var contactService = new ContactService( RockContext );
 
             int? photoId = null;
@@ -72,7 +70,6 @@ namespace Rock.Blocks.Types.Mobile.Crm
                 ConnectionCadence = saveContactBag.ConnectionCadence.ToNative(),
                 ConnectionNote = saveContactBag.ConnectionNote,
                 HasAcceptedJesus = saveContactBag.HasAcceptedJesus,
-                //SalvationDate = saveContactBag.SalvationDate,
                 SalvationDay = saveContactBag.SalvationDay,
                 SalvationMonth = saveContactBag.SalvationMonth,
                 SalvationYear = saveContactBag.SalvationYear,

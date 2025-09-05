@@ -15,37 +15,32 @@
 // </copyright>
 //
 
-namespace Rock.Enums.Crm
+namespace Rock.Enums.Outreach
 {
     /// <summary>
-    /// The strength of a relationship.
+    /// Relationship Focus for contact
     /// </summary>
-    [Enums.EnumDomain( "CRM" )]
-    public enum RelationshipStrength
+    [EnumDomain( "Outreach" )]
+    public enum RelationshipFocus
     {
         /// <summary>
-        /// Getting to know them.
+        /// Invitation to Faith
         /// </summary>
-        GettingToKnowThem = 0,
+        InvitationToFaith = 0,
 
         /// <summary>
-        /// Casual acquaintance.
+        /// Deepening Faith
         /// </summary>
-        CasualAcquaintance = 1,
+        DeepeningFaith = 1,
 
         /// <summary>
-        /// Growing connection.
+        /// Encouragement and Care
         /// </summary>
-        GrowingConnection = 2,
+        EncouragementAndCare = 2,
 
         /// <summary>
-        /// Trusted relationship.
+        /// Restoration and Healing
         /// </summary>
-        TrustedRelationship = 3,
-
-        /// <summary>
-        /// Deep and meaningful connection.
-        /// </summary>
-        DeepAndMeaningfulConnection = 4
+        RestorationAndHealing = 3,
     }
 }

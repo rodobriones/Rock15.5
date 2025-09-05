@@ -15,38 +15,37 @@
 // </copyright>
 //
 
-namespace Rock.Enums.Crm
+namespace Rock.Enums.Outreach
 {
-
     /// <summary>
-    /// The connection cadence of the contact.
+    /// The strength of a relationship.
     /// </summary>
-    [Enums.EnumDomain( "CRM" )]
-    public enum OutreachCadence
+    [EnumDomain( "Outreach" )]
+    public enum RelationshipStrength
     {
         /// <summary>
-        /// Weekly prayer cadence.
+        /// Getting to know them.
         /// </summary>
-        Weekly = 0,
+        GettingToKnowThem = 0,
 
         /// <summary>
-        /// Every other week prayer cadence.
+        /// Casual acquaintance.
         /// </summary>
-        EveryOtherWeek = 1,
+        CasualAcquaintance = 1,
 
         /// <summary>
-        /// Monthly prayer cadence.
+        /// Growing connection.
         /// </summary>
-        Monthly = 2,
+        GrowingConnection = 2,
 
         /// <summary>
-        /// Every other month prayer cadence.
+        /// Trusted relationship.
         /// </summary>
-        EveryOtherMonth = 3,
+        TrustedRelationship = 3,
 
         /// <summary>
-        /// Quarterly prayer cadence.
+        /// Deep and meaningful connection.
         /// </summary>
-        Quarterly = 4,
+        DeepAndMeaningfulConnection = 4
     }
 }

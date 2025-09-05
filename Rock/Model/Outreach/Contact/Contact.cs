@@ -5,7 +5,7 @@ using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Rock.Data;
-using Rock.Enums.Crm;
+using Rock.Enums.Outreach;
 
 namespace Rock.Model
 {
@@ -17,7 +17,7 @@ namespace Rock.Model
     [DataContract]
     [CodeGenerateRest( ~Enums.CodeGenerateRestEndpoint.DeleteItem, DisableEntitySecurity = true )]
     [Analytics( true, true )]
-    [Rock.SystemGuid.EntityTypeGuid( Rock.SystemGuid.EntityType.CONTACT )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT )]
     public class Contact : Entity<Contact> // ************* PS TODO: INHERIT FROM MODEL OR ENTITY ************
     {
         #region Entity Properties
@@ -255,13 +255,13 @@ namespace Rock.Model
         #region Navigation Properties
 
         /// <summary>
-        /// Gets or sets the owner <see cref="Rock.Model.PersonAlias"/>.
+        /// Gets or sets the owner <see cref="PersonAlias"/>.
         /// </summary>
         [DataMember]
         public virtual PersonAlias OwnerPersonAlias { get; set; }
 
         /// <summary>
-        /// Gets or sets the photo <see cref="Rock.Model.BinaryFile"/>.
+        /// Gets or sets the photo <see cref="BinaryFile"/>.
         /// </summary>
         [DataMember]
         public virtual BinaryFile Photo { get; set; }
@@ -281,8 +281,8 @@ namespace Rock.Model
         /// </summary>
         public ContactConfiguration()
         {
-            this.HasRequired( c => c.OwnerPersonAlias ).WithMany().HasForeignKey( c => c.OwnerPersonAliasId ).WillCascadeOnDelete( false );
-            this.HasOptional( c => c.Photo ).WithMany().HasForeignKey( c => c.PhotoId ).WillCascadeOnDelete( false );
+            HasRequired( c => c.OwnerPersonAlias ).WithMany().HasForeignKey( c => c.OwnerPersonAliasId ).WillCascadeOnDelete( false );
+            HasOptional( c => c.Photo ).WithMany().HasForeignKey( c => c.PhotoId ).WillCascadeOnDelete( false );
         }
     }
 

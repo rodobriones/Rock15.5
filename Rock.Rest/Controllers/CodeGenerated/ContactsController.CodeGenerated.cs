@@ -29,7 +29,7 @@ namespace Rock.Rest.Controllers
     /// <summary>
     /// Contacts REST API
     /// </summary>
-    [RestControllerGuid( "3D43C7A7-93D0-49DD-B22C-C8F79461E275" )]
+    [RestControllerGuid( "A03F9DB3-6B8A-474D-86E3-649BFAAEB71C" )]
     public partial class ContactsController : Rock.Rest.ApiController<Rock.Model.Contact>
     {
         /// <summary>

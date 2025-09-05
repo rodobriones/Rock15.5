@@ -15,32 +15,38 @@
 // </copyright>
 //
 
-namespace Rock.Enums.Crm
+namespace Rock.Enums.Outreach
 {
+
     /// <summary>
-    /// Relationship Focus for contact
+    /// The connection cadence of the contact.
     /// </summary>
-    [Enums.EnumDomain( "CRM" )]
-    public enum RelationshipFocus
+    [EnumDomain( "Outreach" )]
+    public enum OutreachCadence
     {
         /// <summary>
-        /// Invitation to Faith
+        /// Weekly prayer cadence.
         /// </summary>
-        InvitationToFaith = 0,
+        Weekly = 0,
 
         /// <summary>
-        /// Deepening Faith
+        /// Every other week prayer cadence.
         /// </summary>
-        DeepeningFaith = 1,
+        EveryOtherWeek = 1,
 
         /// <summary>
-        /// Encouragement and Care
+        /// Monthly prayer cadence.
         /// </summary>
-        EncouragementAndCare = 2,
+        Monthly = 2,
 
         /// <summary>
-        /// Restoration and Healing
+        /// Every other month prayer cadence.
         /// </summary>
-        RestorationAndHealing = 3,
+        EveryOtherMonth = 3,
+
+        /// <summary>
+        /// Quarterly prayer cadence.
+        /// </summary>
+        Quarterly = 4,
     }
 }
