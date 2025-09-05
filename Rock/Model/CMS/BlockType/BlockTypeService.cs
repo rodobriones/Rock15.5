@@ -268,86 +268,36 @@ namespace Rock.Model
             }
         }
 
-        internal static BlockType StageMigrateWebFormsToObsidianBlock( Guid? blockTypeGuidFromAttribute, EntityType entityType, MigrationStrategy? migrationStrategy, RockContext rockContext )
-        {
-            if ( blockTypeGuidFromAttribute == null || entityType == null )
-            {
-                // If the block doesn't have a BlockTypeGuid attribute, then we can't do the migration.
-                return null;
-            }
-
-            var blockTypeService = new BlockTypeService( rockContext );
-            var blockType = blockTypeService.Queryable().FirstOrDefault( b => b.EntityType.Guid == entityType.Guid );
-            if ( blockType != null )
-            {
-                // If we found the block, then it has already been migrated.
-                return null;
-            }
-
-            // We did not find the block... that means we can proceed with the migration.
-            return StageObsidianMigrationForBlock( blockTypeGuidFromAttribute, entityType, migrationStrategy, blockTypeService );
-        }
-
         /// <summary>
-        /// Check if the block type is being converted from a webforms block to an obsidian block, and if it
-        /// is, process the conversion by hijacking the existing webforms block type.  If it's a Chop
-        /// conversion, then delete the webforms block files from the filesystem.
+        /// Finds legacy WebForms block types whose GUIDs match the supplied map and stages their conversion to Obsidian by
+        /// assigning the target <see cref="EntityType"/> and clearing the block's <c>Path</c>. Flushes the cache for each updated block.
         ///
-        /// It's the callers responsibility to save any changes to the blockTypeService.
+        /// NOTE: It's the callers responsibility to save any changes to the blockTypeService.
         /// </summary>
-        /// <param name="blockTypeGuidFromAttribute"></param>
-        /// <param name="entityTypeId"></param>
-        /// <param name="migrationStrategy">Designates which kind of migration the block should undergo</param>
-        /// <param name="blockTypeService"></param>
-        /// <returns></returns>
-        private static BlockType StageObsidianMigrationForBlock( Guid? blockTypeGuidFromAttribute, EntityType entityType, MigrationStrategy? migrationStrategy, BlockTypeService blockTypeService )
+        /// <param name="blocksTypesToCheck">Map of block type GUID to the target <see cref="EntityType"/> that will replace the legacy WebForms block type.</param>
+        /// <param name="rockContext">The database context used to query and update block types. The caller is responsible for calling <c>SaveChanges()</c> to persist changes.</param>
+        /// <remarks>
+        /// If a legacy WebForms block should remain (e.g., for a swap), please change its <c>[Rock.SystemGuid.BlockTypeGuid(...)]</c> to a new GUID.
+        /// This method stages updates only and does not call <c>SaveChanges()</c>.
+        /// </remarks>
+        /// 
+        internal static void StageMigrateWebFormsToObsidianBlock( Dictionary<Guid, EntityType> blocksTypesToCheck, RockContext rockContext )
         {
-            // This could be a chop... check to see if this block is already registered
-            // without the EntityTypeId.  If it is, we'll hijack it for Obsidian.
-            //
-            // Note: If the webforms block wants to stay around (ie, a swap), a developer needs
-            //       to change its [Rock.SystemGuid.BlockTypeGuid(... NEW GUID...)] to a new value.
-            BlockType webFormsBlockType = blockTypeService.Queryable().FirstOrDefault( b => b.Guid == blockTypeGuidFromAttribute.Value && b.EntityTypeId == null );
-            if ( webFormsBlockType != null )
-            {
-                // If we found an existing block, then it is now Obsidian by setting it's EntityTypeId
-                // and NULLing the Path:
-                webFormsBlockType.EntityType = entityType;
+            var blockTypeService = new BlockTypeService( rockContext );
+            var webFormBlocksToMigrateToObsidian = blockTypeService.Queryable()
+                .Where( b => b.EntityTypeId == null && !string.IsNullOrEmpty( b.Path ) && blocksTypesToCheck.Keys.Contains( b.Guid ) )
+                .ToList();
 
-                // If this is a Chop migration strategy, then we delete the webforms blocktype from the filesystem.
-                if ( migrationStrategy != null && migrationStrategy.Value == MigrationStrategy.Chop )
+            using ( ObservabilityHelper.StartActivity( "ObsidianMigration: Migrating webforms blocks to Obsidian" ) )
+            {
+                foreach ( var block in webFormBlocksToMigrateToObsidian )
                 {
-                    DeleteBlockTypeFiles( webFormsBlockType.Path );
+                    var entityType = blocksTypesToCheck[block.Guid];
+
+                    block.EntityType = entityType;
+                    block.Path = null;
+                    BlockTypeCache.FlushItem( block.Id );
                 }
-
-                webFormsBlockType.Path = null;
-                BlockTypeCache.FlushItem( webFormsBlockType.Id );
-            }
-
-            // Now it's an Obsidian block type:
-            return webFormsBlockType;
-        }
-
-        /// <summary>
-        /// Deletes the block type files from the file system.
-        /// This can/should be removed once the Obsidian conversion is complete.
-        /// </summary>
-        /// <param name="path"></param>
-        private static void DeleteBlockTypeFiles( string path )
-        {
-            var blockTypeFilePath = path?
-                .Replace( '/', Path.DirectorySeparatorChar )
-                .Replace( "~", AppDomain.CurrentDomain.BaseDirectory ) ?? "";
-
-            if ( File.Exists( blockTypeFilePath ) )
-            {
-                File.Delete( blockTypeFilePath );
-            }
-
-            var sourceCodeBlockTypeFilePath = blockTypeFilePath + ".cs";
-            if ( File.Exists( sourceCodeBlockTypeFilePath ) )
-            {
-                File.Delete( sourceCodeBlockTypeFilePath );
             }
         }
 
@@ -455,17 +405,25 @@ namespace Rock.Model
                             blockType.Category = Rock.Reflection.GetCategory( controlType ) ?? string.Empty;
                             blockType.Description = Rock.Reflection.GetDescription( controlType ) ?? string.Empty;
 
+                            var blockTypeGuidFromAttribute = blockCompiledType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+
                             /*
                                 9/4/2025 - N.A.
 
-                                Changed attribute inheritance from false to true. In Web Site–style projects, Roslyn can
-                                emit a runtime subclass (e.g., "ASP.*") that inherits from the code-behind class. If the
-                                attribute is declared on the code-behind class, then calling 
+                                Changed attribute inheritance from false to true. In Web Site–style projects, Roslyn will
+                                emit a runtime subclass (e.g., "ASP.*") that inherits from the code-behind class (for
+                                webform user controls). If the attribute is declared on the code-behind class, then calling 
                                 GetCustomAttribute(inherit: false) on the generated subclass would return null.
+
+                                Therefore we will use the UnderlyingSystemType to look for the attribute in this case.
 
                                 Reason: Ensure attributes declared on code-behind classes are visible to generated subclasses.
                             */
-                            var blockTypeGuidFromAttribute = blockCompiledType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: true )?.Guid;
+                            if ( blockTypeGuidFromAttribute == null && blockCompiledType.Namespace == "ASP" )
+                            {
+                                blockTypeGuidFromAttribute = blockCompiledType.UnderlyingSystemType.GetCustomAttribute<Rock.SystemGuid.BlockTypeGuidAttribute>( inherit: false )?.Guid;
+                            }
+
                             if ( blockTypeGuidFromAttribute != null && blockType.Guid != blockTypeGuidFromAttribute.Value )
                             {
                                 blockType.Guid = blockTypeGuidFromAttribute.Value;
