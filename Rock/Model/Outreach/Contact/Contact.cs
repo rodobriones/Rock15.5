@@ -12,7 +12,7 @@ namespace Rock.Model
     /// <summary>
     /// Represents a contact.
     /// </summary>
-    [RockDomain( "CRM" )]
+    [RockDomain( "Outreach" )]
     [Table( "Contact" )]
     [DataContract]
     [CodeGenerateRest( ~Enums.CodeGenerateRestEndpoint.DeleteItem, DisableEntitySecurity = true )]
@@ -138,7 +138,7 @@ namespace Rock.Model
         /// Gets or sets the relationship focus.
         /// </summary>
         [DataMember]
-        public RelationshipFocus relationshipFocus { get; set; }
+        public RelationshipFocus RelationshipFocus { get; set; }
 
         /// <summary>
         /// Gets or sets the connection note.

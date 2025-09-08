@@ -135,7 +135,7 @@ namespace Rock.Model
             target.PhotoId = source.PhotoId;
             target.PrayerCadence = source.PrayerCadence;
             target.PrayerNote = source.PrayerNote;
-            target.relationshipFocus = source.relationshipFocus;
+            target.RelationshipFocus = source.RelationshipFocus;
             target.RelationshipStrength = source.RelationshipStrength;
             target.SalvationDay = source.SalvationDay;
             target.SalvationMonth = source.SalvationMonth;

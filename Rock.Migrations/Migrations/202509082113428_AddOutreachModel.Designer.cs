@@ -7,13 +7,13 @@ namespace Rock.Migrations
     using System.Resources;
     
     [GeneratedCode("EntityFramework.Migrations", "6.4.4")]
-    public sealed partial class AddContactModel : IMigrationMetadata
+    public sealed partial class AddOutreachModel : IMigrationMetadata
     {
-        private readonly ResourceManager Resources = new ResourceManager(typeof(AddContactModel));
+        private readonly ResourceManager Resources = new ResourceManager(typeof(AddOutreachModel));
         
         string IMigrationMetadata.Id
         {
-            get { return "202509042145223_AddContactModel"; }
+            get { return "202509082113428_AddOutreachModel"; }
         }
         
         string IMigrationMetadata.Source

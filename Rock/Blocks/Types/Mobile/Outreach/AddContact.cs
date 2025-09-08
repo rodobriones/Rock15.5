@@ -92,7 +92,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BirthYear = saveContactBag.Birthdate?.Year,
                 MobilePhone = saveContactBag.MobilePhone,
                 RelationshipStrength = saveContactBag.RelationshipStrength.ToNative(),
-                relationshipFocus = saveContactBag.RelationshipFocus.ToNative(),
+                RelationshipFocus = saveContactBag.RelationshipFocus.ToNative(),
                 PrayerNote = saveContactBag.PrayerNote,
                 ConnectionCadence = saveContactBag.ConnectionCadence.ToNative(),
                 ConnectionNote = saveContactBag.ConnectionNote,
@@ -112,7 +112,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
-
 
         #region IRockMobileBlockType Implementation
 

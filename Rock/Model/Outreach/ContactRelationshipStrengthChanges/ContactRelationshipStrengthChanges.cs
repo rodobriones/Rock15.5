@@ -1,0 +1,77 @@
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity.ModelConfiguration;
+using System.Runtime.Serialization;
+
+using Rock.Data;
+using Rock.Enums.Outreach;
+
+namespace Rock.Model
+{
+    /// <summary>
+    /// Represents changes in relationship strength for a <see cref="Rock.Model.Contact"/>.
+    /// </summary>
+    [RockDomain( "Outreach" )]
+    [Table( "ContactRelationshipStrengthChanges" )]
+    [DataContract]
+    [CodeGenerateRest( ~Enums.CodeGenerateRestEndpoint.DeleteItem, DisableEntitySecurity = true )]
+    [Analytics( true, true )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_STRENGTH_CHANGES )]
+    public partial class ContactRelationshipStrengthChanges : Entity<ContactRelationshipStrengthChanges>
+    {
+        #region Entity Properties
+
+        /// <summary>
+        /// Gets or sets the contact identifier.
+        /// </summary>
+        [DataMember]
+        public int ContactId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the previous relationship strength.
+        /// </summary>
+        [DataMember]
+        public RelationshipStrength PreviousRelationshipStrength { get; set; }
+
+        /// <summary>
+        /// Gets or sets the new relationship strength.
+        /// </summary>
+        [DataMember]
+        public RelationshipStrength NewRelationshipStrength { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the change was app influenced growth.
+        /// </summary>
+        [DataMember]
+        public bool AppInfluencedGrowth { get; set; }
+
+        #endregion
+
+        #region Navigation Properties
+
+        /// <summary>
+        /// Gets or sets the contact.
+        /// </summary>
+        [DataMember]
+        public virtual Contact Contact { get; set; }
+
+        #endregion
+
+        #region Entity Configuration
+
+        /// <summary>
+        /// ContactRelationshipStrengthChanges Configuration class.
+        /// </summary>
+        public partial class ContactRelationshipStrengthChangesConfiguration : EntityTypeConfiguration<ContactRelationshipStrengthChanges>
+        {
+            /// <summary>
+            /// Initializes a new instance of the <see cref="ContactRelationshipStrengthChangesConfiguration"/> class.
+            /// </summary>
+            public ContactRelationshipStrengthChangesConfiguration()
+            {
+                this.HasRequired( p => p.Contact ).WithMany().HasForeignKey( p => p.ContactId ).WillCascadeOnDelete( false );
+            }
+        }
+
+        #endregion
+    }
+}

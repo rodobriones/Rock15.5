@@ -22,7 +22,7 @@ namespace Rock.Migrations
     /// <summary>
     ///
     /// </summary>
-    public partial class AddContactModel : Rock.Migrations.RockMigration
+    public partial class AddOutreachModel : Rock.Migrations.RockMigration
     {
         /// <summary>
         /// Operations to be performed during the upgrade process.
@@ -52,7 +52,7 @@ namespace Rock.Migrations
                         NextPrayerDate = c.DateTime(),
                         ConnectionCadence = c.Int(nullable: false),
                         NextConnectionDate = c.DateTime(),
-                        relationshipFocus = c.Int(nullable: false),
+                        RelationshipFocus = c.Int(nullable: false),
                         ConnectionNote = c.String(maxLength: 500),
                         PrayerNote = c.String(maxLength: 500),
                         AdditionalNote = c.String(maxLength: 500),
@@ -82,6 +82,56 @@ namespace Rock.Migrations
                 .Index(t => t.PhotoId)
                 .Index(t => t.Guid, unique: true);
             
+            CreateTable(
+                "dbo.ContactRelationshipStrengthChanges",
+                c => new
+                    {
+                        Id = c.Int(nullable: false, identity: true),
+                        ContactId = c.Int(nullable: false),
+                        PreviousRelationshipStrength = c.Int(nullable: false),
+                        NewRelationshipStrength = c.Int(nullable: false),
+                        AppInfluencedGrowth = c.Boolean(nullable: false),
+                        Guid = c.Guid(nullable: false),
+                        ForeignId = c.Int(),
+                        ForeignGuid = c.Guid(),
+                        ForeignKey = c.String(maxLength: 100),
+                    })
+                .PrimaryKey(t => t.Id)
+                .ForeignKey("dbo.Contact", t => t.ContactId)
+                .Index(t => t.ContactId)
+                .Index(t => t.Guid, unique: true);
+            
+            CreateTable(
+                "dbo.ContactTouchpoint",
+                c => new
+                    {
+                        Id = c.Int(nullable: false, identity: true),
+                        ContactId = c.Int(nullable: false),
+                        Type = c.Int(nullable: false),
+                        IsScheduled = c.Boolean(nullable: false),
+                        ScheduledDateTime = c.DateTime(nullable: false),
+                        CompletedDateTime = c.DateTime(),
+                        SystemNote = c.String(maxLength: 1000),
+                        CommunicationMedium = c.Int(nullable: false),
+                        SharedEntityTypeId = c.Int(),
+                        SharedEntityId = c.Int(),
+                        SharedSummary = c.String(maxLength: 250),
+                        Note = c.String(maxLength: 500),
+                        IsBirthday = c.Boolean(nullable: false),
+                        IsAnniversary = c.Boolean(nullable: false),
+                        Guid = c.Guid(nullable: false),
+                        ForeignId = c.Int(),
+                        ForeignGuid = c.Guid(),
+                        ForeignKey = c.String(maxLength: 100),
+                    })
+                .PrimaryKey(t => t.Id)
+                .ForeignKey("dbo.Contact", t => t.ContactId)
+                .Index(t => t.ContactId)
+                .Index(t => t.Guid, unique: true);
+            
+            AddColumn("dbo.Person", "OutreachTouchpointSchedule", c => c.Int(nullable: false));
+            AddColumn("dbo.Person", "OutreachTouchpointNotificationsEnabled", c => c.Boolean(nullable: false));
+            AddColumn("dbo.Person", "OutreachTouchpointPrayersPerDay", c => c.Int());
         }
         
         /// <summary>
@@ -89,11 +139,22 @@ namespace Rock.Migrations
         /// </summary>
         public override void Down()
         {
+            DropForeignKey("dbo.ContactTouchpoint", "ContactId", "dbo.Contact");
+            DropForeignKey("dbo.ContactRelationshipStrengthChanges", "ContactId", "dbo.Contact");
             DropForeignKey("dbo.Contact", "PhotoId", "dbo.BinaryFile");
             DropForeignKey("dbo.Contact", "OwnerPersonAliasId", "dbo.PersonAlias");
+            DropIndex("dbo.ContactTouchpoint", new[] { "Guid" });
+            DropIndex("dbo.ContactTouchpoint", new[] { "ContactId" });
+            DropIndex("dbo.ContactRelationshipStrengthChanges", new[] { "Guid" });
+            DropIndex("dbo.ContactRelationshipStrengthChanges", new[] { "ContactId" });
             DropIndex("dbo.Contact", new[] { "Guid" });
             DropIndex("dbo.Contact", new[] { "PhotoId" });
             DropIndex("dbo.Contact", new[] { "OwnerPersonAliasId" });
+            DropColumn("dbo.Person", "OutreachTouchpointPrayersPerDay");
+            DropColumn("dbo.Person", "OutreachTouchpointNotificationsEnabled");
+            DropColumn("dbo.Person", "OutreachTouchpointSchedule");
+            DropTable("dbo.ContactTouchpoint");
+            DropTable("dbo.ContactRelationshipStrengthChanges");
             DropTable("dbo.Contact");
         }
     }

@@ -17,6 +17,7 @@
 
 using Rock.Data;
 using Rock.Enums.Crm;
+using Rock.Enums.Outreach;
 using Rock.Lava;
 using Rock.UniversalSearch;
 using Rock.Utility.Enums;
@@ -754,6 +755,24 @@ namespace Rock.Model
         /// </summary>
         [DataMember]
         public bool? IsChatOpenDirectMessageAllowed { get; set; }
+
+        /// <summary>
+        /// Gets or sets the outreach schedule.
+        /// </summary>
+        [DataMember]
+        public DaysOfWeekFlags OutreachTouchpointSchedule { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether outreach notification is enable.
+        /// </summary>
+        [DataMember]
+        public bool OutreachTouchpointNotificationsEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets the outreach prayers per day.
+        /// </summary>
+        [DataMember]
+        public int? OutreachTouchpointPrayersPerDay { get; set; }
 
         #endregion
 

@@ -214,9 +214,19 @@ namespace Rock.SystemGuid
         public const string CONNECTION_WORKFLOW = "4EB8711F-7301-4699-A223-0505A7CEB20A";
 
         /// <summary>
-        /// The guid for the Rock.Model.OutreachTool entity
+        /// The guid for the Rock.Model.Contact entity
         /// </summary>
         public const string CONTACT = "A2FBB846-2511-4760-B912-928775BFC6D6";
+
+        /// <summary>
+        /// The guid for the Rock.Model.ContactTouchpoint entity
+        /// </summary>
+        public const string CONTACT_TOUCHPOINT = "1068B648-FEE4-44E7-BF43-607371871367";
+
+        /// <summary>
+        /// The guid for the Rock.Model.ContactRelationshipStrengthChanges entity
+        /// </summary>
+        public const string CONTACT_RELATIONSHIP_STRENGTH_CHANGES = "0397D69F-1E9E-4202-BCB8-9DEEDAA554C9";
 
         /// <summary>
         /// The guid for the Rock.Model.ContentCollection entity
