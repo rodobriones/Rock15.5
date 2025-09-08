@@ -36,6 +36,7 @@
         <Column name="engagementMap"
                 title="Recent Engagement"
                 field="engagementMap"
+                :disableSort="true"
                 visiblePriority="md"
                 width="12%">
 
@@ -50,6 +51,7 @@
                       title="Current Streak"
                       field="currentStreakCount"
                       :filter="numberValueFilter"
+                      :quickFilterValue="getCurrentStreakCountFilterValue"
                       visiblePriority="xs"
                       width="5%" />
 
@@ -57,6 +59,7 @@
                       title="Longest Streak"
                       field="longestStreakCount"
                       :filter="numberValueFilter"
+                      :quickFilterValue="getLongestStreakCountFilterValue"
                       visiblePriority="xs"
                       width="5%" />
 
@@ -64,6 +67,7 @@
                       title="Engagements"
                       field="engagementCount"
                       :filter="numberValueFilter"
+                      :quickFilterValue="getEngagementCountFilterValue"
                       visiblePriority="xs"
                       width="5%" />
 
@@ -73,6 +77,7 @@
                     headerClass="title-right"
                     itemClass="justify-content-end text-right"
                     :filter="dateValueFilter"
+                    :quickFilterValue="getEnrollmentDateFilterValue"
                     visiblePriority="xs"
                     width="5%" />
 
@@ -178,6 +183,49 @@
     */
     function getNameRowFilterValue(row: Record<string, unknown>): string {
         return row.fullName as string;
+    }
+
+    /**
+    * Gets the filter value text to use for the person column.
+    *
+    * @param row The row to be filtered.
+    */
+    function getCurrentStreakCountFilterValue(row: Record<string, unknown>): string {
+        return row.currentStreakCount as string;
+    }
+
+    /**
+    * Gets the filter value text to use for the person column.
+    *
+    * @param row The row to be filtered.
+    */
+    function getLongestStreakCountFilterValue(row: Record<string, unknown>): string {
+        return row.longestStreakCount as string;
+    }
+
+    /**
+    * Gets the filter value text to use for the person column.
+    *
+    * @param row The row to be filtered.
+    */
+    function getEngagementCountFilterValue(row: Record<string, unknown>): string {
+        return row.engagementCount as string;
+    }
+
+    /**
+    * Gets the filter value text to use for the person column.
+    *
+    * @param row The row to be filtered.
+    */
+    function getEnrollmentDateFilterValue(row: Record<string, unknown>): string {
+        const dateStr = row.enrollmentDate as string;
+        if (!dateStr) return "";
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        const mm = String(date.getMonth() + 1);
+        const dd = String(date.getDate());
+        const yyyy = date.getFullYear();
+        return `${mm}/${dd}/${yyyy}`;
     }
 
     // #endregion
