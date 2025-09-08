@@ -20,6 +20,7 @@
         <Column name="person"
                 title="Name"
                 field="person"
+                :sortValue="row => getPersonFullName(row)"
                 :filter="pickExistingValueFilter"
                 :filterValue="getNameRowFilterValue"
                 :quickFilterValue="getNameRowFilterValue"
@@ -143,6 +144,10 @@
             throw new Error(result.errorMessage ?? "Unknown error while trying to load grid data.");
         }
     }
+
+    const getPersonFullName = (row: Record<string, unknown>): string => {
+        return row["fullName"] as string;
+    };
 
     function getIsDeceasedRowClass(row: Record<string, unknown>): string {
         const isDeceased = asBoolean(row["isDeceased"]);
