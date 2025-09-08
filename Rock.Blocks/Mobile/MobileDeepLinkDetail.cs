@@ -66,6 +66,7 @@ namespace Rock.Blocks.Mobile
         {
             public const string SiteId = "SiteId";
             public const string DeepLinkRouteGuid = "DeepLinkRouteGuid";
+            public const string AutoEdit = "AutoEdit";
         }
 
         private static class NavigationUrlKey
@@ -154,7 +155,7 @@ namespace Rock.Blocks.Mobile
             };
 
             // New entity is being created, default to edit as only choice.
-            if ( box.IsEditable )
+            if ( box.IsEditable && PageParameter( PageParameterKey.AutoEdit ).AsBooleanOrNull() == true )
             {
                 box.Bag = GetDetailBagForEdit( mobileDeepLink, additionalSettings.DeepLinkPathPrefix );
             }
@@ -549,7 +550,16 @@ namespace Rock.Blocks.Mobile
 
                 var deepLinkGuid = routeGuid.AsGuidOrNull();
                 var routes = additionalSettings.DeepLinkRoutes;
-                var route = routes.First( r => r.Guid == deepLinkGuid ) ?? null;
+
+                var route = ( DeepLinkRoute ) null;
+                try
+                {
+                    route = routes.First( r => r.Guid == deepLinkGuid ) ?? null;
+                }
+                catch ( InvalidOperationException )
+                {
+                    return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
+                }
 
                 if ( route == null )
                 {

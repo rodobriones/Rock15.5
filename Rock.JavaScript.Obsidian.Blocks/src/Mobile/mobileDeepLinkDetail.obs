@@ -11,7 +11,7 @@
                  :name="panelName"
                  :labels="blockLabels"
                  :entityKey="entityKey"
-                 :entityTypeName="'Deep Link'"
+                 :entityTypeName="'Deep Links'"
                  :isAuditHidden="false"
                  :isBadgesVisible="true"
                  :isDeleteVisible="false"
@@ -68,10 +68,11 @@
 
     const mobileDeepLinkViewBag = ref(config.bag);
     const mobileDeepLinkEditBag = ref<ValidPropertiesBox<MobileDeepLinkDetailBag>>({
-        bag: {} as MobileDeepLinkDetailBag
+        bag: config.bag ?? {} as MobileDeepLinkDetailBag,
+        validProperties: config.bag ? Object.keys(config.bag) : []
     });
 
-    const panelMode = ref<DetailPanelMode>(DetailPanelMode.View);
+    const panelMode = config.isEditable ? ref<DetailPanelMode>(DetailPanelMode.Edit) : ref<DetailPanelMode>(DetailPanelMode.View);
 
     const baseBlock = useEntityDetailBlock({
         blockConfig: config,
@@ -86,11 +87,7 @@
      * The entity name to display in the block panel.
      */
     const panelName = computed((): string => {
-        if (panelMode.value === DetailPanelMode.Edit) {
-            return "Edit Deep Link";
-        }
-
-        return "View Deep Link";
+        return "Deep Links";
     });
 
     /**
@@ -136,12 +133,9 @@
      * @returns true if the panel should leave edit mode; false if it should stay in edit mode; or a string containing a redirect URL.
      */
     async function onCancelEdit(): Promise<boolean | string> {
-        if (!mobileDeepLinkEditBag.value.bag?.routeGuid) {
-            if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
-                return config.navigationUrls[NavigationUrlKey.ParentPage];
-            }
-
-            return false;
+        // Always redirect to parent page after cancelling an Edit or Add
+        if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
+            return config.navigationUrls[NavigationUrlKey.ParentPage];
         }
 
         return true;
@@ -185,7 +179,7 @@
         });
 
         if (result.isSuccess && result.data) {
-            // Always redirect to parent page after save
+            // Always redirect to parent page after saving an Edit or Add
             if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
                 return config.navigationUrls[NavigationUrlKey.ParentPage];
             }
