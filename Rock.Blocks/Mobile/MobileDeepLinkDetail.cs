@@ -199,7 +199,7 @@ namespace Rock.Blocks.Mobile
 
             return new Dictionary<string, string>
             {
-                { NavigationUrlKey.ParentPage, GetPageUrlWithoutLastSegment( pageParams ) }
+                { NavigationUrlKey.ParentPage, GetTrueParentPage( queryParams: pageParams ) }
             };
         }
 
@@ -466,10 +466,10 @@ namespace Rock.Blocks.Mobile
         }
 
         /// <summary>
-        /// Gets the page URL up to but not including the last URL segment.
+        /// Gets the parent page URL up to but not including the last URL segment.
         /// </summary>
         /// <returns>The base URL without the last segment.</returns>
-        private string GetPageUrlWithoutLastSegment( IDictionary<string, string> queryParams = null )
+        private string GetTrueParentPage( IDictionary<string, string> queryParams = null, bool cleaveDetailParameters = true )
         {
             var parameters = queryParams != null ? new Dictionary<string, string>( queryParams ) : new Dictionary<string, string>();
 
@@ -481,6 +481,18 @@ namespace Rock.Blocks.Mobile
                 if ( queryParam.Key == "PageId" )
                 {
                     continue;
+                }
+
+                if ( cleaveDetailParameters )
+                {
+                    switch ( queryParam.Key )
+                    {
+                        case PageParameterKey.DeepLinkRouteGuid:
+                        case PageParameterKey.AutoEdit:
+                            continue;
+                        default:
+                            break;
+                    }
                 }
 
                 parameters.TryAdd( queryParam.Key, queryParam.Value );

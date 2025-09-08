@@ -1566,7 +1566,7 @@ namespace RockWeb.Blocks.Mobile
 
             if ( IsUserAuthorized( Authorization.EDIT ) )
             {
-                queryParameters.Add( "autoEdit", "true" );
+                queryParameters.Add( "AutoEdit", "true" );
             }
 
             NavigateToLinkedPage( AttributeKey.DeepLinkDetail, queryParameters );
