@@ -199,7 +199,8 @@
   border-radius: 999px;
 }
 
-.btn-overflow {
+.btn-overflow,
+.dropdown > .btn-link.btn-overflow {
   color:    var(--color-interface-medium);
   &:hover,
   &:focus {
@@ -311,7 +312,7 @@
   }
 
   .badge {
-      color:            var(--color-primary);
+      color:            var(--base-interface-softest);
       background-color: var(--color-primary);
   }
 

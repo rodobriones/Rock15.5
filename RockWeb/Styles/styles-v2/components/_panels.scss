@@ -555,8 +555,9 @@ ul.activeusers {
             margin-bottom: 6px;
 
             & > a {
-                background-color: transparent;
+                background-color: var(--color-interface-softer);
                 color: var(--color-interface-strong);
+                font-weight: var(--font-weight-medium);
             }
 
             & > a:hover {

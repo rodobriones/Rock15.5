@@ -103,6 +103,10 @@
   }
 }
 
+.panel .panel-body .actions + .alert {
+  margin-top: var(--spacing-small);
+};
+
 // Moved from theme.less
 .panel-block {
   position:           relative;
