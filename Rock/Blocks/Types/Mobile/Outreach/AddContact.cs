@@ -14,8 +14,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     /// Allows you to add contact.
     /// </summary>
     [DisplayName( "Add Contact" )]
-    [Category( "Mobile > Crm" )]
-    [IconCssClass( "ti ti-address-book" )]
+    [Category( "Mobile > Outreach" )]
+    [IconCssClass( "ti ti-users-plus" )]
     [Description( "Allows you to add contact." )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
@@ -31,7 +31,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     #endregion
 
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_ADD_CONTACT_BLOCK_TYPE )]
-    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.ADD_CONTACT )]
+    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_ADD_CONTACT )]
     public class AddContact : RockBlockType
     {
         #region Keys

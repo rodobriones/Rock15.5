@@ -83,11 +83,6 @@ namespace Rock.SystemGuid
         public const string CONNECTION_OPPORTUNITY_SIGNUP = "C7FCE3B7-704B-43C0-AF96-5A70EB7F70D9";
 
         /// <summary>
-        /// The add contact Block Type GUID
-        /// </summary>
-        public const string ADD_CONTACT = "DE2F490D-2598-40E8-8170-4753DDC0A0B0";
-
-        /// <summary>
         /// Content Channel View Block Type Guid
         /// </summary>
         public const string CONTENT_CHANNEL_VIEW = "143A2345-3E26-4ED0-A2FE-42AAF11B4C0F";
@@ -290,6 +285,11 @@ namespace Rock.SystemGuid
         #region Mobile Block Types
 
         /// <summary>
+        /// The mobile Add Contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.AddContact">Add Contact</see> block type.
+        /// </summary>
+        public const string MOBILE_ADD_CONTACT = "DE2F490D-2598-40E8-8170-4753DDC0A0B0";
+
+        /// <summary>
         /// The mobile Connection &gt; <see cref="Rock.Blocks.Types.Mobile.Connection.ConnectionTypeList">Connection Type List</see> block type.
         /// </summary>
         public const string MOBILE_CONNECTION_CONNECTION_TYPE_LIST = "31E1FCCF-C4B1-4D84-992C-DEACAF3697CF";
@@ -397,7 +397,7 @@ namespace Rock.SystemGuid
         /// <summary>
         /// The mobile group members &gt; <see cref="Rock.Blocks.Types.Mobile.Crm.GroupMembers">Group Members</see> block type.
         /// </summary>
-        public const string MOBILE_CRM_GROUP_MEMBERS  = "1F1E7598-8D51-4750-8D61-E5791A226FDB";
+        public const string MOBILE_CRM_GROUP_MEMBERS = "1F1E7598-8D51-4750-8D61-E5791A226FDB";
 
         /// <summary>
         /// The mobile scheduled transaction list &gt; <see cref="Rock.Blocks.Types.Mobile.Finance.ScheduledTransactionList">Scheduled Transaction</see> block type.
@@ -423,6 +423,12 @@ namespace Rock.SystemGuid
         /// The mobile transaction list &gt; <see cref="Rock.Blocks.Types.Mobile.Finance.TransactionList">Transaction List</see> block type.
         /// </summary>
         public const string MOBILE_FINANCE_TRANSACTION_LIST = "D29C24EA-A52B-4470-A8D9-D7082FFF19DE";
+
+        /// <summary>
+        /// The mobile my contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContact">My Contact</see> block type.
+        /// </summary>
+        public const string MOBILE_MY_CONTACT = "5C8E3D6E-1F2D-4A2D-8E3C-2F3B1C6D7E8F";
+
         #endregion
 
         #region Obsidian Block Types
