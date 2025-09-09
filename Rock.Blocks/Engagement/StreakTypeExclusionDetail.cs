@@ -346,22 +346,19 @@ namespace Rock.Blocks.Engagement
         /// <inheritdoc/>
         public BreadCrumbResult GetBreadCrumbs( PageReference pageReference )
         {
-            using ( var rockContext = new RockContext() )
-            {
-                var exclusionId = pageReference.GetPageParameter( PageParameterKey.StreakTypeExclusionId );
-                var exclusionLocationName = new StreakTypeExclusionService( rockContext )
-                    .GetSelect( exclusionId, exclusion => exclusion.Location.Name );
-                var breadCrumbPageRef = new PageReference( pageReference.PageId, 0, pageReference.Parameters );
-                var breadCrumb = new BreadCrumbLink( exclusionLocationName ?? "New Exclusion", breadCrumbPageRef );
+            var exclusionId = pageReference.GetPageParameter( PageParameterKey.StreakTypeExclusionId );
+            var exclusionLocationName = new StreakTypeExclusionService( RockContext )
+                .GetSelect( exclusionId, exclusion => exclusion.Location.Name );
+            var breadCrumbPageRef = new PageReference( pageReference.PageId, 0, pageReference.Parameters );
+            var breadCrumb = new BreadCrumbLink( exclusionLocationName ?? "New Exclusion", breadCrumbPageRef );
 
-                return new BreadCrumbResult
+            return new BreadCrumbResult
+            {
+                BreadCrumbs = new List<IBreadCrumb>
                 {
-                    BreadCrumbs = new List<IBreadCrumb>
-                   {
-                       breadCrumb
-                   }
-                };
-            }
+                    breadCrumb
+                }
+            };
         }
 
         #endregion
