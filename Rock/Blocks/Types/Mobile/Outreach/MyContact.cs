@@ -52,12 +52,31 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
         #region Block Actions
 
+        /// <summary>
+        /// Gets the contact list.
+        /// </summary>
+        /// <param name="startIndex"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
         [BlockAction]
         public BlockActionResult GetContactList( int startIndex, int count )
         {
-            var contactService = new ContactService( RockContext );
+            var currentPerson = GetCurrentPerson();
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "You are not logged in" );
+            }
+
+            var personAliasId = currentPerson.PrimaryAliasId;
+            if ( personAliasId == null )
+            {
+                return ActionBadRequest( "The current person doesn't have a primary alias Id" );
+            }
+
+            ContactService contactService = new ContactService( RockContext );
             var contacts = contactService
                 .Queryable()
+                .Where( c => c.OwnerPersonAliasId == personAliasId )
                 .OrderByDescending( c => c.Id )
                 .Skip( startIndex )
                 .Take( count )
@@ -72,14 +91,33 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk( contacts );
         }
 
+        /// <summary>
+        /// Searches the contacts.
+        /// </summary>
+        /// <param name="searchTerm"></param>
+        /// <returns></returns>
         [BlockAction]
         public BlockActionResult SearchContacts( string searchTerm )
         {
-            var contactService = new ContactService( RockContext );
+            var currentPerson = GetCurrentPerson();
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "You are not logged in" );
+            }
+
+            var personAliasId = currentPerson.PrimaryAliasId;
+            if ( personAliasId == null )
+            {
+                return ActionBadRequest( "The current person doesn't have a primary alias Id" );
+            }
+
+            ContactService contactService = new ContactService( RockContext );
+
             searchTerm = searchTerm.ToLower().Trim();
 
             var contacts = contactService
                 .Queryable()
+                .Where( c => c.OwnerPersonAliasId == personAliasId )
                 .Where( c => c.FirstName.Contains( searchTerm ) || c.LastName.Contains( searchTerm ) || ( c.FirstName + " " + c.LastName ).Contains( searchTerm ) )
                 .OrderByDescending( c => c.Id )
                 .ToList()
