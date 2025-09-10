@@ -13,6 +13,7 @@ using Rock.Attribute;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Blocks.Types.Mobile.Outreach
 {
@@ -25,10 +26,29 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [Description( "Allows you to view and edit existing contact." )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
+    #region Block Attributes
+
+    [LinkedPage(
+        "Add Contact Page",
+        Description = "Page to link to when user taps on a Transaction List. TransactionDetailGuid is passed in the query string.",
+        IsRequired = true,
+        Key = AttributeKey.AddContact,
+        Order = 0 )]
+
+    #endregion
+
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_MY_CONTACT_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_MY_CONTACT )]
     public class MyContact : RockBlockType
     {
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string AddContact = "AddContact";
+        }
+
+        #endregion
 
         #region Block Actions
 
@@ -56,9 +76,11 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         public BlockActionResult SearchContacts( string searchTerm )
         {
             var contactService = new ContactService( RockContext );
+            searchTerm = searchTerm.ToLower().Trim();
+
             var contacts = contactService
                 .Queryable()
-                .Where( c => c.FirstName.Contains( searchTerm ) || c.LastName.Contains( searchTerm ) )
+                .Where( c => c.FirstName.Contains( searchTerm ) || c.LastName.Contains( searchTerm ) || ( c.FirstName + " " + c.LastName ).Contains( searchTerm ) )
                 .OrderByDescending( c => c.Id )
                 .ToList()
                 .Select( c => new ContactItem
@@ -71,13 +93,27 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk( contacts );
         }
 
-        #endregion
+        #region IRockMobileBlockType Implementation
+
+        /// <inheritdoc />
+        public override object GetMobileConfigurationValues()
+        {
+            return new
+            {
+                AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull()
+            };
+        }
     }
 
-    public class ContactItem
-    {
-        public string ContactIdKey { get; set; }
-        public string profilePhotoUrl { get; set; }
-        public string name { get; set; }
-    }
+    #endregion
+
+
+    #endregion
+}
+
+public class ContactItem
+{
+    public string ContactIdKey { get; set; }
+    public string profilePhotoUrl { get; set; }
+    public string name { get; set; }
 }
