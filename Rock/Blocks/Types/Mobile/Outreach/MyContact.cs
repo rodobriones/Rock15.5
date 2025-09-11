@@ -1,19 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using Microsoft.Identity.Client;
-
-using OpenXmlPowerTools;
 
 using Rock.Attribute;
+using Rock.Cms.ContentCollection.Search;
+using Rock.Common.Mobile.Blocks.Outreach.MyContact;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
-using Rock.Web.Cache;
 
 namespace Rock.Blocks.Types.Mobile.Outreach
 {
@@ -53,51 +48,12 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         #region Block Actions
 
         /// <summary>
-        /// Gets the contact list.
+        /// Searches the contacts with options.
         /// </summary>
-        /// <param name="startIndex"></param>
-        /// <param name="count"></param>
+        /// <param name="option"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult GetContactList( int startIndex, int count )
-        {
-            var currentPerson = GetCurrentPerson();
-            if ( currentPerson == null )
-            {
-                return ActionBadRequest( "You are not logged in" );
-            }
-
-            var personAliasId = currentPerson.PrimaryAliasId;
-            if ( personAliasId == null )
-            {
-                return ActionBadRequest( "The current person doesn't have a primary alias Id" );
-            }
-
-            ContactService contactService = new ContactService( RockContext );
-            var contacts = contactService
-                .Queryable()
-                .Where( c => c.OwnerPersonAliasId == personAliasId )
-                .OrderByDescending( c => c.Id )
-                .Skip( startIndex )
-                .Take( count )
-                .ToList()
-                .Select( c => new ContactItem
-                {
-                    ContactIdKey = c.IdKey,
-                    name = c.FirstName + " " + c.LastName,
-                    profilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
-                } );
-
-            return ActionOk( contacts );
-        }
-
-        /// <summary>
-        /// Searches the contacts.
-        /// </summary>
-        /// <param name="searchTerm"></param>
-        /// <returns></returns>
-        [BlockAction]
-        public BlockActionResult SearchContacts( string searchTerm )
+        public BlockActionResult Search( ContactSearchOptions option )
         {
             var currentPerson = GetCurrentPerson();
             if ( currentPerson == null )
@@ -113,23 +69,37 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             ContactService contactService = new ContactService( RockContext );
 
-            searchTerm = searchTerm.ToLower().Trim();
-
-            var contacts = contactService
+            var qry = contactService
                 .Queryable()
-                .Where( c => c.OwnerPersonAliasId == personAliasId )
-                .Where( c => c.FirstName.Contains( searchTerm ) || c.LastName.Contains( searchTerm ) || ( c.FirstName + " " + c.LastName ).Contains( searchTerm ) )
-                .OrderByDescending( c => c.Id )
-                .ToList()
-                .Select( c => new ContactItem
-                {
-                    ContactIdKey = c.IdKey,
-                    name = c.FirstName + " " + c.LastName,
-                    profilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
-                } );
+                .AsNoTracking()
+                .Where( c => c.OwnerPersonAliasId == personAliasId );
 
-            return ActionOk( contacts );
+            if ( option.SearchTerm.IsNotNullOrWhiteSpace() )
+            {
+                var searchTerm = option.SearchTerm.ToLower().Trim();
+                qry = qry.Where( c =>
+                    ( c.FirstName ?? "" ).ToLower().Contains( searchTerm ) ||
+                    ( c.LastName ?? "" ).ToLower().Contains( searchTerm ) ||
+                    ( ( ( c.FirstName ?? "" ) + " " + ( c.LastName ?? "" ) ).ToLower().Contains( searchTerm ) )
+                );
+            }
+
+            var contacts = qry.OrderByDescending( c => c.Id )
+                .Skip( option.Offset )
+                .Take( option.Limit )
+                .ToList();
+
+            var result = contacts.Select( c => new ContactItem
+            {
+                ContactIdKey = c.IdKey,
+                name = c.FirstName + " " + c.LastName,
+                profilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
+            } );
+
+            return ActionOk( result );
         }
+
+        #endregion
 
         #region IRockMobileBlockType Implementation
 
@@ -141,17 +111,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull()
             };
         }
+        #endregion
     }
-
-    #endregion
-
-
-    #endregion
-}
-
-public class ContactItem
-{
-    public string ContactIdKey { get; set; }
-    public string profilePhotoUrl { get; set; }
-    public string name { get; set; }
 }
