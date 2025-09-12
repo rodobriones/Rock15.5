@@ -425,9 +425,9 @@ namespace Rock.SystemGuid
         public const string MOBILE_FINANCE_TRANSACTION_LIST = "D29C24EA-A52B-4470-A8D9-D7082FFF19DE";
 
         /// <summary>
-        /// The mobile my contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContact">My Contact</see> block type.
+        /// The mobile my contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContacts">My Contact</see> block type.
         /// </summary>
-        public const string MOBILE_MY_CONTACT = "5C8E3D6E-1F2D-4A2D-8E3C-2F3B1C6D7E8F";
+        public const string MOBILE_MY_CONTACTS = "5C8E3D6E-1F2D-4A2D-8E3C-2F3B1C6D7E8F";
 
         #endregion
 

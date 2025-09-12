@@ -14,7 +14,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     /// <summary>
     /// Allows you to add contact.
     /// </summary>
-    [DisplayName( "Add Contact" )]
+    [DisplayName( "Add Contacts" )]
     [Category( "Mobile > Outreach" )]
     [IconCssClass( "ti ti-users-plus" )]
     [Description( "Allows you to add contact." )]
