@@ -1642,6 +1642,20 @@ mission. We are so grateful for your commitment.</p>
                 .Where( a => a is IHostedGatewayComponent && !( a is TestGateway ) )
                 .Select( a => a as IHostedGatewayComponent ).ToList();
 
+            // Now remove any components that have no active instances
+            hostedGatewayComponentList = hostedGatewayComponentList
+                .Where( item =>
+                {
+                    using ( var rockContext = new Rock.Data.RockContext() )
+                    {
+                        var entityType = Rock.Web.Cache.EntityTypeCache.Get( item.TypeGuid );
+                        return new FinancialGatewayService( rockContext )
+                            .Queryable()
+                            .Any( g => g.EntityTypeId == entityType.Id && g.IsActive );
+                    }
+                } )
+                .ToList();
+
             rptInstalledGateways.DataSource = hostedGatewayComponentList;
             rptInstalledGateways.DataBind();
         }

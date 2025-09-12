@@ -290,7 +290,7 @@ namespace RockWeb.Blocks.Steps
 
                 if ( stepPerson.TopSignalColor.IsNotNullOrWhiteSpace() )
                 {
-                    sbNameHtml.Append( stepPerson.GetSignalMarkup() );
+                    sbNameHtml.Append( " " + stepPerson.GetSignalMarkup() );
                 }
 
                 if ( _showNoteColumn && step.Note.IsNotNullOrWhiteSpace() )

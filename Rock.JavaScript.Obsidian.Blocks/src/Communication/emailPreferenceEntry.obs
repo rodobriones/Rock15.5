@@ -481,7 +481,7 @@
             && !hasResubscribed.value
             && (
                 !unsubscribedFromChannel.value
-                || isBulkEmailAllowed.value
+                || areEmailsAllowed.value
             );
     });
 
@@ -532,13 +532,13 @@
         return "Updated Email Address";
     });
 
-    const isBulkEmailAllowed = computed((): boolean => {
-        return internalEmailPreference.value === EmailPreference.EmailAllowed;
+    const areEmailsAllowed = computed((): boolean => {
+        return internalEmailPreference.value !== EmailPreference.DoNotEmail;
     });
 
     const showCurrentCommunicationChannelsSection = computed((): boolean => {
         return !!(
-            isBulkEmailAllowed.value
+            areEmailsAllowed.value
             && isCurrentCommunicationChannelsSectionEnabled.value
             && currentCommunicationChannels.value.length
         );
@@ -546,7 +546,7 @@
 
     const showAvailableCommunicationChannelsSection = computed((): boolean => {
         return !!(
-            isBulkEmailAllowed.value
+            areEmailsAllowed.value
             && isAvailableCommunicationChannelsSectionEnabled.value
             && availableCommunicationChannels.value.length
         );

@@ -20,8 +20,7 @@
         <CheckBox v-model="hideDrafts" label="Hide Drafts" />
 
         <SlidingDateRangePicker v-model="slidingDateRange"
-                                label="Send Date Range"
-                                :enabledSlidingDateRangeUnits="enabledSlidingDateRangeUnits" />
+                                label="Send Date Range" />
 
         <NumberRangeBox v-model="recipientCountRange" label="Recipient Count" />
 
@@ -106,13 +105,6 @@
         (e: "update:visible", value: boolean): void;
         (e: "close"): void;
     }>();
-
-    const enabledSlidingDateRangeUnits: RangeType[] = [
-        RangeType.Last,
-        RangeType.Current,
-        RangeType.DateRange,
-        RangeType.Previous
-    ];
 
     // #region Values
 

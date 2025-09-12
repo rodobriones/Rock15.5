@@ -132,7 +132,6 @@ namespace Rock.Blocks.Communication
         Key = AttributeKey.CommunicationListCategories_PreferenceMode,
         Description = "Select which categories of communication lists to display for Preference Mode. If no categories are selected, all lists the person is authorized to view will be shown. Note: category permissions override communication list permissions.",
         GroupTypeGuid = Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST,
-        DefaultValue = Rock.SystemGuid.Category.GROUPTYPE_COMMUNICATIONLIST_PUBLIC,
         AllowMultiple = true,
         Category = AttributeCategory.BasicSettings_PreferenceModeSettings,
         Order = 1,
@@ -163,7 +162,6 @@ namespace Rock.Blocks.Communication
         Key = AttributeKey.CommunicationListCategories_UnsubscribeMode,
         Description = "Select which categories of communication lists to display for Unsubscribe Mode. If no categories are selected, all lists the person is authorized to view will be shown. Note: category permissions override communication list permissions.",
         GroupTypeGuid = Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST,
-        DefaultValue = Rock.SystemGuid.Category.GROUPTYPE_COMMUNICATIONLIST_PUBLIC,
         AllowMultiple = true,
         Category = AttributeCategory.BasicSettings_UnsubscribeModeSettings,
         Order = 0,
@@ -1622,6 +1620,7 @@ namespace Rock.Blocks.Communication
                 .AsNoTracking()
                 .Where( gm =>
                     gm.Group.IsActive
+                    && gm.Group.IsPublic
                     && gm.Group.GroupTypeId == communicationListGroupTypeId
                     && gm.PersonId == person.Id
                     && gm.GroupMemberStatus == GroupMemberStatus.Active
@@ -1934,6 +1933,7 @@ namespace Rock.Blocks.Communication
                 .AsNoTracking()
                 .Where( g =>
                     g.IsActive
+                    && g.IsPublic
                     && g.GroupTypeId == communicationListGroupTypeId
                     && !g.Members.Any( gm =>
                         gm.GroupMemberStatus == GroupMemberStatus.Active

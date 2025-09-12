@@ -97,19 +97,11 @@ namespace Rock.Blocks.Cms
         {
             var options = new MediaElementListOptionsBag();
 
-            var mediaFolderId = PageParameter( PageParameterKey.MediaFolderId ).AsIntegerOrNull();
-            if ( !mediaFolderId.HasValue )
-            {
-                mediaFolderId = IdHasher.Instance.GetId( PageParameter( PageParameterKey.MediaFolderId ) );
-            }
+            var mediaFolder = GetMediaFolder();
 
-            if ( mediaFolderId.HasValue )
+            if ( mediaFolder != null )
             {
-                var mediaFolder = new MediaFolderService( RockContext ).Get( mediaFolderId.Value );
-                if ( mediaFolder != null )
-                {
-                    options.MediaFolderName = mediaFolder.Name;
-                }
+                options.MediaFolderName = mediaFolder.Name;
             }
 
             return options;
@@ -122,8 +114,62 @@ namespace Rock.Blocks.Cms
         private bool GetIsAddEnabled()
         {
             var entity = new MediaElement();
+            var mediaAccountComponent = GetMediaAccountComponent();
 
-            return entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
+            bool canAddEditDelete = entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
+            return canAddEditDelete && mediaAccountComponent != null && mediaAccountComponent.AllowsManualEntry;
+        }
+
+        /// <summary>
+        /// Gets the media account component.
+        /// </summary>
+        /// <returns></returns>
+        private MediaAccountComponent GetMediaAccountComponent()
+        {
+            var mediaFolder = GetMediaFolder();
+            var componentEntityTypeId = mediaFolder != null && mediaFolder.MediaAccount != null ? mediaFolder.MediaAccount.ComponentEntityTypeId : ( int? ) null;
+
+            if ( componentEntityTypeId.HasValue )
+            {
+                var componentEntityType = EntityTypeCache.Get( componentEntityTypeId.Value );
+                return componentEntityType == null ? null : MediaAccountContainer.GetComponent( componentEntityType.Name );
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Get the media folder's Id.
+        /// </summary>
+        /// <returns></returns>
+        private int? GetMediaFolderId()
+        {
+            var mediaFolderId = PageParameter( PageParameterKey.MediaFolderId ).AsIntegerOrNull();
+
+            if ( !mediaFolderId.HasValue )
+            {
+                mediaFolderId = IdHasher.Instance.GetId( PageParameter( PageParameterKey.MediaFolderId ) );
+            }
+
+            return mediaFolderId;
+        }
+
+        /// <summary>
+        /// Get the actual media folder model.
+        /// </summary>
+        /// <returns></returns>
+        private MediaFolder GetMediaFolder()
+        {
+            var mediaFolderId = GetMediaFolderId();
+
+            if ( !mediaFolderId.HasValue )
+            {
+                return null;
+            }
+
+            var mediaFolderService = new MediaFolderService( RockContext );
+
+            return mediaFolderService.Queryable( "MediaAccount" ).FirstOrDefault( a => a.Id == mediaFolderId.Value );
         }
 
         /// <summary>
@@ -132,11 +178,7 @@ namespace Rock.Blocks.Cms
         /// <returns>A dictionary of key names and URL values.</returns>
         private Dictionary<string, string> GetBoxNavigationUrls()
         {
-            var mediaFolderId = PageParameter( PageParameterKey.MediaFolderId ).AsIntegerOrNull();
-            if ( !mediaFolderId.HasValue )
-            {
-                mediaFolderId = IdHasher.Instance.GetId( PageParameter( PageParameterKey.MediaFolderId ) );
-            }
+            var mediaFolderId = GetMediaFolderId();
 
             return new Dictionary<string, string>
             {
@@ -152,12 +194,7 @@ namespace Rock.Blocks.Cms
         protected override IQueryable<MediaElement> GetListQueryable( RockContext rockContext )
         {
             var mediaElementService = new MediaElementService( rockContext );
-            var mediaFolderId = PageParameter( PageParameterKey.MediaFolderId ).AsIntegerOrNull();
-
-            if ( !mediaFolderId.HasValue )
-            {
-                mediaFolderId = IdHasher.Instance.GetId( PageParameter( PageParameterKey.MediaFolderId ) );
-            }
+            var mediaFolderId = GetMediaFolderId();
 
             var qry = mediaElementService.Queryable().AsNoTracking();
 

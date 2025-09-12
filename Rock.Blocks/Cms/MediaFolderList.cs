@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Media;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Reporting.DataFilter.ContentChannelItem;
@@ -133,8 +134,28 @@ namespace Rock.Blocks.Cms
         private bool GetIsAddEnabled()
         {
             var entity = new MediaFolder();
+            var mediaAccountComponent = GetMediaAccountComponent();
 
-            return entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
+            bool canAddEditDelete = entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
+            return canAddEditDelete && mediaAccountComponent != null && mediaAccountComponent.AllowsManualEntry;
+        }
+
+        /// <summary>
+        /// Gets the media account component.
+        /// </summary>
+        /// <returns></returns>
+        private MediaAccountComponent GetMediaAccountComponent()
+        {
+            var mediaAccount = GetMediaAccount();
+            var componentEntityTypeId = mediaAccount != null ? mediaAccount.ComponentEntityTypeId : ( int? ) null;
+
+            if ( componentEntityTypeId.HasValue )
+            {
+                var componentEntityType = EntityTypeCache.Get( componentEntityTypeId.Value );
+                return componentEntityType == null ? null : MediaAccountContainer.GetComponent( componentEntityType.Name );
+            }
+
+            return null;
         }
 
         /// <summary>
