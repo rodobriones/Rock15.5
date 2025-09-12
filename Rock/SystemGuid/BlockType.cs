@@ -315,6 +315,11 @@ namespace Rock.SystemGuid
         public const string MOBILE_CONNECTION_ADD_CONNECTION_REQUEST = "1380115A-B3F0-49BC-A6BC-432A59DC27A2";
 
         /// <summary>
+        /// The mobile contact profile &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.ContactProfile">Contact Profile</see> block type."/>
+        /// </summary>
+        public const string MOBILE_CONTACT_PROFILE = "40E200AD-1E29-4855-A8A4-8055A63753FF";
+
+        /// <summary>
         /// The mobile Core &gt; <see cref="Rock.Blocks.Types.Mobile.Core.Search"/> block type.
         /// </summary>
         public const string MOBILE_CORE_SEARCH = "41174BEA-6567-430C-AAD4-A89A5CF70FB0";

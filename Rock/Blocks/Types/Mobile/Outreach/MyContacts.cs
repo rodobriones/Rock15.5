@@ -25,10 +25,17 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
     [LinkedPage(
         "Add Contact Page",
-        Description = "Page to link to when user taps on a Transaction List. TransactionDetailGuid is passed in the query string.",
+        Description = "Page to link to when user taps on the plus button.",
         IsRequired = true,
         Key = AttributeKey.AddContact,
         Order = 0 )]
+
+    [LinkedPage(
+        "Contact Profile",
+        Description = "Page to link to when the user taps on the contact.",
+        IsRequired = true,
+        Key = AttributeKey.ContactProfil,
+        Order = 1 )]
 
     #endregion
 
@@ -41,6 +48,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         private static class AttributeKey
         {
             public const string AddContact = "AddContact";
+            public const string ContactProfil = "ContactProfile";
         }
 
         #endregion
@@ -106,11 +114,13 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <inheritdoc />
         public override object GetMobileConfigurationValues()
         {
-            return new
+            return new Rock.Common.Mobile.Blocks.Outreach.MyContact.Configuration
             {
-                AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull()
+                AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull(),
+                ContactProfileGuid = GetAttributeValue( AttributeKey.ContactProfil ).AsGuidOrNull()
             };
         }
+
         #endregion
     }
 }

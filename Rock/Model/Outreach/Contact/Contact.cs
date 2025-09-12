@@ -18,7 +18,7 @@ namespace Rock.Model
     [CodeGenerateRest( ~Enums.CodeGenerateRestEndpoint.DeleteItem, DisableEntitySecurity = true )]
     [Analytics( true, true )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT )]
-    public partial class Contact : Entity<Contact> // ************* PS TODO: INHERIT FROM MODEL OR ENTITY ************
+    public partial class Contact : Model<Contact>
     {
         #region Entity Properties
 

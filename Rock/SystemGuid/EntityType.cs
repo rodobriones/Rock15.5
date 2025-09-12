@@ -538,6 +538,11 @@ namespace Rock.SystemGuid
         public const string MOBILE_CONNECTION_ADD_CONNECTION_REQUEST = "F41E7BE3-2854-40FF-82C8-1FDEA12B8B2F";
 
         /// <summary>
+        /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Connection.AddConnectionRequest"/>
+        /// </summary>
+        public const string MOBILE_CONTACT_PROFILE_BLOCK_TYPE = "5A8E8F2C-1F1E-4D3A-9C8E-3B6D9F1C4E2B";
+
+        /// <summary>
         /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContacts"/>.
         /// </summary>
         public const string MOBILE_MY_CONTACTS_BLOCK_TYPE = "D1CFF2E3-0E3A-4F2D-8F1D-4C3E3F2B6F2A";
