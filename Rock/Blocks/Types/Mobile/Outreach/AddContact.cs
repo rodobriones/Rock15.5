@@ -3,6 +3,7 @@
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.AddContact;
 using Rock.Common.Mobile.ViewModel;
+using Rock.Communication;
 using Rock.Data;
 using Rock.Mobile;
 using Rock.Model;
@@ -68,15 +69,16 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             }
 
             var currentPerson = GetCurrentPerson();
-            if ( currentPerson == null )
-            {
-                return ActionBadRequest( "" );
-            }
 
-            var personAlias = currentPerson.PrimaryAliasId;
+            var personAlias = currentPerson?.PrimaryAliasId;
             if ( personAlias == null )
             {
-                return ActionBadRequest( "" );
+                return ActionBadRequest( "You must be logged in to add contact." );
+            }
+
+            if ( saveContactBag.Email.IsNotNullOrWhiteSpace() && !EmailAddressFieldValidator.IsValid( saveContactBag.Email ) )
+            {
+                return ActionBadRequest( "The email address is not valid." );
             }
 
             contactService.Add( new Contact
