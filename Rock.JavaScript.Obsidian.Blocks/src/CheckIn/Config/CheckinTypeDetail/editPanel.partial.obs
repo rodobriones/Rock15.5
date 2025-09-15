@@ -510,6 +510,10 @@
             text: "Don't Ask If There Is No Ability Level",
             value: "2",
         },
+        {
+            text: "Don't Ask If There Is an Ability Level",
+            value: "3",
+        },
     ]);
     const specialNeedsOptions = ref<ListItemBag[]>([
         {
