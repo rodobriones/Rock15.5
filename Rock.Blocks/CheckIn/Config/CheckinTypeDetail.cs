@@ -26,6 +26,8 @@ using Rock.Attribute;
 using Rock.CheckIn;
 using Rock.Constants;
 using Rock.Data;
+using Rock.Enums.CheckIn;
+using Rock.Enums.Controls;
 using Rock.Model;
 using Rock.Security;
 using Rock.ViewModels.Blocks;
@@ -106,7 +108,7 @@ namespace Rock.Blocks.CheckIn.Config
                 PersonAttributeOptions = GetPersonAttributeOptions(),
                 RelationshipTypeOptions = GetRelationshipTypeOptions(),
                 SearchTypeOptions = GetSearchTypeOptions(),
-                TemplateDisplayOptions = typeof( SuccessLavaTemplateDisplayMode ).ToEnumListItemBag(),
+                TemplateDisplayOptions = typeof( Rock.CheckIn.SuccessLavaTemplateDisplayMode ).ToEnumListItemBag(),
                 PromotionsContentChannelTypeOptions = GetPromotionsContentChannelTypeOptions(),
                 HidePanel = string.IsNullOrWhiteSpace( PageParameter( PageParameterKey.CheckinTypeId ) ),
                 NameSearch = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.CHECKIN_SEARCH_TYPE_NAME.AsGuid() ).ToListItemBag(),
@@ -379,6 +381,12 @@ namespace Rock.Blocks.CheckIn.Config
 
             bag.LoadAttributesAndValuesForPublicEdit( entity, RequestContext.CurrentPerson, enforceSecurity: true, attributeFilter: IsAttributeIncluded );
 
+            var checkInTemplateSettings = entity.GetAdditionalSettings<CheckInTemplateSettings>();
+
+            bag.RegistrationSettings.GradeConfirmationAge = checkInTemplateSettings.GradeConfirmationAge;
+            bag.RegistrationSettings.ForceSelectionOfKnownRelationshipType = checkInTemplateSettings.ForceSelectionOfKnownRelationshipType;
+            bag.RegistrationSettings.DisplayMobilePhoneOnChildren = ( ( int ) checkInTemplateSettings.DisplayMobilePhoneOnChildren ).ToString();
+            bag.RegistrationSettings.DisplaySuffix = ( ( int ) checkInTemplateSettings.DisplaySuffix ).ToString();
             return bag;
         }
 
@@ -491,7 +499,7 @@ namespace Rock.Blocks.CheckIn.Config
                 PreventInactivePeople = groupType.GetAttributeValue( "core_checkin_PreventInactivePeople" ).AsBoolean( true ),
                 UseSameOptions = groupType.GetAttributeValue( "core_checkin_UseSameOptions" ).AsBoolean( false ),
                 PromotionsContentChannelTypes = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_GROUPTYPE_PROMOTIONS_CONTENT_CHANNEL ),
-                EnableRemoveFamilyKiosk = groupType.GetAttributeValue(Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_REMOVE_FROM_FAMILY_KIOSK ).AsBoolean(),
+                EnableRemoveFamilyKiosk = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_REMOVE_FROM_FAMILY_KIOSK ).AsBoolean(),
                 EnableProximityCheckin = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ENABLE_PROXIMITY_CHECKIN ).AsBoolean()
             };
         }
@@ -512,7 +520,7 @@ namespace Rock.Blocks.CheckIn.Config
                 PersonSelectTemplate = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_PERSON_SELECT_ADDITIONAL_INFORMATION_LAVA_TEMPLATE ),
                 StartTemplate = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_START_LAVA_TEMPLATE ),
                 SuccessTemplate = groupType.GetAttributeValue( Rock.SystemKey.GroupTypeAttributeKey.CHECKIN_SUCCESS_LAVA_TEMPLATE ),
-                SuccessTemplateOverrideDisplayMode = string.IsNullOrWhiteSpace( displayMode ) ? SuccessLavaTemplateDisplayMode.Never.ConvertToInt().ToString() : displayMode,
+                SuccessTemplateOverrideDisplayMode = string.IsNullOrWhiteSpace( displayMode ) ? Rock.CheckIn.SuccessLavaTemplateDisplayMode.Never.ConvertToInt().ToString() : displayMode,
             };
         }
 
@@ -581,6 +589,15 @@ namespace Rock.Blocks.CheckIn.Config
             {
                 return false;
             }
+
+            var templateSettings = entity.GetAdditionalSettings<CheckInTemplateSettings>();
+
+            templateSettings.GradeConfirmationAge = box.Bag.RegistrationSettings.GradeConfirmationAge;
+            templateSettings.ForceSelectionOfKnownRelationshipType = box.Bag.RegistrationSettings.ForceSelectionOfKnownRelationshipType;
+            templateSettings.DisplayMobilePhoneOnChildren = Enum.TryParse( box.Bag.RegistrationSettings.DisplayMobilePhoneOnChildren, out RequirementLevel requirementLevel ) ? requirementLevel : RequirementLevel.Optional;
+            templateSettings.DisplaySuffix = Enum.TryParse( box.Bag.RegistrationSettings.DisplaySuffix, out AdultsOrChildrenSelectionMode suffixOption ) ? suffixOption : AdultsOrChildrenSelectionMode.AdultsAndChildren;
+
+            entity.SetAdditionalSettings( templateSettings );
 
             // This pattern of nested bags and using ValidProperties as a flat list of the properties inside the nested bag should not be followed.
             // Later we will come up with a pattern for how to handle this safely.

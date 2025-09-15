@@ -28,8 +28,20 @@ export type CheckInRegistrationSettingsBag = {
     /** Gets or sets the can check in known relationship types. */
     canCheckInKnownRelationshipTypes?: string[] | null;
 
+    /** Gets or sets the display mobile phone on children options. */
+    displayMobilePhoneOnChildren?: string | null;
+
+    /** Gets or sets the display suffix options. */
+    displaySuffix?: string | null;
+
     /** Gets or sets a value indicating whether [enable check in after registration]. */
     enableCheckInAfterRegistration: boolean;
+
+    /** Gets or sets a value indicating whether the individual should be required to select a relationship type from the list. */
+    forceSelectionOfKnownRelationshipType: boolean;
+
+    /** Gets or sets the grade confirmation age. */
+    gradeConfirmationAge?: number | null;
 
     /** Gets or sets the known relationship types. */
     knownRelationshipTypes?: string[] | null;

@@ -283,6 +283,10 @@
                                   :items="relationshipTypeOptions"
                                   multiple />
 
+                    <CheckBox v-model="forceSelectionOfKnownRelationshipType"
+                              label="Force Selection of Known Relationship Type"
+                              help="Requires the individual to select a relationship type from the list. 'Child' will not be preselected automatically." />
+
                     <DropDownList v-model="sameFamilyKnownRelationshipTypes"
                                   label="Same Family Known Relationship Types"
                                   help="Of the known relationships defined above which should be used to place the child in the family with the adults."
@@ -306,6 +310,11 @@
                                         label="New Person Workflow Types"
                                         help="The workflow types that should be launched when a person is added to a family."
                                         multiple />
+
+                    <TextBox v-model="gradeConfirmationAge"
+                             label="Grade Confirmation Age"
+                             :rules="[validateNumberValue, minZero]"
+                             help="Sets the age when the grade confirmation dialog appears while adding or editing a child. Use decimals for partial years (e.g., 5.5). Only applies if grade is optional. Leave blank to disable the dialog." />
                 </div>
                 <div class="col-md-6">
                     <DropDownList v-model="registrationRequiredAttributesForAdults" runat="server" label="Required Attributes for Adults" :items="personAttributeOptions" multiple />
@@ -321,6 +330,8 @@
                     <DropDownList v-model="registrationDisplayEthnicityOnAdults" runat="server" label="Display Ethnicity on Adults" help="How should ethnicity be displayed for adults?" :items="displayOptions" />
                     <DropDownList v-model="registrationDisplayRaceOnChildren" runat="server" label="Display Race on Children" help="How should race be displayed for children?" :items="displayOptions" />
                     <DropDownList v-model="registrationDisplayEthnicityOnChildren" runat="server" label="Display Ethnicity on Children" help="How should ethnicity be displayed for children?" :items="displayOptions" />
+                    <DropDownList v-model="displayMobilePhoneOnChildren" runat="server" label="Display Mobile Phone on Children" help="How should Mobile Phone be displayed for children?" :showBlankItem="false" :items="displayMobilePhoneOnChildrenOptions" />
+                    <DropDownList v-model="displaySuffix" runat="server" label="Display Suffix" help="Show or hide the suffix field when editing an individual." :showBlankItem="false" :items="displaySuffixOptions" />
                 </div>
             </div>
         </Panel>
@@ -422,6 +433,98 @@
 
     // #region Values
 
+    // #region List Items by Category
+
+    const checkInTypeOptions = ref<ListItemBag[]>([
+        {
+            text: "Family",
+            value: "1",
+        },
+        {
+            text: "Individual",
+            value: "0",
+        }
+    ]);
+    const displayMobilePhoneOnChildrenOptions = ref<ListItemBag[]>([
+        {
+            text: "Hide",
+            value: "0",
+        },
+        {
+            text: "Optional",
+            value: "1",
+        },
+        {
+            text: "Required",
+            value: "2",
+        },
+    ]);
+    const displaySuffixOptions = ref<ListItemBag[]>([
+        {
+            text: "None",
+            value: "0",
+        },
+        {
+            text: "Adults And Children",
+            value: "1",
+        },
+        {
+            text: "Adults Only",
+            value: "2",
+        },
+        {
+            text: "Children Only",
+            value: "3",
+        },
+    ]);
+    const autoSelectOptionsItems = ref<ListItemBag[]>([
+        {
+            text: "People Only",
+            value: "0",
+        },
+        {
+            text: "People and Their Area/Group/Location",
+            value: "1",
+        }
+    ]);
+    const phoneSearchTypeOptions = ref<ListItemBag[]>([
+        {
+            text: "Contains",
+            value: "0",
+        },
+        {
+            text: "Ends With",
+            value: "1",
+        }
+    ]);
+    const abilityLevelDeterminationOptions = ref<ListItemBag[]>([
+        {
+            text: "Ask",
+            value: "0",
+        },
+        {
+            text: "Don't Ask",
+            value: "1",
+        },
+        {
+            text: "Don't Ask If There Is No Ability Level",
+            value: "2",
+        },
+    ]);
+    const specialNeedsOptions = ref<ListItemBag[]>([
+        {
+            text: "Remove Special Needs Groups",
+            value: "special-needs",
+        },
+        {
+            text: "Remove Non-Special Needs Groups",
+            value: "non-special-needs",
+        }
+    ]);
+
+    // #endregion List Items by Category
+
+    // GroupType (Bag) Values
     const attributes = ref(props.modelValue?.bag?.attributes ?? {});
     const attributeValues = ref(props.modelValue?.bag?.attributeValues ?? {});
     const description = propertyRef(props.modelValue?.bag?.description ?? "", "Description");
@@ -486,10 +589,12 @@
     const registrationSmsEnabledByDefault = ref(props.modelValue?.bag?.registrationSettings?.registrationSmsEnabledByDefault ?? false);
     const enableCheckInAfterRegistration = ref(props.modelValue?.bag?.registrationSettings?.enableCheckInAfterRegistration ?? false);
     const knownRelationshipTypes = ref(props.modelValue?.bag?.registrationSettings?.knownRelationshipTypes ?? []);
+    const forceSelectionOfKnownRelationshipType = ref(props.modelValue?.bag?.registrationSettings?.forceSelectionOfKnownRelationshipType ?? false);
     const sameFamilyKnownRelationshipTypes = ref(props.modelValue?.bag?.registrationSettings?.sameFamilyKnownRelationshipTypes ?? []);
     const canCheckInKnownRelationshipTypes = ref(props.modelValue?.bag?.registrationSettings?.canCheckInKnownRelationshipTypes ?? []);
     const registrationAddFamilyWorkflowTypes = ref(props.modelValue?.bag?.registrationSettings?.registrationAddFamilyWorkflowTypes ?? []);
     const registrationAddPersonWorkflowTypes = ref(props.modelValue?.bag?.registrationSettings?.registrationAddPersonWorkflowTypes ?? []);
+    const gradeConfirmationAge = ref(String(props.modelValue?.bag?.registrationSettings?.gradeConfirmationAge ?? ""));
     const registrationRequiredAttributesForAdults = ref(props.modelValue?.bag?.registrationSettings?.registrationRequiredAttributesForAdults ?? []);
     const registrationOptionalAttributesForAdults = ref(props.modelValue?.bag?.registrationSettings?.registrationOptionalAttributesForAdults ?? []);
     const registrationRequiredAttributesForChildren = ref(props.modelValue?.bag?.registrationSettings?.registrationRequiredAttributesForChildren ?? []);
@@ -503,6 +608,8 @@
     const registrationDisplayEthnicityOnAdults = ref(props.modelValue?.bag?.registrationSettings?.registrationDisplayEthnicityOnAdults ?? "");
     const registrationDisplayRaceOnChildren = ref(props.modelValue?.bag?.registrationSettings?.registrationDisplayRaceOnChildren ?? "");
     const registrationDisplayEthnicityOnChildren = ref(props.modelValue?.bag?.registrationSettings?.registrationDisplayEthnicityOnChildren ?? "");
+    const displayMobilePhoneOnChildren = ref(props.modelValue?.bag?.registrationSettings?.displayMobilePhoneOnChildren ?? "");
+    const displaySuffix = ref(props.modelValue?.bag?.registrationSettings?.displaySuffix ?? "");
 
     // Advanced Settings
     const searchRegex = ref(props.modelValue?.bag?.advancedSettings?.searchRegex ?? "");
@@ -523,60 +630,7 @@
     const personAttributeOptions = ref(props.options.personAttributeOptions ?? []);
     const displayOptions = ref(props.options.displayOptions ?? []);
     const searchTypeOptions = ref(props.options.searchTypeOptions ?? []);
-    const checkInTypeOptions = ref<ListItemBag[]>([
-        {
-            text: "Family",
-            value: "1",
-        },
-        {
-            text: "Individual",
-            value: "0",
-        }
-    ]);
-    const autoSelectOptionsItems = ref<ListItemBag[]>([
-        {
-            text: "People Only",
-            value: "0",
-        },
-        {
-            text: "People and Their Area/Group/Location",
-            value: "1",
-        }
-    ]);
-    const phoneSearchTypeOptions = ref<ListItemBag[]>([
-        {
-            text: "Contains",
-            value: "0",
-        },
-        {
-            text: "Ends With",
-            value: "1",
-        }
-    ]);
-    const abilityLevelDeterminationOptions = ref<ListItemBag[]>([
-        {
-            text: "Ask",
-            value: "0",
-        },
-        {
-            text: "Don't Ask",
-            value: "1",
-        },
-        {
-            text: "Don't Ask If There Is No Ability Level",
-            value: "2",
-        }
-    ]);
-    const specialNeedsOptions = ref<ListItemBag[]>([
-        {
-            text: "Remove Special Needs Groups",
-            value: "special-needs",
-        },
-        {
-            text: "Remove Non-Special Needs Groups",
-            value: "non-special-needs",
-        }
-    ]);
+
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
     const propRefs = [description, name, iconCssClass];
@@ -594,10 +648,11 @@
     const displaySettingsRefs = [hidePhotos, startTemplate, familySelectTemplate, personSelectTemplate, successTemplateOverrideDisplayMode, successTemplate];
 
     const registrationSettingsRefs = [registrationDefaultPersonConnectionStatus, registrationDisplayAlternateIdFieldForAdults, registrationDisplayAlternateIdFieldForChildren,
-        registrationDisplaySmsEnabled, registrationSmsEnabledByDefault, enableCheckInAfterRegistration, knownRelationshipTypes, sameFamilyKnownRelationshipTypes,
-        canCheckInKnownRelationshipTypes, registrationAddFamilyWorkflowTypes, registrationAddPersonWorkflowTypes, registrationRequiredAttributesForAdults, registrationOptionalAttributesForAdults,
+        registrationDisplaySmsEnabled, registrationSmsEnabledByDefault, enableCheckInAfterRegistration, knownRelationshipTypes, forceSelectionOfKnownRelationshipType, sameFamilyKnownRelationshipTypes,
+        canCheckInKnownRelationshipTypes, registrationAddFamilyWorkflowTypes, registrationAddPersonWorkflowTypes, gradeConfirmationAge, registrationRequiredAttributesForAdults, registrationOptionalAttributesForAdults,
         registrationRequiredAttributesForChildren, registrationOptionalAttributesForChildren, registrationRequiredAttributesForFamilies, registrationDisplayBirthdateOnAdults, registrationDisplayBirthdateOnChildren,
-        registrationDisplayGradeOnChildren, registrationDisplayRaceOnAdults, registrationDisplayEthnicityOnAdults, registrationDisplayRaceOnChildren, registrationDisplayEthnicityOnChildren];
+        registrationDisplayGradeOnChildren, registrationDisplayRaceOnAdults, registrationDisplayEthnicityOnAdults, registrationDisplayRaceOnChildren, registrationDisplayEthnicityOnChildren, displayMobilePhoneOnChildren,
+        displaySuffix];
 
     const advancedSettingsRefs = [searchRegex, refreshInterval, ageRequired, gradeRequired, abilityLevelDetermination, displayLocCount, specialNeedsValues];
 
@@ -638,6 +693,20 @@
                 return "must be a valid number.";
             }
             else if (Number(stringValue) < 0) {
+                return "must have a value of 0 or more.";
+            }
+        }
+
+        return true;
+    }
+
+    function minZero(value: unknown): string | boolean {
+
+        const stringValue = value as string;
+
+        if (stringValue && isValidNumber(stringValue)) {
+            const numberValue = Number(stringValue);
+            if (numberValue < 0) {
                 return "must have a value of 0 or more.";
             }
         }
@@ -765,10 +834,12 @@
         updateRefValue(registrationSmsEnabledByDefault, props.modelValue?.bag?.registrationSettings?.registrationSmsEnabledByDefault ?? false);
         updateRefValue(enableCheckInAfterRegistration, props.modelValue?.bag?.registrationSettings?.enableCheckInAfterRegistration ?? false);
         updateRefValue(knownRelationshipTypes, props.modelValue?.bag?.registrationSettings?.knownRelationshipTypes ?? []);
+        updateRefValue(forceSelectionOfKnownRelationshipType, props.modelValue?.bag?.registrationSettings?.forceSelectionOfKnownRelationshipType ?? false);
         updateRefValue(sameFamilyKnownRelationshipTypes, props.modelValue?.bag?.registrationSettings?.sameFamilyKnownRelationshipTypes ?? []);
         updateRefValue(canCheckInKnownRelationshipTypes, props.modelValue?.bag?.registrationSettings?.canCheckInKnownRelationshipTypes ?? []);
         updateRefValue(registrationAddFamilyWorkflowTypes, props.modelValue?.bag?.registrationSettings?.registrationAddFamilyWorkflowTypes ?? []);
         updateRefValue(registrationAddPersonWorkflowTypes, props.modelValue?.bag?.registrationSettings?.registrationAddPersonWorkflowTypes ?? []);
+        updateRefValue(gradeConfirmationAge, String(props.modelValue?.bag?.registrationSettings?.gradeConfirmationAge ?? ""));
         updateRefValue(registrationRequiredAttributesForAdults, props.modelValue?.bag?.registrationSettings?.registrationRequiredAttributesForAdults ?? []);
         updateRefValue(registrationOptionalAttributesForAdults, props.modelValue?.bag?.registrationSettings?.registrationOptionalAttributesForAdults ?? []);
         updateRefValue(registrationRequiredAttributesForChildren, props.modelValue?.bag?.registrationSettings?.registrationRequiredAttributesForChildren ?? []);
@@ -782,6 +853,8 @@
         updateRefValue(registrationDisplayEthnicityOnAdults, props.modelValue?.bag?.registrationSettings?.registrationDisplayEthnicityOnAdults ?? "");
         updateRefValue(registrationDisplayRaceOnChildren, props.modelValue?.bag?.registrationSettings?.registrationDisplayRaceOnChildren ?? "");
         updateRefValue(registrationDisplayEthnicityOnChildren, props.modelValue?.bag?.registrationSettings?.registrationDisplayEthnicityOnChildren ?? "");
+        updateRefValue(displayMobilePhoneOnChildren, props.modelValue?.bag?.registrationSettings?.displayMobilePhoneOnChildren ?? "");
+        updateRefValue(displaySuffix, props.modelValue?.bag?.registrationSettings?.displaySuffix ?? "");
     });
 
     // Determines which values we want to track changes on (defined in the
@@ -812,10 +885,12 @@
                 registrationSmsEnabledByDefault: registrationSmsEnabledByDefault.value,
                 enableCheckInAfterRegistration: enableCheckInAfterRegistration.value,
                 knownRelationshipTypes: knownRelationshipTypes.value,
+                forceSelectionOfKnownRelationshipType: forceSelectionOfKnownRelationshipType.value,
                 sameFamilyKnownRelationshipTypes: sameFamilyKnownRelationshipTypes.value,
                 canCheckInKnownRelationshipTypes: canCheckInKnownRelationshipTypes.value,
                 registrationAddFamilyWorkflowTypes: registrationAddFamilyWorkflowTypes.value,
                 registrationAddPersonWorkflowTypes: registrationAddPersonWorkflowTypes.value,
+                gradeConfirmationAge: parseFloat(gradeConfirmationAge.value) || null,
                 registrationRequiredAttributesForAdults: registrationRequiredAttributesForAdults.value,
                 registrationOptionalAttributesForAdults: registrationOptionalAttributesForAdults.value,
                 registrationRequiredAttributesForChildren: registrationRequiredAttributesForChildren.value,
@@ -829,6 +904,8 @@
                 registrationDisplayRaceOnChildren: registrationDisplayRaceOnChildren.value,
                 registrationDisplayEthnicityOnAdults: registrationDisplayEthnicityOnAdults.value,
                 registrationDisplayEthnicityOnChildren: registrationDisplayEthnicityOnChildren.value,
+                displayMobilePhoneOnChildren: displayMobilePhoneOnChildren.value,
+                displaySuffix: displaySuffix.value,
             };
 
             const displaySettings: CheckInDisplaySettingsBag = {

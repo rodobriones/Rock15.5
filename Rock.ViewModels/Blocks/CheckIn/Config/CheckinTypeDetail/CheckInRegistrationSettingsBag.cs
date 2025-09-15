@@ -14,9 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
-
-using Rock.ViewModels.Utility;
 using System.Collections.Generic;
+
+using Rock.Enums.CheckIn;
+using Rock.Enums.Controls;
+using Rock.ViewModels.Utility;
 
 namespace Rock.ViewModels.Blocks.CheckIn.Config.CheckinTypeDetail
 {
@@ -82,6 +84,14 @@ namespace Rock.ViewModels.Blocks.CheckIn.Config.CheckinTypeDetail
         public List<string> KnownRelationshipTypes { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether the individual should be required to select a relationship type from the list.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if [force known relationship type]; otherwise, <c>false</c>.
+        /// </value>
+        public bool ForceSelectionOfKnownRelationshipType { get; set; }
+
+        /// <summary>
         /// Gets or sets the same family known relationship types.
         /// </summary>
         /// <value>
@@ -112,6 +122,15 @@ namespace Rock.ViewModels.Blocks.CheckIn.Config.CheckinTypeDetail
         /// The registration add person workflow types.
         /// </value>
         public List<ListItemBag> RegistrationAddPersonWorkflowTypes { get; set; }
+
+        
+        /// <summary>
+        /// Gets or sets the grade confirmation age.
+        /// </summary>
+        /// <value>
+        /// The grade confirmation age. If set, this value determines the age at which grade confirmation is required during registration.
+        /// </value>
+        public decimal? GradeConfirmationAge { get; set; }
 
         /// <summary>
         /// Gets or sets the registration required attributes for adults.
@@ -216,5 +235,21 @@ namespace Rock.ViewModels.Blocks.CheckIn.Config.CheckinTypeDetail
         /// The registration display ethnicity on children.
         /// </value>
         public string RegistrationDisplayEthnicityOnChildren { get; set; }
+
+        /// <summary>
+        /// Gets or sets the display mobile phone on children options.
+        /// </summary>
+        /// <value>
+        /// The display mobile phone on children options.
+        /// </value>
+        public string DisplayMobilePhoneOnChildren { get; set; }
+
+        /// <summary>
+        /// Gets or sets the display suffix options.
+        /// </summary>
+        /// <value>
+        /// The display suffix options.
+        /// </value>
+        public string DisplaySuffix { get; set; }
     }
 }
