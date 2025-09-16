@@ -70,7 +70,7 @@
                                   :labels="genderChartBag.labels ?? []"
                                   :series="genderChartPieSeries"
                                   :hideLegend="false"
-                                  type="percent"
+                                  type="number"
                                   height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on gender demographics.</NotificationBox>
                     </Panel>
@@ -283,9 +283,12 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "Age"
             ) ?? {};
-            ageChartBag = moveUnknownToLastForBarChart(ageChartDataBag.chartBag as ChartBag);
+            ageChartBag = ageChartDataBag.chartBag as ChartBag;
             ageChartBarSeries = ageChartBag.seriesBags as BarSeries[];
             ageChartOptionsBag = ageChartBag.chartOptionsBag ?? null;
+
+            // Special Chart Sorting
+            ageChartBag = moveUnknownToLastForBarChart(ageChartBag);
         }
         if (blockProperties.isMaritalStatusShown) {
             maritalStatusChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -295,6 +298,9 @@
             maritalStatusChartBag = maritalStatusChartDataBag.chartBag as ChartBag;
             maritalStatusChartBarSeries = maritalStatusChartBag.seriesBags as BarSeries[];
             maritalStatusChartOptionsBag = maritalStatusChartBag.chartOptionsBag ?? null;
+
+            // Special Chart Sorting
+            maritalStatusChartBag = reorderMaritalStatuses(maritalStatusChartBag);
         }
         if (blockProperties.isGenderShown) {
             genderChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -412,9 +418,50 @@
                         seriesBag.data.push(unknownData);
                     }
                 });
+
+                // Change the color for "Unknown", which is now the last label,
+                // to the appropriate color for each series
+                const labelsLength = chartBag.labels.length;
+                chartBag.seriesBags.forEach((seriesBag: BarSeriesBag) => {
+                    if (seriesBag.color && seriesBag.color.length > 0) {
+                        seriesBag.color[labelsLength - 1] = "#E7E5E4";
+                    }
+                });
             }
         }
         return chartBag;
+    }
+
+    /**
+     * Reorders the marital statuses in the ChartBag to have "Single" first and "Unknown" last.
+     *
+     * @param {ChartBag} chartBag - The ChartBag to modify.
+     * @returns {ChartBag} The modified ChartBag with "Single" first and "Unknown" last.
+     */
+    function reorderMaritalStatuses(chartBag: ChartBag): ChartBag {
+        let updatedChartBag = chartBag;
+
+        // Move "Single" to the start of the label and data arrays
+        if (updatedChartBag.labels && updatedChartBag.seriesBags && updatedChartBag.labels.length > 1) {
+            const singleLabelIndex = updatedChartBag.labels.findIndex(label => label.toLowerCase() === "single");
+            if (singleLabelIndex > 0) {
+                // Move the "Single" label to the start of the labels array
+                const [singleLabel] = updatedChartBag.labels.splice(singleLabelIndex, 1);
+                updatedChartBag.labels.unshift(singleLabel);
+
+                // Move the corresponding data point in each series to the start of the data array
+                updatedChartBag.seriesBags.forEach((seriesBag: BarSeriesBag) => {
+                    if (seriesBag.data && seriesBag.data.length > singleLabelIndex) {
+                        const [singleData] = seriesBag.data.splice(singleLabelIndex, 1);
+                        seriesBag.data.unshift(singleData);
+                    }
+                });
+            }
+        }
+
+        updatedChartBag = moveUnknownToLastForBarChart(updatedChartBag);
+
+        return updatedChartBag;
     }
 
     /**

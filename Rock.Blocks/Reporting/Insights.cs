@@ -20,8 +20,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
-using System.Windows.Forms;
-
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Enums.Crm;
@@ -307,10 +305,10 @@ namespace Rock.Blocks.Reporting
                 .GroupBy( person => person.Gender )
                 .ToDictionary(
                     grouping => grouping.Key.ToString(),
-                    grouping => GetPercentage( grouping.Count(), activeAlivePersons.Count() ).ToString()
+                    grouping => grouping.Count().ToString()
                 );
 
-            PushChartDataIntoChartBag<PieSeriesBag>( chartBag, chartData );
+            PushChartDataIntoChartBag<PieSeriesBag>( chartBag, chartData, isPercentage: false );
 
             if ( chartBag.SeriesBags[0] != null )
             {
@@ -359,7 +357,7 @@ namespace Rock.Blocks.Reporting
                 }
             }
 
-            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData );
+            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData, isPercentage: true );
 
             return new InsightsChartDataBag
             {
@@ -410,7 +408,7 @@ namespace Rock.Blocks.Reporting
                 .GroupBy( label => label )
                 .ToDictionary( g => g.Key, g => GetPercentage( g.Count(), persons.Count() ).ToString() );
 
-            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, labelCounts );
+            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, labelCounts, isPercentage: true );
 
             return new InsightsChartDataBag
             {
@@ -463,7 +461,7 @@ namespace Rock.Blocks.Reporting
                 { "Home Address", GetPercentage(hasHomeAddressCount, total) }
             };
 
-            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData );
+            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData, isPercentage: true );
 
             return new InsightsChartDataBag
             {
@@ -524,7 +522,7 @@ namespace Rock.Blocks.Reporting
                 .OrderBy( a => a.Title )
                 .ToDictionary( a => a.Title, a => GetPercentage( a.Count, activeAlivePersons.Count() ) );
 
-            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData );
+            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, chartData, isPercentage: true );
 
             return new InsightsChartDataBag
             {
@@ -559,7 +557,7 @@ namespace Rock.Blocks.Reporting
                 status => GetPercentage( statusCounts.GetValueOrDefault( status.Id, 0 ), alivePersonsCount )
             );
 
-            PushChartDataIntoChartBag<PieSeriesBag>( chartBag, chartData );
+            PushChartDataIntoChartBag<PieSeriesBag>( chartBag, chartData, isPercentage: true );
 
             return new InsightsChartDataBag
             {
@@ -717,7 +715,7 @@ namespace Rock.Blocks.Reporting
         /// <typeparam name="TSeries">The type of chart series to add, must implement <see cref="IChartSeriesBag"/> and have a parameterless constructor.</typeparam>
         /// <param name="chartBag">The chart bag to which the series will be added.</param>
         /// <param name="chartData">A dictionary containing chart data, where each key is a label and each value is the percentage string.</param>
-        private static void PushChartDataIntoChartBag<TSeries>( ChartBag chartBag, Dictionary<string, string> chartData )
+        private static void PushChartDataIntoChartBag<TSeries>( ChartBag chartBag, Dictionary<string, string> chartData, bool isPercentage = false )
             where TSeries : class, IChartSeriesBag, new()
         {
             foreach ( var kvp in chartData )
@@ -730,7 +728,15 @@ namespace Rock.Blocks.Reporting
                     }
 
                     chartBag.Labels.Add( kvp.Key );
-                    chartBag.SeriesBags[0].Data.Add( value / 100 );
+
+                    if ( isPercentage )
+                    {
+                        chartBag.SeriesBags[0].Data.Add( value / 100 );
+                    }
+                    else
+                    {
+                        chartBag.SeriesBags[0].Data.Add( value );
+                    }    
                 }
             }
         }
