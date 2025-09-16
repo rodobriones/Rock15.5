@@ -23,14 +23,14 @@
                                      @update:modelValue="title = $event" />
                         </div>
                         <div class="autolayout">
-                            <TextBox :modelValue="chartContainerHeight ?? ''"
+                            <TextBox :modelValue="height ?? ''"
                                      label="Chart Container Height"
                                      help="CSS size value (e.g., '300px' or '50%')."
-                                     @update:modelValue="chartContainerHeight = $event" />
-                            <TextBox :modelValue="chartContainerWidth ?? ''"
+                                     @update:modelValue="height = $event" />
+                            <TextBox :modelValue="width ?? ''"
                                      label="Chart Container Width"
                                      help="CSS size value (e.g., '300px' or '50%')."
-                                     @update:modelValue="chartContainerWidth = $event" />
+                                     @update:modelValue="width = $event" />
                         </div>
                     </ContentStack>
 
@@ -142,8 +142,8 @@
             data: generateRandomData(4, 10, 40, false)
         }
     ]);
-    const chartContainerHeight = ref<string | undefined>();
-    const chartContainerWidth = ref<string | undefined>();
+    const height = ref<string | undefined>();
+    const width = ref<string | undefined>();
     const hasCustomTooltip = ref<boolean | undefined>();
     const seriesCount = ref<number>(series.value.length);
     const legendPosition = ref<LegendPosition | undefined>();
@@ -162,11 +162,11 @@
             `:series="series"`
         ];
 
-        if (!isNullish(chartContainerHeight.value)) {
-            pieChartProps.push(`chartContainerHeight="${chartContainerHeight.value}"`);
+        if (!isNullish(height.value)) {
+            pieChartProps.push(`height="${height.value}"`);
         }
-        if (!isNullish(chartContainerWidth.value)) {
-            pieChartProps.push(`chartContainerWidth="${chartContainerWidth.value}"`);
+        if (!isNullish(width.value)) {
+            pieChartProps.push(`width="${width.value}"`);
         }
         if (!isNullish(isLegendHidden.value)) {
             pieChartProps.push(`:hideLegend="${isLegendHidden.value}"`);

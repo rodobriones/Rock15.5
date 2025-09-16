@@ -37,14 +37,14 @@
                                      @update:modelValue="title = $event" />
                         </div>
                         <div class="autolayout">
-                            <TextBox :modelValue="chartContainerHeight ?? ''"
+                            <TextBox :modelValue="height ?? ''"
                                      label="Chart Container Height"
                                      help="CSS size value (e.g., '300px' or '50%')."
-                                     @update:modelValue="chartContainerHeight = $event" />
-                            <TextBox :modelValue="chartContainerWidth ?? ''"
+                                     @update:modelValue="height = $event" />
+                            <TextBox :modelValue="width ?? ''"
                                      label="Chart Container Width"
                                      help="CSS size value (e.g., '300px' or '50%')."
-                                     @update:modelValue="chartContainerWidth = $event" />
+                                     @update:modelValue="width = $event" />
                         </div>
                     </ContentStack>
 
@@ -247,8 +247,8 @@
     const valueHideGridLines = ref<boolean | undefined>();
     const categoryMaxTickCount = ref<number | undefined>();
     const valueMaxTickCount = ref<number | undefined>();
-    const chartContainerHeight = ref<string | undefined>();
-    const chartContainerWidth = ref<string | undefined>();
+    const height = ref<string | undefined>();
+    const width = ref<string | undefined>();
     const isUnfilled = ref<boolean | undefined>();
     const isLinear = ref<boolean | undefined>();
     const isStacked = ref<boolean | undefined>();
@@ -302,11 +302,11 @@
         if (!isNullish(categoryShowGridLines.value)) {
             lineChartProps.push(`:categoryShowGridLines="${categoryShowGridLines.value}"`);
         }
-        if (!isNullish(chartContainerHeight.value)) {
-            lineChartProps.push(`chartContainerHeight="${chartContainerHeight.value}"`);
+        if (!isNullish(height.value)) {
+            lineChartProps.push(`height="${height.value}"`);
         }
-        if (!isNullish(chartContainerWidth.value)) {
-            lineChartProps.push(`chartContainerWidth="${chartContainerWidth.value}"`);
+        if (!isNullish(width.value)) {
+            lineChartProps.push(`width="${width.value}"`);
         }
         if (!isNullish(isLegendHidden.value)) {
             lineChartProps.push(`:hideLegend="${isLegendHidden.value}"`);

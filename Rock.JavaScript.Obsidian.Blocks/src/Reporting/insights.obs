@@ -24,7 +24,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on connection status demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -42,7 +42,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on age demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -60,7 +60,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on marital status demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -71,7 +71,7 @@
                                   :series="genderChartPieSeries"
                                   :hideLegend="false"
                                   type="percent"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on gender demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -89,7 +89,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on race demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -107,7 +107,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="300px" />
+                                  height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on ethnicity demographics.</NotificationBox>
                     </Panel>
                 </div>
@@ -132,7 +132,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="400px" />
+                                  height="400px" />
                         <NotificationBox v-else alertType="info">There is no data on information completeness.</NotificationBox>
                     </Panel>
                 </div>
@@ -150,7 +150,7 @@
                                   type="percent"
                                   :unfilled="false"
                                   :valueHideGridLines="false"
-                                  chartContainerHeight="400px" />
+                                  height="400px" />
                         <NotificationBox v-else alertType="info">There is no data on active individuals with assessments.</NotificationBox>
                     </Panel>
                 </div>
@@ -163,7 +163,7 @@
                                       :hideLegend="false"
                                       legendPosition="right"
                                       type="percent"
-                                      chartContainerHeight="200px" />
+                                      height="200px" />
                             <NotificationBox v-else alertType="info">There is no data on record statuses.</NotificationBox>
                         </Panel>
                     </div>
@@ -186,8 +186,7 @@
     import { InsightsInitializationBox } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsInitializationBox";
     import { InsightsChartDataBag } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsChartDataBag";
     import { ChartOptionsBag } from "@Obsidian/ViewModels/Reporting/chartOptionsBag";
-    import { BarChartBag } from "@Obsidian/ViewModels/Reporting/BarChart/barChartBag";
-    import { PieChartBag } from "@Obsidian/ViewModels/Reporting/PieChart/pieChartBag";
+    import { ChartBag } from "@Obsidian/ViewModels/Reporting/chartBag";
     import { BarSeries, PieSeries } from "@Obsidian/Core/Controls/chart";
     import { BarSeriesBag } from "@Obsidian/ViewModels/Reporting/BarChart/barSeriesBag";
     import { PieSeriesBag } from "@Obsidian/ViewModels/Reporting/PieChart/pieSeriesBag";
@@ -217,32 +216,32 @@
     // #region Values > Demographics Charts - Declarations
 
     let connectionStatusChartDataBag: InsightsChartDataBag;
-    let connectionStatusChartBag: BarChartBag;
+    let connectionStatusChartBag: ChartBag;
     let connectionStatusChartBarSeries: BarSeries[];
     let connectionStatusChartOptionsBag: ChartOptionsBag | null;
 
     let ageChartDataBag: InsightsChartDataBag;
-    let ageChartBag: BarChartBag;
+    let ageChartBag: ChartBag;
     let ageChartBarSeries: BarSeries[];
     let ageChartOptionsBag: ChartOptionsBag | null;
 
     let maritalStatusChartDataBag: InsightsChartDataBag;
-    let maritalStatusChartBag: BarChartBag;
+    let maritalStatusChartBag: ChartBag;
     let maritalStatusChartBarSeries: BarSeries[];
     let maritalStatusChartOptionsBag: ChartOptionsBag | null;
 
     let genderChartDataBag: InsightsChartDataBag;
-    let genderChartBag: PieChartBag;
+    let genderChartBag: ChartBag;
     let genderChartPieSeries: PieSeries[];
     let genderChartOptionsBag: ChartOptionsBag | null;
 
     let raceChartDataBag: InsightsChartDataBag;
-    let raceChartBag: BarChartBag;
+    let raceChartBag: ChartBag;
     let raceChartBarSeries: BarSeries[];
     let raceChartOptionsBag: ChartOptionsBag | null;
 
     let ethnicityChartDataBag: InsightsChartDataBag;
-    let ethnicityChartBag: BarChartBag;
+    let ethnicityChartBag: ChartBag;
     let ethnicityChartBarSeries: BarSeries[];
     let ethnicityChartOptionsBag: ChartOptionsBag | null;
 
@@ -251,17 +250,17 @@
     // #region Values > Information Statistics - Declarations
 
     let informationCompletenessChartDataBag: InsightsChartDataBag;
-    let informationCompletenessChartBag: BarChartBag;
+    let informationCompletenessChartBag: ChartBag;
     let informationCompletenessChartBarSeries: BarSeries[];
     let informationCompletenessChartOptionsBag: ChartOptionsBag | null;
 
     let activeIndividualsWithAssessmentsChartDataBag: InsightsChartDataBag;
-    let activeIndividualsWithAssessmentsChartBag: BarChartBag;
+    let activeIndividualsWithAssessmentsChartBag: ChartBag;
     let activeIndividualsWithAssessmentsChartBarSeries: BarSeries[];
     let activeIndividualsWithAssessmentsChartOptionsBag: ChartOptionsBag | null;
 
     let recordStatusesChartDataBag: InsightsChartDataBag;
-    let recordStatusesChartBag: PieChartBag;
+    let recordStatusesChartBag: ChartBag;
     let recordStatusesChartPieSeries: PieSeries[];
     let recordStatusesChartOptionsBag: ChartOptionsBag | null;
 
@@ -275,7 +274,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "ConnectionStatus"
             ) ?? {};
-            connectionStatusChartBag = connectionStatusChartDataBag.chartBag as BarChartBag;
+            connectionStatusChartBag = connectionStatusChartDataBag.chartBag as ChartBag;
             connectionStatusChartBarSeries = connectionStatusChartBag.seriesBags as BarSeries[];
             connectionStatusChartOptionsBag = connectionStatusChartBag.chartOptionsBag ?? null;
         }
@@ -284,7 +283,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "Age"
             ) ?? {};
-            ageChartBag = moveUnknownToLast(ageChartDataBag.chartBag as BarChartBag);
+            ageChartBag = moveUnknownToLastForBarChart(ageChartDataBag.chartBag as ChartBag);
             ageChartBarSeries = ageChartBag.seriesBags as BarSeries[];
             ageChartOptionsBag = ageChartBag.chartOptionsBag ?? null;
         }
@@ -293,7 +292,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "MaritalStatus"
             ) ?? {};
-            maritalStatusChartBag = maritalStatusChartDataBag.chartBag as BarChartBag;
+            maritalStatusChartBag = maritalStatusChartDataBag.chartBag as ChartBag;
             maritalStatusChartBarSeries = maritalStatusChartBag.seriesBags as BarSeries[];
             maritalStatusChartOptionsBag = maritalStatusChartBag.chartOptionsBag ?? null;
         }
@@ -302,7 +301,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "Gender"
             ) ?? {};
-            genderChartBag = genderChartDataBag.chartBag as PieChartBag;
+            genderChartBag = genderChartDataBag.chartBag as ChartBag;
             genderChartPieSeries = genderChartBag.seriesBags as PieSeries[];
             genderChartOptionsBag = genderChartBag.chartOptionsBag ?? null;
         }
@@ -311,7 +310,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "Race"
             ) ?? {};
-            raceChartBag = raceChartDataBag.chartBag as BarChartBag;
+            raceChartBag = raceChartDataBag.chartBag as ChartBag;
             raceChartBarSeries = raceChartBag.seriesBags as BarSeries[];
             raceChartOptionsBag = raceChartBag.chartOptionsBag ?? null;
         }
@@ -320,7 +319,7 @@
                 bag.insightCategory === "Demographics" &&
                 bag.insightSubcategory === "Ethnicity"
             ) ?? {};
-            ethnicityChartBag = ethnicityChartDataBag.chartBag as BarChartBag;
+            ethnicityChartBag = ethnicityChartDataBag.chartBag as ChartBag;
             ethnicityChartBarSeries = ethnicityChartBag.seriesBags as BarSeries[];
             ethnicityChartOptionsBag = ethnicityChartBag.chartOptionsBag ?? null;
         }
@@ -332,7 +331,7 @@
                 bag.insightCategory === "InformationStatistics" &&
                 bag.insightSubcategory === "InformationCompleteness"
             ) ?? {};
-            informationCompletenessChartBag = informationCompletenessChartDataBag.chartBag as BarChartBag;
+            informationCompletenessChartBag = informationCompletenessChartDataBag.chartBag as ChartBag;
             informationCompletenessChartBarSeries = informationCompletenessChartBag.seriesBags as BarSeries[];
             informationCompletenessChartOptionsBag = informationCompletenessChartBag.chartOptionsBag ?? null;
         }
@@ -341,7 +340,7 @@
                 bag.insightCategory === "InformationStatistics" &&
                 bag.insightSubcategory === "ActiveIndividualsWithAssessments"
             ) ?? {};
-            activeIndividualsWithAssessmentsChartBag = activeIndividualsWithAssessmentsChartDataBag.chartBag as BarChartBag;
+            activeIndividualsWithAssessmentsChartBag = activeIndividualsWithAssessmentsChartDataBag.chartBag as ChartBag;
             activeIndividualsWithAssessmentsChartBarSeries = activeIndividualsWithAssessmentsChartBag.seriesBags as BarSeries[];
             activeIndividualsWithAssessmentsChartOptionsBag = activeIndividualsWithAssessmentsChartBag.chartOptionsBag ?? null;
         }
@@ -350,7 +349,7 @@
                 bag.insightCategory === "InformationStatistics" &&
                 bag.insightSubcategory === "RecordStatuses"
             ) ?? {};
-            recordStatusesChartBag = recordStatusesChartDataBag.chartBag as PieChartBag;
+            recordStatusesChartBag = recordStatusesChartDataBag.chartBag as ChartBag;
             recordStatusesChartPieSeries = recordStatusesChartBag.seriesBags as PieSeries[];
             recordStatusesChartOptionsBag = recordStatusesChartBag.chartOptionsBag ?? null;
         }
@@ -393,21 +392,21 @@
     }
 
     /**
-     * Moves the "Unknown" label and its corresponding data point to the end of the BarChartBag.
+     * Moves the "Unknown" label and its corresponding data point to the end of the ChartBag.
      *
-     * @param {BarChartBag} barChartBag - The BarChartBag to modify.
-     * @returns {BarChartBag} The modified BarChartBag with "Unknown" moved to the end.
+     * @param {ChartBag} chartBag - The ChartBag to modify.
+     * @returns {ChartBag} The modified ChartBag with "Unknown" moved to the end.
      */
-    function moveUnknownToLast(barChartBag: BarChartBag): BarChartBag {
-        if (barChartBag.labels && barChartBag.seriesBags && barChartBag.labels.length > 1) {
-            const unknownLabelIndex = barChartBag.labels.findIndex(label => label.toLowerCase() === "unknown");
-            if (unknownLabelIndex > -1 && unknownLabelIndex !== barChartBag.labels.length - 1) {
+    function moveUnknownToLastForBarChart(chartBag: ChartBag): ChartBag {
+        if (chartBag.labels && chartBag.seriesBags && chartBag.labels.length > 1) {
+            const unknownLabelIndex = chartBag.labels.findIndex(label => label.toLowerCase() === "unknown");
+            if (unknownLabelIndex > -1 && unknownLabelIndex !== chartBag.labels.length - 1) {
                 // Move the "Unknown" label to the end of the labels array
-                const [unknownLabel] = barChartBag.labels.splice(unknownLabelIndex, 1);
-                barChartBag.labels.push(unknownLabel);
+                const [unknownLabel] = chartBag.labels.splice(unknownLabelIndex, 1);
+                chartBag.labels.push(unknownLabel);
 
                 // Move the corresponding data point in each series to the end of the data array
-                barChartBag.seriesBags.forEach((seriesBag: BarSeriesBag) => {
+                chartBag.seriesBags.forEach((seriesBag: BarSeriesBag) => {
                     if (seriesBag.data && seriesBag.data.length > unknownLabelIndex) {
                         const [unknownData] = seriesBag.data.splice(unknownLabelIndex, 1);
                         seriesBag.data.push(unknownData);
@@ -415,7 +414,33 @@
                 });
             }
         }
-        return barChartBag;
+        return chartBag;
+    }
+
+    /**
+     * Moves the "Unknown" label and its corresponding data point to the end of the ChartBag.
+     *
+     * @param {ChartBag} chartBag - The ChartBag to modify.
+     * @returns {ChartBag} The modified ChartBag with "Unknown" moved to the end.
+     */
+    function moveUnknownToLastForPieChart(chartBag: ChartBag): ChartBag {
+        if (chartBag.labels && chartBag.seriesBags && chartBag.labels.length > 1) {
+            const unknownLabelIndex = chartBag.labels.findIndex(label => label.toLowerCase() === "unknown");
+            if (unknownLabelIndex > -1 && unknownLabelIndex !== chartBag.labels.length - 1) {
+                // Move the "Unknown" label to the end of the labels array
+                const [unknownLabel] = chartBag.labels.splice(unknownLabelIndex, 1);
+                chartBag.labels.push(unknownLabel);
+
+                // Move the corresponding data point in each series to the end of the data array
+                chartBag.seriesBags.forEach((seriesBag: PieSeriesBag) => {
+                    if (seriesBag.data && seriesBag.data.length > unknownLabelIndex) {
+                        const [unknownData] = seriesBag.data.splice(unknownLabelIndex, 1);
+                        seriesBag.data.push(unknownData);
+                    }
+                });
+            }
+        }
+        return chartBag;
     }
 
     // #endregion
