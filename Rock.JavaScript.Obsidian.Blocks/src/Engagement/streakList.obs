@@ -37,6 +37,7 @@
                 title="Recent Engagement"
                 field="engagementMap"
                 :disableSort="true"
+                quickFilterValue="null"
                 visiblePriority="md"
                 width="12%">
 
