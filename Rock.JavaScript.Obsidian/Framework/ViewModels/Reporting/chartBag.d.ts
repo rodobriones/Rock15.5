@@ -24,14 +24,14 @@
 import { IChartSeriesBag } from "@Obsidian/ViewModels/Blocks/Reporting/iChartSeriesBag";
 import { ChartOptionsBag } from "@Obsidian/ViewModels/Reporting/chartOptionsBag";
 
-/** Represents a bar chart, including its labels, bar series, and configuration. */
-export type BarChartBag = {
-    /** Gets or sets the chart options bag, which contains configuration options for the chart. */
+/** Defines the contract for a chart bag, which contains the labels, series data, and chart options for a chart. */
+export type ChartBag = {
+    /** Gets or sets the chart options bag. */
     chartOptionsBag?: ChartOptionsBag | null;
 
-    /** Gets or sets the labels for the data points. */
+    /** Gets or sets the labels for the chart. */
     labels?: string[] | null;
 
-    /** Gets or sets one or more bar series data. */
+    /** Gets or sets the series bags for the chart. */
     seriesBags?: IChartSeriesBag[] | null;
 };

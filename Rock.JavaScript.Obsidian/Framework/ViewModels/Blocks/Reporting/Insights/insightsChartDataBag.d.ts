@@ -21,12 +21,12 @@
 // </copyright>
 //
 
-import { IChartBag } from "@Obsidian/ViewModels/Reporting/iChartBag";
+import { ChartBag } from "@Obsidian/ViewModels/Reporting/chartBag";
 
 /** Data Bag for the Insights block charts. */
 export type InsightsChartDataBag = {
     /** Gets or sets the chart bag containing the chart's data and configuration. */
-    chartBag?: IChartBag | null;
+    chartBag?: ChartBag | null;
 
     /** Gets or sets the category of the insight. */
     insightCategory?: string | null;

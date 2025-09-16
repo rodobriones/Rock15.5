@@ -21,17 +21,14 @@
 // </copyright>
 //
 
-/** Represents a single bar series in a bar chart, including its label, data points, colors, opacity, and label configuration. */
+/** Represents a single pie series in a pie chart, including its label, data points, colors, opacity, and label configuration. */
 export type PieSeriesBag = {
-    /**
-     * Gets or sets the color of the bars.
-     * Can be a single color value or a comma-separated list for each data point.
-     */
+    /** Gets or sets the color of the slices. */
     colors?: string[] | null;
 
-    /** Gets or sets the data points for the bar series. */
+    /** Gets or sets the data points for the pie series. */
     data?: number[] | null;
 
-    /** Gets or sets the label for the bar series. */
+    /** Gets or sets the label for the pie series. */
     label?: string | null;
 };

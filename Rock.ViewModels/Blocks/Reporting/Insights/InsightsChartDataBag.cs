@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using Rock.ViewModels.Reporting;
+﻿using Rock.ViewModels.Reporting;
 
 namespace Rock.ViewModels.Blocks.Reporting.Insights
 {
@@ -22,6 +20,6 @@ namespace Rock.ViewModels.Blocks.Reporting.Insights
         /// <summary>
         /// Gets or sets the chart bag containing the chart's data and configuration.
         /// </summary>
-        public IChartBag ChartBag { get; set; }
+        public ChartBag ChartBag { get; set; }
     }
 }

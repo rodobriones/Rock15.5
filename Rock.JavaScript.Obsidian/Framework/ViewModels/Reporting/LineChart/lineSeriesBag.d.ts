@@ -21,17 +21,23 @@
 // </copyright>
 //
 
-import { IChartSeriesBag } from "@Obsidian/ViewModels/Blocks/Reporting/iChartSeriesBag";
-import { ChartOptionsBag } from "@Obsidian/ViewModels/Reporting/chartOptionsBag";
+/** Represents a single line series in a line chart, including its label, data points, color, opacity, and label configuration. */
+export type LineSeriesBag = {
+    /** Gets or sets the color of the line. */
+    color?: string | null;
 
-/** Represents a bar chart, including its labels, bar series, and configuration. */
-export type PieChartBag = {
-    /** Gets or sets the chart options bag, which contains configuration options for the chart. */
-    chartOptionsBag?: ChartOptionsBag | null;
+    /** Gets or sets the data points for the line series. */
+    data?: number[] | null;
 
-    /** Gets or sets the labels for the data points. */
-    labels?: string[] | null;
+    /** Gets or sets a value indicating whether the transformation is linear. */
+    isLinear: boolean;
 
-    /** Gets or sets one or more bar series data. */
-    seriesBags?: IChartSeriesBag[] | null;
+    /** Gets or sets a value indicating whether the underside of the line has a fill. */
+    isUnfilled?: boolean | null;
+
+    /** Gets or sets the label for the line series. */
+    label?: string | null;
+
+    /** Gets or sets the style of the line used in rendering. Allowed values: "solid", "dashed", "dotted". */
+    lineStyle?: string | null;
 };

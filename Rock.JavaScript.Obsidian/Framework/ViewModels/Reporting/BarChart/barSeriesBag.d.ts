@@ -24,16 +24,10 @@
 /** Represents a single bar series in a bar chart, including its label, data points, colors, opacity, and label configuration. */
 export type BarSeriesBag = {
     /**
-     * Gets or sets the configuration for the bar labels.
-     * The dictionary maps label keys to label text.
-     */
-    barLabels?: unknown;
-
-    /**
      * Gets or sets the color of the bars.
      * Can be a single color value or a comma-separated list for each data point.
      */
-    colors?: string[] | null;
+    color?: string[] | null;
 
     /** Gets or sets the data points for the bar series. */
     data?: number[] | null;
@@ -46,10 +40,4 @@ export type BarSeriesBag = {
 
     /** Gets or sets the label for the bar series. */
     label?: string | null;
-
-    /**
-     * Gets or sets the opacity of the bars (range 0-1).
-     * Can be a single value or an array for each data point.
-     */
-    opacity?: number | null[] | null;
 };

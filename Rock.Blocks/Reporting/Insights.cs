@@ -301,7 +301,7 @@ namespace Rock.Blocks.Reporting
         /// </returns>
         private InsightsChartDataBag GetGenderChartDataBag( IEnumerable<PersonViewModel> activeAlivePersons )
         {
-            var chartBag = BuildChartBag<PieChartBag, PieSeriesBag>();
+            var chartBag = BuildChartBag<PieSeriesBag>();
 
             var chartData = activeAlivePersons
                 .GroupBy( person => person.Gender )
@@ -339,7 +339,7 @@ namespace Rock.Blocks.Reporting
         /// </returns>
         private InsightsChartDataBag GetAgeChartDataBag( IEnumerable<PersonViewModel> activeAlivePersons )
         {
-            var chartBag = BuildChartBag<BarChartBag, BarSeriesBag>();
+            var chartBag = BuildChartBag<BarSeriesBag>();
 
             var totalPersons = activeAlivePersons.Count();
             var personsWithAge = activeAlivePersons.Where( person => person.BirthDate.HasValue ).ToList();
@@ -383,7 +383,7 @@ namespace Rock.Blocks.Reporting
                                                                                   string category,
                                                                                   string subcategory )
         {
-            var chartBag = BuildChartBag<BarChartBag, BarSeriesBag>();
+            var chartBag = BuildChartBag<BarSeriesBag>();
 
             var property = typeof( PersonViewModel ).GetProperty( propertyName );
 
@@ -434,7 +434,7 @@ namespace Rock.Blocks.Reporting
         /// </returns>
         private InsightsChartDataBag GetInformationCompletenessDataBag( IEnumerable<PersonViewModel> activeAlivePersons, RockContext rockContext )
         {
-            var chartBag = BuildChartBag<BarChartBag, BarSeriesBag>();
+            var chartBag = BuildChartBag<BarSeriesBag>();
             int total = activeAlivePersons.Count();
 
             var personsInfo = activeAlivePersons.Select( person => new
@@ -483,7 +483,7 @@ namespace Rock.Blocks.Reporting
         /// </returns>
         private InsightsChartDataBag GetActiveIndividualsWithAssessmentsDataBag( IEnumerable<PersonViewModel> activeAlivePersons, RockContext rockContext )
         {
-            var chartBag = BuildChartBag<BarChartBag, BarSeriesBag>();
+            var chartBag = BuildChartBag<BarSeriesBag>();
 
             var validPersonIds = new PersonService( rockContext )
                 .Queryable()
@@ -543,7 +543,7 @@ namespace Rock.Blocks.Reporting
         /// </returns>
         private InsightsChartDataBag GetRecordStatusesDataBag( IEnumerable<PersonViewModel> alivePersons )
         {
-            var chartBag = BuildChartBag<PieChartBag, PieSeriesBag>();
+            var chartBag = BuildChartBag<PieSeriesBag>();
 
             var activeRecordStatuses = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_RECORD_STATUS ).DefinedValues
                 .Where( dv => dv.IsActive )
@@ -717,7 +717,7 @@ namespace Rock.Blocks.Reporting
         /// <typeparam name="TSeries">The type of chart series to add, must implement <see cref="IChartSeriesBag"/> and have a parameterless constructor.</typeparam>
         /// <param name="chartBag">The chart bag to which the series will be added.</param>
         /// <param name="chartData">A dictionary containing chart data, where each key is a label and each value is the percentage string.</param>
-        private static void PushChartDataIntoChartBag<TSeries>( IChartBag chartBag, Dictionary<string, string> chartData )
+        private static void PushChartDataIntoChartBag<TSeries>( ChartBag chartBag, Dictionary<string, string> chartData )
             where TSeries : class, IChartSeriesBag, new()
         {
             foreach ( var kvp in chartData )
@@ -743,8 +743,7 @@ namespace Rock.Blocks.Reporting
         /// <returns>
         /// An instance of <typeparamref name="TChartBag"/> with default color settings and empty labels/data.
         /// </returns>
-        private TChartBag BuildChartBag<TChartBag, TSeriesBag>()
-            where TChartBag : IChartBag, new()
+        private ChartBag BuildChartBag<TSeriesBag>()
             where TSeriesBag : IChartSeriesBag, new()
         {
             var seriesBag = new TSeriesBag
@@ -775,7 +774,7 @@ namespace Rock.Blocks.Reporting
                 colorsProperty.SetValue( seriesBag, _defaultColors );
             }
 
-            var chartBag = new TChartBag
+            var chartBag = new ChartBag
             {
                 Labels = new List<string>(),
                 SeriesBags = new List<IChartSeriesBag> { seriesBag },

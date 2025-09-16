@@ -53,33 +53,8 @@ namespace Rock.ViewModels.Reporting.LineChart
         public bool IsLinear { get; set; }
 
         /// <summary>
-        /// Gets or sets the style of the line used in rendering.
+        /// Gets or sets the style of the line used in rendering. Allowed values: "solid", "dashed", "dotted".
         /// </summary>
-        public LineStyle LineStyle { get; set; }
+        public string LineStyle { get; set; }
     }
-
-    #region Line Style Enums
-
-    /// <summary>
-    /// Specifies the style of the line in a line chart.
-    /// </summary>
-    public enum LineStyle
-    {
-        /// <summary>
-        /// A solid line.
-        /// </summary>
-        Solid,
-
-        /// <summary>
-        /// A dashed line.
-        /// </summary>
-        Dashed,
-
-        /// <summary>
-        /// A dotted line.
-        /// </summary>
-        Dotted
-    }
-
-    #endregion Line Style Enums
 }
