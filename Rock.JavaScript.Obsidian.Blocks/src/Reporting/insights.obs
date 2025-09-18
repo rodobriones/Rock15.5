@@ -185,11 +185,9 @@
     import { onConfigurationValuesChanged, useConfigurationValues, useReloadBlock } from "@Obsidian/Utility/block";
     import { InsightsInitializationBox } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsInitializationBox";
     import { InsightsChartDataBag } from "@Obsidian/ViewModels/Blocks/Reporting/Insights/insightsChartDataBag";
-    import { ChartOptionsBag } from "@Obsidian/ViewModels/Reporting/chartOptionsBag";
     import { ChartBag } from "@Obsidian/ViewModels/Reporting/chartBag";
     import { BarSeries, PieSeries } from "@Obsidian/Core/Controls/chart";
     import { BarSeriesBag } from "@Obsidian/ViewModels/Reporting/BarChart/barSeriesBag";
-    import { PieSeriesBag } from "@Obsidian/ViewModels/Reporting/PieChart/pieSeriesBag";
 
     // #region Values
 
@@ -218,32 +216,26 @@
     let connectionStatusChartDataBag: InsightsChartDataBag;
     let connectionStatusChartBag: ChartBag;
     let connectionStatusChartBarSeries: BarSeries[];
-    let connectionStatusChartOptionsBag: ChartOptionsBag | null;
 
     let ageChartDataBag: InsightsChartDataBag;
     let ageChartBag: ChartBag;
     let ageChartBarSeries: BarSeries[];
-    let ageChartOptionsBag: ChartOptionsBag | null;
 
     let maritalStatusChartDataBag: InsightsChartDataBag;
     let maritalStatusChartBag: ChartBag;
     let maritalStatusChartBarSeries: BarSeries[];
-    let maritalStatusChartOptionsBag: ChartOptionsBag | null;
 
     let genderChartDataBag: InsightsChartDataBag;
     let genderChartBag: ChartBag;
     let genderChartPieSeries: PieSeries[];
-    let genderChartOptionsBag: ChartOptionsBag | null;
 
     let raceChartDataBag: InsightsChartDataBag;
     let raceChartBag: ChartBag;
     let raceChartBarSeries: BarSeries[];
-    let raceChartOptionsBag: ChartOptionsBag | null;
 
     let ethnicityChartDataBag: InsightsChartDataBag;
     let ethnicityChartBag: ChartBag;
     let ethnicityChartBarSeries: BarSeries[];
-    let ethnicityChartOptionsBag: ChartOptionsBag | null;
 
     // #endregion
 
@@ -252,17 +244,14 @@
     let informationCompletenessChartDataBag: InsightsChartDataBag;
     let informationCompletenessChartBag: ChartBag;
     let informationCompletenessChartBarSeries: BarSeries[];
-    let informationCompletenessChartOptionsBag: ChartOptionsBag | null;
 
     let activeIndividualsWithAssessmentsChartDataBag: InsightsChartDataBag;
     let activeIndividualsWithAssessmentsChartBag: ChartBag;
     let activeIndividualsWithAssessmentsChartBarSeries: BarSeries[];
-    let activeIndividualsWithAssessmentsChartOptionsBag: ChartOptionsBag | null;
 
     let recordStatusesChartDataBag: InsightsChartDataBag;
     let recordStatusesChartBag: ChartBag;
     let recordStatusesChartPieSeries: PieSeries[];
-    let recordStatusesChartOptionsBag: ChartOptionsBag | null;
 
     // #endregion
 
@@ -276,7 +265,6 @@
             ) ?? {};
             connectionStatusChartBag = connectionStatusChartDataBag.chartBag as ChartBag;
             connectionStatusChartBarSeries = connectionStatusChartBag.seriesBags as BarSeries[];
-            connectionStatusChartOptionsBag = connectionStatusChartBag.chartOptionsBag ?? null;
         }
         if (blockProperties.isAgeShown) {
             ageChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -285,7 +273,6 @@
             ) ?? {};
             ageChartBag = ageChartDataBag.chartBag as ChartBag;
             ageChartBarSeries = ageChartBag.seriesBags as BarSeries[];
-            ageChartOptionsBag = ageChartBag.chartOptionsBag ?? null;
 
             // Special Chart Sorting
             ageChartBag = moveUnknownToLastForBarChart(ageChartBag);
@@ -297,7 +284,6 @@
             ) ?? {};
             maritalStatusChartBag = maritalStatusChartDataBag.chartBag as ChartBag;
             maritalStatusChartBarSeries = maritalStatusChartBag.seriesBags as BarSeries[];
-            maritalStatusChartOptionsBag = maritalStatusChartBag.chartOptionsBag ?? null;
 
             // Special Chart Sorting
             maritalStatusChartBag = reorderMaritalStatuses(maritalStatusChartBag);
@@ -309,7 +295,8 @@
             ) ?? {};
             genderChartBag = genderChartDataBag.chartBag as ChartBag;
             genderChartPieSeries = genderChartBag.seriesBags as PieSeries[];
-            genderChartOptionsBag = genderChartBag.chartOptionsBag ?? null;
+
+            // No special sorting, already in order
         }
         if (blockProperties.isRaceShown) {
             raceChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -318,7 +305,6 @@
             ) ?? {};
             raceChartBag = raceChartDataBag.chartBag as ChartBag;
             raceChartBarSeries = raceChartBag.seriesBags as BarSeries[];
-            raceChartOptionsBag = raceChartBag.chartOptionsBag ?? null;
         }
         if (blockProperties.isEthnicityShown) {
             ethnicityChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -327,7 +313,6 @@
             ) ?? {};
             ethnicityChartBag = ethnicityChartDataBag.chartBag as ChartBag;
             ethnicityChartBarSeries = ethnicityChartBag.seriesBags as BarSeries[];
-            ethnicityChartOptionsBag = ethnicityChartBag.chartOptionsBag ?? null;
         }
     }
 
@@ -339,7 +324,6 @@
             ) ?? {};
             informationCompletenessChartBag = informationCompletenessChartDataBag.chartBag as ChartBag;
             informationCompletenessChartBarSeries = informationCompletenessChartBag.seriesBags as BarSeries[];
-            informationCompletenessChartOptionsBag = informationCompletenessChartBag.chartOptionsBag ?? null;
         }
         if (blockProperties.isPercentageOfIndividualsWithAssessmentsShown) {
             activeIndividualsWithAssessmentsChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -348,7 +332,6 @@
             ) ?? {};
             activeIndividualsWithAssessmentsChartBag = activeIndividualsWithAssessmentsChartDataBag.chartBag as ChartBag;
             activeIndividualsWithAssessmentsChartBarSeries = activeIndividualsWithAssessmentsChartBag.seriesBags as BarSeries[];
-            activeIndividualsWithAssessmentsChartOptionsBag = activeIndividualsWithAssessmentsChartBag.chartOptionsBag ?? null;
         }
         if (blockProperties.isRecordStatusesShown) {
             recordStatusesChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -357,7 +340,6 @@
             ) ?? {};
             recordStatusesChartBag = recordStatusesChartDataBag.chartBag as ChartBag;
             recordStatusesChartPieSeries = recordStatusesChartBag.seriesBags as PieSeries[];
-            recordStatusesChartOptionsBag = recordStatusesChartBag.chartOptionsBag ?? null;
         }
     }
 
@@ -432,6 +414,33 @@
         return chartBag;
     }
 
+    // This is here for future use if we want to move "Unknown" to the end of pie charts as well.
+    // /**
+    //  * Moves the "Unknown" label and its corresponding data point to the end of the ChartBag.
+    //  *
+    //  * @param {ChartBag} chartBag - The ChartBag to modify.
+    //  * @returns {ChartBag} The modified ChartBag with "Unknown" moved to the end.
+    //  */
+    // function moveUnknownToLastForPieChart(chartBag: ChartBag): ChartBag {
+    //     if (chartBag.labels && chartBag.seriesBags && chartBag.labels.length > 1) {
+    //         const unknownLabelIndex = chartBag.labels.findIndex(label => label.toLowerCase() === "unknown");
+    //         if (unknownLabelIndex > -1 && unknownLabelIndex !== chartBag.labels.length - 1) {
+    //             // Move the "Unknown" label to the end of the labels array
+    //             const [unknownLabel] = chartBag.labels.splice(unknownLabelIndex, 1);
+    //             chartBag.labels.push(unknownLabel);
+
+    //             // Move the corresponding data point in each series to the end of the data array
+    //             chartBag.seriesBags.forEach((seriesBag: PieSeriesBag) => {
+    //                 if (seriesBag.data && seriesBag.data.length > unknownLabelIndex) {
+    //                     const [unknownData] = seriesBag.data.splice(unknownLabelIndex, 1);
+    //                     seriesBag.data.push(unknownData);
+    //                 }
+    //             });
+    //         }
+    //     }
+    //     return chartBag;
+    // }
+
     /**
      * Reorders the marital statuses in the ChartBag to have "Single" first and "Unknown" last.
      *
@@ -462,32 +471,6 @@
         updatedChartBag = moveUnknownToLastForBarChart(updatedChartBag);
 
         return updatedChartBag;
-    }
-
-    /**
-     * Moves the "Unknown" label and its corresponding data point to the end of the ChartBag.
-     *
-     * @param {ChartBag} chartBag - The ChartBag to modify.
-     * @returns {ChartBag} The modified ChartBag with "Unknown" moved to the end.
-     */
-    function moveUnknownToLastForPieChart(chartBag: ChartBag): ChartBag {
-        if (chartBag.labels && chartBag.seriesBags && chartBag.labels.length > 1) {
-            const unknownLabelIndex = chartBag.labels.findIndex(label => label.toLowerCase() === "unknown");
-            if (unknownLabelIndex > -1 && unknownLabelIndex !== chartBag.labels.length - 1) {
-                // Move the "Unknown" label to the end of the labels array
-                const [unknownLabel] = chartBag.labels.splice(unknownLabelIndex, 1);
-                chartBag.labels.push(unknownLabel);
-
-                // Move the corresponding data point in each series to the end of the data array
-                chartBag.seriesBags.forEach((seriesBag: PieSeriesBag) => {
-                    if (seriesBag.data && seriesBag.data.length > unknownLabelIndex) {
-                        const [unknownData] = seriesBag.data.splice(unknownLabelIndex, 1);
-                        seriesBag.data.push(unknownData);
-                    }
-                });
-            }
-        }
-        return chartBag;
     }
 
     // #endregion
