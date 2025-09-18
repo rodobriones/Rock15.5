@@ -216,8 +216,7 @@ namespace Rock.Blocks.Engagement
 
             if ( streakType != null )
             {
-                var occurrenceEngagements = new StreakTypeService( RockContext )
-                    .GetRecentEngagementBits( streakType.Id, streak.PersonAlias.PersonId, 24, out string errorMessage ) ?? new OccurrenceEngagement[0];
+                var occurrenceEngagements = new StreakTypeService( RockContext ).GetEngagmentBitsForStreak( streakType, streak, 24 ) ?? new OccurrenceEngagement[0];
                 var stringBuilder = new StringBuilder();
                 foreach ( var occurrence in occurrenceEngagements )
                 {
