@@ -843,7 +843,7 @@ The logged-in person's information will be used to complete the registrar inform
             var rockContext = new RockContext();
             var registrationTemplate = new RegistrationTemplateService( rockContext ).Get( hfRegistrationTemplateId.Value.AsInteger() );
 
-            if ( registrationTemplate != null && ( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) ) )
+            if ( registrationTemplate != null && ( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, this.CurrentPerson ) ) )
             {
                 LoadStateDetails( registrationTemplate, rockContext );
                 ShowEditDetails( registrationTemplate, rockContext );
@@ -1233,7 +1233,6 @@ The logged-in person's information will be used to complete the registrar inform
                 // Save the entity field changes to the registration template.
                 try
                 {
-
                     // Everything below should be part of a single save transaction,
                     // if anything fails to save, then the whole thing needs to be
                     // rolled back.
@@ -1545,20 +1544,20 @@ The logged-in person's information will be used to complete the registrar inform
 
                         SaveAttributes( new Registration().TypeId, "RegistrationTemplateId", registrationTemplate.Id.ToString(), RegistrationAttributesState, rockContext );
 
-                        // If this is a new template, give the current user and the Registration Administrators role administrative
-                        // rights to this template, and staff, and staff like roles edit rights
+                        // If this is a new template, give the Registration Administrators role administrative
+                        // rights to this template (for DELETE purposes), and staff, and staff like roles edit rights.
                         if ( newTemplate )
                         {
-                            registrationTemplate.AllowPerson( Authorization.ADMINISTRATE, CurrentPerson, rockContext );
+                            //registrationTemplate.AllowPerson( Authorization.ADMINISTRATE, CurrentPerson, rockContext );
 
                             var registrationAdmins = groupService.Get( Rock.SystemGuid.Group.GROUP_EVENT_REGISTRATION_ADMINISTRATORS.AsGuid() );
                             registrationTemplate.AllowSecurityRole( Authorization.ADMINISTRATE, registrationAdmins, rockContext );
 
-                            var staffLikeUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_LIKE_MEMBERS.AsGuid() );
-                            registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffLikeUsers, rockContext );
+                            //var staffLikeUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_LIKE_MEMBERS.AsGuid() );
+                            //registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffLikeUsers, rockContext );
 
-                            var staffUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_MEMBERS.AsGuid() );
-                            registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffUsers, rockContext );
+                            //var staffUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_MEMBERS.AsGuid() );
+                            //registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffUsers, rockContext );
                         }
                     } );
 
@@ -2560,11 +2559,19 @@ The logged-in person's information will be used to complete the registrar inform
 
             if ( registrationTemplate == null )
             {
+                var parentCategory = new Category();
+
+                if ( parentCategoryId.HasValue )
+                {
+                    parentCategory = new CategoryService( rockContext ).Get( parentCategoryId.Value );
+                }
+
                 registrationTemplate = new RegistrationTemplate
                 {
                     Id = 0,
                     IsActive = true,
                     CategoryId = parentCategoryId,
+                    Category = parentCategory,
                     ConfirmationFromName = "{{ RegistrationInstance.ContactPersonAlias.Person.FullName }}",
                     ConfirmationFromEmail = "{{ RegistrationInstance.ContactEmail }}",
                     ConfirmationSubject = "{{ RegistrationInstance.Name }} Confirmation",
@@ -2598,8 +2605,8 @@ The logged-in person's information will be used to complete the registrar inform
 
             nbEditModeMessage.Text = string.Empty;
 
-            // User must have 'Edit' rights to block, or 'Administrate' rights to template
-            if ( !UserCanEdit && !registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, CurrentPerson ) )
+            // User must have 'Edit' rights to block, or 'Edit' rights to template
+            if ( !UserCanEdit && !registrationTemplate.IsAuthorized( Authorization.EDIT, CurrentPerson ) )
             {
                 readOnly = true;
                 nbEditModeMessage.Heading = "Information";
