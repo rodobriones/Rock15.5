@@ -45,6 +45,9 @@
                          :isActive="isActive"
                          :isRockMobilePushTransportConfigured="config.isRockMobilePushTransportConfigured"
                          :pushMobileApplications="config.pushMobileApplications ?? []"
+                         :shortLinkCheckToken="onShortLinkCheckToken"
+                         :shortLinkGetPageId="onShortLinkGetPageId"
+                         :shortLinkSites="config.shortLinkSites ?? []"
                          :smsFromSystemPhoneNumbers="config.smsFromSystemPhoneNumbers ?? []"
                          :testEmailAddress="config.testEmailAddress"
                          :testSmsPhoneNumber="config.testSmsPhoneNumber"
@@ -116,6 +119,7 @@
     import { getSecurityGrant, onConfigurationValuesChanged, provideSecurityGrant, useConfigurationValues, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { isNullish } from "@Obsidian/Utility/util";
     import { CommunicationFlowBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowDetail/communicationFlowBag";
+    import { CheckShortLinkTokenBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowDetail/checkShortLinkTokenBag";
     import { CommunicationFlowCommunicationBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowDetail/communicationFlowCommunicationBag";
     import { CommunicationFlowDetailInitializationBox } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowDetail/communicationFlowDetailInitializationBox";
     import { CommunicationFlowDetailCommunicationTemplateBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowDetail/communicationFlowDetailCommunicationTemplateBag";
@@ -126,6 +130,7 @@
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
+    import { Guid } from "@Obsidian/Types";
 
     const config = useConfigurationValues<CommunicationFlowDetailInitializationBox>();
     const securityGrant = getSecurityGrant(config.securityGrantToken);
@@ -263,33 +268,69 @@
 
     // #region Event Handlers
 
-    function onTriggerTypeUpdated(newTriggerType: CommunicationFlowTriggerType): void {
-        if (newTriggerType === CommunicationFlowTriggerType.OneTime || newTriggerType === CommunicationFlowTriggerType.Recurring) {
-            // Clear the recurring schedule if the trigger type is one-time.
-            const calendar = iCalendarContent.value ? new Calendar(iCalendarContent.value) : new Calendar();
+    async function onShortLinkCheckToken(token: string, siteId: number): Promise<string> {
+        const bag: CheckShortLinkTokenBag = {
+            siteId,
+            token
+        };
+        const result = await invokeBlockAction<string>("CheckShortLinkToken", bag);
 
-            if (calendar) {
-                if (calendar.events?.length) {
-                    calendar.events = calendar.events.slice(0, 1);
-                }
-                else {
-                    calendar.events = [new Event()];
-                }
-
-                const event = calendar.events[0];
-
-                event.excludedDates = [];
-                event.recurrenceDates = [];
-                event.recurrenceRules = [];
-
-                iCalendarContent.value = calendar.build();
-            }
+        if (result.isSuccess && result.data) {
+            return result.data;
         }
         else {
-            // Clear the target audience and schedule if the
-            // trigger type is neither recurring nor one-time.
-            iCalendarContent.value = null;
-            targetAudienceDataView.value = null;
+            // Something went wrong so just return the original token.
+            return token;
+        }
+    }
+
+    async function onShortLinkGetPageId(pageGuid: Guid): Promise<number | null | undefined> {
+        const result = await invokeBlockAction<number | null | undefined>("GetShortLinkPageId", { pageGuid });
+
+        if (result.isSuccess) {
+            return result.data;
+        }
+        else {
+            return null;
+        }
+    }
+
+    function onTriggerTypeUpdated(newTriggerType: CommunicationFlowTriggerType): void {
+        switch (newTriggerType) {
+            case CommunicationFlowTriggerType.OneTime: {
+                // Clear the recurring schedule if the trigger type is one-time.
+                const calendar = iCalendarContent.value ? new Calendar(iCalendarContent.value) : new Calendar();
+
+                if (calendar) {
+                    if (calendar.events?.length) {
+                        calendar.events = calendar.events.slice(0, 1);
+                    }
+                    else {
+                        calendar.events = [new Event()];
+                    }
+
+                    const event = calendar.events[0];
+
+                    event.excludedDates = [];
+                    event.recurrenceDates = [];
+                    event.recurrenceRules = [];
+
+                    iCalendarContent.value = calendar.build();
+                }
+
+                break;
+            }
+
+            case CommunicationFlowTriggerType.OnDemand: {
+                // Clear the target audience and schedule if the
+                // trigger type is neither recurring nor one-time.
+                targetAudienceDataView.value = null;
+                iCalendarContent.value = null;
+
+                break;
+            }
+
+            default: break;
         }
     }
 

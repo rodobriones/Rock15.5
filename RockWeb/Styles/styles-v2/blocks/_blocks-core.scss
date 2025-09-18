@@ -112,7 +112,8 @@
   border-color:   var(--color-interface-softer);
   box-shadow:     none !important;
 
-  > .panel-heading {
+  > .panel-heading,
+  > .panel-header {
     position:         relative;
     padding:          18px;
     background:       var(--color-interface-softer);
@@ -183,7 +184,8 @@
 .panel-note {
   border: 1px solid var(--color-interface-soft);
 
-  & > .panel-heading {
+  & > .panel-heading,
+  & > .panel-header {
     color:            var(--color-interface-strongest);
     background-color: var(--color-interface-softest);
     border-color:     var(--color-interface-soft);
@@ -205,7 +207,8 @@
     padding: 0;
   }
 
-  .panel-heading {
+  .panel-heading,
+  .panel-header {
     h3 {
       float:    left;
     }
@@ -866,7 +869,8 @@
   }
 
   // TODO: Add class activity-type-description
-  > .panel-heading > .filter-toggle > span {
+  > .panel-heading > .filter-toggle > span,
+  > .panel-header > .filter-toggle > span {
     margin-left:    36px;
     font-size:      var(--font-size-xsmall);
     line-height:    var(--line-height-normal);
@@ -893,7 +897,8 @@
     border-color: var(--color-primary);
   }
 
-  > .panel-heading {
+  > .panel-heading,
+  > .panel-header {
     background:   var(--color-interface-softer) !important;
   }
 
@@ -933,7 +938,8 @@
     margin-bottom:      30px;
     border-color:       var(--color-interface-soft);
 
-    & > .panel-heading {
+    & > .panel-heading,
+    & > .panel-header {
       color:            var(--color-interface-strongest);
       background-color: var(--color-interface-softer);
       border-color:     var(--color-interface-softer);
@@ -955,7 +961,8 @@
       background-color: var(--color-interface-softest);
     }
 
-    .panel-heading {
+    .panel-heading,
+    .panel-header {
       padding: 30px;
 
       a {

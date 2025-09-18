@@ -36,6 +36,16 @@
                                      label="Chart Title"
                                      @update:modelValue="title = $event" />
                         </div>
+                        <div class="autolayout">
+                            <TextBox :modelValue="height ?? ''"
+                                     label="Chart Container Height"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="height = $event" />
+                            <TextBox :modelValue="width ?? ''"
+                                     label="Chart Container Width"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="width = $event" />
+                        </div>
                     </ContentStack>
 
                     <ContentStack title="Data">
@@ -237,6 +247,8 @@
     const valueHideGridLines = ref<boolean | undefined>();
     const categoryMaxTickCount = ref<number | undefined>();
     const valueMaxTickCount = ref<number | undefined>();
+    const height = ref<string | undefined>();
+    const width = ref<string | undefined>();
     const isUnfilled = ref<boolean | undefined>();
     const isLinear = ref<boolean | undefined>();
     const isStacked = ref<boolean | undefined>();
@@ -288,10 +300,16 @@
             lineChartProps.push(`:categoryMaxTickCount="${categoryMaxTickCount.value}"`);
         }
         if (!isNullish(categoryShowGridLines.value)) {
-            lineChartProps.push(`categoryShowGridLines="${categoryShowGridLines.value}"`);
+            lineChartProps.push(`:categoryShowGridLines="${categoryShowGridLines.value}"`);
+        }
+        if (!isNullish(height.value)) {
+            lineChartProps.push(`height="${height.value}"`);
+        }
+        if (!isNullish(width.value)) {
+            lineChartProps.push(`width="${width.value}"`);
         }
         if (!isNullish(isLegendHidden.value)) {
-            lineChartProps.push(`hideLegend="${isLegendHidden.value}"`);
+            lineChartProps.push(`:hideLegend="${isLegendHidden.value}"`);
         }
         if (!isNullish(labelDateFormat.value)) {
             lineChartProps.push(`labelDateFormat="${labelDateFormat.value}"`);
@@ -303,13 +321,13 @@
             lineChartProps.push(`legendPosition="${legendPosition.value}"`);
         }
         if (!isNullish(isLinear.value)) {
-            lineChartProps.push(`linear="${isLinear.value}"`);
+            lineChartProps.push(`:linear="${isLinear.value}"`);
         }
         if (!isNullish(lineStyle.value)) {
             lineChartProps.push(`lineStyle="${lineStyle.value}"`);
         }
         if (!isNullish(isStacked.value)) {
-            lineChartProps.push(`stack="${isStacked.value}"`);
+            lineChartProps.push(`:stack="${isStacked.value}"`);
         }
         if (title.value) {
             lineChartProps.push(`title="${title.value}"`);

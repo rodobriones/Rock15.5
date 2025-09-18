@@ -428,11 +428,13 @@ $badge-count-width: 18px;
     color:    inherit;
   }
 
-  .fa-stack-1x {
+  .fa-stack-1x,
+  .ti-stacked-1x {
     color:    var(--color-interface-softest);
   }
 
-  .fa-stack-2x {
+  .fa-stack-2x,
+  .ti-stacked-2x {
     color:    currentColor;
   }
 

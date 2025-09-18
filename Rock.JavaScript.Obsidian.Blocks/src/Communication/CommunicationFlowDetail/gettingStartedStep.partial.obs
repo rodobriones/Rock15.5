@@ -54,8 +54,7 @@
                 <TileRadioButtonList v-model="triggerTypeAsString"
                                      :items="triggerTypes"
                                      label="Flow Type"
-                                     rules="required"
-                                     @update:modelValue="onTriggerTypeUpdated" />
+                                     rules="required" />
 
                 <TransitionVerticalCollapse>
                     <ConditionalWell v-if="internalTriggerType !== CommunicationFlowTriggerType.OnDemand">
@@ -78,6 +77,7 @@
                                 </div>
 
                                 <ScheduleBuilder v-model="internalICalendarContent"
+                                                 :disabled="!startDateTimeIsoString"
                                                  hideDuration
                                                  hideStartDateTime
                                                  label="Schedule Builder"
@@ -140,7 +140,7 @@
 </style>
 
 <script setup lang="ts">
-    import { computed, PropType, ref } from "vue";
+    import { computed, PropType } from "vue";
     import GuideWell from "./guideWell.partial.obs";
     import TileRadioButtonList from "./tileRadioButtonList.partial.obs";
     import { TileListItemBag } from "./types.partial";
@@ -162,7 +162,7 @@
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { newGuid } from "@Obsidian/Utility/guid";
-    import { Calendar, Event } from "@Obsidian/Utility/internetCalendar";
+    import { Calendar, Event, RecurrenceRule } from "@Obsidian/Utility/internetCalendar";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { isNullish } from "@Obsidian/Utility/util";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
@@ -272,7 +272,6 @@
     // #region Values
 
     // UI values.
-    const areAdvancedSettingsShown = ref<boolean>(false);
     const internalIsGoalTrackingEnabled = useVModelPassthrough(props, "isGoalTrackingEnabled", emit);
 
     // State values.
@@ -319,11 +318,25 @@
                 event.endDateTime = endDateTime;
             }
             else {
-                const e = new Event();
-                e.startDateTime = startDateTime;
-                e.endDateTime = endDateTime;
+                event = new Event();
+                event.startDateTime = startDateTime;
+                event.endDateTime = endDateTime;
 
-                calendar.events.push(e);
+                calendar.events.push(event);
+            }
+
+            // If trigger type is recurring, ensure there is a recurrence rule.
+            if (internalTriggerType.value === CommunicationFlowTriggerType.Recurring) {
+                if (!event.recurrenceRules) {
+                    event.recurrenceRules = [];
+                }
+
+                if (event.recurrenceRules.length === 0) {
+                    const recurrenceRule = new RecurrenceRule();
+                    recurrenceRule.frequency = "DAILY";
+                    recurrenceRule.interval = 1;
+                    event.recurrenceRules.push(recurrenceRule);
+                }
             }
 
             internalICalendarContent.value = calendar.build();
@@ -405,18 +418,4 @@
     };
 
     // #endregion Functions
-
-    // #region Event Handlers
-
-    // This is called when the trigger type is updated.
-    function onTriggerTypeUpdated(): void {
-        // If the trigger type is On-Demand, then we need to clear the target audience.
-        if (internalTriggerType.value === CommunicationFlowTriggerType.OnDemand) {
-            // Clear the target audience data view and schedule.
-            internalTargetAudienceDataView.value = null;
-            internalICalendarContent.value = null;
-        }
-    }
-
-    // #endregion Event Handlers
 </script>

@@ -74,7 +74,7 @@
     import TextBox from "@Obsidian/Controls/textBox.obs";
     import { DefinedType } from "@Obsidian/SystemGuids/definedType";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
-    import { RangeType, SlidingDateRange } from "@Obsidian/Utility/slidingDateRange";
+    import { SlidingDateRange } from "@Obsidian/Utility/slidingDateRange";
     import { asCommaAnd } from "@Obsidian/Utility/stringUtils";
     import { deepEqual } from "@Obsidian/Utility/util";
 

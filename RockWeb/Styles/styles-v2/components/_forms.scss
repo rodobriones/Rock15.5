@@ -138,11 +138,11 @@ output {
 
   // Placeholder
   &::-moz-placeholder {
-    color:      var(--color-interface-strong);
+    color:      var(--color-interface-medium);
     opacity:    1;
   }
-  &:-ms-input-placeholder { color: var(--color-interface-strong); }
-  &::-webkit-input-placeholder  { color: var(--color-interface-strong); }
+  &:-ms-input-placeholder { color: var(--color-interface-medium); }
+  &::-webkit-input-placeholder  { color: var(--color-interface-medium); }
 
   // Unstyle the caret on `<select>`s in IE10+.
   &::-ms-expand {

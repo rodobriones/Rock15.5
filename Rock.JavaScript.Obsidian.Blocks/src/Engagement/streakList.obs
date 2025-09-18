@@ -104,7 +104,6 @@
     import { computed, reactive, ref } from "vue";
     import { PersonFieldBag } from "@Obsidian/ViewModels/Core/Grid/personFieldBag";
     import { asBoolean } from "@Obsidian/Utility/booleanUtils";
-    import { useStore } from "@Obsidian/PageState";
 
     const config = useConfigurationValues<ListBlockBox<StreakListOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -123,7 +122,7 @@
     });
 
     const isVisible = computed((): boolean => {
-        return !!config.options?.streakTypeIdKey && useStore().state.areSecondaryBlocksShown;
+        return !!config.options?.streakTypeIdKey;
     });
 
     //#endregion

@@ -130,6 +130,12 @@
     background-repeat:  no-repeat;
     background-position:  50%;
     background-size:      contain;
+
+    .file-link-default::after {
+      display:      block;
+      font-family:    'tabler-icons';
+      content:      "\faf7";
+    }
   }
 
   .fileupload-thumbnail-icon {
@@ -144,12 +150,7 @@
     }
   }
 
-  .file-link-default {
-    &::after {
-      display:      block;
-      content:      "\faf7";
-    }
-  }
+
 
   .picker-select-none {
     position:         absolute;

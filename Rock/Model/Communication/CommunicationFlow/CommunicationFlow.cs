@@ -158,6 +158,18 @@ namespace Rock.Model
         [DataMember]
         public string PublicName { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether all flow instances are messaging-complete
+        /// and the flow schedule will not create any new instances.
+        /// </summary>
+        public bool IsMessagingClosed { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether conversion goal tracking is complete
+        /// for all instances in this flow and no future instances will be created.
+        /// </summary>
+        public bool IsConversionGoalTrackingClosed { get; set; }
+
         /// <inheritdoc />
         [DataMember]
         public string AdditionalSettingsJson { get; set; }

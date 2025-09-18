@@ -52,6 +52,7 @@ namespace Rock.Blocks.Engagement
         IsRequired = false,
         Order = 1 )]
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "b7894ceb-837a-468e-92b1-53a1631c828e" )]
     [Rock.SystemGuid.BlockTypeGuid( "73efc838-d5e3-4dbd-b5af-c3c81d3e7daf" )]
     [CustomizedGrid]

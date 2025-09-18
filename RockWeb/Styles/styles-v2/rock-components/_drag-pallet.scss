@@ -11,7 +11,8 @@
 
 // ======================== BASE STYLE ========================
 
-.mobile-block-types {
+.mobile-block-types,
+.sms-action-components {
     border-bottom-left-radius: var(--rounded-medium); // Prevent clipping on panel corner
 
     .components-list {
@@ -31,7 +32,7 @@
         padding: var(--spacing-small) 0 var(--spacing-tiny);
         margin: 6px 2.5%;
         font-size: var(--font-size-xsmall);
-        color: var(--color-interface-strong);
+        color: var(--color-interface-strong) !important;
         text-align: center;
         cursor: -webkit-grab;
         cursor: -moz-grab;
@@ -67,6 +68,7 @@
         text-overflow: ellipsis;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
+        color: var(--color-interface-strong) !important;
     }
     .components-list .component:hover {
         border: 1px solid var(--color-primary);
@@ -78,7 +80,8 @@
         border-left: 1px solid var(--color-interface-softest);
         border-radius: 0;
     }
-    .panel-palette .panel-heading {
+    .panel-palette .panel-heading,
+    .panel-palette .panel-header {
         font-weight: var(--font-weight-medium);
         text-align: center;
         background: var(--color-interface-softest);
