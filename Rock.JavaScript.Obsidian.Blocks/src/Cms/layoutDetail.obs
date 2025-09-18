@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-    import { computed, ref, watch } from "vue";
+    import { computed, ref } from "vue";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import DetailBlock from "@Obsidian/Templates/detailBlock";
@@ -40,13 +40,12 @@
     import { PanelAction } from "@Obsidian/Types/Controls/panelAction";
     import EditPanel from "./LayoutDetail/editPanel.partial.obs";
     import ViewPanel from "./LayoutDetail/viewPanel.partial.obs";
-    import { getSecurityGrant, hideBlockRole, provideSecurityGrant, refreshDetailAttributes, useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { getSecurityGrant, provideSecurityGrant, refreshDetailAttributes, useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { debounce } from "@Obsidian/Utility/util";
     import { NavigationUrlKey } from "./LayoutDetail/types.partial";
     import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";
     import { LayoutBag } from "@Obsidian/ViewModels/Blocks/Cms/LayoutDetail/layoutBag";
     import { LayoutDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Cms/LayoutDetail/layoutDetailOptionsBag";
-    import { BlockRole } from "@Obsidian/Enums/Cms/blockRole";
 
     const config = useConfigurationValues<DetailBlockBox<LayoutBag, LayoutDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -116,13 +115,6 @@
     // #endregion
 
     // #region Watchers
-
-    // Watch for changes to the panel mode and hide blocks with the Secondary role.
-    watch(panelMode, (newMode) => {
-        if (newMode === DetailPanelMode.Add) {
-            hideBlockRole(BlockRole.Secondary);
-        }
-    });
 
     // #endregion
 
