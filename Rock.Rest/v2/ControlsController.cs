@@ -1,4 +1,4 @@
-﻿// <copyright>
+// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -9642,7 +9642,8 @@ namespace Rock.Rest.v2
                     IncludeInactiveItems = options.IncludeInactiveItems,
                     DefaultIconCssClass = "ti ti-list-numbers",
                     LazyLoad = true,
-                    SecurityGrant = grant
+                    SecurityGrant = grant,
+                    IncludeCategoryGuids = options.IncludeCategoryGuids
                 };
 
                 if ( options.includePublicItemsOnly )
