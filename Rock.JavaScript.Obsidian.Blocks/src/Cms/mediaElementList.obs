@@ -55,12 +55,10 @@
     import { MediaElementListOptionsBag } from "@Obsidian/ViewModels/Blocks/Cms/MediaElementList/mediaElementListOptionsBag";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
     import { NavigationUrlKey } from "./MediaElementList/types.partial";
-    import { computed, reactive, ref } from "vue";
-    import { useStore } from "@Obsidian/PageState";
+    import { reactive, ref } from "vue";
 
     const config = useConfigurationValues<ListBlockBox<MediaElementListOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
-    const store = useStore();
 
     // All blocks auto reload when changing block settings unless there is an
     // explicit reason not to (like using a custom reload function instead),

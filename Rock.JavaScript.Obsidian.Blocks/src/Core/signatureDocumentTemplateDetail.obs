@@ -75,10 +75,6 @@
 
     // #region Computed Values
 
-    const canAdministrate = computed((): boolean => {
-        return signatureDocumentTemplateViewBag.value?.canAdministrate === true;
-    });
-
     /**
      * The entity name to display in the block panel.
      */

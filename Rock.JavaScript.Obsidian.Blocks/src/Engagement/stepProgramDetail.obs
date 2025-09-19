@@ -44,7 +44,7 @@
 </style>
 
 <script setup lang="ts">
-    import { computed, ref, watch } from "vue";
+    import { computed, ref } from "vue";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { DetailPanelMode } from "@Obsidian/Enums/Controls/detailPanelMode";
@@ -58,13 +58,10 @@
     import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";
     import { StepProgramBag } from "@Obsidian/ViewModels/Blocks/Engagement/StepProgramDetail/stepProgramBag";
     import { StepProgramDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Engagement/StepProgramDetail/stepProgramDetailOptionsBag";
-    import { useStore } from "@Obsidian/PageState";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
 
     const config = useConfigurationValues<DetailBlockBox<StepProgramBag, StepProgramDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
-    const store = useStore();
-
     // #region Values
 
     const blockError = ref("");
@@ -257,18 +254,6 @@
     }
 
     // #region Watchers
-
-    // This is a workaround to ensure the "Secondary Blocks" (ISecondaryBlocks) are shown when the panel is in view mode and not in edit mode.
-    // We will want to remove this once we have a better solution for showing/hiding secondary block.
-    // See: https://app.asana.com/1/20866866924293/project/1198840255983422/task/1205960087046095?focus=true
-    watch(panelMode, () => {
-        if (panelMode.value === DetailPanelMode.View) {
-            store.setAreSecondaryBlocksShown(true);
-        }
-        else {
-            store.setAreSecondaryBlocksShown(false);
-        }
-    }, { immediate: true });
 
     // #endregion
 

@@ -5,8 +5,7 @@
         <strong>Note</strong> You are not authorized to view Step Types of this Step Program.
     </NotificationBox>
 
-    <Grid v-if="isVisible"
-          :definition="config.gridDefinition ?? undefined"
+    <Grid :definition="config.gridDefinition ?? undefined"
           :data="gridDataSource"
           keyField="idKey"
           itemTerm="Step Type"
@@ -127,7 +126,6 @@
     import { NavigationUrlKey, GridSettingsOptions, PreferenceKey } from "./StepTypeList/types.partial";
     import GridSettingsModal from "./StepTypeList/gridSettingsModal.partial.obs";
     import { computed, reactive, ref, watch } from "vue";
-    import { useStore } from "@Obsidian/PageState";
     import { PageMessages } from "@Obsidian/Utility/browserBus";
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
     import { areEqual } from "@Obsidian/Utility/guid";
@@ -190,10 +188,6 @@
     // #endregion
 
     // #region Computed Values
-
-    const isVisible = computed((): boolean => {
-        return !!useStore().state.areSecondaryBlocksShown;
-    });
 
     /** `true` if the grid settings is performing any filtering. */
     const hasSettingsFilters = computed((): boolean => {

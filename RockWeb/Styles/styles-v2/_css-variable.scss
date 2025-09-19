@@ -63,6 +63,16 @@
   --color-warning-tint:     var(--base-warning);
   --color-warning-shade:    var(--base-warning);
 
+  --color-gender-male-soft:   var(--base-gender-male);
+  --color-gender-male-strong: var(--base-gender-male);
+  --color-gender-male-tint:   var(--base-gender-male);
+  --color-gender-male-shade:  var(--base-gender-male);
+
+  --color-gender-female-soft:   var(--base-gender-female);
+  --color-gender-female-strong: var(--base-gender-female);
+  --color-gender-female-tint:   var(--base-gender-female);
+  --color-gender-female-shade:  var(--base-gender-female);
+
   /* System colors */
   --color-primary-soft:     var(--base-primary);
   --color-primary:          var(--base-primary);
@@ -74,6 +84,7 @@
   --color-link-shade:       var(--base-link);
 
   --color-secondary:        var(--base-secondary);
+  --color-secondary-soft:   var(--base-secondary);
   --color-secondary-tint:   var(--base-secondary);
   --color-secondary-shade:  var(--base-secondary);
 

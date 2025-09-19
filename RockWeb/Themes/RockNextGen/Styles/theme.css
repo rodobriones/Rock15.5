@@ -281,6 +281,14 @@ iframe {
   --color-warning-strong: var(--base-warning);
   --color-warning-tint: var(--base-warning);
   --color-warning-shade: var(--base-warning);
+  --color-gender-male-soft: var(--base-gender-male);
+  --color-gender-male-strong: var(--base-gender-male);
+  --color-gender-male-tint: var(--base-gender-male);
+  --color-gender-male-shade: var(--base-gender-male);
+  --color-gender-female-soft: var(--base-gender-female);
+  --color-gender-female-strong: var(--base-gender-female);
+  --color-gender-female-tint: var(--base-gender-female);
+  --color-gender-female-shade: var(--base-gender-female);
   /* System colors */
   --color-primary-soft: var(--base-primary);
   --color-primary: var(--base-primary);
@@ -290,6 +298,7 @@ iframe {
   --color-link-tint: var(--base-link);
   --color-link-shade: var(--base-link);
   --color-secondary: var(--base-secondary);
+  --color-secondary-soft: var(--base-secondary);
   --color-secondary-tint: var(--base-secondary);
   --color-secondary-shade: var(--base-secondary);
   --color-categorical-1: #007aff;
@@ -7711,7 +7720,7 @@ input[type=text].chosen-focus-input {
 
 .jcrop-holder img, img.jcrop-preview {
   max-width: none;
-}
+} 
 .breadcrumb {
   padding: var(--spacing-xsmall) var(--spacing-medium);
   list-style: none;
@@ -13367,6 +13376,11 @@ ul.list-group-panel .list-group-item:last-child,
   background-position: 50%;
   background-size: contain;
 }
+.picker-asset .fileupload-thumbnail .file-link-default::after {
+  display: block;
+  font-family: "tabler-icons";
+  content: "﫷";
+}
 .picker-asset .fileupload-thumbnail-icon {
   background-size: 40%;
 }
@@ -13375,10 +13389,6 @@ ul.list-group-panel .list-group-item:last-child,
 }
 .picker-asset .file-link::after {
   display: none;
-}
-.picker-asset .file-link-default::after {
-  display: block;
-  content: "﫷";
 }
 .picker-asset .picker-select-none {
   position: absolute;
@@ -18570,6 +18580,7 @@ iframe.file-browser {
 .tox:not(.tox-tinymce-inline) .tox-editor-header,
 .tox.tox-tinymce-inline .tox-editor-header {
   background-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .tox .tox-toolbar {
@@ -18641,14 +18652,6 @@ iframe.file-browser {
   fill: var(--color-interface-strong) !important;
 }
 
-.tox .tox-tbtn:hover:not(.tox-tbtn--disabled) {
-  background-color: var(--color-interface-soft) !important;
-}
-
-.tox .tox-tbtn--disabled svg {
-  fill: var(--color-interface-soft) !important;
-}
-
 .tox .tox-tbtn__select-chevron svg {
   fill: var(--color-interface-medium) !important;
 }
@@ -18660,8 +18663,8 @@ iframe.file-browser {
   color: var(--color-interface-strong) !important;
 }
 
-.tox .tox-tbtn--disabled {
-  color: var(--color-interface-soft) !important;
+.tox .tox-tbtn--disabled .tox-tbtn:not(.tox-tbtn--enabled) {
+  opacity: 0.5 !important;
 }
 
 .tox .tox-menu {
@@ -18759,6 +18762,17 @@ iframe.file-browser {
 
 .tox .tox-dialog-wrap .tox-dialog-wrap__backdrop {
   background: rgba(94, 94, 94, 0.6);
+}
+
+.tox .tox-tbtn--disabled .tox-tbtn--enabled svg {
+  fill: var(--color-interface-strong) !important;
+}
+
+.tox .tox-tbtn--disabled, .tox .tox-tbtn--disabled:hover {
+  background-attachment: local !important;
+  background-position: center top 40px !important;
+  background-size: calc(100% - 22px) calc(100% - 41px) !important;
+  background-repeat: no-repeat !important;
 }
 
 .workflow-activity {
@@ -34039,8 +34053,7 @@ a.rock-bookmark {
   color: var(--color-interface-strong);
 }
 
-.fa-stack-2x,
-.ti-stacked-2x {
+.fa-stack-2x {
   font-size: 2em;
 }
 

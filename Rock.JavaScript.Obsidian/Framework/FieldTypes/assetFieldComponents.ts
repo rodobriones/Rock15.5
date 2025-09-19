@@ -46,7 +46,8 @@ export const EditComponent = defineComponent({
                     name: modelProp?.Name,
                     uri: modelProp?.Url
                 };
-            } else {
+            }
+            else {
                 internalValue.value = null;
             }
         }, {

@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-    import { computed, nextTick, onMounted, ref } from "vue";
+    import { computed, onMounted, ref } from "vue";
     import BreakpointObserver from "./breakpointObserver.partial.obs";
     import CredentialLogin from "./Login/credentialLogin.partial.obs";
     import Divider from "./Login/divider.partial.obs";

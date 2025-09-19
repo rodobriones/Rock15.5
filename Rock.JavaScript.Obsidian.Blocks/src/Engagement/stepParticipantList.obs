@@ -1,8 +1,7 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 
 <template>
-    <Grid v-if="isVisible"
-          :definition="config.gridDefinition ?? undefined"
+    <Grid :definition="config.gridDefinition ?? undefined"
           :data="gridDataSource"
           keyField="idKey"
           personKeyField="personIdKey"
@@ -141,7 +140,6 @@
     import { NavigationUrlKey } from "./StepParticipantList/types.partial";
     import { computed, reactive, ref } from "vue";
     import { PersonFieldBag } from "@Obsidian/ViewModels/Core/Grid/personFieldBag";
-    import { useStore } from "@Obsidian/PageState";
     import { PageMessages } from "@Obsidian/Utility/browserBus";
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
     import { areEqual } from "@Obsidian/Utility/guid";
@@ -166,10 +164,6 @@
     // #endregion
 
     // #region Computed Values
-
-    const isVisible = computed((): boolean => {
-        return useStore().state.areSecondaryBlocksShown;
-    });
 
     /**
      * The item term, derived from the name of the current step type.

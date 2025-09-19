@@ -18,7 +18,9 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
+using System.Data.SqlClient;
 using System.Linq;
+using System.Linq.Expressions;
 
 using Microsoft.Extensions.Logging;
 
@@ -96,134 +98,83 @@ namespace Rock.Jobs
                     var flowUnsubscribeCount = 0;
                     var flowConversionCount = 0;
                     var flowSendCount = 0;
+                    List<Model.Communication> sendImmediatelyQueue = null;
 
                     using ( var rockContext = CreateRockContext() )
                     {
-                        // Turn off AutoDetectChanges for performance
-                        // and manually call rockContext.ChangeTracker.DetectChanges() before each rockContext.SaveChanges().
-                        rockContext.Configuration.AutoDetectChangesEnabled = false;
-
-                        // Wrapping a single flow processing in a transaction
-                        // so communication recipients can be bulk-inserted without
-                        // losing the ability to roll everything back if the flow processing fails.
-                        rockContext.WrapTransaction( () =>
+                        CommunicationFlow communicationFlow;
+                        using ( var activity = ObservabilityHelper.StartActivity( $"Retrieve full object graph for flow {flowId}" ) )
                         {
-                            CommunicationFlow flow;
-                            using ( var activity = ObservabilityHelper.StartActivity( $"Retrieve full object graph for flow {flowId}" ) )
-                            {
-                                // A. Read the entire flow object graph (except Communications and CommunicationRecipients).
-                                flow = new CommunicationFlowService( rockContext )
-                                    .Queryable()
-                                    .Include( f => f.Schedule )
-                                    .Include( f =>
-                                        f.CommunicationFlowCommunications.Select( c =>
-                                            c.CommunicationTemplate ) )
-                                    .Include( f =>
-                                        f.CommunicationFlowInstances.Select( i =>
-                                            i.CommunicationFlowInstanceCommunications.Select( c =>
-                                                c.CommunicationFlowInstanceCommunicationConversions.Select( h =>
-                                                    h.PersonAlias ) ) ) )
-                                    .Include( f =>
-                                        f.CommunicationFlowInstances.Select( i =>
-                                            i.CommunicationFlowInstanceRecipients.Select( r =>
-                                                r.RecipientPersonAlias ) ) )
-                                    .FirstOrDefault( f => f.Id == flowId );
-                            }
-
-                            // Check again if flow is active in case it changed while this job was running.
-                            if ( flow == null || !flow.IsActive )
-                            {
-                                return;
-                            }
-
-                            var interactionQuery = new InteractionService( rockContext ).Queryable();
-                            var commChannelId = InteractionChannelCache.Get( SystemGuid.InteractionChannel.COMMUNICATION.AsGuid() )?.Id ?? 0;
-
-                            var recipientInfoQuery = new CommunicationFlowInstanceService( rockContext )
+                            // A. Read the entire flow object graph (except Communications and CommunicationRecipients).
+                            communicationFlow = new CommunicationFlowService( rockContext )
                                 .Queryable()
-                                .AsNoTracking()
-                                .Where( cfi => cfi.CommunicationFlowId == flowId )
-                                .SelectMany( cfi => cfi.CommunicationFlowInstanceCommunications
-                                    .SelectMany( cfic => cfic.Communication.Recipients
-                                        .Select( r => new RecipientInfo
-                                        {
-                                            CommunicationRecipientId = r.Id,
-                                            CommunicationRecipientSendDateTime = r.SendDateTime,
-                                            CommunicationFlowCommunicationOrder = cfic.CommunicationFlowCommunication.Order,
-                                            CommunicationSendDateTime = cfic.Communication.SendDateTime,
-                                            CommunicationFlowInstanceId = cfi.Id,
-                                            CommunicationFlowInstanceCommunicationId = cfic.Id,
-                                            CommunicationId = r.CommunicationId,
-                                            PersonId = r.PersonAlias.PersonId,
-                                            Status = r.Status,
-                                            UnsubscribeDateTime = r.UnsubscribeDateTime,
-                                            OpenedDateTime = r.OpenedDateTime,
-                                            ClickedDateTime = interactionQuery // newest click
-                                                .Where( i =>
-                                                    i.InteractionComponent.InteractionChannelId == commChannelId
-                                                    && i.InteractionComponent.EntityId == r.CommunicationId
-                                                    && i.EntityId == r.Id
-                                                    && i.Operation == "Click" )
-                                                .Select( ix => ix.InteractionDateTime )
-                                                .Max()
-                                        } )
-                                    )
-                                );
+                                .Include( f => f.Schedule )
+                                .Include( f =>
+                                    f.CommunicationFlowCommunications.Select( c =>
+                                        c.CommunicationTemplate ) )
+                                .Include( f =>
+                                    f.CommunicationFlowInstances.Select( i =>
+                                        i.CommunicationFlowInstanceCommunications ) )
+                                .Include( f => f.CommunicationFlowInstances )
+                                .FirstOrDefault( f => f.Id == flowId );
+                        }
 
-                            var flowCommunicationRecipients = recipientInfoQuery.ToList();
+                        // Check again if flow is active in case it changed while this job was running.
+                        if ( communicationFlow == null || !communicationFlow.IsActive )
+                        {
+                            return;
+                        }
 
-                            // Attach the CommunicationFlowInstanceCommunications
-                            // from the flow object graph (this avoids reading the CommunicationFlowInstanceCommunications twice).
-                            var cficLookup = flow.CommunicationFlowInstances.SelectMany( cfi => cfi.CommunicationFlowInstanceCommunications ).ToDictionary( cfic => cfic.Id, cfic => cfic );
-                            foreach ( var flowCommunicationRecipient in flowCommunicationRecipients )
+                        var interactionQuery = new InteractionService( rockContext ).Queryable();
+                        var commChannelId = InteractionChannelCache.Get( SystemGuid.InteractionChannel.COMMUNICATION.AsGuid() )?.Id ?? 0;
+
+                        // B. Process the flow unsubscribes, conversions, next-send logic.
+                        using ( ObservabilityHelper.StartActivity( "Process Flow Unsubscribes" ) )
+                        {
+                            ProcessCommunicationFlowInstanceRecipientsUnsubscribedFromCommunications(
+                                rockContext,
+                                communicationFlow.Id,
+                                out flowUnsubscribeCount
+                            );
+                        }
+
+                        var conversionGoalProcessor = GetConversionGoalProcessor( rockContext, communicationFlow.ConversionGoalType );
+
+                        using ( ObservabilityHelper.StartActivity( "Process Flow Conversions" ) )
+                        {
+                            ProcessFlowConversions(
+                                rockContext,
+                                communicationFlow,
+                                conversionGoalProcessor,
+                                out flowConversionCount
+                            );
+                        }
+
+                        using ( ObservabilityHelper.StartActivity( "Process Flow Next Communications" ) )
+                        {
+                            ProcessFlowNextCommunications(
+                                rockContext,
+                                communicationFlow,
+                                conversionGoalProcessor,
+                                out sendImmediatelyQueue,
+                                out flowSendCount
+                            );
+                        }
+
+                        // D. Send immediate Communications.
+                        if ( sendImmediatelyQueue != null )
+                        {
+                            foreach ( var communication in sendImmediatelyQueue )
                             {
-                                if ( cficLookup.TryGetValue( flowCommunicationRecipient.CommunicationFlowInstanceCommunicationId, out var cfic ) )
+                                var msg = new ProcessSendCommunication.Message
                                 {
-                                    flowCommunicationRecipient.CommunicationFlowInstanceCommunication = cfic;
-                                }
+                                    CommunicationId = communication.Id
+                                };
+                                msg.Send();
                             }
+                        }
 
-                            // B. Process the flow unsubscribes, conversions, next-send logic.
-                            var isContextDirty = false;
-                            using ( ObservabilityHelper.StartActivity( "Process Flow Unsubscribes" ) )
-                            {
-                                isContextDirty = ProcessFlowUnsubscribes( flow, flowCommunicationRecipients, out flowUnsubscribeCount );
-                            }
-
-                            IConversionGoalProcessor conversionGoalProcessor;
-                            using ( ObservabilityHelper.StartActivity( "Process Flow Conversions" ) )
-                            {
-                                isContextDirty |= ProcessFlowConversions( rockContext, flow, recipientInfoQuery, flowCommunicationRecipients, out conversionGoalProcessor, out flowConversionCount );
-                            }
-                            List<Model.Communication> sendImmediatelyQueue;
-                            using ( ObservabilityHelper.StartActivity( "Process Flow Next Communications" ) )
-                            {
-                                isContextDirty |= ProcessFlowNextCommunications( rockContext, flow, conversionGoalProcessor, out sendImmediatelyQueue, out flowSendCount );
-                            }
-
-                            // C. Save once for the whole flow.
-                            if ( isContextDirty )
-                            {
-                                // One context scan for changes.
-                                rockContext.ChangeTracker.DetectChanges();
-                                rockContext.SaveChanges();
-                            }
-
-                            // D. Send immediate Communications.
-                            if ( sendImmediatelyQueue != null )
-                            {
-                                foreach ( var communication in sendImmediatelyQueue )
-                                {
-                                    var msg = new ProcessSendCommunication.Message
-                                    {
-                                        CommunicationId = communication.Id
-                                    };
-                                    msg.Send();
-                                }
-                            }
-
-                            jobStatus.ReportFlowProgress( flowNumber, flowUnsubscribeCount, flowConversionCount, flowSendCount );
-                        } );
+                        jobStatus.ReportFlowProgress( flowNumber, flowUnsubscribeCount, flowConversionCount, flowSendCount );
                     }
                 }
                 catch ( Exception ex )
@@ -247,73 +198,98 @@ namespace Rock.Jobs
             return rockContext;
         }
 
-        private bool ProcessFlowUnsubscribes( CommunicationFlow flow, List<RecipientInfo> recipientInfos, out int flowUnsubscribeCount )
+        private void ProcessCommunicationFlowInstanceRecipientsUnsubscribedFromCommunications( RockContext rockContext, int communicationFlowId, out int flowUnsubscribeCount )
         {
-            var isContextDirty = false;
+            var communicationFlowInstanceService = new CommunicationFlowInstanceService( rockContext );
             flowUnsubscribeCount = 0;
 
-            foreach ( var instance in flow.CommunicationFlowInstances )
+            // Get instance ids once
+            List<int> instanceIds;
+            instanceIds = communicationFlowInstanceService
+                .GetByCommunicationFlow( communicationFlowId )
+                .Where( cfi => cfi.CommunicationFlow.IsActive )
+                .Select( cfi => cfi.Id )
+                .ToList();
+
+            if ( instanceIds.Count == 0 )
             {
-                // Get the initial recipients for this flow instance.
-                var personIdToInstanceRecipientLookup = instance.CommunicationFlowInstanceRecipients
-                    .ToDictionary( cfir => cfir.RecipientPersonAlias.PersonId );
-                
-                // Check if this instance has any unsubscribes.
-                var unsubscribedRecipients = recipientInfos
-                    .Where( r => r.CommunicationFlowInstanceId == instance.Id && r.UnsubscribeDateTime.HasValue )
-                    .ToList();
-
-                foreach ( var recipient in unsubscribedRecipients )
-                {
-                    var recipientPersonId = recipient.PersonId;
-
-                    if ( recipientPersonId.HasValue
-                        && personIdToInstanceRecipientLookup.TryGetValue( recipientPersonId.Value, out var instanceRecipient )
-                        && instanceRecipient.UnsubscribeCommunicationRecipientId != recipient.CommunicationRecipientId )
-                    {
-                        instanceRecipient.MarkUnsubscribedFromCommunication( recipient.CommunicationRecipientId );
-
-                        flowUnsubscribeCount++;
-                        isContextDirty = true;
-                    }
-                }                
+                return;
             }
 
-            return isContextDirty;
+            const string sql = @"
+UPDATE cfir
+SET
+    cfir.[UnsubscribeCommunicationRecipientId] = unsub.[Id],
+    cfir.[Status] = @InactiveStatus,
+    cfir.[InactiveReason] = @InactiveReason
+FROM [dbo].[CommunicationFlowInstanceRecipient] AS cfir
+CROSS APPLY (
+    SELECT TOP (1) cr.[Id]
+    FROM [dbo].[CommunicationRecipient] cr
+    WHERE
+        cr.[PersonAliasId] = cfir.[RecipientPersonAliasId]
+        AND cr.[UnsubscribeDateTime] IS NOT NULL
+        AND cr.[CommunicationId] IN (
+            SELECT cfic.[CommunicationId]
+            FROM [dbo].[CommunicationFlowInstanceCommunication] cfic
+            WHERE cfic.[CommunicationFlowInstanceId] = @InstanceId
+        )
+    ORDER BY cr.[UnsubscribeDateTime] DESC, cr.[Id] DESC
+) AS unsub
+WHERE
+    cfir.[CommunicationFlowInstanceId] = @InstanceId
+    AND (
+        cfir.[UnsubscribeCommunicationRecipientId] IS NULL
+        OR cfir.[UnsubscribeCommunicationRecipientId] <> unsub.[Id]
+    );";
+
+            foreach ( var instanceId in instanceIds )
+            {
+                var affected = rockContext.Database.ExecuteSqlCommand(
+                    sql,
+                    new SqlParameter( "@InactiveStatus", ( int ) CommunicationFlowInstanceRecipientStatus.Inactive ),
+                    new SqlParameter( "@InactiveReason", ( int ) CommunicationFlowInstanceRecipientInactiveReason.Unsubscribed ),
+                    new SqlParameter( "@InstanceId", instanceId )
+                );
+
+                flowUnsubscribeCount += Math.Max( 0, affected );
+            }
         }
 
-        private bool ProcessFlowConversions(
+        private IConversionGoalProcessor GetConversionGoalProcessor( RockContext rockContext, ConversionGoalType? conversionGoalType )
+        {
+            if ( !conversionGoalType.HasValue )
+            {
+                // No conversion goal set, so no conversion processing needed for this flow.
+                return NullConversionGoalProcessor.Instance;
+            }
+
+            return ConversionGoalProcessorFactory.Create( rockContext, conversionGoalType.Value );
+        }
+
+        private void ProcessFlowConversions(
             RockContext rockContext,
             CommunicationFlow flow,
-            IQueryable<RecipientInfo> recipientInfoQuery,
-            List<RecipientInfo> communicationRecipients,
-            out IConversionGoalProcessor conversionGoalProcessor,
+            IConversionGoalProcessor conversionGoalProcessor,
             out int flowConversionCount )
         {
             var communicationFlowService = new CommunicationFlowService( rockContext );
-            var isContextDirty = false;
             flowConversionCount = 0;
-
-            if ( !flow.ConversionGoalType.HasValue
-                 || !flow.ConversionGoalTimeframeInDays.HasValue )
+            
+            if ( !flow.ConversionGoalType.HasValue )
             {
-                // No conversion goal set, so no conversion processing needed for this flow.
-                conversionGoalProcessor = NullConversionGoalProcessor.Instance;
-                return isContextDirty;
-            }
-
-            using ( ObservabilityHelper.StartActivity( "Create Conversion Goal Processor" ) )
-            {
-                conversionGoalProcessor = ConversionGoalProcessorFactory.Create( rockContext, flow );
+                // Conversion goal tracking is not enabled for this communication flow so exit early.
+                return;
             }
 
             if ( conversionGoalProcessor == NullConversionGoalProcessor.Instance )
             {
                 // The conversion goal type is unknown, so skip conversion processing for this flow.
                 Logger.LogWarning( $"Flow {flow.Id} cannot be processed. It has an unsupported conversion goal type {flow.ConversionGoalType.Value}." );
-                return isContextDirty;
+                return;
             }
 
+            var isContextDirty = false;
             foreach ( var flowInstance in flow.CommunicationFlowInstances.Where( cfi => !cfi.IsConversionGoalTrackingCompleted ) )
             {
                 using ( ObservabilityHelper.StartActivity( $"Processing Conversions For Instance {flowInstance.Id}" ) )
@@ -336,10 +312,13 @@ namespace Rock.Jobs
                 communicationFlowService.CloseConversionGoalTracking( flow );
             }
             
-            return isContextDirty;
+            if ( isContextDirty )
+            {
+                rockContext.SaveChanges();
+            }
         }
 
-        private bool ProcessFlowNextCommunications(
+        private void ProcessFlowNextCommunications(
             RockContext rockContext,
             CommunicationFlow flow,
             IConversionGoalProcessor conversionGoalProcessor,
@@ -360,12 +339,12 @@ namespace Rock.Jobs
             {
                 Logger.LogWarning( $"Flow {flow.Id} cannot be processed. It has an unsupported trigger type {flow.TriggerType}." );
                 sendImmediatelyQueue = null;
-                return isContextDirty;
+                return;
             }
 
             using ( ObservabilityHelper.StartActivity( "Ensuring Flow Has Latest Instance" ) )
             {
-                isContextDirty |= triggerProcessor.EnsureFlowHasLatestInstance( flow );
+                triggerProcessor.EnsureFlowHasLatestInstance( flow );
             }
 
             InstanceCommunicationHelper instanceCommunicationHelper;
@@ -376,7 +355,9 @@ namespace Rock.Jobs
                     new CommunicationService( rockContext ),
                     new PersonService( rockContext ),
                     new CommunicationFlowInstanceRecipientService( rockContext ),
-                    conversionGoalProcessor
+                    conversionGoalProcessor,
+                    new BulkInsertService( rockContext ),
+                    new SaveChangesService( rockContext )
                 );
             }
 
@@ -390,13 +371,13 @@ namespace Rock.Jobs
                     {
                         using ( ObservabilityHelper.StartActivity( "Pruning Recipients" ) )
                         {
-                            isContextDirty |= ExitConditionHelper.PruneRecipients( rockContext, instance );
+                            ExitConditionHelper.PruneRecipients( rockContext, instance );
                         }
 
                         Model.Communication communication;
                         using ( ObservabilityHelper.StartActivity( "Creating Next Communication" ) )
                         {
-                            isContextDirty |= instanceCommunicationHelper.CreateNextCommunication( instance, out communication );
+                            instanceCommunicationHelper.CreateNextCommunication( instance, out communication );
                         }
 
                         if ( communication != null )
@@ -415,7 +396,10 @@ namespace Rock.Jobs
                 isContextDirty |= triggerProcessor.MarkFlowMessagingClosedIfWarranted( flow );
             }
 
-            return isContextDirty;
+            if ( isContextDirty )
+            {
+                rockContext.SaveChanges();
+            }
         }
 
         #region Conversion Goal Processors
@@ -423,7 +407,6 @@ namespace Rock.Jobs
         private interface IConversionGoalProcessor
         {
             bool AddConversions( CommunicationFlowInstance instance, out List<CommunicationFlowInstanceCommunicationConversion> addedConversions );
-            IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIds );
             IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIds, DateTime conversionStartDateTime, DateTime conversionEndDateTime );
         }
 
@@ -431,23 +414,27 @@ namespace Rock.Jobs
         {
             public int PersonId { get; set; }
 
-            public DateTime ConversionDateTime { get; set; }
+            public int PersonAliasId { get; set; }
 
-            public PersonAlias PersonAlias { get; set; }
+            public DateTime ConversionDateTime { get; set; }
         }
 
         private static class ConversionGoalProcessorFactory
         {
-            public static IConversionGoalProcessor Create( RockContext rockContext, CommunicationFlow flow )
+            public static IConversionGoalProcessor Create( RockContext rockContext, ConversionGoalType conversionGoalType )
             {
-                switch ( flow.ConversionGoalType )
+                var communicationFlowInstanceService = new CommunicationFlowInstanceService( rockContext );
+                var communicationFlowInstanceCommunicationConversionService = new CommunicationFlowInstanceCommunicationConversionService( rockContext );
+                var bulkInsertService = new BulkInsertService( rockContext );
+
+                switch ( conversionGoalType )
                 {
-                    case ConversionGoalType.CompletedForm: return new CompletedFormConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new WorkflowService( rockContext ) );
-                    case ConversionGoalType.EnteredDataView: return new EnteredDataViewConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new DataViewService( rockContext ), new PersonService( rockContext ), new CommunicationFlowInstanceRecipientService( rockContext ) );
-                    case ConversionGoalType.JoinedGroupType: return new JoinedGroupTypeConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new GroupMemberService( rockContext ) );
-                    case ConversionGoalType.JoinedGroup: return new JoinedGroupConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new GroupMemberService( rockContext ) );
-                    case ConversionGoalType.Registered: return new RegisteredConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new RegistrationRegistrantService( rockContext ) );
-                    case ConversionGoalType.TookStep: return new TookStepConversionGoalProcessor( new CommunicationFlowInstanceService( rockContext ), new StepService( rockContext ) );
+                    case ConversionGoalType.CompletedForm: return new CompletedFormConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new WorkflowService( rockContext ) );
+                    case ConversionGoalType.EnteredDataView: return new EnteredDataViewConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new DataViewService( rockContext ), new PersonService( rockContext ), new CommunicationFlowInstanceRecipientService( rockContext ) );
+                    case ConversionGoalType.JoinedGroupType: return new JoinedGroupTypeConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new GroupMemberService( rockContext ) );
+                    case ConversionGoalType.JoinedGroup: return new JoinedGroupConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new GroupMemberService( rockContext ) );
+                    case ConversionGoalType.Registered: return new RegisteredConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new RegistrationRegistrantService( rockContext ) );
+                    case ConversionGoalType.TookStep: return new TookStepConversionGoalProcessor( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService, new StepService( rockContext ) );
                     default: return NullConversionGoalProcessor.Instance;
                 }
             }
@@ -481,19 +468,26 @@ namespace Rock.Jobs
 
         private abstract class ConversionGoalProcessorBase : IConversionGoalProcessor
         {
+            private readonly BulkInsertService _bulkInsertService;
+            private readonly CommunicationFlowInstanceCommunicationConversionService _communicationFlowInstanceCommunicationConversionService;
+                            
+
             protected CommunicationFlowInstanceService CommunicationFlowInstanceService { get; }
 
             protected delegate ( int CommunicationFlowInstanceCommunicationId, int CommunicationRecipientId ) GetInstanceCommunicationForConversionDelegate( ConversionInfo conversionInfo );
 
-            protected ConversionGoalProcessorBase( CommunicationFlowInstanceService communicationFlowInstanceService )
+            protected ConversionGoalProcessorBase(
+                CommunicationFlowInstanceService communicationFlowInstanceService,
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService )
             {
                 CommunicationFlowInstanceService = communicationFlowInstanceService ?? throw new ArgumentNullException( nameof( communicationFlowInstanceService ) );
+                _communicationFlowInstanceCommunicationConversionService = communicationFlowInstanceCommunicationConversionService ?? throw new ArgumentNullException( nameof( communicationFlowInstanceCommunicationConversionService ) );
+                _bulkInsertService = bulkInsertService ?? throw new ArgumentNullException( nameof( bulkInsertService ) );
             }
 
             public bool AddConversions( CommunicationFlowInstance instance, out List<CommunicationFlowInstanceCommunicationConversion> addedConversions )
             {
-                var isContextDirty = false;
-
                 List<PersonConversionInfo> peopleWhoReceivedInstanceCommunications;
                 IQueryable<int> personIdWhoReceivedInstanceCommunicationQuery;
                 using ( ObservabilityHelper.StartActivity( "Get RecipientInfos Who Received Comms" ) )
@@ -541,7 +535,7 @@ namespace Rock.Jobs
                 if ( !conversions.Any() )
                 {
                     addedConversions = null;
-                    return isContextDirty;
+                    return false;
                 }
 
                 var groupedPersonConversionInfo = peopleWhoReceivedInstanceCommunications
@@ -586,11 +580,9 @@ namespace Rock.Jobs
                                 Conversion = new CommunicationFlowInstanceCommunicationConversion
                                 {
                                     CommunicationFlowInstanceCommunicationId = personConversionInfo.CommunicationFlowInstanceCommunicationId,
-                                    CommunicationFlowInstanceCommunication = communicationFlowInstanceCommunication,
                                     CommunicationRecipientId = personConversionInfo.CommunicationRecipientId,
                                     Date = c.ConversionDateTime,
-                                    PersonAliasId = c.PersonAlias.Id,
-                                    PersonAlias = c.PersonAlias
+                                    PersonAliasId = c.PersonAliasId
                                 }
                             };
                         } )
@@ -601,11 +593,11 @@ namespace Rock.Jobs
                 if ( !conversionCandidates.Any() )
                 {
                     addedConversions = null;
-                    return isContextDirty;
+                    return false;
                 }
 
-                var existingKeys = instance.CommunicationFlowInstanceCommunications
-                    .SelectMany( cfic => cfic.CommunicationFlowInstanceCommunicationConversions )
+                var existingKeys = _communicationFlowInstanceCommunicationConversionService
+                    .GetByCommunicationFlowInstance( instance.Id )
                     .Select( h => new
                     {
                         h.CommunicationFlowInstanceCommunicationId,
@@ -632,36 +624,20 @@ namespace Rock.Jobs
                 if ( !newConversions.Any() )
                 {
                     addedConversions = null;
-                    return isContextDirty;
+                    return false;
                 }
 
-                // Attach - stays in memory, counted by EF.
-                using ( ObservabilityHelper.StartActivity( "Attach Conversions" ) )
+                using ( ObservabilityHelper.StartActivity( "Insert Conversions" ) )
                 {
-                    foreach ( var conversion in newConversions )
-                    {
-                        conversion.Conversion
-                            .CommunicationFlowInstanceCommunication
-                            .CommunicationFlowInstanceCommunicationConversions
-                            .Add( conversion.Conversion );
-                        isContextDirty = true;
-                    }
-
-                    addedConversions = newConversions
-                        .Select( c => c.Conversion )
-                        .ToList();
+                    var conversionsToInsert = newConversions.Select( c => c.Conversion ).ToList();
+                    _bulkInsertService.BulkInsert( conversionsToInsert );
+                    addedConversions = conversionsToInsert;
                 }
 
-                return isContextDirty;
+                return addedConversions.Any();
             }
 
-            public abstract IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIds );
-
-            public virtual IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIds, DateTime conversionStartDateTime, DateTime conversionEndDateTime )
-            {
-                return GetConversionQuery( communicationFlowInstance, personIds )
-                    .Where( c => conversionStartDateTime <= c.ConversionDateTime && c.ConversionDateTime < conversionEndDateTime );
-            }
+            public abstract IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIds, DateTime conversionStartDateTime, DateTime conversionEndDateTime );
 
             private class PersonConversionInfo
             {
@@ -677,13 +653,18 @@ namespace Rock.Jobs
         {
             private readonly WorkflowService _workflowService;
 
-            public CompletedFormConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, WorkflowService workflowService )
-                : base( communicationFlowInstanceService )
+
+            public CompletedFormConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService,
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                WorkflowService workflowService )
+                : base( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _workflowService = workflowService ?? throw new ArgumentNullException( nameof( workflowService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionGoalStartDate, DateTime conversionGoalEndDate )
             {
                 var workflowTypeGuid = communicationFlowInstance.CommunicationFlow.GetConversionGoalSettings()?.CompletedFormSettings?.WorkflowTypeGuid;
                 var workflowTypeId = workflowTypeGuid.HasValue ? WorkflowTypeCache.GetId( workflowTypeGuid.Value ) : null;
@@ -700,10 +681,11 @@ namespace Rock.Jobs
                         && w.CompletedDateTime.HasValue
                         && w.InitiatorPersonAlias != null
                         && personIdQuery.Contains( w.InitiatorPersonAlias.PersonId )
+                        && conversionGoalStartDate <= w.CompletedDateTime.Value && w.CompletedDateTime.Value < conversionGoalEndDate
                     )
                     .Select( p => new ConversionInfo
                     {
-                        PersonAlias = p.InitiatorPersonAlias,
+                        PersonAliasId = p.InitiatorPersonAlias.Id,
                         PersonId = p.InitiatorPersonAlias.PersonId,
                         ConversionDateTime = p.CompletedDateTime.Value
                     } );
@@ -716,15 +698,19 @@ namespace Rock.Jobs
             private readonly PersonService _personService;
             private readonly CommunicationFlowInstanceRecipientService _communicationFlowInstanceRecipientService;
 
-            public EnteredDataViewConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, DataViewService dataViewService, PersonService personService, CommunicationFlowInstanceRecipientService communicationFlowInstanceRecipientService )
-                : base( communicationFlowInstanceService )
+            public EnteredDataViewConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService, 
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                DataViewService dataViewService, PersonService personService, CommunicationFlowInstanceRecipientService communicationFlowInstanceRecipientService )
+                : base( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _dataViewService = dataViewService ?? throw new ArgumentNullException( nameof( dataViewService ) );
                 _personService = personService ?? throw new ArgumentNullException( nameof( personService ) );
                 _communicationFlowInstanceRecipientService = communicationFlowInstanceRecipientService ?? throw new ArgumentNullException( nameof( communicationFlowInstanceRecipientService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery(CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionGoalStartDate, DateTime conversionGoalEndDate )
             {
                 /*
                     7/23/2025 - JMH
@@ -766,11 +752,13 @@ namespace Rock.Jobs
                         && personIdQuery.Contains( p.Id )
                         // Ignore people who were already in the dataview prior to the first flow instance communication.
                         && !personIdsAlreadyInDataViewPriorToFlowQuery.Contains( p.Id )
+                        && dataView.LastRunDateTime.HasValue
+                        && conversionGoalStartDate <= dataView.LastRunDateTime.Value && dataView.LastRunDateTime.Value < conversionGoalEndDate
                     )
                     .Select( p => new ConversionInfo
                     {
                         PersonId = p.Id,
-                        PersonAlias = p.Aliases.FirstOrDefault( a => a.AliasPersonId == p.Id ),
+                        PersonAliasId = p.PrimaryAliasId.Value,
                         ConversionDateTime = dataView.LastRunDateTime.Value
                     } );
             }
@@ -780,13 +768,17 @@ namespace Rock.Jobs
         {
             private readonly GroupMemberService _groupMemberService;
 
-            public JoinedGroupConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, GroupMemberService groupMemberService )
-                : base( communicationFlowInstanceService )
+            public JoinedGroupConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService, 
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                GroupMemberService groupMemberService )
+                : base( communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _groupMemberService = groupMemberService ?? throw new ArgumentNullException( nameof( groupMemberService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery(CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionGoalStartDate, DateTime conversionGoalEndDate )
             {
                 var groupGuid = communicationFlowInstance.CommunicationFlow.GetConversionGoalSettings()?.JoinedGroupSettings?.GroupGuid;
                 var groupId = groupGuid.HasValue ? GroupCache.GetId( groupGuid.Value ) : null;
@@ -803,11 +795,12 @@ namespace Rock.Jobs
                         && gm.DateTimeAdded.HasValue
                         && gm.Person.PrimaryAliasId.HasValue
                         && personIdQuery.Contains( gm.PersonId )
+                        && conversionGoalStartDate <= gm.DateTimeAdded.Value && gm.DateTimeAdded.Value < conversionGoalEndDate
                     )
                     .Select( gm => new ConversionInfo
                     {
                         PersonId = gm.PersonId,
-                        PersonAlias = gm.Person.Aliases.FirstOrDefault( a => a.AliasPersonId == gm.PersonId ),
+                        PersonAliasId = gm.Person.PrimaryAliasId.Value,
                         ConversionDateTime = gm.DateTimeAdded.Value
                     } );
             }
@@ -817,13 +810,17 @@ namespace Rock.Jobs
         {
             private readonly GroupMemberService _groupMemberService;
 
-            public JoinedGroupTypeConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, GroupMemberService groupMemberService )
-                : base( communicationFlowInstanceService )
+            public JoinedGroupTypeConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService, 
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                GroupMemberService groupMemberService )
+                : base(communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _groupMemberService = groupMemberService ?? throw new ArgumentNullException( nameof( groupMemberService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionGoalStartDate, DateTime conversionGoalEndDate )
             {
                 var groupTypeGuid = communicationFlowInstance.CommunicationFlow.GetConversionGoalSettings()?.JoinedGroupTypeSettings?.GroupTypeGuid;
                 var groupTypeId = groupTypeGuid.HasValue ? GroupTypeCache.GetId( groupTypeGuid.Value ) : null;
@@ -840,11 +837,12 @@ namespace Rock.Jobs
                         && gm.DateTimeAdded.HasValue
                         && gm.Person.PrimaryAliasId.HasValue
                         && personIdQuery.Contains( gm.PersonId )
+                        && conversionGoalStartDate <= gm.DateTimeAdded.Value && gm.DateTimeAdded.Value < conversionGoalEndDate
                     )
                     .Select( gm => new ConversionInfo
                     {
                         PersonId = gm.PersonId,
-                        PersonAlias = gm.Person.Aliases.FirstOrDefault( a => a.AliasPersonId == gm.PersonId ),
+                        PersonAliasId = gm.Person.PrimaryAliasId.Value,
                         ConversionDateTime = gm.DateTimeAdded.Value
                     } );
             }
@@ -854,13 +852,17 @@ namespace Rock.Jobs
         {
             private readonly RegistrationRegistrantService _registrationRegistrantService;
 
-            public RegisteredConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, RegistrationRegistrantService registrationRegistrantService )
-                : base( communicationFlowInstanceService )
+            public RegisteredConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService, 
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                RegistrationRegistrantService registrationRegistrantService )
+                : base(communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _registrationRegistrantService = registrationRegistrantService ?? throw new ArgumentNullException( nameof( registrationRegistrantService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionGoalStartDate, DateTime conversionGoalEndDate )
             {
                 var registrationInstanceGuid = communicationFlowInstance.CommunicationFlow.GetConversionGoalSettings()?.RegisteredSettings?.RegistrationInstanceGuid;
                 
@@ -880,11 +882,12 @@ namespace Rock.Jobs
                             && rr.CreatedDateTime.HasValue
                             && rr.PersonAliasId.HasValue
                             && personIdQuery.Contains( rr.PersonAlias.PersonId )
+                            && conversionGoalStartDate <= rr.CreatedDateTime.Value && rr.CreatedDateTime.Value < conversionGoalEndDate
                         )
                         .Select( rr => new ConversionInfo
                         {
                             PersonId = rr.PersonAlias.PersonId,
-                            PersonAlias = rr.PersonAlias,
+                            PersonAliasId = rr.PersonAliasId.Value,
                             ConversionDateTime = rr.CreatedDateTime.Value
                         } );
                 }
@@ -897,13 +900,17 @@ namespace Rock.Jobs
         {
             private readonly StepService _stepService;
 
-            public TookStepConversionGoalProcessor( CommunicationFlowInstanceService communicationFlowInstanceService, StepService stepService )
-                : base( communicationFlowInstanceService )
+            public TookStepConversionGoalProcessor(
+                CommunicationFlowInstanceService communicationFlowInstanceService, 
+                CommunicationFlowInstanceCommunicationConversionService communicationFlowInstanceCommunicationConversionService,
+                BulkInsertService bulkInsertService,
+                StepService stepService )
+                : base(communicationFlowInstanceService, communicationFlowInstanceCommunicationConversionService, bulkInsertService )
             {
                 _stepService = stepService ?? throw new ArgumentNullException( nameof( stepService ) );
             }
 
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery )
+            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionStartDateTime, DateTime conversionEndDateTime )
             {
                 var stepTypeGuid = communicationFlowInstance.CommunicationFlow.GetConversionGoalSettings()?.TookStepSettings?.StepTypeGuid;
                 var stepTypeId = stepTypeGuid.HasValue ? StepTypeCache.GetId( stepTypeGuid.Value ) : null;
@@ -912,34 +919,29 @@ namespace Rock.Jobs
                 {
                     return null;
                 }
-
-                return _stepService
-                    .Queryable()
-                    .Where( s =>
-                        s.StepType.Id == stepTypeId.Value
-                        && s.CompletedDateTime.HasValue
-                        && s.StepStatus.IsCompleteStatus
-                        && personIdQuery.Contains( s.PersonAlias.PersonId )
-                    )
-                    .Select( s => new ConversionInfo
-                    {
-                        PersonId = s.PersonAlias.PersonId,
-                        PersonAlias = s.PersonAlias,
-                        // The CompletedDateTime doesn't actually store the time
-                        // so project this to the end of the day for conversion goal purposes.
-                        ConversionDateTime = s.CompletedDateTime.Value
-                    } );
-            }
-
-            public override IQueryable<ConversionInfo> GetConversionQuery( CommunicationFlowInstance communicationFlowInstance, IQueryable<int> personIdQuery, DateTime conversionStartDateTime, DateTime conversionEndDateTime )
-            {
+                
                 // The CompletedDateTime doesn't actually store the time
                 // so check if the conversion occurred at any time between the dates.
                 conversionStartDateTime = conversionStartDateTime.StartOfDay();
                 conversionEndDateTime = conversionEndDateTime.AddDays( 1 ).StartOfDay();
 
-                return GetConversionQuery( communicationFlowInstance, personIdQuery )
-                    .Where( c => conversionStartDateTime <= c.ConversionDateTime && c.ConversionDateTime < conversionEndDateTime );
+                return _stepService
+                    .Queryable()
+                    .Where( s =>
+                        s.StepTypeId == stepTypeId.Value
+                        && s.CompletedDateTime.HasValue
+                        && s.StepStatus.IsCompleteStatus
+                        && conversionStartDateTime <= s.CompletedDateTime && s.CompletedDateTime < conversionEndDateTime
+                        && personIdQuery.Contains( s.PersonAlias.PersonId )
+                    )
+                    .Select( s => new ConversionInfo
+                    {
+                        PersonId = s.PersonAlias.PersonId,
+                        PersonAliasId = s.PersonAliasId,
+                        // The CompletedDateTime doesn't actually store the time
+                        // so project this to the end of the day for conversion goal purposes.
+                        ConversionDateTime = s.CompletedDateTime.Value
+                    } );
             }
         }
 
@@ -953,7 +955,7 @@ namespace Rock.Jobs
             /// Ensures an initial instance exists if warranted.
             /// </summary>
             /// <returns>Returns <c>true</c> when the context has been modified.</returns>
-            bool EnsureFlowHasLatestInstance( CommunicationFlow flow );
+            void EnsureFlowHasLatestInstance( CommunicationFlow flow );
 
             /// <summary>
             /// Marks the flow complete if warranted.
@@ -963,14 +965,29 @@ namespace Rock.Jobs
             bool MarkFlowMessagingClosedIfWarranted( CommunicationFlow flow );
         }
 
+        private class SaveChangesService
+        {
+            private readonly RockContext _rockContext;
+
+            public SaveChangesService( RockContext rockContext )
+            {
+                _rockContext = rockContext ?? throw new ArgumentNullException( nameof( rockContext ) );
+            }
+
+            public void SaveChanges()
+            {
+                _rockContext.SaveChanges();
+            }
+        }
+
         private static class TriggerTypeProcessorFactory
         {
             public static ITriggerTypeProcessor Create( RockContext rockContext, CommunicationFlow flow )
             {
                 switch ( flow.TriggerType )
                 {
-                    case CommunicationFlowTriggerType.OneTime:   return new OneTimeTriggerTypeProcessor( new CommunicationFlowService( rockContext ) );
-                    case CommunicationFlowTriggerType.Recurring: return new RecurringTriggerTypeProcessor( new CommunicationFlowService( rockContext ) );
+                    case CommunicationFlowTriggerType.OneTime:   return new OneTimeTriggerTypeProcessor( new SaveChangesService( rockContext ), new CommunicationFlowService( rockContext ) );
+                    case CommunicationFlowTriggerType.Recurring: return new RecurringTriggerTypeProcessor( new SaveChangesService( rockContext ), new CommunicationFlowService( rockContext ) );
                     case CommunicationFlowTriggerType.OnDemand:  return new OnDemandTriggerTypeProcessor();
                     default: return null;
                 }
@@ -983,7 +1000,7 @@ namespace Rock.Jobs
             /// This job cannot create On-Demand flows so this method always returns <see langword="false" />.
             /// </summary>
             /// <returns><see langword="false" /></returns>
-            public bool EnsureFlowHasLatestInstance( CommunicationFlow flow ) => false;
+            public void EnsureFlowHasLatestInstance( CommunicationFlow flow ) { }
 
             /// <summary>
             /// On-Demand flows are never automatically marked complete by this job.
@@ -994,21 +1011,21 @@ namespace Rock.Jobs
 
         private sealed class OneTimeTriggerTypeProcessor : ITriggerTypeProcessor
         {
+            private readonly SaveChangesService _saveChangesService;
             private readonly CommunicationFlowService _communicationFlowService;
 
-            public OneTimeTriggerTypeProcessor( CommunicationFlowService communicationFlowService )
+            public OneTimeTriggerTypeProcessor( SaveChangesService saveChangesService, CommunicationFlowService communicationFlowService )
             {
+                _saveChangesService = saveChangesService ?? throw new ArgumentNullException( nameof( saveChangesService ) ); 
                 _communicationFlowService = communicationFlowService ?? throw new ArgumentNullException( nameof( communicationFlowService ) );
             }
 
-            public bool EnsureFlowHasLatestInstance( CommunicationFlow flow )
+            public void EnsureFlowHasLatestInstance( CommunicationFlow flow )
             {
-                var isContextDirty = false;
-
                 if ( flow.CommunicationFlowInstances.Any() )
                 {
                     // There is already a one-time flow instance so return.
-                    return isContextDirty;
+                    return;
                 }
 
                 // No instances yet so try to create one.
@@ -1016,14 +1033,14 @@ namespace Rock.Jobs
                 if ( schedule == null )
                 {
                     // The schedule has not been set so an instance can not be created.
-                    return isContextDirty;
+                    return;
                 }
 
                 var firstStartDateTime = schedule.FirstStartDateTime;
                 if ( !firstStartDateTime.HasValue )
                 {
                     // The schedule does not have a first start date so an instance can not be created.
-                    return isContextDirty;
+                    return;
                 }
 
                 var instance = new CommunicationFlowInstance
@@ -1036,9 +1053,7 @@ namespace Rock.Jobs
                 };
 
                 flow.CommunicationFlowInstances.Add( instance );
-                isContextDirty = true;
-
-                return isContextDirty;
+                _saveChangesService.SaveChanges();
             }
 
             public bool MarkFlowMessagingClosedIfWarranted( CommunicationFlow flow )
@@ -1060,21 +1075,21 @@ namespace Rock.Jobs
 
         private sealed class RecurringTriggerTypeProcessor : ITriggerTypeProcessor
         {
+            private readonly SaveChangesService _saveChangesService;
             private readonly CommunicationFlowService _communicationFlowService;
 
-            public RecurringTriggerTypeProcessor( CommunicationFlowService communicationFlowService )
+            public RecurringTriggerTypeProcessor( SaveChangesService saveChangesService, CommunicationFlowService communicationFlowService )
             {
+                _saveChangesService = saveChangesService ?? throw new ArgumentNullException( nameof( saveChangesService ) );
                 _communicationFlowService = communicationFlowService ?? throw new ArgumentNullException( nameof( communicationFlowService ) );
             }
 
-            public bool EnsureFlowHasLatestInstance( CommunicationFlow flow )
+            public void EnsureFlowHasLatestInstance( CommunicationFlow flow )
             {
-                var isContextDirty = false;
-
                 var schedule = flow.Schedule;
                 if ( schedule == null )
                 {
-                    return isContextDirty;
+                    return;
                 }
 
                 var lastInstanceStartDateTime = flow.CommunicationFlowInstances
@@ -1100,14 +1115,14 @@ namespace Rock.Jobs
                 if ( !nextInstanceStartDateTime.HasValue )
                 {
                     // The schedule is completed; no more instances to create.
-                    return isContextDirty;
+                    return;
                 }
 
                 if ( RockDateTime.Now.Date != nextInstanceStartDateTime.Value.Date )
                 {
                     // The next instance start date isn't today,
                     // so let the next job execution try to process the flow.
-                    return isContextDirty;
+                    return;
                 }
 
                 var instance = new CommunicationFlowInstance
@@ -1120,9 +1135,7 @@ namespace Rock.Jobs
                 };
 
                 flow.CommunicationFlowInstances.Add( instance );
-                isContextDirty = true;
-
-                return isContextDirty;
+                _saveChangesService.SaveChanges();
             }
 
             public bool MarkFlowMessagingClosedIfWarranted( CommunicationFlow flow )
@@ -1177,6 +1190,116 @@ namespace Rock.Jobs
 
         #region Helper Types
 
+        private class BulkInsertService
+        {
+            private readonly RockContext _rockContext;
+
+            public BulkInsertService( RockContext rockContext )
+            {
+                _rockContext = rockContext ?? throw new ArgumentNullException( nameof( rockContext ) );
+            }
+
+            public void BulkInsert<T>( IEnumerable<T> records ) where T : class, IEntity
+            { 
+                foreach ( var batch in Batch( records ) )
+                {
+                    _rockContext.BulkInsert( batch );
+                }
+            }
+
+            private static IEnumerable<List<T>> Batch<T>( IEnumerable<T> source, int size = 4000 )
+            {
+                var bucket = new List<T>( size );
+                foreach ( var item in source )
+                {
+                    bucket.Add( item );
+
+                    if ( bucket.Count == size )
+                    {
+                        yield return bucket;
+                        bucket = new List<T>( size );
+                    }
+                }
+                if ( bucket.Count > 0 )
+                {
+                    yield return bucket;
+                }
+            }
+        }
+
+        private class BulkUpdateService
+        {
+            private readonly RockContext _rockContext;
+
+            public BulkUpdateService( RockContext rockContext )
+            {
+                _rockContext = rockContext ?? throw new ArgumentNullException( nameof( rockContext ) );
+            }
+
+            /// <summary>
+            /// Performs a bulk update on entities of type <typeparamref name="T"/> in batches,
+            /// using the specified filter and update factory expression.
+            /// </summary>
+            /// <typeparam name="T">
+            /// The entity type, which must implement <see cref="IEntity"/>.
+            /// </typeparam>
+            /// <param name="query">
+            /// The base query that identifies the candidate entities to evaluate for update.
+            /// </param>
+            /// <param name="whereRecordsHaveNotBeenUpdated">
+            /// A predicate expression that defines which records from <paramref name="query"/>
+            /// should be included for updating. This ensures only records that have not already
+            /// been updated are considered.
+            /// </param>
+            /// <param name="updateFactory">
+            /// An expression that defines the update operation to apply to matching records.
+            /// </param>
+            /// <param name="batchSize">
+            /// The maximum number of records to process in each batch. Defaults to 4000.
+            /// </param>
+            /// <returns>
+            /// The total number of records updated across all processed batches.
+            /// </returns>
+            /// <remarks>
+            /// This method limits each batch to 4000 records to avoid generating an
+            /// excessively large <c>WHERE IN</c> clause, which could otherwise exceed
+            /// SQL Server's query plan limits. The update process will continue iterating
+            /// until no additional records meet the update condition.
+            /// </remarks>
+            public int BulkUpdate<T>(
+                IQueryable<T> query,
+                Expression<Func<T, bool>> whereRecordsHaveNotBeenUpdated,
+                Expression<Func<T, T>> updateFactory,
+                int batchSize = 4000 ) where T : class, IEntity
+            {
+                var totalUpdatedCount = 0;
+
+                while ( true )
+                {
+                    var idToUpdateQuery = query
+                        .Where( whereRecordsHaveNotBeenUpdated )
+                        .OrderBy( e => e.Id )
+                        .Select( e => e.Id )
+                        .Take( batchSize );
+
+                    var batchedUpdateQuery = _rockContext
+                        .Set<T>()
+                        .Where( e => idToUpdateQuery.Contains( e.Id ) );
+
+                    var batchUpdatedCount = _rockContext.BulkUpdate( batchedUpdateQuery, updateFactory );
+
+                    if ( batchUpdatedCount <= 0 )
+                    {
+                        break;
+                    }
+
+                    totalUpdatedCount += batchUpdatedCount;
+                }
+
+                return totalUpdatedCount;
+            }
+        }
+
         private class RecipientInfo
         {
             public int CommunicationRecipientId { get; set; }
@@ -1196,39 +1319,51 @@ namespace Rock.Jobs
 
         private static class ExitConditionHelper
         {
-            public static bool PruneRecipients( RockContext rockContext, CommunicationFlowInstance communicationFlowInstance )
+            public static void PruneRecipients( RockContext rockContext, CommunicationFlowInstance communicationFlowInstance )
             {
                 var communicationFlowService = new CommunicationFlowService( rockContext );
                 var communicationFlowInstanceRecipientService = new CommunicationFlowInstanceRecipientService( rockContext );
-                var isContextDirty = false;
+                var communicationFlowInstanceCommunicationService = new CommunicationFlowInstanceCommunicationService( rockContext );
+                var communicationFlowInstanceCommunicationConversionService = new CommunicationFlowInstanceCommunicationConversionService( rockContext );
+                var communicationService = new CommunicationService( rockContext );
+                var bulkUpdateService = new BulkUpdateService( rockContext );
 
-                var recipients = communicationFlowInstance.CommunicationFlowInstanceRecipients
+                var activeInstanceRecipientQuery = communicationFlowInstanceRecipientService
+                    .GetByCommunicationFlowInstance( communicationFlowInstance.Id )
                     .Where( r => r.Status == CommunicationFlowInstanceRecipientStatus.Active );
+
+                var activeInstanceRecipientPersonIdQuery = activeInstanceRecipientQuery
+                    .Select( cfir => cfir.RecipientPersonAlias.PersonId )
+                    .Distinct();
 
                 var communicationFlow = communicationFlowInstance?.CommunicationFlow;
 
                 if ( communicationFlow == null )
                 {
                     // Unable to check exit condition to determine if recipients should be pruned.
-                    return isContextDirty;
+                    return;
                 }
 
-                // Ensure unsubscribed recipients are pruned from this flow instance.
-                var unsubscribedPersonIds = communicationFlowInstanceRecipientService
-                    .GetUnsubscribedFromCommunicationFlow( communicationFlow.Id )
+                // Ensure flow-unsubscribed recipients are pruned from this flow instance.
+                var unsubscribedFromFlowPersonIdQuery = communicationFlowInstanceRecipientService
+                    .GetByCommunicationFlow( communicationFlow.Id )
+                    .WhereUnsubscribedFromCommunicationFlow()
                     .Where( r => r.CommunicationFlowInstanceId != communicationFlowInstance.Id && r.RecipientPersonAlias != null )
                     .Select( r => r.RecipientPersonAlias.PersonId )
-                    .Distinct()
-                    .ToList();
+                    .Distinct();
 
-                foreach ( var recipient in recipients )
-                {
-                    if ( unsubscribedPersonIds.Contains( recipient.GetPersonId() ) )
+                bulkUpdateService.BulkUpdate(
+                    activeInstanceRecipientQuery.Where( cfir => unsubscribedFromFlowPersonIdQuery.Contains( cfir.RecipientPersonAlias.PersonId ) ),
+                    cfir => !(
+                        cfir.Status == CommunicationFlowInstanceRecipientStatus.Inactive
+                        && cfir.InactiveReason == CommunicationFlowInstanceRecipientInactiveReason.UnsubscribedFromFlow
+                    ),
+                    updates => new CommunicationFlowInstanceRecipient
                     {
-                        communicationFlowService.DeactivateInstanceRecipient( recipient, CommunicationFlowInstanceRecipientInactiveReason.UnsubscribedFromFlow );
-                        isContextDirty = true;
+                        Status = CommunicationFlowInstanceRecipientStatus.Inactive,
+                        InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.UnsubscribedFromFlow
                     }
-                }
+                );
 
                 switch ( communicationFlow.ExitConditionType )
                 {
@@ -1237,12 +1372,18 @@ namespace Rock.Jobs
                             // If the instance is completed, then all active recipients should be marked as inactive.
                             if ( communicationFlowInstance.IsMessagingCompleted )
                             {
-                                foreach ( var recipient in recipients )
-                                {
-                                    recipient.Status = CommunicationFlowInstanceRecipientStatus.Inactive;
-                                    recipient.InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.LastCommunicationSent;
-                                    isContextDirty = true;
-                                }
+                                bulkUpdateService.BulkUpdate(
+                                    activeInstanceRecipientQuery,
+                                    cfir => !(
+                                        cfir.Status == CommunicationFlowInstanceRecipientStatus.Inactive
+                                        && cfir.InactiveReason == CommunicationFlowInstanceRecipientInactiveReason.LastCommunicationSent
+                                    ),
+                                    updates => new CommunicationFlowInstanceRecipient
+                                    {
+                                        Status = CommunicationFlowInstanceRecipientStatus.Inactive,
+                                        InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.LastCommunicationSent
+                                    }
+                                );
                             }
 
                             break;
@@ -1250,92 +1391,77 @@ namespace Rock.Jobs
 
                     case ExitConditionType.AnyEmailOpened:
                         {
-                            var communicationIdQuery = new CommunicationFlowInstanceCommunicationService( rockContext )
-                                .Queryable()
-                                .Where( cfic => cfic.CommunicationFlowInstanceId == communicationFlowInstance.Id )
+                            var communicationIdQuery = communicationFlowInstanceCommunicationService
+                                .GetByCommunicationFlowInstance( communicationFlowInstance.Id )
                                 .Select( cfic => cfic.CommunicationId )
                                 .Distinct();
 
-                            var personIdQuery = new CommunicationFlowInstanceRecipientService( rockContext )
-                                .Queryable()
-                                .Where( cfir =>
-                                    cfir.CommunicationFlowInstanceId == communicationFlowInstance.Id
-                                    && cfir.Status == CommunicationFlowInstanceRecipientStatus.Active )
-                                .Select( cfir => cfir.RecipientPersonAlias.PersonId )
-                                .Distinct();
+                            var openedCommunicationPersonIdQuery = communicationService
+                                .GetOpenedInteractions( communicationIdQuery, activeInstanceRecipientPersonIdQuery )
+                                .Select( i => i.PersonAlias.PersonId );
 
-                            var recipientPersonIdsWhoOpenedComm = new CommunicationService( rockContext )
-                                .GetOpenedInteractions( communicationIdQuery, personIdQuery )
-                                .Select( i => i.PersonAlias.PersonId )
-                                .ToList();
-
-                            var recipientsWhoOpenedComm = recipients
-                                .Where( r => recipientPersonIdsWhoOpenedComm.Contains( r.GetPersonId() ) )
-                                .ToList();
-
-                            foreach ( var recipient in recipientsWhoOpenedComm )
-                            {
-                                recipient.Status = CommunicationFlowInstanceRecipientStatus.Inactive;
-                                recipient.InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.OpenedCommunication;
-                                isContextDirty = true;
-                            }
+                            bulkUpdateService.BulkUpdate(
+                                activeInstanceRecipientQuery.Where( cfir => openedCommunicationPersonIdQuery.Contains( cfir.RecipientPersonAlias.PersonId ) ),
+                                cfir => !(
+                                    cfir.Status == CommunicationFlowInstanceRecipientStatus.Inactive
+                                    && cfir.InactiveReason == CommunicationFlowInstanceRecipientInactiveReason.OpenedCommunication
+                                ),
+                                updates => new CommunicationFlowInstanceRecipient
+                                {
+                                    Status = CommunicationFlowInstanceRecipientStatus.Inactive,
+                                    InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.OpenedCommunication
+                                }
+                            );
 
                             break;
                         }
 
                     case ExitConditionType.AnyEmailClickedThrough:
                         {
-                            var communicationIdQuery = new CommunicationFlowInstanceCommunicationService( rockContext )
-                                .Queryable()
-                                .Where( cfic => cfic.CommunicationFlowInstanceId == communicationFlowInstance.Id )
+                            var communicationIdQuery = communicationFlowInstanceCommunicationService
+                                .GetByCommunicationFlowInstance( communicationFlowInstance.Id )
                                 .Select( cfic => cfic.CommunicationId )
                                 .Distinct();
 
-                            var personIdQuery = new CommunicationFlowInstanceRecipientService( rockContext )
-                                .Queryable()
-                                .Where( cfir =>
-                                    cfir.CommunicationFlowInstanceId == communicationFlowInstance.Id
-                                    && cfir.Status == CommunicationFlowInstanceRecipientStatus.Active )
-                                .Select( cfir => cfir.RecipientPersonAlias.PersonId )
-                                .Distinct();
+                            var clickedCommunicationPersonIdQuery = communicationService
+                                .GetClickInteractions( communicationIdQuery, activeInstanceRecipientPersonIdQuery )
+                                .Select( i => i.PersonAlias.PersonId );
 
-                            var recipientPersonIdsWhoClickedComm = new CommunicationService( rockContext )
-                                .GetClickInteractions( communicationIdQuery, personIdQuery )
-                                .Select( i => i.PersonAlias.PersonId )
-                                .ToList();
-
-                            var recipientsWhoClickedComm = recipients
-                                .Where( r => recipientPersonIdsWhoClickedComm.Contains( r.GetPersonId() ) )
-                                .ToList();
-
-                            foreach ( var recipient in recipientsWhoClickedComm )
-                            {
-                                recipient.Status = CommunicationFlowInstanceRecipientStatus.Inactive;
-                                recipient.InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.ClickedCommunication;
-                                isContextDirty = true;
-                            }
+                            bulkUpdateService.BulkUpdate(
+                                activeInstanceRecipientQuery.Where( cfir => clickedCommunicationPersonIdQuery.Contains( cfir.RecipientPersonAlias.PersonId ) ),
+                                cfir => !(
+                                    cfir.Status == CommunicationFlowInstanceRecipientStatus.Inactive
+                                    && cfir.InactiveReason == CommunicationFlowInstanceRecipientInactiveReason.ClickedCommunication
+                                ),
+                                updates => new CommunicationFlowInstanceRecipient
+                                {
+                                    Status = CommunicationFlowInstanceRecipientStatus.Inactive,
+                                    InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.ClickedCommunication
+                                }
+                            );
 
                             break;
                         }
 
                     case ExitConditionType.ConversionAchieved:
                         {
-                            var personIdsWhoAchievedConversionGoal = communicationFlowInstance
-                                .CommunicationFlowInstanceCommunications
-                                .SelectMany( cfic => cfic.CommunicationFlowInstanceCommunicationConversions.Select( cfich => cfich.PersonAlias.PersonId ).Distinct() )
-                                .Distinct()
-                                .ToList();
+                            var personIdWhoAchievedConversionGoalQuery = communicationFlowInstanceCommunicationConversionService
+                                .GetByCommunicationFlowInstance( communicationFlowInstance.Id )
+                                .Select( cfich => cfich.PersonAlias.PersonId )
+                                .Distinct();
 
-                            var recipientsWhoAchievedConversionGoal = recipients
-                                .Where( r => personIdsWhoAchievedConversionGoal.Contains( r.GetPersonId() ) )
-                                .ToList();
-
-                            foreach ( var recipient in recipientsWhoAchievedConversionGoal )
-                            {
-                                recipient.Status = CommunicationFlowInstanceRecipientStatus.Inactive;
-                                recipient.InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.ConversionGoalMet;
-                                isContextDirty = true;
-                            }
+                            bulkUpdateService.BulkUpdate(
+                                activeInstanceRecipientQuery.Where( cfir => personIdWhoAchievedConversionGoalQuery.Contains( cfir.RecipientPersonAlias.PersonId ) ),
+                                cfir => !(
+                                    cfir.Status == CommunicationFlowInstanceRecipientStatus.Inactive
+                                    && cfir.InactiveReason == CommunicationFlowInstanceRecipientInactiveReason.ConversionGoalMet
+                                ),
+                                updates => new CommunicationFlowInstanceRecipient
+                                {
+                                    Status = CommunicationFlowInstanceRecipientStatus.Inactive,
+                                    InactiveReason = CommunicationFlowInstanceRecipientInactiveReason.ConversionGoalMet
+                                }
+                            );
 
                             break;
                         }
@@ -1343,8 +1469,6 @@ namespace Rock.Jobs
                     default:
                         break;
                 }
-
-                return isContextDirty;
             }
         }
 
@@ -1355,20 +1479,25 @@ namespace Rock.Jobs
             private readonly PersonService _personService;
             private readonly CommunicationFlowInstanceRecipientService _communicationFlowInstanceRecipientService;
             private readonly IConversionGoalProcessor _conversionGoalProcessor;
+            private readonly BulkInsertService _bulkInsertService;
+            private readonly SaveChangesService _saveChangesService;
 
             private InstanceCommunicationHelper(
                 CommunicationFlowService communicationFlowService,
                 CommunicationService communicationService,
                 PersonService personService,
                 CommunicationFlowInstanceRecipientService communicationFlowInstanceRecipientService,
-                IConversionGoalProcessor conversionGoalProcessor
-            )
+                IConversionGoalProcessor conversionGoalProcessor,
+                BulkInsertService bulkInsertService,
+                SaveChangesService saveChangesService )
             {
                 _communicationFlowService = communicationFlowService ?? throw new ArgumentNullException( nameof( communicationFlowService ) );
                 _communicationService = communicationService ?? throw new ArgumentNullException( nameof( communicationService ) );
                 _personService = personService ?? throw new ArgumentNullException( nameof( personService ) );
                 _communicationFlowInstanceRecipientService = communicationFlowInstanceRecipientService ?? throw new ArgumentNullException( nameof( communicationFlowInstanceRecipientService ) );
                 _conversionGoalProcessor = conversionGoalProcessor ?? throw new ArgumentNullException( nameof( conversionGoalProcessor ) );
+                _bulkInsertService = bulkInsertService ?? throw new ArgumentNullException( nameof( bulkInsertService ) );
+                _saveChangesService = saveChangesService ?? throw new ArgumentNullException( nameof( saveChangesService ) );
             }
 
             public static InstanceCommunicationHelper Create(
@@ -1376,7 +1505,9 @@ namespace Rock.Jobs
                 CommunicationService communicationService,
                 PersonService personService,
                 CommunicationFlowInstanceRecipientService communicationFlowInstanceRecipientService,
-                IConversionGoalProcessor conversionGoalProcessor
+                IConversionGoalProcessor conversionGoalProcessor,
+                BulkInsertService bulkInsertService,
+                SaveChangesService saveChangesService
             )
             {
                 return new InstanceCommunicationHelper(
@@ -1384,13 +1515,13 @@ namespace Rock.Jobs
                     communicationService,
                     personService,
                     communicationFlowInstanceRecipientService,
-                    conversionGoalProcessor );
+                    conversionGoalProcessor,
+                    bulkInsertService,
+                    saveChangesService );
             }
 
-            public bool CreateNextCommunication( CommunicationFlowInstance instance, out Model.Communication communication )
+            public void CreateNextCommunication( CommunicationFlowInstance instance, out Model.Communication communication )
             {
-                var isContextDirty = false;
-
                 // 1. Determine the next communication to send.
                 var sentCommunicationsWithBlueprints = instance
                     .CommunicationFlowInstanceCommunications
@@ -1417,10 +1548,11 @@ namespace Rock.Jobs
                 {
                     // No more communications to send.
                     _communicationFlowService.CompleteMessaging( instance );
-                    isContextDirty = true;
+                    _saveChangesService.SaveChanges();
 
                     communication = null;
-                    return isContextDirty;
+
+                    return;
                 }
 
                 // Calculate the send date and time for the next communication.
@@ -1447,7 +1579,7 @@ namespace Rock.Jobs
                         // Let the next job execution process the next communication
                         // so there is time to send the last communication.
                         communication = null;
-                        return isContextDirty;
+                        return;
                     }
                     else
                     {
@@ -1464,7 +1596,7 @@ namespace Rock.Jobs
                     // so there is time to accurately build a recipients list
                     // of people who have not exited the flow.
                     communication = null;
-                    return isContextDirty;
+                    return;
                 }
 
                 DateTime? futureSendDateTime = null;
@@ -1478,41 +1610,39 @@ namespace Rock.Jobs
                 {
                     // Add the instance recipients as close to sending the FIRST communication as possible
                     // to make sure the best matching target recipients for the communication.
-                    isContextDirty |= AddInitialInstanceRecipients( instance );
-                    if ( !instance.CommunicationFlowInstanceRecipients.Any() )
+                    if ( !AddInitialInstanceRecipients( instance ) )
                     {
                         // Failed to add initial recipients before first communication was created
                         // so indicate that no changes have been made.
                         communication = null;
-                        return isContextDirty;
+                        return;
                     }
                 }
 
                 // B. Gather active recipients.
-                var activeRecipientPersonAliasIds = instance
-                    .CommunicationFlowInstanceRecipients
-                   .Where( r => r.Status == CommunicationFlowInstanceRecipientStatus.Active )
-                   .Select( r => r.RecipientPersonAliasId )
-                   .ToList();
+                var activeRecipientPersonAliasIdQuery = _communicationFlowInstanceRecipientService
+                    .GetByCommunicationFlowInstance( instance.Id )
+                    .Where( r => r.Status == CommunicationFlowInstanceRecipientStatus.Active )
+                    .Select( r => r.RecipientPersonAliasId );
 
                 // B.1. No one left to send to.
-                if ( !activeRecipientPersonAliasIds.Any() )
+                if ( !activeRecipientPersonAliasIdQuery.Any() )
                 {
                     // This flow instance should be marked complete.
                     _communicationFlowService.CompleteMessaging( instance );
-                    isContextDirty = true;
+                    _saveChangesService.SaveChanges();
                     
                     communication = null;
-                    return isContextDirty; 
+                    return; 
                 }
 
                 // C. Create communication (no SaveChanges here).
-                isContextDirty |= CreateCommunicationFromTemplate( nextUnsentBlueprint, activeRecipientPersonAliasIds, futureSendDateTime, out communication );
+                CreateCommunicationFromTemplate( nextUnsentBlueprint, activeRecipientPersonAliasIdQuery, futureSendDateTime, out communication );
 
                 if ( communication == null )
                 {
                     // Unable to create communication.
-                    return isContextDirty;
+                    return;
                 }
 
                 // D. Add instance communication link.
@@ -1523,22 +1653,22 @@ namespace Rock.Jobs
                         CommunicationFlowInstance = instance,
                         CommunicationFlowCommunicationId = nextUnsentBlueprint.Id,
                         CommunicationFlowCommunication = nextUnsentBlueprint,
-                        Communication = communication
+                        Communication = communication,
+                        CommunicationId = communication.Id
                     } );
 
-                isContextDirty = true;
+                _saveChangesService.SaveChanges();
 
-                return isContextDirty;
+                return ;
             }
 
-            private bool CreateCommunicationFromTemplate(
+            private void CreateCommunicationFromTemplate(
                 CommunicationFlowCommunication communicationBlueprint,
-                List<int> activeRecipientPersonAliasIds,
+                IQueryable<int> activeRecipientPersonAliasIdQuery,
                 DateTime? scheduledSendDateTime,
                 out Model.Communication communication
             )
             {
-                var isContextDirty = false;
                 var template = communicationBlueprint.CommunicationTemplate;
 
                 if ( communicationBlueprint.CommunicationType == Model.CommunicationType.Email )
@@ -1552,7 +1682,7 @@ namespace Rock.Jobs
                         FutureSendDateTime = scheduledSendDateTime,
                         Message = template.Message,
                         Name = $"{communicationBlueprint.CommunicationFlow.Name} – {communicationBlueprint.Name}",
-                        RecipientPrimaryPersonAliasIds = activeRecipientPersonAliasIds,
+                        RecipientPrimaryPersonAliasIds = activeRecipientPersonAliasIdQuery.ToList(),
                         RecipientStatus = CommunicationRecipientStatus.Pending,
                         ReplyTo = template.ReplyToEmail,
                         SendDateTime = null, // This is actually the "sent" value and must be null here.
@@ -1573,7 +1703,7 @@ namespace Rock.Jobs
                         Message = template.SMSMessage,
                         ResponseCode = null,
                         SystemCommunicationId = null,
-                        ToPrimaryPersonAliasIds = activeRecipientPersonAliasIds
+                        ToPrimaryPersonAliasIds = activeRecipientPersonAliasIdQuery.ToList()
                     } );
                 }
                 else if ( communicationBlueprint.CommunicationType == Model.CommunicationType.PushNotification )
@@ -1585,7 +1715,7 @@ namespace Rock.Jobs
                         FromPersonAliasId = template.SenderPersonAliasId,
                         FutureSendDateTime = scheduledSendDateTime,
                         PushMessage = template.PushMessage,
-                        ToPersonAliasIds = activeRecipientPersonAliasIds,
+                        ToPersonAliasIds = activeRecipientPersonAliasIdQuery.ToList(),
                         PushData = template.PushData,
                         PushImageBinaryFileId = template.PushImageBinaryFileId,
                         PushOpenAction = template.PushOpenAction,
@@ -1606,15 +1736,36 @@ namespace Rock.Jobs
 
                     foreach ( var attachment in template.Attachments.ToList() )
                     {
-                        var newAttachment = new CommunicationAttachment();
-                        newAttachment.BinaryFileId = attachment.BinaryFileId;
-                        newAttachment.CommunicationType = attachment.CommunicationType;
+                        var newAttachment = new CommunicationAttachment
+                        {
+                            BinaryFileId = attachment.BinaryFileId,
+                            CommunicationType = attachment.CommunicationType
+                        };
                         communication.Attachments.Add( newAttachment );
                     }
+
+                    // Separate the CommunicationRecipients from the Communication
+                    // so the Communication can be saved without recipients.
+                    // Then we'll save the recipients using a bulk insert.
+                    var communicationRecipients = communication.Recipients;
+                    communication.Recipients = new List<CommunicationRecipient>();
+                    foreach ( var communicationRecipient in communicationRecipients )
+                    {
+                        communicationRecipient.Communication = null;
+                        _communicationService.Context.Entry( communicationRecipient ).State = EntityState.Detached;
+                    }
+
+                    // Save the communication.
+                    _saveChangesService.SaveChanges();
+
+                    foreach ( var communicationRecipient in communicationRecipients )
+                    {
+                        // Update the communication ID.
+                        communicationRecipient.CommunicationId = communication.Id;
+                    }
+
+                    _bulkInsertService.BulkInsert( communicationRecipients );
                 }
-                
-                isContextDirty |= communication != null;
-                return isContextDirty;
             }
 
             /// <summary>
@@ -1623,56 +1774,75 @@ namespace Rock.Jobs
             /// </summary>
             private bool AddInitialInstanceRecipients( CommunicationFlowInstance instance )
             {
-                var isContextDirty = false;
-
-                if ( instance.CommunicationFlow.TargetAudienceDataView == null )
+                using ( ObservabilityHelper.StartActivity( "Add Initial Instance Recipients" ) )
                 {
-                    // No DataView; nothing to seed.
-                    return isContextDirty;
-                }
-
-                var dataViewQuery = _personService
-                    .GetQueryUsingDataView( instance.CommunicationFlow.TargetAudienceDataView );
-
-                var personIdQuery = dataViewQuery.Select( p => p.Id );
-                var personAndPersonAliasIds = dataViewQuery
-                    .Where( p => p.PrimaryAliasId.HasValue )
-                    .Select( p => new
+                    if ( instance.CommunicationFlow.TargetAudienceDataView == null )
                     {
-                        PersonId = p.Id,
-                        PersonAliasId = p.PrimaryAliasId.Value
-                    } )
-                    .ToList();
+                        // No DataView; nothing to seed.
+                        return false;
+                    }
 
-                var preMetPersonIds = _conversionGoalProcessor.GetConversionQuery( instance, personIdQuery )
+                    var dataViewQuery = _personService.GetQueryUsingDataView( instance.CommunicationFlow.TargetAudienceDataView );
+
+                    var personIdQuery = dataViewQuery.Select( p => p.Id );
+                    var personAndPersonAliasIds = dataViewQuery
+                        .Where( p => p.PrimaryAliasId.HasValue )
+                        .Select( p => new
+                        {
+                            PersonId = p.Id,
+                            PersonAliasId = p.PrimaryAliasId.Value
+                        } )
+                        .ToList();
+
+                    var conversionGoalStartDate = instance.StartDate;
+                    var conversionGoalEndDate = conversionGoalStartDate.AddDays( instance.CommunicationFlow.ConversionGoalTimeframeInDays ?? 0 ).Date;
+
+                    var preMetPersonIds = _conversionGoalProcessor
+                        .GetConversionQuery( instance, personIdQuery, DateTime.MinValue, conversionGoalStartDate )
                         .Select( h => h.PersonId )
                         .ToList();
-                
-                var unsubscribedPersonIds = _communicationFlowInstanceRecipientService
-                    .GetUnsubscribedFromCommunicationFlow( instance.CommunicationFlowId )
-                    .Where( r => r.CommunicationFlowInstanceId != instance.Id && r.RecipientPersonAlias != null )
-                    .Select( r => r.RecipientPersonAlias.PersonId )
-                    .Distinct()
-                    .ToList();
 
-                foreach ( var ids in personAndPersonAliasIds )
-                {
-                    var isUnsubscribed = unsubscribedPersonIds.Contains( ids.PersonId );
+                    var unsubscribedFromFlowPersonIds = _communicationFlowInstanceRecipientService
+                        .GetByCommunicationFlow( instance.CommunicationFlowId )
+                        .WhereUnsubscribedFromCommunicationFlow()
+                        .Where( r => r.CommunicationFlowInstanceId != instance.Id && r.RecipientPersonAlias != null )
+                        .Select( r => r.RecipientPersonAlias.PersonId )
+                        .Distinct()
+                        .ToList();
 
-                    instance.CommunicationFlowInstanceRecipients.Add(
-                        new CommunicationFlowInstanceRecipient
+                    using ( ObservabilityHelper.StartActivity( $"Creating {personAndPersonAliasIds.Count} Communication Instance Recipients" ) )
+                    {
+                        var communicationFlowInstanceRecipients = new List<CommunicationFlowInstanceRecipient>();
+
+                        foreach ( var ids in personAndPersonAliasIds )
                         {
-                            CommunicationFlowInstance = instance,
-                            RecipientPersonAliasId = ids.PersonAliasId,
-                            Status = !isUnsubscribed ? CommunicationFlowInstanceRecipientStatus.Active : CommunicationFlowInstanceRecipientStatus.Inactive,
-                            InactiveReason = !isUnsubscribed ? default : CommunicationFlowInstanceRecipientInactiveReason.UnsubscribedFromFlow,
-                            WasConversionGoalPreMet = preMetPersonIds.Contains( ids.PersonId )
-                        }
-                    );
-                    isContextDirty = true;
-                }
+                            var isUnsubscribed = unsubscribedFromFlowPersonIds.Contains( ids.PersonId );
 
-                return isContextDirty;
+                            communicationFlowInstanceRecipients.Add(
+                                new CommunicationFlowInstanceRecipient
+                                {
+                                    CommunicationFlowInstance = instance,
+                                    CommunicationFlowInstanceId = instance.Id,
+                                    RecipientPersonAliasId = ids.PersonAliasId,
+                                    Status = !isUnsubscribed ? CommunicationFlowInstanceRecipientStatus.Active : CommunicationFlowInstanceRecipientStatus.Inactive,
+                                    InactiveReason = !isUnsubscribed ? default : CommunicationFlowInstanceRecipientInactiveReason.UnsubscribedFromFlow,
+                                    WasConversionGoalPreMet = preMetPersonIds.Contains( ids.PersonId )
+                                }
+                            );
+                        }
+
+                        if ( communicationFlowInstanceRecipients.Any() )
+                        {
+                            _bulkInsertService.BulkInsert( communicationFlowInstanceRecipients );
+
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                }
             }
         }
 

@@ -30,8 +30,8 @@
                               rules="required" />
 
                 <StaticFormControl v-else
-                            label="Applies To"
-                            :modelValue="appliesToPersonAlias.text ?? ''" />
+                                   label="Applies To"
+                                   :modelValue="appliesToPersonAlias.text ?? ''" />
 
                 <PersonPicker v-model="assignedToPersonAlias"
                               v-if="isLegacyDocument"
@@ -40,8 +40,8 @@
                               rules="required" />
 
                 <StaticFormControl v-else
-                            label="Assigned To"
-                            :modelValue="assignedToPersonAlias.text ?? ''" />
+                                   label="Assigned To"
+                                   :modelValue="assignedToPersonAlias.text ?? ''" />
 
                 <PersonPicker v-model="signedByPersonAlias"
                               v-if="isLegacyDocument"
@@ -49,8 +49,8 @@
                               help="The person that signed this." />
 
                 <StaticFormControl v-else
-                            label="Signed By"
-                            :modelValue="signedByPersonAlias.text ?? ''" />
+                                   label="Signed By"
+                                   :modelValue="signedByPersonAlias.text ?? ''" />
             </div>
         </div>
         <AttributeValuesContainer v-model="attributeValues" :attributes="attributes" isEditMode :numberOfColumns="2" />
@@ -58,10 +58,9 @@
 </template>
 
 <script setup lang="ts">
-    import { PropType, ref, computed, watch } from "vue";
+    import { PropType, ref, watch } from "vue";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
-    import RockLabel from "@Obsidian/Controls/rockLabel.obs";
     import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
     import FileUploader from "@Obsidian/Controls/fileUploader.obs";
     import PersonPicker from "@Obsidian/Controls/personPicker.obs";

@@ -33,6 +33,7 @@
 .tox:not(.tox-tinymce-inline) .tox-editor-header,
 .tox.tox-tinymce-inline .tox-editor-header {
   background-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .tox .tox-toolbar {
@@ -106,14 +107,6 @@
   fill: var(--color-interface-strong) !important;
 }
 
-.tox .tox-tbtn:hover:not(.tox-tbtn--disabled) {
-  background-color: var(--color-interface-soft) !important;
-}
-
-.tox .tox-tbtn--disabled svg {
-  fill: var(--color-interface-soft) !important;
-}
-
 .tox .tox-tbtn__select-chevron svg {
   fill: var(--color-interface-medium) !important;
 }
@@ -125,8 +118,8 @@
   }
 }
 
-.tox .tox-tbtn--disabled {
-  color: var(--color-interface-soft) !important;
+.tox .tox-tbtn--disabled .tox-tbtn:not(.tox-tbtn--enabled) {
+  opacity: 0.5 !important;
 }
 
 // Toolbar Dropdowns
@@ -239,4 +232,15 @@
 
 .tox .tox-dialog-wrap .tox-dialog-wrap__backdrop {
   background: rgba(94, 94, 94, 0.6);
+}
+
+.tox .tox-tbtn--disabled .tox-tbtn--enabled svg {
+  fill: var(--color-interface-strong) !important;
+}
+
+.tox .tox-tbtn--disabled, .tox .tox-tbtn--disabled:hover {
+  background-attachment: local !important;
+  background-position: center top 40px !important;
+  background-size: calc(100% - 22px) calc(100% - 41px) !important;
+  background-repeat: no-repeat !important;
 }

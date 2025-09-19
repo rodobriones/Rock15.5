@@ -22,7 +22,6 @@ using System.Linq;
 
 using Rock.Data;
 using Rock.Enums.Communication;
-using Rock.Lava;
 using Rock.Web.Cache;
 
 namespace Rock.Model

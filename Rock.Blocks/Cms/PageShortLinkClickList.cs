@@ -105,9 +105,9 @@ namespace Rock.Blocks.Cms
                 .AddTextField( "id", a => a.Id.ToString() )
                 .AddDateTimeField( "interactionDateTime", a => a.InteractionDateTime )
                 .AddPersonField( "person", a => a.PersonAlias?.Person )
-                .AddTextField( "application", a => a.InteractionSession.DeviceType.Application )
-                .AddTextField( "clientType", a => a.InteractionSession.DeviceType.ClientType )
-                .AddTextField( "operatingSystem", a => a.InteractionSession.DeviceType.OperatingSystem )
+                .AddTextField( "application", a => a.InteractionSession?.DeviceType?.Application )
+                .AddTextField( "clientType", a => a.InteractionSession?.DeviceType?.ClientType )
+                .AddTextField( "operatingSystem", a => a.InteractionSession?.DeviceType?.OperatingSystem )
                 .AddTextField( "source", a => GetUtmSourceName(a.SourceValueId) );
         }
 

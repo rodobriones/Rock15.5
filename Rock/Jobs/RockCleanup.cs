@@ -2667,7 +2667,7 @@ SELECT @@ROWCOUNT
             // Set the NextDateTime to null for any Event Occurrences that are inactive because:
             // 1. the parent Event Item is inactive; or
             // 2. the Event Occurrence Schedule is inactive.
-            var inactiveScheduleIdList = scheduleService.Queryable().Where( x => !x.IsActive ).Select( x => x.Id ).ToList();
+            var inactiveScheduleIdList = scheduleService.Queryable().Where( x => !x.IsActive ).Select( x => x.Id );
 
             var inactiveOccurrences = eventOccurrenceService.Queryable()
                 .Where( x => x.NextStartDateTime != null
@@ -2683,12 +2683,10 @@ SELECT @@ROWCOUNT
             rockContext.SaveChanges( new SaveChangesArgs { DisablePrePostProcessing = true } );
 
             // Set the NextDateTime for all Event Occurrences with an active schedule.
-            var activeScheduleIdList = scheduleService.Queryable().Where( x => x.IsActive ).Select( x => x.Id ).ToList();
-
             var activeOccurrences = eventOccurrenceService.Queryable()
                 .Include( x => x.Schedule )
                 .Where( x => x.EventItem.IsActive
-                    && x.ScheduleId != null && !inactiveScheduleIdList.Contains( x.ScheduleId.Value ) );
+                    && x.ScheduleId != null && x.Schedule.IsActive );
 
             foreach ( var activeOccurrence in activeOccurrences )
             {

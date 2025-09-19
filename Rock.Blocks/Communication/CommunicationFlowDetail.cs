@@ -1580,9 +1580,107 @@ namespace Rock.Blocks.Communication
             return source;
         }
 
+        private class ReprocessCommunicationFlowConversionsSnapshot
+        {
+            private bool IsConversionGoalTrackingClosed { get; }
+            private string ScheduleICalendarContent { get; }
+            private int? ConversionGoalTimeframeInDays { get; }            
+            private HashSet<string> CommunicationFlowCommunications { get; }
+
+            public ReprocessCommunicationFlowConversionsSnapshot( CommunicationFlow communicationFlow )
+            {
+                IsConversionGoalTrackingClosed = communicationFlow.IsConversionGoalTrackingClosed;
+                ConversionGoalTimeframeInDays = communicationFlow.ConversionGoalTimeframeInDays;
+                ScheduleICalendarContent = communicationFlow.Schedule?.iCalendarContent;
+                CommunicationFlowCommunications = GetCommunicationFlowCommunicationsHashSet( communicationFlow.CommunicationFlowCommunications );
+            }
+
+            public bool IsReprocessingRequired( CommunicationFlow communicationFlow )
+            {
+                if ( !IsConversionGoalTrackingClosed )
+                {
+                    // Conversion goal tracking is still open so reprocessing is not needed.
+                    return false;
+                }
+
+                var conversionGoalTrackingTimeframeEnabledOrExtended =
+                    ConversionGoalTimeframeInDays != communicationFlow.ConversionGoalTimeframeInDays
+                    && communicationFlow.ConversionGoalTimeframeInDays.HasValue
+                    && ( !ConversionGoalTimeframeInDays.HasValue || ConversionGoalTimeframeInDays.Value < communicationFlow.ConversionGoalTimeframeInDays.Value );
+
+                if ( conversionGoalTrackingTimeframeEnabledOrExtended || ScheduleICalendarContent != communicationFlow.Schedule?.iCalendarContent )
+                {
+                    // If the new conversion goal timeframe in days is longer than the old value
+                    // then return true to allow the job more time to process the communication flow.
+                    return true;
+                }
+
+                if ( !CommunicationFlowCommunications.SetEquals( GetCommunicationFlowCommunicationsHashSet( communicationFlow.CommunicationFlowCommunications ) ) )
+                {
+                    // Messages were added or removed or schedules were updated.
+                    return true;
+                }
+
+                return false;
+            }
+
+            private HashSet<string> GetCommunicationFlowCommunicationsHashSet( IEnumerable<CommunicationFlowCommunication> communicationFlowCommunications )
+            {
+                return communicationFlowCommunications.Select( cfc => $"{cfc.Order}|{cfc.DaysToWait}|{cfc.TimeToSend}|{cfc.Id}" ).ToHashSet();
+            }
+        }
+
+        private class ReprocessCommunicationFlowMessagesSnapshot
+        {
+            private bool IsMessagingClosed { get; }
+            private CommunicationFlowTriggerType TriggerType { get; }
+            private string ScheduleICalendarContent { get; }
+            private HashSet<string> CommunicationFlowCommunications { get; }
+
+            public ReprocessCommunicationFlowMessagesSnapshot( CommunicationFlow communicationFlow )
+            {
+                IsMessagingClosed = communicationFlow.IsMessagingClosed;
+                TriggerType = communicationFlow.TriggerType;
+                ScheduleICalendarContent = communicationFlow.Schedule?.iCalendarContent;
+                CommunicationFlowCommunications = GetCommunicationFlowCommunicationsHashSet( communicationFlow.CommunicationFlowCommunications );
+            }
+
+            public bool IsReprocessingRequired( CommunicationFlow communicationFlow )
+            {
+                if ( !IsMessagingClosed )
+                {
+                    // Messaging is still open so reprocessing is not needed.
+                    return false;
+                }
+
+                if ( TriggerType != communicationFlow.TriggerType || ScheduleICalendarContent != communicationFlow.Schedule?.iCalendarContent )
+                {
+                    // If the trigger type (recurring, on-demand, one-time) or schedule has changed
+                    // then return true to allow the job more time to process the communication flow.
+                    return true;
+                }
+
+                if ( !CommunicationFlowCommunications.SetEquals( GetCommunicationFlowCommunicationsHashSet( communicationFlow.CommunicationFlowCommunications ) ) )
+                {
+                    // Messages were added or removed or messaging schedules were updated.
+                    return true;
+                }
+
+                return false;
+            }
+
+            private HashSet<string> GetCommunicationFlowCommunicationsHashSet( IEnumerable<CommunicationFlowCommunication> communicationFlowCommunications )
+            {
+                return communicationFlowCommunications.Select( cfc => $"{cfc.Order}|{cfc.DaysToWait}|{cfc.TimeToSend}|{cfc.Id}" ).ToHashSet();
+            }
+        }
+
         /// <inheritdoc/>
         private bool UpdateEntityFromBag( RockContext rockContext, CommunicationFlow entity, CommunicationFlowBag bag )
         {
+            var reprocessConversionsSnapshot = new ReprocessCommunicationFlowConversionsSnapshot( entity );
+            var reprocessMessagesSnapshot = new ReprocessCommunicationFlowMessagesSnapshot( entity );
+
             var communicationTemplateService = new CommunicationTemplateService( rockContext );
             var communicationFlowCommunicationService = new CommunicationFlowCommunicationService( rockContext );
 
@@ -1654,7 +1752,7 @@ namespace Rock.Blocks.Communication
             foreach ( var communicationFlowCommunication in entity.CommunicationFlowCommunications )
             {
                 var communicationFlowCommunicationBag = updatedEntityToBagMappings[communicationFlowCommunication];
-                
+
                 if ( communicationFlowCommunication.CommunicationTemplate.Guid != communicationFlowCommunicationBag.CommunicationTemplate.Guid )
                 {
                     var communicationTemplate = communicationTemplateService.GetWithCommunicationTemplateBagIncludes( communicationFlowCommunicationBag.CommunicationTemplate.Guid );
@@ -1694,6 +1792,27 @@ namespace Rock.Blocks.Communication
                     Order = communicationFlowCommunicationBag.Order,
                     TimeToSend = communicationFlowCommunicationBag.TimeToSend
                 } );
+            }
+
+            // If the flow is currently marked closed but messages have changed, then remove the closed flag so the job can reprocess the flow.
+            if ( reprocessConversionsSnapshot.IsReprocessingRequired( entity ) )
+            {
+                entity.IsConversionGoalTrackingClosed = false;
+
+                foreach ( var instance in entity.CommunicationFlowInstances )
+                {
+                    instance.IsConversionGoalTrackingCompleted = false;
+                }
+            }
+
+            if ( reprocessMessagesSnapshot.IsReprocessingRequired( entity ) )
+            {
+                entity.IsMessagingClosed = false;
+
+                foreach ( var instance in entity.CommunicationFlowInstances )
+                {
+                    instance.IsMessagingCompleted = false;
+                }
             }
 
             return true;
