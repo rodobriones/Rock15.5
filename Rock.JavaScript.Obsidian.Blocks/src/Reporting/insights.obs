@@ -10,7 +10,7 @@
                 <hr class="section-header-hr">
             </div>
             <div v-if="blockProperties.isDemographicsShown" class="row">
-                <div v-if="blockProperties.isConnectionStatusShown" class="col-md-3">
+                <div v-if="blockProperties.isConnectionStatusShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Connection Status">
                         <BarChart v-if="barSeriesDataExists(connectionStatusChartBarSeries)"
                                   :labels="connectionStatusChartBag.labels ?? []"
@@ -28,7 +28,7 @@
                         <NotificationBox v-else alertType="info">There is no data on connection status demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isAgeShown" class="col-md-3">
+                <div v-if="blockProperties.isAgeShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Age">
                         <BarChart v-if="barSeriesDataExists(ageChartBarSeries)"
                                   :labels="ageChartBag.labels ?? []"
@@ -46,7 +46,7 @@
                         <NotificationBox v-else alertType="info">There is no data on age demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isMaritalStatusShown" class="col-md-3">
+                <div v-if="blockProperties.isMaritalStatusShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Marital Status">
                         <BarChart v-if="barSeriesDataExists(maritalStatusChartBarSeries)"
                                   :labels="maritalStatusChartBag.labels ?? []"
@@ -64,7 +64,7 @@
                         <NotificationBox v-else alertType="info">There is no data on marital status demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isGenderShown" class="col-md-3">
+                <div v-if="blockProperties.isGenderShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Gender">
                         <PieChart v-if="pieSeriesDataExists(genderChartPieSeries)"
                                   :labels="genderChartBag.labels ?? []"
@@ -75,7 +75,7 @@
                         <NotificationBox v-else alertType="info">There is no data on gender demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isRaceShown">
+                <div v-if="blockProperties.isRaceShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Race">
                         <PieChart v-if="pieSeriesDataExists(raceChartPieSeries)"
                                   :labels="raceChartBag.labels ?? []"
@@ -86,7 +86,7 @@
                         <NotificationBox v-else alertType="info">There is no data on race demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isEthnicityShown" class="col-md-3">
+                <div v-if="blockProperties.isEthnicityShown" class="col-md-3" style="min-width: 370px;">
                     <Panel title="Ethnicity">
                         <PieChart v-if="pieSeriesDataExists(ethnicityChartPieSeries)"
                                   :labels="ethnicityChartBag.labels ?? []"
