@@ -696,6 +696,12 @@ namespace Rock.Blocks.Reporting
             }
 
             var percent = ( decimal ) count / total * 100;
+
+            if ( percent > 0 && percent < 0.01m )
+            {
+                return "0.01";
+            }
+
             return percent.ToString( "0.##" ); // 2 decimal places max
         }
 
