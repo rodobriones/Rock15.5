@@ -64,7 +64,8 @@
                                 @click="onEdit">
                         Edit
                     </RockButton>
-                    <RockButton :btnSize="BtnSize.Default"
+                    <RockButton v-if="!config.entity?.isSystem"
+                                :btnSize="BtnSize.Default"
                                 :btnType="BtnType.Link"
                                 @click="onDelete">
                         Delete
