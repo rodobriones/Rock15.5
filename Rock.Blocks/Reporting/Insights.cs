@@ -215,11 +215,11 @@ namespace Rock.Blocks.Reporting
                 }
                 if ( GetAttributeValue( AttributeKey.ShowConnectionStatus ).AsBoolean() )
                 {
-                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty( activeAlivePersons, "ConnectionStatusValueId", "Demographics", "ConnectionStatus" ) );
+                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty<BarSeriesBag>( activeAlivePersons, "ConnectionStatusValueId", "Demographics", "ConnectionStatus", true ) );
                 }
                 if ( GetAttributeValue( AttributeKey.ShowMaritalStatus ).AsBoolean() )
                 {
-                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty( activeAlivePersons, "MaritalStatusValueId", "Demographics", "MaritalStatus" ) );
+                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty<BarSeriesBag>( activeAlivePersons, "MaritalStatusValueId", "Demographics", "MaritalStatus", true ) );
                 }
                 if ( GetAttributeValue( AttributeKey.ShowAge ).AsBoolean() )
                 {
@@ -227,11 +227,11 @@ namespace Rock.Blocks.Reporting
                 }
                 if ( GetAttributeValue( AttributeKey.ShowEthnicity ).AsBoolean() )
                 {
-                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty( activeAlivePersons, "EthnicityValueId", "Demographics", "Ethnicity" ) );
+                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty<PieSeriesBag>( activeAlivePersons, "EthnicityValueId", "Demographics", "Ethnicity", false ) );
                 }
                 if ( GetAttributeValue( AttributeKey.ShowRace ).AsBoolean() )
                 {
-                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty( activeAlivePersons, "RaceValueId", "Demographics", "Race" ) );
+                    box.ChartDataBags.Add( GetChartDataBagByPercentageOfPersonProperty<PieSeriesBag>( activeAlivePersons, "RaceValueId", "Demographics", "Race", false ) );
                 }
             }
 
@@ -368,47 +368,71 @@ namespace Rock.Blocks.Reporting
         }
 
         /// <summary>
-        /// Gets the chart data bag by percentage of the provided property.
+        /// Gets the chart data bag by percentage of the provided property, using a generic chart series type.
         /// </summary>
+        /// <typeparam name="TSeries">The type of chart series to use, must implement <see cref="IChartSeriesBag"/> and have a parameterless constructor.</typeparam>
         /// <param name="persons">A collection of <see cref="PersonViewModel"/> representing the persons to be included in the chart data.</param>
         /// <param name="propertyName">A string representing a valid property of <see cref="PersonViewModel"/>.</param>
+        /// <param name="category">The insight category.</param>
+        /// <param name="subcategory">The insight subcategory.</param>
         /// <returns>
         /// An <see cref="InsightsChartDataBag"/> containing the percentage distribution of the specified property among the provided persons.
         /// </returns>
         /// <exception cref="ArgumentException">Thrown when the property name does not exist on <see cref="PersonViewModel"/>.</exception>
-        private InsightsChartDataBag GetChartDataBagByPercentageOfPersonProperty( IEnumerable<PersonViewModel> persons,
-                                                                                  string propertyName,
-                                                                                  string category,
-                                                                                  string subcategory )
+        private InsightsChartDataBag GetChartDataBagByPercentageOfPersonProperty<TSeries>(
+            IEnumerable<PersonViewModel> persons,
+            string propertyName,
+            string category,
+            string subcategory,
+            bool isPercentage )
+            where TSeries : class, IChartSeriesBag, new()
         {
-            var chartBag = BuildChartBag<BarSeriesBag>();
+            var chartBag = BuildChartBag<TSeries>();
 
-            var property = typeof( PersonViewModel ).GetProperty( propertyName );
+            var property = typeof(PersonViewModel).GetProperty(propertyName);
 
-            if ( property == null )
+            if (property == null)
             {
-                throw new ArgumentException( $"Property '{propertyName}' does not exist on PersonViewModel." );
+                throw new ArgumentException($"Property '{propertyName}' does not exist on PersonViewModel.");
             }
 
-            var labelCounts = persons
-                .Select( person =>
-                {
-                    var value = property.GetValue( person );
-                    if ( value == null )
+            var labelCounts = isPercentage
+                ? persons
+                    .Select(person =>
                     {
-                        return "Unknown";
-                    }
-                    if ( value is int intValue )
+                        var value = property.GetValue(person);
+                        if (value == null)
+                        {
+                            return "Unknown";
+                        }
+                        if (value is int intValue)
+                        {
+                            var definedValue = DefinedValueCache.Get(intValue);
+                            return definedValue?.Value ?? "Unknown";
+                        }
+                        return value.ToString();
+                    })
+                    .GroupBy(label => label)
+                    .ToDictionary(g => g.Key, g => GetPercentage(g.Count(), persons.Count()).ToString())
+                : persons
+                    .Select(person =>
                     {
-                        var definedValue = DefinedValueCache.Get( intValue );
-                        return definedValue?.Value ?? "Unknown";
-                    }
-                    return value.ToString();
-                } )
-                .GroupBy( label => label )
-                .ToDictionary( g => g.Key, g => GetPercentage( g.Count(), persons.Count() ).ToString() );
+                        var value = property.GetValue(person);
+                        if (value == null)
+                        {
+                            return "Unknown";
+                        }
+                        if (value is int intValue)
+                        {
+                            var definedValue = DefinedValueCache.Get(intValue);
+                            return definedValue?.Value ?? "Unknown";
+                        }
+                        return value.ToString();
+                    })
+                    .GroupBy(label => label)
+                    .ToDictionary(g => g.Key, g => g.Count().ToString());
 
-            PushChartDataIntoChartBag<BarSeriesBag>( chartBag, labelCounts, isPercentage: true );
+            PushChartDataIntoChartBag<TSeries>( chartBag, labelCounts, isPercentage );
 
             return new InsightsChartDataBag
             {

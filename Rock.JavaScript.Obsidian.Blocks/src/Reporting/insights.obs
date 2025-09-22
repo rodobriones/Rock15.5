@@ -75,38 +75,24 @@
                         <NotificationBox v-else alertType="info">There is no data on gender demographics.</NotificationBox>
                     </Panel>
                 </div>
-                <div v-if="blockProperties.isRaceShown" class="col-md-3">
+                <div v-if="blockProperties.isRaceShown">
                     <Panel title="Race">
-                        <BarChart v-if="barSeriesDataExists(raceChartBarSeries)"
+                        <PieChart v-if="pieSeriesDataExists(raceChartPieSeries)"
                                   :labels="raceChartBag.labels ?? []"
-                                  :series="raceChartBarSeries"
-                                  :categoryShowAllTicks="true"
-                                  :categoryShowGridLines="true"
-                                  :hideLegend="true"
-                                  :horizontal="false"
-                                  :overlap="false"
-                                  :stack="false"
-                                  type="percent"
-                                  :unfilled="false"
-                                  :valueHideGridLines="false"
+                                  :series="raceChartPieSeries"
+                                  :hideLegend="false"
+                                  type="number"
                                   height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on race demographics.</NotificationBox>
                     </Panel>
                 </div>
                 <div v-if="blockProperties.isEthnicityShown" class="col-md-3">
                     <Panel title="Ethnicity">
-                        <BarChart v-if="barSeriesDataExists(ethnicityChartBarSeries)"
+                        <PieChart v-if="pieSeriesDataExists(ethnicityChartPieSeries)"
                                   :labels="ethnicityChartBag.labels ?? []"
-                                  :series="ethnicityChartBarSeries"
-                                  :categoryShowAllTicks="true"
-                                  :categoryShowGridLines="true"
-                                  :hideLegend="true"
-                                  :horizontal="false"
-                                  :overlap="false"
-                                  :stack="false"
-                                  type="percent"
-                                  :unfilled="false"
-                                  :valueHideGridLines="false"
+                                  :series="ethnicityChartPieSeries"
+                                  :hideLegend="false"
+                                  type="number"
                                   height="300px" />
                         <NotificationBox v-else alertType="info">There is no data on ethnicity demographics.</NotificationBox>
                     </Panel>
@@ -231,11 +217,11 @@
 
     let raceChartDataBag: InsightsChartDataBag;
     let raceChartBag: ChartBag;
-    let raceChartBarSeries: BarSeries[];
+    let raceChartPieSeries: PieSeries[];
 
     let ethnicityChartDataBag: InsightsChartDataBag;
     let ethnicityChartBag: ChartBag;
-    let ethnicityChartBarSeries: BarSeries[];
+    let ethnicityChartPieSeries: PieSeries[];
 
     // #endregion
 
@@ -304,7 +290,7 @@
                 bag.insightSubcategory === "Race"
             ) ?? {};
             raceChartBag = raceChartDataBag.chartBag as ChartBag;
-            raceChartBarSeries = raceChartBag.seriesBags as BarSeries[];
+            raceChartPieSeries = raceChartBag.seriesBags as PieSeries[];
         }
         if (blockProperties.isEthnicityShown) {
             ethnicityChartDataBag = chartDataBags.find((bag: InsightsChartDataBag) =>
@@ -312,7 +298,7 @@
                 bag.insightSubcategory === "Ethnicity"
             ) ?? {};
             ethnicityChartBag = ethnicityChartDataBag.chartBag as ChartBag;
-            ethnicityChartBarSeries = ethnicityChartBag.seriesBags as BarSeries[];
+            ethnicityChartPieSeries = ethnicityChartBag.seriesBags as PieSeries[];
         }
     }
 
