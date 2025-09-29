@@ -129,10 +129,10 @@
     });
 
     // #region Values
+    const isCollapsed = ref(props.disableCollapse ? false : props.isCollapsed);
 
     const title = computed((): string | undefined => props.title);
     const icon = computed((): string | undefined => props.icon);
-    const isCollapsed = computed((): boolean => props.isCollapsed && !props.disableCollapse);
     const isOverflowCollapsed = ref(true);
 
     const section = createSection(title, icon, isCollapsed);
