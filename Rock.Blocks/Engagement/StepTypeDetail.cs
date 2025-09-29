@@ -160,6 +160,12 @@ namespace Rock.Blocks.Engagement
             if ( name != null )
             {
                 pageParameters.Add( PageParameterKey.StepTypeId, key );
+
+                var programId = pageReference.GetPageParameter( PageParameterKey.StepProgramId );
+                if ( !string.IsNullOrWhiteSpace( programId ) )
+                {
+                    pageParameters.Add( PageParameterKey.StepProgramId, programId );
+                }
             }
 
             var breadCrumbPageRef = new PageReference( pageReference.PageId, 0, pageParameters );
@@ -658,6 +664,7 @@ namespace Rock.Blocks.Engagement
 
             if ( !string.IsNullOrWhiteSpace( stepProgramId ) )
             {
+                linkedPageQueryParams[PageParameterKey.StepProgramId] = stepProgramId;
                 parentPageQueryParams[PageParameterKey.StepProgramId] = stepProgramId;
             }
 

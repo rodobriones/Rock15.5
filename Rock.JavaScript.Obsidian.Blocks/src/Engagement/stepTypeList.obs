@@ -90,6 +90,8 @@
                       headerClass="text-nowrap"
                       visiblePriority="md" />
 
+        <AttributeColumns :attributes="config.gridDefinition?.attributeFields ?? []" />
+
         <ButtonColumn v-if="config.options?.isBulkEntryColumnVisible"
                       name="bulkEntry"
                       iconClass="ti ti-truck"
@@ -117,7 +119,7 @@
     import { useBlockBrowserBus, useConfigurationValues, useInvokeBlockAction, usePersonPreferences } from "@Obsidian/Utility/block";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { EngagementType, EngagementTypeDescription } from "@Obsidian/Enums/Engagement/engagementType";
-    import Grid, { TextColumn, textValueFilter, DeleteColumn, ReorderColumn, SecurityColumn, NumberColumn, Column, ButtonColumn, numberValueFilter, pickExistingValueFilter } from "@Obsidian/Controls/grid";
+    import Grid, { TextColumn, textValueFilter, DeleteColumn, ReorderColumn, SecurityColumn, NumberColumn, Column, ButtonColumn, AttributeColumns, numberValueFilter, pickExistingValueFilter } from "@Obsidian/Controls/grid";
     import { alert } from "@Obsidian/Utility/dialogs";
     import { ListBlockBox } from "@Obsidian/ViewModels/Blocks/listBlockBox";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";

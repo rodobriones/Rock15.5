@@ -108,7 +108,7 @@ namespace Rock.Blocks.Event
             {
                 registrationFees = new RegistrationRegistrantFeeService( rockContext ).Queryable()
                     .Include( a => a.RegistrationRegistrant.Registration )
-                    .Include( a => a.RegistrationRegistrant.PersonAlias )
+                    .Include( a => a.RegistrationRegistrant.PersonAlias.Person )
                     .Include( a => a.RegistrationTemplateFee )
                     .Include( a => a.RegistrationTemplateFeeItem )
                     .Where( a => a.RegistrationRegistrant.Registration.RegistrationInstanceId == instanceId );

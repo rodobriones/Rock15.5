@@ -149,7 +149,9 @@ namespace Rock.Blocks.Core
         /// <inheritdoc/>
         protected override IQueryable<Schedule> GetListQueryable( RockContext rockContext )
         {
-            var queryable = new ScheduleService( rockContext ).Queryable().Where( a => !string.IsNullOrEmpty( a.Name ) );
+            var queryable = new ScheduleService( rockContext ).Queryable()
+                .Include( a => a.Category )
+                .Where( a => !string.IsNullOrEmpty( a.Name ) );
 
             if ( this.GetAttributeValue(AttributeKey.FilterCategoryFromQueryString).AsBoolean() )
             {

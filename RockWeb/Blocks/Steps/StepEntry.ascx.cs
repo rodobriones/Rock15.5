@@ -836,11 +836,12 @@ namespace RockWeb.Blocks.Steps
 
             // Going forward, we'd like to use page parameters with this new naming convention (Person),
             // but we still have to support the original convention (PersonId).
+            StepType stepType = null;
+
             if ( personKey.IsNotNullOrWhiteSpace() )
             {
                 parameters.Add( ParameterKey.Person, personKey );
             }
-            // Fall-back logic:
             else if ( personIdParam.HasValue )
             {
                 parameters.Add( ParameterKey.PersonId, personIdParam.Value.ToString() );
@@ -851,11 +852,21 @@ namespace RockWeb.Blocks.Steps
             }
             else
             {
-                var stepType = GetStepType();
+                stepType = GetStepType();
                 if ( stepType != null )
                 {
                     parameters.Add( ParameterKey.StepTypeId, stepType.IdKey );
                 }
+            }
+
+            if ( stepType == null )
+            {
+                stepType = GetStepType();
+            }
+            
+            if ( stepType != null )
+            {
+                parameters.Add( "ProgramId", stepType.StepProgramId.ToString() );
             }
 
             if ( page.IsNullOrWhiteSpace() )

@@ -495,11 +495,41 @@
 
 .grid-obsidian {
     .grid-row:has(.table-empty) {
-    border-bottom: 1px solid var(--color-interface-soft);
+        border-bottom: 1px solid var(--color-interface-soft);
+        border-bottom-left-radius: var(--rounded-small);
+        border-bottom-right-radius: var(--rounded-small);
+    &:hover {
+        background-color: transparent;
+    }
     }
 
     .grid-row:has(.table-empty) .grid-cell {
-    border-bottom: none;
+        border-bottom: none;
+        border-bottom-left-radius: var(--rounded-small);
+    &:hover {
+        background-color: transparent;
+    }
+    }
+
+    .grid-hover .grid-row:hover:has(.table-empty) .grid-cell {
+        background-color: transparent;
+    }
+
+
+    // If there is no footer content, round the bottom corners of the last row
+    &:has(.grid-footing:empty) .grid-row {
+        border-bottom-left-radius: var(--rounded-medium);
+        border-bottom-right-radius: var(--rounded-medium);
+
+        .grid-cell {
+            border-bottom: none;
+        }
+
+        .grid-cell:first-child,
+        .grid-cell:last-child {
+        border-bottom-left-radius: var(--rounded-medium);
+        border-bottom-right-radius: var(--rounded-medium);
+        }
     }
 }
 

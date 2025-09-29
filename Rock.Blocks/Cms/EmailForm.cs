@@ -425,11 +425,37 @@ namespace Rock.Blocks.Cms
                 EnabledLavaCommands = enabledLavaCommands
             };
 
-            var recipientEmails = GetAttributeValue( AttributeKey.RecipientEmail ).Split( ',' ).ToList();
+            var personService = new PersonService( RockContext );
+            var saveCommunicationHistory = GetAttributeValue( AttributeKey.SaveCommunicationHistory ).AsBoolean();
+
+            var recipientEmails = GetAttributeValue( AttributeKey.RecipientEmail )
+                .Split( ',' )
+                .Select( e => e.Trim() )
+                .ToList();
+
             foreach ( var emailAddress in recipientEmails )
             {
                 var email = emailAddress.ResolveMergeFields( mergeFields, enabledLavaCommands );
-                message.AddRecipient( RockEmailMessageRecipient.CreateAnonymous( email, mergeFields ) );
+                
+                RockEmailMessageRecipient recipient;
+                if ( saveCommunicationHistory )
+                {
+                    var person = personService.GetPersonFromEmailAddress( email, false );
+                    if ( person != null )
+                    {
+                        recipient = new RockEmailMessageRecipient( person, mergeFields );
+                    }
+                    else
+                    {
+                        recipient = RockEmailMessageRecipient.CreateAnonymous( email, mergeFields );
+                    }
+                }
+                else
+                {
+                    recipient = RockEmailMessageRecipient.CreateAnonymous( email, mergeFields );
+                }
+                
+                message.AddRecipient( recipient );
             }
 
             message.CCEmails = GetAttributeValue( AttributeKey.CCEmail ).ResolveMergeFields( mergeFields, enabledLavaCommands ).Split( ',' ).ToList();
@@ -442,7 +468,7 @@ namespace Rock.Blocks.Cms
             message.AppRoot = RequestContext.RootUrlPath.EnsureTrailingForwardslash();
             message.ThemeRoot = RequestContext.RootUrlPath + RequestContext.ResolveRockUrl( "~~/" );
 
-            message.CreateCommunicationRecord = GetAttributeValue( AttributeKey.SaveCommunicationHistory ).AsBoolean();
+            message.CreateCommunicationRecord = saveCommunicationHistory;
 
             foreach ( var attachment in attachments )
             {

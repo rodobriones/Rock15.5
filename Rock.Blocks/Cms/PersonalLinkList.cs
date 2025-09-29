@@ -17,6 +17,7 @@
 
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
@@ -103,7 +104,9 @@ namespace Rock.Blocks.Cms
         protected override IQueryable<PersonalLink> GetListQueryable( RockContext rockContext )
         {
             int? sectionId = GetPersonalLinkSectionId();
-            var queryable = new PersonalLinkService( rockContext ).Queryable().Where( a => a.SectionId == sectionId );
+            var queryable = new PersonalLinkService( rockContext ).Queryable()
+                .Include( a => a.Section )
+                .Where( a => a.SectionId == sectionId );
 
             // Filter by: Name
             var name = GetBlockPersonPreferences().GetValue( UserPreferenceKey.Name );
