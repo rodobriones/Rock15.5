@@ -73,21 +73,21 @@
                          label="Google Analytics Code"
                          help="Provided Google Analytics code will track visits on all site pages." />
 
-                <CheckBox v-model="enableVisitorTracking"
-                          label="Enable Visitor Tracking"
-                          help="Track anonymous visitor activity on the site." />
+                <InlineCheckBox v-model="enableVisitorTracking"
+                                label="Enable Visitor Tracking"
+                                help="Track anonymous visitor activity on the site." />
 
-                <CheckBox v-model="requiresEncryption"
-                          label="Require Encryption"
-                          help="Always redirect site traffic to HTTPS for security." />
+                <InlineCheckBox v-model="requiresEncryption"
+                                label="Require Encryption"
+                                help="Always redirect site traffic to HTTPS for security." />
 
-                <CheckBox v-model="enablePersonalization"
-                          label="Enable Personalization"
-                          help=" Personalize pages based on user activity." />
+                <InlineCheckBox v-model="enablePersonalization"
+                                label="Enable Personalization"
+                                help=" Personalize pages based on user activity." />
 
-                <CheckBox v-model="enabledForShortening"
-                          label="Enable Shortlink Option"
-                          help="Allow this site (and its primary domain) to be available when creating shortlinks." />
+                <InlineCheckBox v-model="enabledForShortening"
+                                label="Enable Shortlink Option"
+                                help="Allow this site (and its primary domain) to be available when creating shortlinks." />
             </ContentStack>
         </ContentSection>
         <br />
@@ -187,9 +187,9 @@
                         isCollapsed>
             <ContentStack title="Traffic"
                           description="Configure how visitors are redirected and how their activity is logged.">
-                <CheckBox v-model="enablePageViews"
-                          label="Track Page Views"
-                          help="Record page view events for analytics." />
+                <InlineCheckBox v-model="enablePageViews"
+                                label="Track Page Views"
+                                help="Record page view events for analytics." />
 
 
                 <ConditionalWell v-show="enablePageViews">
@@ -198,9 +198,9 @@
                                help="How many days to retain page view logs. Leave blank to keep indefinitely." />
                 </ConditionalWell>
 
-                <CheckBox v-model="enableMobileRedirect"
-                          label="Enable Mobile Redirect"
-                          help="Redirect visitors on mobile devices to a mobile page or external URL." />
+                <InlineCheckBox v-model="enableMobileRedirect"
+                                label="Enable Mobile Redirect"
+                                help="Redirect visitors on mobile devices to a mobile page or external URL." />
 
                 <ConditionalWell v-show="enableMobileRedirect">
                     <PagePicker v-model="mobilePageComputed"
@@ -213,14 +213,14 @@
                              label="Mobile Redirect URL"
                              help="External URL to send mobile visitors to (overrides Mobile Page)." />
 
-                    <CheckBox v-model="redirectTablets"
-                              label="Include Tablet Devices"
-                              help="Redirect tablet users as well (in addition to phones)." />
+                    <InlineCheckBox v-model="redirectTablets"
+                                    label="Include Tablet Devices"
+                                    help="Redirect tablet users as well (in addition to phones)." />
                 </ConditionalWell>
 
-                <CheckBox v-model="allowIndexing"
-                          label="Allow Indexing"
-                          help="Controls whether search engines (like Google or Bing) can index this site’s pages." />
+                <InlineCheckBox v-model="allowIndexing"
+                                label="Allow Indexing"
+                                help="Controls whether search engines (like Google or Bing) can index this site’s pages." />
             </ContentStack>
             <ContentStack>
                 <hr class="section-header-hr">
@@ -236,13 +236,13 @@
                          label="Index Start Path"
                          help="Start page or path for the Rock site indexer." />
 
-                <CheckBox v-model="enableExclusiveRoutes"
-                          label="Restrict Routes to This Site"
-                          help="Limit routes so they only work on this site’s configured domain(s). Ignored for routes marked ‘Is Global’." />
+                <InlineCheckBox v-model="enableExclusiveRoutes"
+                                label="Restrict Routes to This Site"
+                                help="Limit routes so they only work on this site’s configured domain(s). Ignored for routes marked ‘Is Global’." />
 
-                <CheckBox v-model="disablePredictableIds"
-                          label="Disable Predictable IDs"
-                          help="Replaces simple number IDs in URLs with secure, non-guessable values. This prevents someone from guessing other records by changing numbers (e.g., 112 → 113). Enable only if your site and blocks don’t depend on numeric IDs in the URL." />
+                <InlineCheckBox v-model="disablePredictableIds"
+                                label="Disable Predictable IDs"
+                                help="Replaces simple number IDs in URLs with secure, non-guessable values. This prevents someone from guessing other records by changing numbers (e.g., 112 → 113). Enable only if your site and blocks don’t depend on numeric IDs in the URL." />
             </ContentStack>
             <ContentStack>
                 <hr class="section-header-hr">
@@ -261,6 +261,7 @@
     import { PropType, reactive, ref, watch, computed } from "vue";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import InlineCheckBox from "@Obsidian/Controls/inlineCheckBox.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
     import NumberBox from "@Obsidian/Controls/numberBox.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
