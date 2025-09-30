@@ -124,7 +124,6 @@
 
     const theFilter = ref<InteractionSegmentFilterBag>({} as InteractionSegmentFilterBag);
 
-    const filterExpressionType = ref<boolean>((props.modelValue.interactionFilterExpressionType ?? FilterExpressionType.GroupAny) === FilterExpressionType.GroupAll);
     const comparisonTypes = getFilteredComparisonTypeOptions(numericComparisonTypes);
     const isModalVisible = ref(false);
     const isEditing = ref(false);
@@ -157,6 +156,18 @@
             dateRangeText: formatDelimitedValues(f.slidingDateRangeDelimitedValues ?? "")
         }));
         return { rows };
+    });
+
+    const filterExpressionType = computed<boolean>({
+        get() {
+            return (props.modelValue.interactionFilterExpressionType ?? FilterExpressionType.GroupAny) === FilterExpressionType.GroupAll;
+        },
+        set(value: boolean) {
+            emit("update:modelValue", {
+                ...props.modelValue,
+                interactionFilterExpressionType: value ? FilterExpressionType.GroupAll : FilterExpressionType.GroupAny
+            });
+        }
     });
 
     const slidingDateRange = computed<SlidingDateRange | null>({
@@ -263,7 +274,6 @@
 
         emit("update:modelValue", {
             ...props.modelValue,
-            interactionFilterExpressionType: filterExpressionType.value ? FilterExpressionType.GroupAll : FilterExpressionType.GroupAny,
             interactionSegmentFilters: filters
         });
 

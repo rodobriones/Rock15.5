@@ -31,8 +31,7 @@
     });
 
     const emit = defineEmits<{
-        (e: "update:modelValue", value: ListItemBag | ListItemBag[] | null): void,
-        (e: "componentNamesLoaded", value: ListItemBag[]): void;
+        (e: "update:modelValue", value: ListItemBag | ListItemBag[] | null): void;
     }>();
 
     // #region Values
@@ -73,7 +72,6 @@
 
         if (result.isSuccess && result.data) {
             loadedItems.value = result.data;
-            emit("componentNamesLoaded", result.data);
             return result.data;
         }
         else {

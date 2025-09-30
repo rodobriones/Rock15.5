@@ -119,7 +119,6 @@
 
     const theFilter = ref<SessionCountSegmentFilterBag>({} as SessionCountSegmentFilterBag);
 
-    const filterExpressionType = ref<boolean>((props.modelValue.sessionFilterExpressionType ?? FilterExpressionType.GroupAny) === FilterExpressionType.GroupAll);
     const comparisonTypes = getFilteredComparisonTypeOptions(numericComparisonTypes);
     const sites = ref(props.sites ?? []);
     const isModalVisible = ref(false);
@@ -138,6 +137,18 @@
             description: f.description ?? "",
         }));
         return { rows };
+    });
+
+    const filterExpressionType = computed<boolean>({
+        get() {
+            return (props.modelValue.sessionFilterExpressionType ?? FilterExpressionType.GroupAny) === FilterExpressionType.GroupAll;
+        },
+        set(value: boolean) {
+            emit("update:modelValue", {
+                ...props.modelValue,
+                sessionFilterExpressionType: value ? FilterExpressionType.GroupAll : FilterExpressionType.GroupAny
+            });
+        }
     });
 
     const slidingDateRange = computed<SlidingDateRange | null>({
@@ -224,7 +235,6 @@
 
         emit("update:modelValue", {
             ...props.modelValue,
-            sessionFilterExpressionType: filterExpressionType.value ? FilterExpressionType.GroupAll : FilterExpressionType.GroupAny,
             sessionSegmentFilters: filters
         });
 
