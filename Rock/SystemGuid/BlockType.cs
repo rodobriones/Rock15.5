@@ -285,11 +285,6 @@ namespace Rock.SystemGuid
         #region Mobile Block Types
 
         /// <summary>
-        /// The mobile Add Contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.AddContact">Add Contact</see> block type.
-        /// </summary>
-        public const string MOBILE_ADD_CONTACT = "DE2F490D-2598-40E8-8170-4753DDC0A0B0";
-
-        /// <summary>
         /// The mobile Connection &gt; <see cref="Rock.Blocks.Types.Mobile.Connection.ConnectionTypeList">Connection Type List</see> block type.
         /// </summary>
         public const string MOBILE_CONNECTION_CONNECTION_TYPE_LIST = "31E1FCCF-C4B1-4D84-992C-DEACAF3697CF";
@@ -313,11 +308,6 @@ namespace Rock.SystemGuid
         /// The mobile Connection &gt; <see cref="Rock.Blocks.Types.Mobile.Connection.AddConnectionRequest">Add Connection Request</see> block type.
         /// </summary>
         public const string MOBILE_CONNECTION_ADD_CONNECTION_REQUEST = "1380115A-B3F0-49BC-A6BC-432A59DC27A2";
-
-        /// <summary>
-        /// The mobile contact profile &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.ContactProfile">Contact Profile</see> block type."/>
-        /// </summary>
-        public const string MOBILE_CONTACT_PROFILE = "40E200AD-1E29-4855-A8A4-8055A63753FF";
 
         /// <summary>
         /// The mobile Core &gt; <see cref="Rock.Blocks.Types.Mobile.Core.Search"/> block type.
@@ -432,7 +422,22 @@ namespace Rock.SystemGuid
         /// <summary>
         /// The mobile my contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContacts">My Contact</see> block type.
         /// </summary>
-        public const string MOBILE_MY_CONTACTS = "5C8E3D6E-1F2D-4A2D-8E3C-2F3B1C6D7E8F";
+        public const string MOBILE_OUTREACH_MY_CONTACTS = "5C8E3D6E-1F2D-4A2D-8E3C-2F3B1C6D7E8F";
+
+        /// <summary>
+        /// The mobile contact profile &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.ContactProfile">Contact Profile</see> block type."/>
+        /// </summary>
+        public const string MOBILE_OUTREACH_CONTACT_PROFILE = "40E200AD-1E29-4855-A8A4-8055A63753FF";
+
+        /// <summary>
+        /// The mobile Add Contact &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.AddContact">Add Contact</see> block type.
+        /// </summary>
+        public const string MOBILE_OUTREACH_ADD_CONTACT = "DE2F490D-2598-40E8-8170-4753DDC0A0B0";
+
+        /// <summary>
+        /// The mobile Outreach Onboarding &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.OutreachOnboarding">Outreach Onboarding</see> block type.
+        /// </summary>
+        public const string MOBILE_OUTREACH_OUTREACH_ONBOARDING = "5F1E3C4B-6D7E-4A8F-9C2B-3D4E5F6A7B8C";
 
         #endregion
 

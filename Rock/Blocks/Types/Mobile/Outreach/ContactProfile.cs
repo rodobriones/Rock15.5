@@ -21,8 +21,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [Description( "Allow you to view the contact detail." )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
-    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_CONTACT_PROFILE_BLOCK_TYPE )]
-    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_CONTACT_PROFILE )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_CONTACT_PROFILE_BLOCK_TYPE )]
+    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_CONTACT_PROFILE )]
     public class ContactProfile : RockBlockType
     {
         #region Block Action

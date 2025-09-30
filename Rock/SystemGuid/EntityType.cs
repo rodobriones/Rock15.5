@@ -473,11 +473,6 @@ namespace Rock.SystemGuid
         public const string MOBILE_ANSWER_TO_PRAYER_BLOCK_TYPE = "759AFCA0-9E0B-4A22-A402-CD4499F2A457";
 
         /// <summary>
-        /// The Guid for the entity <see cref="Blocks.Types.Mobile.Outreach.AddContact"/>
-        /// </summary>
-        public const string MOBILE_ADD_CONTACT_BLOCK_TYPE = "2742790B-031B-4CF3-9489-B84E50EA99BA";
-
-        /// <summary>
         /// The GUID for the entity Rock.Blocks.Types.Mobile.Content
         /// </summary>
         public const string MOBILE_CONTENT_BLOCK_TYPE = "B9ADB0A5-62B0-4D74-BDFF-1AA959788602";
@@ -538,14 +533,24 @@ namespace Rock.SystemGuid
         public const string MOBILE_CONNECTION_ADD_CONNECTION_REQUEST = "F41E7BE3-2854-40FF-82C8-1FDEA12B8B2F";
 
         /// <summary>
-        /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Connection.AddConnectionRequest"/>
+        /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.ContactProfile"/>
         /// </summary>
-        public const string MOBILE_CONTACT_PROFILE_BLOCK_TYPE = "5A8E8F2C-1F1E-4D3A-9C8E-3B6D9F1C4E2B";
+        public const string MOBILE_OUTREACH_CONTACT_PROFILE_BLOCK_TYPE = "5A8E8F2C-1F1E-4D3A-9C8E-3B6D9F1C4E2B";
+
+        /// <summary>
+        /// The Guid for the entity <see cref="Blocks.Types.Mobile.Outreach.AddContact"/>
+        /// </summary>
+        public const string MOBILE_OUTREACH_ADD_CONTACT_BLOCK_TYPE = "2742790B-031B-4CF3-9489-B84E50EA99BA";
+
+        /// <summary>
+        /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.OutreachOnboarding"/>.
+        /// </summary>
+        public const string MOBILE_OUTREACH_OUTREACH_ONBOARDING_BLOCK_TYPE = "C1A3F4E2-7F4B-4D3A-8C2E-5B6D9F1C4E3C";
 
         /// <summary>
         /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContacts"/>.
         /// </summary>
-        public const string MOBILE_MY_CONTACTS_BLOCK_TYPE = "D1CFF2E3-0E3A-4F2D-8F1D-4C3E3F2B6F2A";
+        public const string MOBILE_OUTREACH_MY_CONTACTS_BLOCK_TYPE = "D1CFF2E3-0E3A-4F2D-8F1D-4C3E3F2B6F2A";
 
         /// <summary>
         /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Prayer.MyPrayerRequests"/>.

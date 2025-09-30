@@ -31,8 +31,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
     #endregion
 
-    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_ADD_CONTACT_BLOCK_TYPE )]
-    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_ADD_CONTACT )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_ADD_CONTACT_BLOCK_TYPE )]
+    [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_ADD_CONTACT )]
     public class AddContact : RockBlockType
     {
         #region Keys
