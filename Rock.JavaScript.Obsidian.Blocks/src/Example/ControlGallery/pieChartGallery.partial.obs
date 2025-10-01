@@ -22,6 +22,16 @@
                                      label="Chart Title"
                                      @update:modelValue="title = $event" />
                         </div>
+                        <div class="autolayout">
+                            <TextBox :modelValue="height ?? ''"
+                                     label="Chart Container Height"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="height = $event" />
+                            <TextBox :modelValue="width ?? ''"
+                                     label="Chart Container Width"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="width = $event" />
+                        </div>
                     </ContentStack>
 
                     <ContentStack title="Data">
@@ -132,6 +142,8 @@
             data: generateRandomData(4, 10, 40, false)
         }
     ]);
+    const height = ref<string | undefined>();
+    const width = ref<string | undefined>();
     const hasCustomTooltip = ref<boolean | undefined>();
     const seriesCount = ref<number>(series.value.length);
     const legendPosition = ref<LegendPosition | undefined>();
@@ -150,8 +162,14 @@
             `:series="series"`
         ];
 
+        if (!isNullish(height.value)) {
+            pieChartProps.push(`height="${height.value}"`);
+        }
+        if (!isNullish(width.value)) {
+            pieChartProps.push(`width="${width.value}"`);
+        }
         if (!isNullish(isLegendHidden.value)) {
-            pieChartProps.push(`hideLegend="${isLegendHidden.value}"`);
+            pieChartProps.push(`:hideLegend="${isLegendHidden.value}"`);
         }
         if (!isNullish(legendAlign.value)) {
             pieChartProps.push(`legendAlign="${legendAlign.value}"`);

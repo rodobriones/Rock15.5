@@ -140,6 +140,8 @@ namespace Rock.Model
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
             target.IsActive = source.IsActive;
+            target.IsConversionGoalTrackingClosed = source.IsConversionGoalTrackingClosed;
+            target.IsMessagingClosed = source.IsMessagingClosed;
             target.Name = source.Name;
             target.PublicName = source.PublicName;
             target.ScheduleId = source.ScheduleId;

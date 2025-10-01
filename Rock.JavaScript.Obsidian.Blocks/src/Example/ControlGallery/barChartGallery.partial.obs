@@ -39,6 +39,16 @@
                                      label="Chart Title"
                                      @update:modelValue="title = $event" />
                         </div>
+                        <div class="autolayout">
+                            <TextBox :modelValue="height ?? ''"
+                                     label="Chart Container Height"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="height = $event" />
+                            <TextBox :modelValue="width ?? ''"
+                                     label="Chart Container Width"
+                                     help="CSS size value (e.g., '300px' or '50%')."
+                                     @update:modelValue="width = $event" />
+                        </div>
                     </ContentStack>
 
                     <ContentStack title="Data">
@@ -252,6 +262,8 @@
     const valueHideGridLines = ref<boolean | undefined>();
     const categoryMaxTickCount = ref<number | undefined>();
     const categoryShowAllTicks = ref<boolean | undefined>();
+    const height = ref<string | undefined>();
+    const width = ref<string | undefined>();
     const valueMaxTickCount = ref<number | undefined>();
     const isUnfilled = ref<boolean | undefined>();
     const isOverlapped = ref<boolean | undefined>();
@@ -294,7 +306,13 @@
             barChartProps.push(`:categoryShowAllTicks="${categoryShowAllTicks.value}"`);
         }
         if (!isNullish(categoryShowGridLines.value)) {
-            barChartProps.push(`categoryShowGridLines="${categoryShowGridLines.value}"`);
+            barChartProps.push(`:categoryShowGridLines="${categoryShowGridLines.value}"`);
+        }
+        if (!isNullish(height.value)) {
+            barChartProps.push(`height="${height.value}"`);
+        }
+        if (!isNullish(width.value)) {
+            barChartProps.push(`width="${width.value}"`);
         }
         if (!isNullish(isLegendHidden.value)) {
             barChartProps.push(`:hideLegend="${isLegendHidden.value}"`);
@@ -329,10 +347,10 @@
             }
         }
         if (!isNullish(isUnfilled.value)) {
-            barChartProps.push(`"unfilled="${isUnfilled.value}"`);
+            barChartProps.push(`":unfilled="${isUnfilled.value}"`);
         }
         if (!isNullish(valueHideGridLines.value)) {
-            barChartProps.push(`valueHideGridLines="${valueHideGridLines.value}"`);
+            barChartProps.push(`:valueHideGridLines="${valueHideGridLines.value}"`);
         }
         if (valueLabel.value) {
             barChartProps.push(`valueLabel="${valueLabel.value}"`);

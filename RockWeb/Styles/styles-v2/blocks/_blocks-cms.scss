@@ -116,7 +116,8 @@
     background-color:   var(--color-info-soft);
     border:             0;
 
-    .panel-heading {
+    .panel-heading,
+    .panel-header {
       color:            var(--color-info-strong);
       cursor:           pointer;
       background-color: var(--color-info-soft);
@@ -221,7 +222,8 @@
       border-color:     var(--color-interface-soft);
       box-shadow:       none;
 
-      > .panel-heading {
+      > .panel-heading
+      > .panel-header {
         padding:        0 0 var(--spacing-medium);
         margin-bottom:  var(--spacing-medium);
         background:     none;

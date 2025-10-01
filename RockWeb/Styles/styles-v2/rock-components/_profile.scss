@@ -370,7 +370,8 @@
 }
 
 .profile-notes .notes {
-  .panel-noteadd-visible .panel-heading {
+  .panel-noteadd-visible .panel-heading,
+  .panel-noteadd-visible .panel-header {
     display: none;
   }
 

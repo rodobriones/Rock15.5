@@ -47,6 +47,7 @@ namespace Rock.Blocks.Cms
         Description = "The page that will show the media element details.",
         Key = AttributeKey.DetailPage )]
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "9560305d-5ada-4ce4-a67a-2fe2d606cfb8" )]
     [Rock.SystemGuid.BlockTypeGuid( "a713cbd4-549e-4795-9468-828ee2f8c21d" )]
     [CustomizedGrid]

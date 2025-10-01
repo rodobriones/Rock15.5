@@ -216,12 +216,30 @@ namespace RockWeb.Blocks.Event
             gRegistrants.GridRebind += gRegistrants_GridRebind;
 
             // Add a custom button with an EventHandler that is only in this block.
-            var customActionConfigEventButton = new CustomActionConfigEvent
-            {
-                IconCssClass = "ti ti-users",
-                HelpText = "Communicate to Registrars",
-                EventHandler = LbRegistrarCommunication_Click
-            };
+			var customActionConfigEventButton = new CustomActionConfigEvent
+			{
+				IconCssClass = "ti ti-users",
+				HelpText = "Communicate to Registrars",
+				EventHandler = LbRegistrarCommunication_Click
+			};
+
+            // Ensure visibility of this custom action follows the Communication page security, not the Launch Workflow page.
+            // Fixes: https://github.com/SparkDevNetwork/Rock/issues/6455
+            string communicationUrl = gRegistrants.CommunicationPageRoute;
+			if ( communicationUrl.IsNullOrWhiteSpace() )
+			{
+				var pageRef = this.RockPage.Site.CommunicationPageReference;
+				if ( pageRef.PageId > 0 )
+				{
+					pageRef.Parameters.AddOrReplace( "CommunicationId", "0" );
+					communicationUrl = pageRef.BuildUrl();
+				}
+				else
+				{
+					communicationUrl = "~/Communication/{0}";
+				}
+			}
+			customActionConfigEventButton.Route = communicationUrl;
 
             gRegistrants.Actions.AddCustomActionBlockButton( customActionConfigEventButton );
 

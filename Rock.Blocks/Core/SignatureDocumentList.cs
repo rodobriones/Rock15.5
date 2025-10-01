@@ -50,6 +50,7 @@ namespace Rock.Blocks.Core
         Description = "The page that will show the signature document details.",
         Key = AttributeKey.DetailPage )]
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "b4526eb4-3ca4-47be-b686-4b9fbee2bf4d" )]
     [Rock.SystemGuid.BlockTypeGuid( "6076609b-d4d2-4825-8bb2-8681e99c59f2" )]
     [CustomizedGrid]

@@ -80,7 +80,8 @@
         border-left: 1px solid var(--color-interface-softest);
         border-radius: 0;
     }
-    .panel-palette .panel-heading {
+    .panel-palette .panel-heading,
+    .panel-palette .panel-header {
         font-weight: var(--font-weight-medium);
         text-align: center;
         background: var(--color-interface-softest);

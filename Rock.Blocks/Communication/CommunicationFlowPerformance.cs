@@ -72,6 +72,7 @@ namespace Rock.Blocks.Communication
         {
             public const string ParentPage = "ParentPage";
             public const string MessageMetricsPage = "MessageMetricsPage";
+            public const string MessagesMetricsPage = "MessagesMetricsPage";
             public const string PersonProfilePage = "PersonProfilePage";
         }
 
@@ -118,7 +119,13 @@ namespace Rock.Blocks.Communication
                 {
                     { "CommunicationFlow", PageParameter( PageParameterKey.CommunicationFlow ) },
                     { "CommunicationFlowInstance", "((CommunicationFlowInstanceKey))" },
-                    { "CommunicationFlowInstanceCommunication", "((Key))" }
+                    { "CommunicationFlowInstanceCommunication", "((CommunicationFlowInstanceCommunicationKey))" }
+                } ),
+                [NavigationUrlKey.MessagesMetricsPage] = this.GetLinkedPageUrl( AttributeKey.MessageMetricsPage, new Dictionary<string, string>
+                {
+                    { "CommunicationFlow", PageParameter( PageParameterKey.CommunicationFlow ) },
+                    { "CommunicationFlowCommunication", "((CommunicationFlowCommunicationKey))" },
+                    { "StartDateRange", "((StartDateRange))" }
                 } )
             };
         }
