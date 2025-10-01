@@ -6,7 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Rock.Attribute;
-
+using Rock.Common.Mobile.Enums;
+using Rock.Enums.Outreach;
+using Rock.Mobile;
 using Rock.Model;
 
 namespace Rock.Blocks.Types.Mobile.Outreach
@@ -20,9 +22,68 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [Description( "On boarding for Outreach" )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
+    #region Block Attributes
+
+    [LinkedPage(
+        "Add Contact Page",
+        Description = "Page to link to when user taps on the plus button.",
+        IsRequired = true,
+        Key = AttributeKey.AddContact,
+        Order = 0 )]
+
+    #endregion
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_OUTREACH_ONBOARDING_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_OUTREACH_ONBOARDING )]
     public class OutreachOnboarding : RockBlockType
     {
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string AddContact = "AddContact";
+        }
+
+        #endregion
+
+        #region Block Actions
+
+        [BlockAction]
+        public BlockActionResult FinishOnboarding( OutreachOnboardingOption option )
+        {
+            var personService = new PersonService( RockContext );
+            var person = personService.Get( option.CurrentPersonIdKey );
+
+            person.OutreachTouchpointPrayersPerDay = option.DailyPrayerGoal;
+            person.OutreachTouchpointSchedule = option.DayOfWeekFlags.ToNative();
+
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        #endregion
+
+        #region IRockMobileBlockType Implementation
+
+        /// <inheritdoc />
+        public override object GetMobileConfigurationValues()
+        {
+            return new Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.Configuration
+            {
+                AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull(),
+            };
+        }
+
+        #endregion
+    }
+
+    public class OutreachOnboardingOption
+    {
+        public string CurrentPersonIdKey { get; set; }
+        public DayOfWeekFlag DayOfWeekFlags { get; set; }
+
+        public int DailyPrayerGoal { get; set; }
+
+        public Common.Mobile.Enums.OutreachCadence OutreachCadence { get; set; }
     }
 }

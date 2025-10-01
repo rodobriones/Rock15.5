@@ -14,6 +14,8 @@
 // limitations under the License.
 // </copyright>
 //
+using Google.Apis.Util;
+
 using Rock.Common.Mobile.Enums;
 using Rock.Enums.Mobile;
 using Rock.Web.Cache;
@@ -538,4 +540,68 @@ namespace Rock.Mobile
 
         }
     }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.DayOfWeekFlag"/>.
+    /// </summary>
+    public static class MobileExtensionDayOfWeekFlag
+    {
+
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.DayOfWeekFlag"/> to a web native <see cref="Utility.Enums.DayOfWeekFlag"/>.
+        /// </summary>
+        /// <param name="dayOfWeekFlag"></param>
+        /// <returns></returns>
+        public static Utility.Enums.DayOfWeekFlag ToNative( this Rock.Common.Mobile.Enums.DayOfWeekFlag dayOfWeekFlag )
+        {
+            switch ( dayOfWeekFlag )
+            {
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Sunday:
+                    return Utility.Enums.DayOfWeekFlag.Sunday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Monday:
+                    return Utility.Enums.DayOfWeekFlag.Monday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Tuesday:
+                    return Utility.Enums.DayOfWeekFlag.Tuesday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Wednesday:
+                    return Utility.Enums.DayOfWeekFlag.Wednesday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Thursday:
+                    return Utility.Enums.DayOfWeekFlag.Thursday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Friday:
+                    return Utility.Enums.DayOfWeekFlag.Friday;
+                case Rock.Common.Mobile.Enums.DayOfWeekFlag.Saturday:
+                    return Utility.Enums.DayOfWeekFlag.Saturday;
+                default:
+                    return Utility.Enums.DayOfWeekFlag.None;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="System.DayOfWeek"/> to a mobile <see cref="Rock.Common.Mobile.Enums.DayOfWeekFlag"/>.
+        /// </summary>
+        /// <param name="dayOfWeek"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.DayOfWeekFlag ToMobile( this System.DayOfWeek dayOfWeek )
+        {
+            switch ( dayOfWeek )
+            {
+                case System.DayOfWeek.Sunday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Sunday;
+                case System.DayOfWeek.Monday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Monday;
+                case System.DayOfWeek.Tuesday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Tuesday;
+                case System.DayOfWeek.Wednesday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Wednesday;
+                case System.DayOfWeek.Thursday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Thursday;
+                case System.DayOfWeek.Friday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Friday;
+                case System.DayOfWeek.Saturday:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.Saturday;
+                default:
+                    return Rock.Common.Mobile.Enums.DayOfWeekFlag.None;
+            }
+        }
+    }
+
 }

@@ -2,6 +2,7 @@
 using System.ComponentModel;
 
 using Rock.Attribute;
+using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -181,32 +182,5 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
-    }
-
-    public class ContactProfileBag
-    {
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string PhotoUrl { get; set; }
-        public DateTime LastUpdated { get; set; }
-        public int Gender { get; set; }
-        public string MobilePhone { get; set; }
-        public string Email { get; set; }
-        public int RelationshipFocus { get; set; }
-        public int RelationshipStrength { get; set; }
-        public int? BirthDay { get; set; }
-        public int? BirthMonth { get; set; }
-        public int? BirthYear { get; set; }
-        public int? AnniversaryDay { get; set; }
-        public int? AnniversaryMonth { get; set; }
-        public int? AnniversaryYear { get; set; }
-        public int? SalvationDay { get; set; }
-        public int? SalvationMonth { get; set; }
-        public int? SalvationYear { get; set; }
-        public int? BaptismDay { get; set; }
-        public int? BaptismMonth { get; set; }
-        public int? BaptismYear { get; set; }
-        public string InstagramProfileUrl { get; set; }
-        public string XProfileUrl { get; set; }
     }
 }

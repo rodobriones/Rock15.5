@@ -760,7 +760,7 @@ namespace Rock.Model
         /// Gets or sets the outreach schedule.
         /// </summary>
         [DataMember]
-        public DaysOfWeekFlags OutreachTouchpointSchedule { get; set; }
+        public DayOfWeekFlag OutreachTouchpointSchedule { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether outreach notification is enable.
