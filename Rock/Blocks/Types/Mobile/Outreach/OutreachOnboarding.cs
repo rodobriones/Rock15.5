@@ -47,14 +47,28 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
         #region Block Actions
 
+        /// <summary>
+        /// Finishes the onboarding.
+        /// </summary>
+        /// <param name="option"></param>
+        /// <returns></returns>
         [BlockAction]
         public BlockActionResult FinishOnboarding( OutreachOnboardingOption option )
         {
+            if ( option == null || option.CurrentPersonIdKey == null )
+            {
+                return ActionBadRequest( "Invalid options." );
+            }
             var personService = new PersonService( RockContext );
             var person = personService.Get( option.CurrentPersonIdKey );
+            if ( person == null )
+            {
+                return ActionBadRequest( "Could not find the current person." );
+            }
 
             person.OutreachTouchpointPrayersPerDay = option.DailyPrayerGoal;
-            person.OutreachTouchpointSchedule = option.DayOfWeekFlags.ToNative();
+            person.OutreachTouchpointSchedule = ( Utility.Enums.DayOfWeekFlag ) option.DayOfWeekFlags;
+            person.ConnectionCadence = option.OutreachCadence.ToNative();
 
             RockContext.SaveChanges();
 
@@ -80,7 +94,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     public class OutreachOnboardingOption
     {
         public string CurrentPersonIdKey { get; set; }
-        public DayOfWeekFlag DayOfWeekFlags { get; set; }
+        public int DayOfWeekFlags { get; set; }
 
         public int DailyPrayerGoal { get; set; }
 

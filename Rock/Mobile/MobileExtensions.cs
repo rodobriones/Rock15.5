@@ -546,7 +546,6 @@ namespace Rock.Mobile
     /// </summary>
     public static class MobileExtensionDayOfWeekFlag
     {
-
         /// <summary>
         /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.DayOfWeekFlag"/> to a web native <see cref="Utility.Enums.DayOfWeekFlag"/>.
         /// </summary>

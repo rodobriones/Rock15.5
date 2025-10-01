@@ -774,6 +774,12 @@ namespace Rock.Model
         [DataMember]
         public int? OutreachTouchpointPrayersPerDay { get; set; }
 
+        /// <summary>
+        /// Gets or sets the outreach cadence.
+        /// </summary>
+        [DataMember]
+        public OutreachCadence ConnectionCadence { get; set; }
+
         #endregion
 
         #region Constructors
