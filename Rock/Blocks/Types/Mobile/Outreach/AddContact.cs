@@ -22,7 +22,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
     #region Block Attributes
 
-    [MobileNavigationActionField( "Post Delete Action",
+    [MobileNavigationActionField( "Post Save Action",
         Description = "The navigation action to perform when the delete button is pressed.",
         IsRequired = false,
         DefaultValue = MobileNavigationActionFieldAttribute.PopSinglePageValue,
