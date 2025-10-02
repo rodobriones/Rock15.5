@@ -39,7 +39,7 @@ namespace Rock.Blocks.Crm
     [Category( "CRM" )]
     [Description( "Displays a list of person duplicates." )]
     [IconCssClass( "ti ti-list" )]
-    // [SupportedSiteTypes( Model.SiteType.Web )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     [LinkedPage( "Detail Page",
         Description = "The page that will show the person duplicate details.",
