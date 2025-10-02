@@ -67,7 +67,7 @@ namespace Rock.Rest.v2
         /// <param name="endpointSlug">The slug that identifies the Endpoint in the Lava Application.</param>
         /// <returns>The response from executing the Lava defined on the endpoint.</returns>
         [HttpGet]
-        [Route( "1/{applicationSlug}/{*endpointSlug?}" )]
+        [Route( "1/{applicationSlug}/{*endpointSlug}" )]
         [Authenticate]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_READ, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
         [ProducesResponse( HttpStatusCode.OK )]
@@ -86,7 +86,7 @@ namespace Rock.Rest.v2
         /// <param name="endpointSlug">The slug that identifies the Endpoint in the Lava Application.</param>
         /// <returns>The response from executing the Lava defined on the endpoint.</returns>
         [HttpHead]
-        [Route( "1/{applicationSlug}/{*endpointSlug?}" )]
+        [Route( "1/{applicationSlug}/{*endpointSlug}" )]
         [Authenticate]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_READ, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
         [ProducesResponse( HttpStatusCode.OK )]
@@ -105,7 +105,7 @@ namespace Rock.Rest.v2
         /// <param name="endpointSlug">The slug that identifies the Endpoint in the Lava Application.</param>
         /// <returns>The response from executing the Lava defined on the endpoint.</returns>
         [HttpPost]
-        [Route( "1/{applicationSlug}/{*endpointSlug?}" )]
+        [Route( "1/{applicationSlug}/{*endpointSlug}" )]
         [Authenticate]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_READ, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
         [ProducesResponse( HttpStatusCode.OK )]
@@ -124,7 +124,7 @@ namespace Rock.Rest.v2
         /// <param name="endpointSlug">The slug that identifies the Endpoint in the Lava Application.</param>
         /// <returns>The response from executing the Lava defined on the endpoint.</returns>
         [HttpPut]
-        [Route( "1/{applicationSlug}/{*endpointSlug?}" )]
+        [Route( "1/{applicationSlug}/{*endpointSlug}" )]
         [Authenticate]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_READ, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
         [ProducesResponse( HttpStatusCode.OK )]

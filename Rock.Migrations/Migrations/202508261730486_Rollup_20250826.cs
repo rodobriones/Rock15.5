@@ -17,7 +17,7 @@
 namespace Rock.Migrations
 {
     using System.Collections.Generic;
-    
+
     /// <summary>
     ///
     /// </summary>
@@ -1334,6 +1334,10 @@ VALUES
                 blockAttributeKeysToIgnore: new Dictionary<string, string> {
                 { "CEDC742C-0AB3-487D-ABC2-77A0A443AEBF", "SeriesColors" }, // Communication Detail ( Communication )
                 { "7F9CEA6F-DCE5-4F60-A551-924965289F1D", "FutureWeeksToShow,SignupInstructions,EnableSignup,DeclineReasonPage" }, // Group Schedule Toolbox    
+                { "C7FCE3B7-704B-43C0-AF96-5A70EB7F70D9", "SetPageTitle,EnableDebug,2E6540EA-63F0-40FE-BE50-F2A84735E600,8522BADD-2871-45A5-81DD-C76DA07E2E7E" }, // Connection Opportunity Signup
+                { "DF0F5743-2BFF-40C0-8BEE-39F1DE7B4C22", "GroupCategoryId" }, // Prayer Comment List ( Core )
+                { "3131C55A-8753-435F-85F3-DF777EFBD1C8", "DetailPage,CaseWorkerGroup" }, // Benevolence Request List ( Finance )
+                { "7E4663CD-2176-48D6-9CC2-2DBC9B880C23", "StreakPage" } // Achievement Attempt Detail ( Engagement )
             } );
         }
 

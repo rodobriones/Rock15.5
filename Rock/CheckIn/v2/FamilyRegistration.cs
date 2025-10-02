@@ -906,8 +906,18 @@ namespace Rock.CheckIn.v2
             // NOTE: NickName, LastName, Gender, MaritalStatusValueId should
             // replace existing values if they were provided even if it is a
             // matched person.
-            person.NickName = registrationPerson.Bag.NickName;
+
             person.LastName = registrationPerson.Bag.LastName;
+
+            // If the value of the NickName has changed, then also update the
+            // first name. This way we don't "break" a name where the first
+            // name and nickname are different but the only real change they
+            // made was to birthdate.
+            if ( person.NickName != registrationPerson.Bag.NickName )
+            {
+                person.FirstName = registrationPerson.Bag.NickName;
+                person.NickName = registrationPerson.Bag.NickName;
+            }
 
             registrationPerson.IfValidProperty( nameof( registrationPerson.Bag.Gender ),
                 () => person.Gender = registrationPerson.Bag.Gender );

@@ -17,16 +17,15 @@
             <ContentStack>
                 <div v-if="selectedStepProgramViewEnum === StepProgramView.Flow" class="row">
                     <RockForm @submit="fetchStepFlowData" ref="flowForm">
-                        <div class="col-md-6">
+                        <div class="col-md-3">
                             <NumberBox v-model="maxLevels"
                                        :decimalCount="0"
                                        :minimumValue="2"
                                        rules="required"
-                                       formGroupClasses="col"
                                        label="Max Levels to Display"
                                        help="The maximum number of levels to show in the flow. It's possible that an individual could take the same level twice in the course of completing a step program." />
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-9">
                             <DropDownList v-model="startingStepTypes"
                                           :items="availableStepTypes"
                                           :multiple="true"

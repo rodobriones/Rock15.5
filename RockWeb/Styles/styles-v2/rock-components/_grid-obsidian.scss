@@ -43,7 +43,6 @@
 
 .grid-obsidian .grid-content-container .grid-column-header-container.sticky-column-header {
     position: sticky;
-    top: 57px;
     z-index: 1;
     background-color: var(--color-interface-softest);
 }
@@ -498,49 +497,62 @@
         border-bottom: 1px solid var(--color-interface-soft);
         border-bottom-left-radius: var(--rounded-small);
         border-bottom-right-radius: var(--rounded-small);
-    &:hover {
-        background-color: transparent;
-    }
-    }
 
-    .grid-row:has(.table-empty) .grid-cell {
-        border-bottom: none;
-        border-bottom-left-radius: var(--rounded-small);
-    &:hover {
-        background-color: transparent;
-    }
-    }
+        &:hover {
+            background-color: transparent;
+        }
 
-    .grid-hover .grid-row:hover:has(.table-empty) .grid-cell {
-        background-color: transparent;
+        .grid-row:has(.table-empty) .grid-cell {
+            border-bottom: none;
+            border-bottom-left-radius: var(--rounded-small);
+
+            &:hover {
+                background-color: transparent;
+            }
+        }
+
+        .grid-hover .grid-row:hover:has(.table-empty) .grid-cell {
+            background-color: transparent;
+        }
+        // If there is no footer content, round the bottom corners of the last row
+        &:has(.grid-footing:empty) .grid-row {
+            border-bottom-left-radius: var(--rounded-medium);
+            border-bottom-right-radius: var(--rounded-medium);
+
+            .grid-cell {
+                border-bottom: none;
+            }
+
+            .grid-cell:first-child,
+            .grid-cell:last-child {
+                border-bottom-left-radius: var(--rounded-medium);
+                border-bottom-right-radius: var(--rounded-medium);
+            }
+        }
     }
-
-
-    // If there is no footer content, round the bottom corners of the last row
-    &:has(.grid-footing:empty) .grid-row {
-        border-bottom-left-radius: var(--rounded-medium);
-        border-bottom-right-radius: var(--rounded-medium);
+    // If there is a footer, but the last row is empty, don't round the bottom corners of the last row
+    &:has(.grid-footing) .grid-row:has(.table-empty) {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
 
         .grid-cell {
             border-bottom: none;
-        }
 
-        .grid-cell:first-child,
-        .grid-cell:last-child {
-        border-bottom-left-radius: var(--rounded-medium);
-        border-bottom-right-radius: var(--rounded-medium);
+            &:hover {
+                background-color: transparent;
+            }
         }
     }
-}
 
-@media (max-width: 767px) {
-    .grid-obsidian > .grid-footing > .grid-paging-footer > .grid-page-picker > .page-num {
-        display: none;
-    }
-}
+        @media (max-width: 767px) {
+            .grid-obsidian > .grid-footing > .grid-paging-footer > .grid-page-picker > .page-num {
+                display: none;
+            }
+        }
 
-@media (max-width:992px) {
-    .grid-obsidian.grid-sticky .sticky-column-header {
-        top: calc(var(--sticky-element-offset) + 114px);
+        @media (max-width:992px) {
+            .grid-obsidian.grid-sticky .sticky-column-header {
+                top: calc(var(--sticky-element-offset) + 114px);
+            }
+        }
     }
-}
