@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Enums;
+using Rock.Common.Mobile.ViewModel;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -31,7 +32,15 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         Key = AttributeKey.AddContact,
         Order = 0 )]
 
+    [MobileNavigationActionField( "After Finish Action",
+        Description = "The navigation action to perform when the delete button is pressed.",
+        IsRequired = false,
+        DefaultValue = MobileNavigationActionFieldAttribute.PopSinglePageValue,
+        Key = AttributeKey.AfterFinishAction,
+        Order = 1 )]
+
     #endregion
+
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_OUTREACH_ONBOARDING_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_OUTREACH_ONBOARDING )]
     public class OutreachOnboarding : RockBlockType
@@ -41,6 +50,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         private static class AttributeKey
         {
             public const string AddContact = "AddContact";
+            public const string AfterFinishAction = "AfterFinishAction";
         }
 
         #endregion
@@ -85,6 +95,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return new Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.Configuration
             {
                 AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull(),
+                AfterFinishAction = GetAttributeValue( AttributeKey.AfterFinishAction ).FromJsonOrNull<MobileNavigationActionViewModel>() ?? new MobileNavigationActionViewModel()
             };
         }
 
