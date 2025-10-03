@@ -1,4 +1,4 @@
-// <copyright>
+﻿// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -22,5 +22,29 @@ namespace Rock.ViewModels.Blocks.Crm.PersonDuplicateList
     /// </summary>
     public class PersonDuplicateListOptionsBag
     {
+        /// <summary>
+        /// Gets or sets the high confidence score threshold for duplicate detection.
+        /// </summary>
+        public double ConfidenceScoreHigh { get; set; }
+
+        /// <summary>
+        /// Gets or sets the low confidence score threshold for duplicate detection.
+        /// </summary>
+        public double ConfidenceScoreLow { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether inactive persons should be included.
+        /// </summary>
+        public bool IncludeInactive { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether businesses should be included.
+        /// </summary>
+        public bool IncludeBusinesses { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the entity has multiple campuses.
+        /// </summary>
+        public bool HasMultipleCampuses { get; set; }
     }
 }

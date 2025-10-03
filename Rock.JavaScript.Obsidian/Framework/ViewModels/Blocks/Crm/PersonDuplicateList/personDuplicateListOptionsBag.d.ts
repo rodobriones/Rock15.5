@@ -23,4 +23,18 @@
 
 /** The additional configuration options for the Person Duplicate List block. */
 export type PersonDuplicateListOptionsBag = {
+    /** Gets or sets the high confidence score threshold for duplicate detection. */
+    confidenceScoreHigh: number;
+
+    /** Gets or sets the low confidence score threshold for duplicate detection. */
+    confidenceScoreLow: number;
+
+    /** Gets or sets a value indicating whether the entity has multiple campuses. */
+    hasMultipleCampuses: boolean;
+
+    /** Gets or sets a value indicating whether businesses should be included. */
+    includeBusinesses: boolean;
+
+    /** Gets or sets a value indicating whether inactive persons should be included. */
+    includeInactive: boolean;
 };
