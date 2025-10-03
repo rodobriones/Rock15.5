@@ -7,21 +7,44 @@
           :entityTypeGuid="EntityType.PersonDuplicate"
           stickyHeader
           liveUpdates
-          :onAddItem="config.isAddEnabled ? onAddItem : undefined"
           @selectItem="onSelectItem">
-        <SelectColumn />
+
+        <HtmlColumn name="confidenceScore"
+                    title="Confidence Score"
+                    field="confidenceScore" />
+        <Column name="campus"
+                title="Campus"
+                field="campus" />
+        <HtmlColumn name="accountProtectionProfile"
+                    title="Account Protection Profile"
+                    field="accountProtectionProfile" />
+        <Column name="firstName"
+                title="First Name"
+                field="firstName" />
+        <Column name="lastName"
+                title="Last Name"
+                field="lastName" />
+        <Column name="suffix"
+                title="Suffix"
+                field="suffix" />
+        <Column name="matchCount"
+                title="Match Count"
+                field="matchCount" />
+        <Column name="modified"
+                title="Modified"
+                field="modified" />
+        <Column name="createdBy"
+                title="Created By"
+                field="createdBy" />
 
         <AttributeColumns :attributes="config.gridDefinition?.attributeFields ?? []" />
-
-        <SecurityColumn />
     </Grid>
 </template>
 
 <script setup lang="ts">
     import { onConfigurationValuesChanged, useConfigurationValues, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
-    import Grid, { AttributeColumns, SecurityColumn, SelectColumn } from "@Obsidian/Controls/grid";
-    import { alert } from "@Obsidian/Utility/dialogs";
+    import Grid, { Column, HtmlColumn, AttributeColumns } from "@Obsidian/Controls/grid";
     import { ListBlockBox } from "@Obsidian/ViewModels/Blocks/listBlockBox";
     import { PersonDuplicateListOptionsBag } from "@Obsidian/ViewModels/Blocks/Crm/PersonDuplicateList/personDuplicateListOptionsBag";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
@@ -35,7 +58,7 @@
     // explicit reason not to (like using a custom reload function instead),
     // in which case you can remove this code.
     onConfigurationValuesChanged(useReloadBlock());
-    
+
     // #region Values
 
     const gridDataSource = ref<Promise<GridDataBag>>();
@@ -53,11 +76,70 @@
 
         if (result.isSuccess && result.data) {
             gridData = reactive(result.data);
+            gridData = formatConfidenceScores(gridData);
+            gridData = formatAccountProtectionProfiles(gridData);
             return gridData;
         }
         else {
             throw new Error(result.errorMessage ?? "Unknown error while trying to load grid data.");
         }
+    }
+
+    function formatConfidenceScores(data: GridDataBag): GridDataBag {
+        if (data?.rows) {
+            data.rows.forEach(row => {
+                const score = Number(row["confidenceScore"]);
+                let formattedScore = "0.00%";
+
+                if (!isNaN(score)) {
+                    formattedScore = `${score.toFixed(2)}%`;
+                }
+
+                if (score >= Number(config.options?.confidenceScoreHigh)) {
+                    formattedScore = `<span class='label label-success'>${formattedScore}</span>`;
+                }
+                else if (score >= Number(config.options?.confidenceScoreLow)) {
+                    formattedScore = `<span class='label label-warning'>${formattedScore}</span>`;
+                }
+                else {
+                    formattedScore = `<span class='label label-default'>${formattedScore}</span>`;
+                }
+                row["confidenceScore"] = formattedScore;
+            });
+        }
+
+        return data;
+    }
+
+    function formatAccountProtectionProfiles(data: GridDataBag): GridDataBag {
+        if (data?.rows) {
+            data.rows.forEach(row => {
+                const profile = String(row["accountProtectionProfile"]) ?? "";
+                let formattedProfile = profile;
+
+                switch (profile.toLowerCase()) {
+                    case "low":
+                        formattedProfile = "<span class='label label-success'>Low</span>";
+                        break;
+                    case "medium":
+                        formattedProfile = "<span class='label label-warning'>Medium</span>";
+                        break;
+                    case "high":
+                        formattedProfile = "<span class='label label-primary'>High</span>";
+                        break;
+                    case "extreme":
+                        formattedProfile = "<span class='label label-danger'>Extreme</span>";
+                        break;
+                    default:
+                        formattedProfile = "<span class='label label-light'>Unknown</span>";
+                        break;
+                }
+
+                row["accountProtectionProfile"] = formattedProfile;
+            });
+        }
+
+        return data;
     }
 
     // #endregion
@@ -72,15 +154,6 @@
     function onSelectItem(key: string): void {
         if (config.navigationUrls?.[NavigationUrlKey.DetailPage]) {
             window.location.href = config.navigationUrls[NavigationUrlKey.DetailPage].replace("((Key))", key);
-        }
-    }
-
-    /**
-     * Called when the Add button has been clicked by the individual.
-     */
-    function onAddItem(): void {
-        if (config.navigationUrls?.[NavigationUrlKey.DetailPage]) {
-            window.location.href = config.navigationUrls[NavigationUrlKey.DetailPage].replace("((Key))", "0");
         }
     }
 
