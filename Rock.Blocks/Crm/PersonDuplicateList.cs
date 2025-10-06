@@ -242,7 +242,7 @@ namespace Rock.Blocks.Crm
         {
             return new GridBuilder<PersonDuplicate>()
                 .WithBlock( this )
-                .AddTextField( "idKey", a => a.IdKey )
+                .AddTextField( "idKey", a => a.PersonAlias.Person.IdKey )
                 .AddField( "confidenceScore", a => a.ConfidenceScore.HasValue ? a.ConfidenceScore.Value : 0 )
                 .AddTextField( "accountProtectionProfile", a => a.PersonAlias.Person.AccountProtectionProfile.ConvertToString() )
                 .AddTextField( "firstName", a => a.PersonAlias.Person.FirstName )
