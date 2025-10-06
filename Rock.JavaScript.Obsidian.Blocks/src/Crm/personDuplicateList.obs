@@ -12,7 +12,8 @@
         <HtmlColumn name="confidenceScore"
                     title="Confidence Score"
                     field="confidenceScore" />
-        <Column name="campus"
+        <Column v-if="config.options?.hasMultipleCampuses"
+                name="campus"
                 title="Campus"
                 field="campus" />
         <HtmlColumn name="accountProtectionProfile"
