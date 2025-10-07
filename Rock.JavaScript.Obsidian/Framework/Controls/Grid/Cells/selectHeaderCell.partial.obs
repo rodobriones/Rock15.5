@@ -1,6 +1,6 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div class="checkbox">
+    <div class="checkbox" v-if="showCheckbox">
         <label title="">
             <input type="checkbox" class="select-all" :checked="isChecked" @change="onValueChange">
             <span class="label-text">&nbsp;</span>
@@ -10,9 +10,17 @@
 
 <script setup lang="ts">
     import { standardHeaderCellProps } from "@Obsidian/Core/Controls/grid";
-    import {  onUnmounted, ref } from "vue";
+    import { onUnmounted, ref } from "vue";
 
     const props = defineProps(standardHeaderCellProps);
+
+    const showCheckbox = ref(false);
+    if (props.column.props.enableRowExclusions) {
+        showCheckbox.value = !!props.column.props.forceAllowSelectAll;
+    }
+    else {
+        showCheckbox.value = true;
+    }
 
     const isChecked = ref(false);
 
