@@ -9,7 +9,8 @@
           :entityTypeGuid="EntityType.PersonDuplicate"
           stickyHeader
           liveUpdates
-          @selectItem="onSelectItem">
+          @selectItem="onSelectItem"
+          :isCountMessageVisible="false">
 
         <SelectColumn :enableRowExclusions="true"
                       :excludeRow="excludeRow"
