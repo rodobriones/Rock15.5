@@ -10,7 +10,8 @@
           stickyHeader
           liveUpdates
           @selectItem="onSelectItem"
-          :isCountMessageVisible="false">
+          :isCountMessageVisible="false"
+          :selectedKeysOverride="selectedKeysOverride">
 
         <SelectColumn :enableRowExclusions="true"
                       :excludeRow="excludeRow"
@@ -275,6 +276,22 @@
             return Boolean((row as Record<string, unknown>)["isDuplicateRow"]);
         }
         return false;
+    }
+
+    /**
+     * Forces the person being viewed to always be selected in the grid and
+     * for all actions, such as merge, communication, etcetera to include them.
+     *
+     * @param {string[]} selectedKeys
+     * @returns {string[]} The modified list of selected keys including the person being viewed.
+     */
+    function selectedKeysOverride(selectedKeys: string[]): string[] {
+        const urlParams = new URLSearchParams(window.location.search);
+        const personId = urlParams.get("PersonId");
+        if (personId && !selectedKeys.includes(personId)) {
+            selectedKeys.unshift(personId);
+        }
+        return selectedKeys;
     }
 
     // #endregion
