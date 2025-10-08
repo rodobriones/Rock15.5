@@ -17,21 +17,16 @@
 
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Obsidian.UI;
-using Rock.Security;
-using Rock.Utility.Enums;
 using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Crm.PersonDuplicateDetail;
 using Rock.ViewModels.Core.Grid;
-using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-using Rock.Web.UI.Controls;
 
 namespace Rock.Blocks.Crm
 {
