@@ -55,12 +55,12 @@
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import Grid, { Column, HtmlColumn, AttributeColumns, SelectColumn } from "@Obsidian/Controls/grid";
     import { ListBlockBox } from "@Obsidian/ViewModels/Blocks/listBlockBox";
-    import { PersonDuplicateListOptionsBag } from "@Obsidian/ViewModels/Blocks/Crm/PersonDuplicateList/personDuplicateListOptionsBag";
+    import { PersonDuplicateDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Crm/PersonDuplicateDetail/personDuplicateDetailOptionsBag";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
-    import { NavigationUrlKey } from "./PersonDuplicateList/types.partial";
+    import { NavigationUrlKey } from "./PersonDuplicateDetail/types.partial";
     import { reactive, ref } from "vue";
 
-    const config = useConfigurationValues<ListBlockBox<PersonDuplicateListOptionsBag>>();
+    const config = useConfigurationValues<ListBlockBox<PersonDuplicateDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
 
     // All blocks auto reload when changing block settings unless there is an
