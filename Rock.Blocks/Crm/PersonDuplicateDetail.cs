@@ -166,7 +166,7 @@ namespace Rock.Blocks.Crm
 
             var personDuplicateService = new PersonDuplicateService( RockContext );
             var personService = new PersonService( RockContext );
-            int personId =  Rock.Utility.IdHasher.Instance.GetId( PageParameter( "PersonId" ).ToStringSafe() ).Value;
+            int personId = Rock.Utility.IdHasher.Instance.GetId( PageParameter( "PersonId" ).ToStringSafe() ).Value;
 
             //// Take duplicates that aren't confirmed as NotDuplicate and aren't IgnoreUntilScoreChanges.
             var query = personDuplicateService.Queryable()
@@ -292,18 +292,18 @@ namespace Rock.Blocks.Crm
         /// <returns>
         /// A list of key-value pairs where the key is the <see cref="PhoneNumber"/> and the value is the phone number type as a <see cref="string"/>.
         /// </returns>
-        public List<KeyValuePair<PhoneNumber, string>> GetPhoneNumbersWithType(Person person)
+        public List<KeyValuePair<PhoneNumber, string>> GetPhoneNumbersWithType( Person person )
         {
-            if (person.PhoneNumbers == null)
+            if ( person.PhoneNumbers == null )
             {
                 return new List<KeyValuePair<PhoneNumber, string>>();
             }
 
             var phoneNumberList = person.PhoneNumbers
-                .OrderBy(pn => pn.NumberTypeValue != null ? pn.NumberTypeValue.Order : int.MaxValue)
-                .ThenBy(pn => pn.Id)
+                .OrderBy( pn => pn.NumberTypeValue != null ? pn.NumberTypeValue.Order : int.MaxValue )
+                .ThenBy( pn => pn.Id )
                 .ToList()
-                .Select(pn => new KeyValuePair<PhoneNumber, string>(pn, pn.NumberTypeValue != null ? pn.NumberTypeValue.Value : null))
+                .Select( pn => new KeyValuePair<PhoneNumber, string>( pn, pn.NumberTypeValue != null ? pn.NumberTypeValue.Value : null ) )
                 .ToList();
 
             return phoneNumberList;
@@ -325,16 +325,16 @@ namespace Rock.Blocks.Crm
         {
             var gridDataBag = new GridDataBag();
 
-            var personIdParam = PageParameter(PageParameterKey.PersonId).ToStringSafe();
-            var personId = Rock.Utility.IdHasher.Instance.GetId(personIdParam);
-            if (!personId.HasValue)
+            var personIdParam = PageParameter( PageParameterKey.PersonId ).ToStringSafe();
+            var personId = Rock.Utility.IdHasher.Instance.GetId( personIdParam );
+            if ( !personId.HasValue )
             {
                 return ActionNotFound();
             }
 
-            var personService = new PersonService(RockContext);
-            var person = personService.Get(personId.Value);
-            if (person == null)
+            var personService = new PersonService( RockContext );
+            var person = personService.Get( personId.Value );
+            if ( person == null )
             {
                 return ActionNotFound();
             }
@@ -349,28 +349,60 @@ namespace Rock.Blocks.Crm
                 ["accountProtectionProfile"] = person.AccountProtectionProfile.ConvertToString(),
                 ["firstName"] = person.FirstName,
                 ["lastName"] = person.LastName,
-                ["email"] = string.IsNullOrEmpty(person.Email) ? "" : person.Email,
-                ["gender"] = string.IsNullOrEmpty(person.Gender.ConvertToStringSafe()) ? "" : person.Gender.ConvertToStringSafe(),
+                ["email"] = string.IsNullOrEmpty( person.Email ) ? "" : person.Email,
+                ["gender"] = string.IsNullOrEmpty( person.Gender.ConvertToStringSafe() ) ? "" : person.Gender.ConvertToStringSafe(),
                 ["age"] = person.Age.ToStringSafe(),
-                ["addresses"] = GetAddressesWithType(person),
-                ["phoneNumbers"] = GetPhoneNumbersWithType(person)
+                ["addresses"] = GetAddressesWithType( person ),
+                ["phoneNumbers"] = GetPhoneNumbersWithType( person )
             };
 
             var gridAttributes = GetGridAttributes();
-            if (gridAttributes != null && gridAttributes.Any())
+            if ( gridAttributes != null && gridAttributes.Any() )
             {
-                person.LoadAttributes(RockContext);
-                foreach (var attr in gridAttributes)
+                person.LoadAttributes( RockContext );
+                foreach ( var attr in gridAttributes )
                 {
-                    row[attr.Key] = person.GetAttributeValue(attr.Key);
+                    row[attr.Key] = person.GetAttributeValue( attr.Key );
                 }
             }
 
             gridDataBag.Rows = new List<Dictionary<string, object>> { row };
 
-            return ActionOk(gridDataBag);
+            return ActionOk( gridDataBag );
         }
 
-        #endregion
+        [BlockAction]
+        public virtual BlockActionResult MarkNotDuplicate( string personDuplicateIdKey )
+        {
+            var personDuplicateService = new PersonDuplicateService( RockContext );
+            var personDuplicate = personDuplicateService.Get( personDuplicateIdKey, true );
+            personDuplicate.IsConfirmedAsNotDuplicate = true;
+            if ( RockContext.SaveChanges() > 0 )
+            {
+                return ActionOk();
+            }
+            else
+            {
+                return ActionBadRequest( $"Failed to mark IsConfirmedAsNotDuplicate for PersonDuplicate with idKey of '{personDuplicateIdKey}'" );
+            }
+        }
+
+        [BlockAction]
+        public virtual BlockActionResult MarkIgnoreDuplicate( string personDuplicateIdKey )
+        {
+            var personDuplicateService = new PersonDuplicateService( RockContext );
+            var personDuplicate = personDuplicateService.Get( personDuplicateIdKey, true );
+            personDuplicate.IgnoreUntilScoreChanges = true;
+            if ( RockContext.SaveChanges() > 0 )
+            {
+                return ActionOk();
+            }
+            else
+            {
+                return ActionBadRequest( $"Failed to mark IgnoreUntilScoreChanges for PersonDuplicate with idKey of '{personDuplicateIdKey}'" );
+            }
+        }
+
+        #endregion Block Actions
     }
 }
