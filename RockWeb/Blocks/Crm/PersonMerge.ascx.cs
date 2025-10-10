@@ -607,7 +607,9 @@ namespace RockWeb.Blocks.Crm
                             string oldValue = phoneNumber != null ? phoneNumber.Number : string.Empty;
 
                             string key = "phone_" + phoneType.Id.ToString();
-                            string newValue = GetNewStringValue( key );
+                            var selectedValue = GetNewValue( key );
+                            string newValue = selectedValue != null ? selectedValue.Value : string.Empty;
+
                             bool phoneNumberDeleted = false;
 
                             if ( !oldValue.Equals( newValue, StringComparison.OrdinalIgnoreCase ) )
@@ -623,8 +625,30 @@ namespace RockWeb.Blocks.Crm
                                         primaryPerson.PhoneNumbers.Add( phoneNumber );
                                     }
 
-                                    // Update phone number
-                                    phoneNumber.Number = newValue;
+                                    string selectedCountryCode = null;
+                                    string selectedNumberOnly = null;
+
+                                    var parts = newValue.Split( '|' );
+                                    if ( parts.Length == 2 )
+                                    {
+                                        selectedCountryCode = parts[0];
+                                        selectedNumberOnly = parts[1];
+                                    }
+                                    else
+                                    {
+                                        selectedNumberOnly = newValue;
+                                    }
+
+                                    phoneNumber.Number = PhoneNumber.CleanNumber( selectedNumberOnly );
+
+                                    if ( !string.IsNullOrWhiteSpace( selectedCountryCode ) )
+                                    {
+                                        phoneNumber.CountryCode = PhoneNumber.CleanNumber( selectedCountryCode );
+                                    }
+                                    else if ( string.IsNullOrWhiteSpace( phoneNumber.CountryCode ) )
+                                    {
+                                        phoneNumber.CountryCode = PhoneNumber.DefaultCountryCode();
+                                    }
                                 }
                                 else
                                 {
@@ -2369,7 +2393,8 @@ AND Attendance.Id != @FirstTimeRecordId
                             iconHtml += " <span class='label label-success' title='SMS Enabled' data-toggle='tooltip' data-placement='top'><i class='ti ti-device-mobile-message'></i></span>";
                         }
 
-                        AddProperty( key, phoneType.Value, person.Id, phoneNumber.Number, phoneNumber.NumberFormatted + iconHtml );
+                        var countryCodeAndNumber = string.Format( "{0}|{1}", phoneNumber.CountryCode, phoneNumber.Number );
+                        AddProperty( key, phoneType.Value, person.Id, countryCodeAndNumber, phoneNumber.NumberFormatted + iconHtml );
                     }
                     else
                     {
