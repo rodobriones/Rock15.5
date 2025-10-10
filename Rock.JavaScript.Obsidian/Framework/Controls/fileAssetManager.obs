@@ -644,7 +644,27 @@
         }
     }
 
+    const hasSubfolders = computed(() => {
+        const bag = selectedFolderBag.value;
+        if (!bag) return false;
+
+        if (bag.children !== null && bag.children !== undefined) {
+            return bag.children.length > 0;
+        }
+        else {
+            return bag.hasChildren;
+        }
+    });
+
+    const hasContents = computed(() => {
+        return hasSubfolders.value || files.value.length > 0;
+    });
+
     async function deleteSelectedFolder(): Promise<void> {
+        if (hasContents.value && !(await confirm("Are you sure you want to delete this folder and all its contents?"))) {
+            return;
+        }
+
         isFolderPaneActionLoading.value = true;
 
         const options: AssetManagerBaseOptionsBag = {
