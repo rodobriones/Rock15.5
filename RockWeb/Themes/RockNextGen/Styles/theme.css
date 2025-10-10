@@ -14792,7 +14792,6 @@ dl:not(.dl-horizontal) dt {
 }
 @media (max-width: 768px) {
   .picker .picker-menu {
-    position: static;
     max-width: 100%;
   }
 }
