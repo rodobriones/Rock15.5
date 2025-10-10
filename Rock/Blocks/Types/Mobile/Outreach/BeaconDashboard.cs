@@ -29,107 +29,86 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         #region Methods
 
         /// <summary>
-        /// Creates new touch points for each special event (birthday, anniversary, salvation anniversary, baptism anniversary).
+        /// Gets the touchpoint view.
         /// </summary>
-        /// <param name="touchpointBag"></param>
-        /// <returns></returns>
-        private List<ContactTouchPointBag> CreateNewTouchPoints( ContactTouchPointBag touchpointBag )
-        {
-            var touchpointBags = new List<ContactTouchPointBag>();
-            if ( touchpointBag.IsBirthday )
-            {
-                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
-                newTouchpointBag.IsAnniversary = false;
-                newTouchpointBag.IsSalvationAnniversary = false;
-                newTouchpointBag.IsBaptismAnniversary = false;
-                touchpointBags.Add( newTouchpointBag );
-            }
-            if ( touchpointBag.IsAnniversary )
-            {
-                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
-                newTouchpointBag.IsBirthday = false;
-                newTouchpointBag.IsSalvationAnniversary = false;
-                newTouchpointBag.IsBaptismAnniversary = false;
-                touchpointBags.Add( newTouchpointBag );
-            }
-            if ( touchpointBag.IsSalvationAnniversary )
-            {
-                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
-                newTouchpointBag.IsBirthday = false;
-                newTouchpointBag.IsAnniversary = false;
-                newTouchpointBag.IsBaptismAnniversary = false;
-                touchpointBags.Add( newTouchpointBag );
-            }
-            if ( touchpointBag.IsBaptismAnniversary )
-            {
-                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
-                newTouchpointBag.IsBirthday = false;
-                newTouchpointBag.IsAnniversary = false;
-                newTouchpointBag.IsSalvationAnniversary = false;
-                touchpointBags.Add( newTouchpointBag );
-            }
-
-            return touchpointBags;
-        }
-
-        /// <summary>
-        /// Clones the contact touch point bag.
-        /// </summary>
-        /// <param name="old"></param>
-        /// <returns></returns>
-        private ContactTouchPointBag CloneContactTouchPointBag( ContactTouchPointBag old )
-        {
-            var clone = old.ToJson().FromJsonOrNull<ContactTouchPointBag>();
-            if ( clone == null )
-            {
-                throw new InvalidOperationException( "Clone failed." );
-            }
-            return clone;
-        }
-
-        /// <summary>
-        /// Determines if the contact has more than one special event (birthday, anniversary, salvation anniversary, baptism anniversary).
-        /// </summary>
-        /// <param name="touchpointBag"></param>
-        /// <returns></returns>
-        private bool HasMoreThanOneSpecialEvent( ContactTouchPointBag touchpointBag )
-        {
-            var eventStatusList = new List<bool> { touchpointBag.IsBirthday, touchpointBag.IsAnniversary, touchpointBag.IsSalvationAnniversary, touchpointBag.IsBaptismAnniversary };
-            var hasMultipleSpecialEvents = eventStatusList
-                .Count( x => x == true ) > 1;
-
-            return hasMultipleSpecialEvents;
-        }
-
-        /// <summary>
-        /// Updates the special event status in the bag based on the contact's special events.
-        /// </summary>
-        /// <param name="bag"></param>
+        /// <param name="touchpointType"></param>
         /// <param name="contact"></param>
-        private void SetBagSpecialEventStatus( ContactTouchPointBag bag, Contact contact )
-        {
-            bag.IsBirthday = HasOccurredThisYear( contact.BirthDay, contact.BirthMonth );
-            bag.IsAnniversary = HasOccurredThisYear( contact.WeddingAnniversaryDay, contact.WeddingAnniversaryMonth );
-            bag.IsSalvationAnniversary = HasOccurredThisYear( contact.SalvationDay, contact.SalvationMonth );
-            bag.IsBaptismAnniversary = HasOccurredThisYear( contact.BaptismDay, contact.BaptismMonth );
-        }
-
-        /// <summary>
-        /// Determines if a special event (birthday, anniversary, salvation anniversary, baptism anniversary) has occurred this year.
-        /// </summary>
-        /// <param name="day"></param>
-        /// <param name="month"></param>
         /// <returns></returns>
-        private bool HasOccurredThisYear( int? day, int? month )
+        private TouchpointView GetTouchpointView( TouchpointType touchpointType, Contact contact )
         {
-            if ( !day.HasValue || !month.HasValue )
+            switch ( touchpointType )
             {
-                return false;
+                case TouchpointType.Prayer:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
+                        Title = "Prayer",
+                        InformationText = $"Lift up {contact.FirstName} in prayer."
+                    };
+                case TouchpointType.Connection:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-conversation-bubble.svg",
+                        Title = "Connection",
+                        InformationText = $"Check in to see how {contact.FirstName} doing."
+                    };
+                case TouchpointType.Reminder:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-sticky-note.svg",
+                        Title = "Reminder",
+                        InformationText = "Here’s what you wrote:"
+                    };
+                case TouchpointType.Pulse:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-heart.svg",
+                        Title = "Pulse",
+                        InformationText = $"Has your connection with {contact.FirstName} grown,or has he taken a step toward Christ?"
+                    };
+                case TouchpointType.Birthday:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-birthday.svg",
+                        Title = "Birthday",
+                        InformationText = "Celebrate his life and your relationship", // PS TODO: gender it
+                    };
+                case TouchpointType.WeddingAnniversary:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-wedding-anniversary.svg",
+                        Title = "Wedding Anniversary",
+                        InformationText = "Celebrate her commitment", // PS TODO: Gender it
+                    };
+                case TouchpointType.BaptismAnniversary:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-baptism-anniversary.svg",
+                        Title = "Baptism Anniversary",
+                        InformationText = "Celebrate his decision", // PS TODO: Gender it
+                    };
+                case TouchpointType.SalvationAnniversary:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-salvation-anniversary.svg",
+                        Title = "Salvation Anniversary",
+                        InformationText = "Celebrate her decision", // PS TODO: Gender it
+                    };
+                case TouchpointType.Share:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-share.svg",
+                        Title = "Share",
+                        InformationText = $"Share your faith with {contact.FirstName}.",
+                    };
+                default:
+                    return new TouchpointView
+                    {
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
+                        Title = "Touchpoint",
+                        InformationText = $"Connect with {contact.FirstName}.",
+                    };
             }
-
-            var today = RockDateTime.Today;
-            return month.Value < today.Month ||
-                   ( month.Value == today.Month && day.Value <= today.Day );
         }
 
         #endregion
@@ -178,8 +157,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                             && tp.ScheduledDateTime < tomorrowStart )       // Only get the touchpoints that are scheduled for today
                 .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
                 .ToList();
-            // PS TODO: hwo does the ScheduledDateTime get set? 
-            // PS TODO: if the person daily prayer goal is only 2 should we do .take(2)?
 
             var touchpointBags = new List<ContactTouchPointBag>();
 
@@ -202,7 +179,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     ConnectionNote = contact.ConnectionNote,
                     PrayerNote = contact.PrayerNote,
                     MobilePhone = contact.MobilePhone,
-                    Note = touchpoint.SystemNote,
+                    Note = touchpoint.Note,
                     Email = contact.Email,
                     PrayerCadence = contact.PrayerCadence.ToMobile(),
                     ConnectionCadence = contact.ConnectionCadence.ToMobile(),
@@ -222,28 +199,10 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     BaptismDay = contact.BaptismDay,
                     BaptismMonth = contact.BaptismMonth,
                     BaptismYear = contact.BaptismYear,
-                    IsBirthday = touchpoint.IsBirthday,         // PS TODO: Ask Braden if this is automatically set somewhere else.
-                    IsAnniversary = touchpoint.IsAnniversary,   // PS TODO: Ask Braden if this is automatically set somewhere else.
-                    IsSalvationAnniversary = false,             // Default to false, will be updated below if it is a salvation anniversary.
-                    IsBaptismAnniversary = false,               // Default to false, will be updated below if it is a baptism anniversary.
+                    TouchpointView = GetTouchpointView( touchpoint.Type, contact )
                 };
 
-                // If the current touchpoint is a special event, check if it is birthday or anniversary or both.
-                if ( touchpointBag.Type == TouchpointType.SpecialEvent )
-                {
-                    SetBagSpecialEventStatus( touchpointBag, contact );
-                }
-
-                if ( HasMoreThanOneSpecialEvent( touchpointBag ) )
-                {
-                    // create a new touchpoint for each special event
-                    var newTouchPoints = CreateNewTouchPoints( touchpointBag );
-                    touchpointBags.AddRange( newTouchPoints );
-                }
-                else
-                {
-                    touchpointBags.Add( touchpointBag );
-                }
+                touchpointBags.Add( touchpointBag );
             }
 
             return ActionOk( touchpointBags );
@@ -255,10 +214,14 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     public class ContactTouchPointBag : ContactProfileBag
     {
         public TouchpointType Type { get; set; }
-        public bool IsBirthday { get; set; }
-        public bool IsAnniversary { get; set; }
-        public bool IsSalvationAnniversary { get; set; }
-        public bool IsBaptismAnniversary { get; set; }
         public string Note { get; set; }
+        public TouchpointView TouchpointView { get; set; }
+    }
+
+    public class TouchpointView
+    {
+        public string IconSource { get; set; }
+        public string Title { get; set; }
+        public string InformationText { get; set; }
     }
 }

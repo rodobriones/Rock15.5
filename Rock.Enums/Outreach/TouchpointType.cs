@@ -27,9 +27,24 @@
         Pulse = 3,
 
         /// <summary>
-        /// Special Event
+        /// Birthday
         /// </summary>
-        SpecialEvent = 4,
+        Birthday = 4,
+
+        /// <summary>
+        /// Wedding Anniversary
+        /// </summary>
+        WeddingAnniversary = 6,
+
+        /// <summary>
+        /// Baptism Anniversary
+        /// </summary>
+        BaptismAnniversary = 7,
+
+        /// <summary>
+        /// Salvation Anniversary
+        /// </summary>
+        SalvationAnniversary = 8,
 
         /// <summary>
         /// Share
