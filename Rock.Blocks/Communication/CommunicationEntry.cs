@@ -1463,7 +1463,13 @@ namespace Rock.Blocks.Communication
         {
             var isNewCommunication = communication.Id == 0;
 
-            if ( isNewCommunication )
+            // If started from a grid and not edited yet, treat it as new so 'Default As Bulk' block setting will apply.
+            var isNewCommunicationFromGrid = communication.Status == Model.CommunicationStatus.Transient
+                && communication.CreatedDateTime.HasValue
+                && communication.ModifiedDateTime.HasValue
+                && communication.CreatedDateTime.Value == communication.ModifiedDateTime.Value;
+
+            if ( isNewCommunication || isNewCommunicationFromGrid )
             {
                 communicationBag.IsBulkCommunication = this.DefaultAsBulk;
             }
@@ -1472,7 +1478,7 @@ namespace Rock.Blocks.Communication
                 communicationBag.IsBulkCommunication = communication.IsBulkCommunication;
             }
 
-            if ( isNewCommunication
+            if ( isNewCommunication || isNewCommunicationFromGrid
                  && ( communicationBag.Recipients?.Count ?? 0 ) + ( communicationBag.AdditionalEmailAddresses?.Count ?? 0 ) == 1 )
             {
                 communicationBag.IsBulkCommunication = false;
