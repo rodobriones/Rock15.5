@@ -14,3 +14,21 @@
     margin-bottom: 0;
   }
 }
+
+.file-asset-manager,
+.file-asset-manager > .block-content,
+.file-asset-manager > .block-content > div:not(.config-bar),
+.file-asset-manager > .block-content > div:not(.config-bar) > .obsidian-block-wrapper,
+.file-asset-manager > .block-content > div:not(.config-bar) > .obsidian-block-wrapper > .obsidian-block {
+  height: 100%;
+}
+
+
+.panel-body:has(.file-asset-manager) {
+  padding: 0;
+}
+
+.file-asset-manager table.assetmanager-files {
+  border-left: none;
+  border-right: none;
+}

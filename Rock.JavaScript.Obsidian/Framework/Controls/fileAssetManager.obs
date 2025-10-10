@@ -49,8 +49,8 @@
             </Transition>
         </div>
 
-        <div class="picker-files d-flex flex-column p-3 mh-100 flex-shrink-0 position-relative">
-            <div class="mb-3 d-flex align-items-center">
+        <div class="picker-files d-flex flex-column pb-3 pt-3 mh-100 flex-shrink-0 position-relative">
+            <div class="mx-3 mb-3 d-flex align-items-center">
                 <div v-if="isUploadingFile" class="js-upload-progress upload-progress-sm mr-2">
                     <i class="ti ti-refresh ti-spin"></i>
                 </div>
@@ -162,9 +162,7 @@
 
 <style scoped>
 #pnlAssetManager {
-    height: 400px;
-    min-height: 250px;
-    border: 1px solid var(--color-interface-soft);
+    height: 100%;
 }
 
 @media (max-width: 992px) {

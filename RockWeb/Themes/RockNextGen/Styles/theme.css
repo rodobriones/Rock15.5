@@ -16689,8 +16689,6 @@ textarea:focus,
   max-width: 320px;
   padding-right: var(--spacing-medium);
   border-right: 1px solid var(--color-interface-soft);
-  border-top-left-radius: var(--rounded-xsmall);
-  border-bottom-left-radius: var(--rounded-xsmall);
 }
 @media (max-width: 992px) {
   .picker-folders {
@@ -16699,9 +16697,6 @@ textarea:focus,
     max-width: 100%;
     padding-right: 0;
     padding-bottom: var(--spacing-medium);
-    border-top-right-radius: var(--rounded-xsmall);
-    border-top-left-radius: var(--rounded-xsmall);
-    border-bottom-left-radius: 0;
     border-bottom: 1px solid var(--color-interface-soft);
     border-right: 0;
   }
@@ -22867,8 +22862,20 @@ iframe.email-body {
   background-color: var(--color-interface-softest);
 }
 
+.file-asset-manager,
+.file-asset-manager > .block-content,
+.file-asset-manager > .block-content > div:not(.config-bar),
+.file-asset-manager > .block-content > div:not(.config-bar) > .obsidian-block-wrapper,
+.file-asset-manager > .block-content > div:not(.config-bar) > .obsidian-block-wrapper > .obsidian-block {
+  height: 100%;
+}
+
 #pnlAssetManager {
   border-radius: var(--rounded-xsmall);
+}
+
+.panel-body:has(.file-asset-manager) {
+  padding: 0;
 }
 
 .actions.assetmanager-actions {
@@ -22876,6 +22883,11 @@ iframe.email-body {
 }
 .actions.assetmanager-actions > .pull-left {
   margin-right: var(--spacing-xsmall);
+}
+
+.file-asset-manager table.assetmanager-files {
+  border-left: none;
+  border-right: none;
 }
 
 /* Pretty printing styles. Used with prettify.js. */
