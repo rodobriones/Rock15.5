@@ -4,11 +4,8 @@ using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 
-using OpenXmlPowerTools;
-
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Data;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -29,7 +26,121 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_BEACON_DASHBOARD )]
     public class BeaconDashboard : RockBlockType
     {
+        #region Methods
 
+        /// <summary>
+        /// Creates new touch points for each special event (birthday, anniversary, salvation anniversary, baptism anniversary).
+        /// </summary>
+        /// <param name="touchpointBag"></param>
+        /// <returns></returns>
+        private List<ContactTouchPointBag> CreateNewTouchPoints( ContactTouchPointBag touchpointBag )
+        {
+            var touchpointBags = new List<ContactTouchPointBag>();
+            if ( touchpointBag.IsBirthday )
+            {
+                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
+                newTouchpointBag.IsAnniversary = false;
+                newTouchpointBag.IsSalvationAnniversary = false;
+                newTouchpointBag.IsBaptismAnniversary = false;
+                touchpointBags.Add( newTouchpointBag );
+            }
+            if ( touchpointBag.IsAnniversary )
+            {
+                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
+                newTouchpointBag.IsBirthday = false;
+                newTouchpointBag.IsSalvationAnniversary = false;
+                newTouchpointBag.IsBaptismAnniversary = false;
+                touchpointBags.Add( newTouchpointBag );
+            }
+            if ( touchpointBag.IsSalvationAnniversary )
+            {
+                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
+                newTouchpointBag.IsBirthday = false;
+                newTouchpointBag.IsAnniversary = false;
+                newTouchpointBag.IsBaptismAnniversary = false;
+                touchpointBags.Add( newTouchpointBag );
+            }
+            if ( touchpointBag.IsBaptismAnniversary )
+            {
+                var newTouchpointBag = CloneContactTouchPointBag( touchpointBag );
+                newTouchpointBag.IsBirthday = false;
+                newTouchpointBag.IsAnniversary = false;
+                newTouchpointBag.IsSalvationAnniversary = false;
+                touchpointBags.Add( newTouchpointBag );
+            }
+
+            return touchpointBags;
+        }
+
+        /// <summary>
+        /// Clones the contact touch point bag.
+        /// </summary>
+        /// <param name="old"></param>
+        /// <returns></returns>
+        private ContactTouchPointBag CloneContactTouchPointBag( ContactTouchPointBag old )
+        {
+            var clone = old.ToJson().FromJsonOrNull<ContactTouchPointBag>();
+            if ( clone == null )
+            {
+                throw new InvalidOperationException( "Clone failed." );
+            }
+            return clone;
+        }
+
+        /// <summary>
+        /// Determines if the contact has more than one special event (birthday, anniversary, salvation anniversary, baptism anniversary).
+        /// </summary>
+        /// <param name="touchpointBag"></param>
+        /// <returns></returns>
+        private bool HasMoreThanOneSpecialEvent( ContactTouchPointBag touchpointBag )
+        {
+            var eventStatusList = new List<bool> { touchpointBag.IsBirthday, touchpointBag.IsAnniversary, touchpointBag.IsSalvationAnniversary, touchpointBag.IsBaptismAnniversary };
+            var hasMultipleSpecialEvents = eventStatusList
+                .Count( x => x == true ) > 1;
+
+            return hasMultipleSpecialEvents;
+        }
+
+        /// <summary>
+        /// Updates the special event status in the bag based on the contact's special events.
+        /// </summary>
+        /// <param name="bag"></param>
+        /// <param name="contact"></param>
+        private void SetBagSpecialEventStatus( ContactTouchPointBag bag, Contact contact )
+        {
+            bag.IsBirthday = HasOccurredThisYear( contact.BirthDay, contact.BirthMonth );
+            bag.IsAnniversary = HasOccurredThisYear( contact.WeddingAnniversaryDay, contact.WeddingAnniversaryMonth );
+            bag.IsSalvationAnniversary = HasOccurredThisYear( contact.SalvationDay, contact.SalvationMonth );
+            bag.IsBaptismAnniversary = HasOccurredThisYear( contact.BaptismDay, contact.BaptismMonth );
+        }
+
+        /// <summary>
+        /// Determines if a special event (birthday, anniversary, salvation anniversary, baptism anniversary) has occurred this year.
+        /// </summary>
+        /// <param name="day"></param>
+        /// <param name="month"></param>
+        /// <returns></returns>
+        private bool HasOccurredThisYear( int? day, int? month )
+        {
+            if ( !day.HasValue || !month.HasValue )
+            {
+                return false;
+            }
+
+            var today = RockDateTime.Today;
+            return month.Value < today.Month ||
+                   ( month.Value == today.Month && day.Value <= today.Day );
+        }
+
+        #endregion
+
+        #region Block Actions
+
+        /// <summary>
+        /// Gets the contact touch points that are scheduled for today and not yet completed.
+        /// </summary>
+        /// <param name="IdKey"></param>
+        /// <returns></returns>
         [BlockAction]
         public BlockActionResult GetContactTouchPoints( string IdKey )
         {
@@ -55,60 +166,64 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             var contactIdList = contacts.Select( c => c.Id );
 
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+
+            var todayStart = RockDateTime.Today;
+            var tomorrowStart = todayStart.AddDays( 1 );
             var pendingTouchpoints = contactTouchpointService
                 .Queryable()
                 .AsNoTracking()
-                .Where( tp => contactIdList.Contains( tp.ContactId ) )   // Grab the person contract touchpoints
-                .Where( tp => tp.CompletedDateTime == null )                            // Only get the uncompleted touchpoints
-                .Where( tp => DbFunctions.TruncateTime( tp.ScheduledDateTime ) == RockDateTime.Today.Date ) // Only get the touchpoints that are scheduled for today
+                .Where( tp => contactIdList.Contains( tp.ContactId ) )      // Grab the person contact touchpoints
+                .Where( tp => tp.CompletedDateTime == null )                // Only get the uncompleted touchpoints
+                .Where( tp => tp.ScheduledDateTime >= todayStart
+                            && tp.ScheduledDateTime < tomorrowStart )       // Only get the touchpoints that are scheduled for today
+                .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
                 .ToList();
-
+            // PS TODO: hwo does the ScheduledDateTime get set? 
             // PS TODO: if the person daily prayer goal is only 2 should we do .take(2)?
 
             var touchpointBags = new List<ContactTouchPointBag>();
 
+            var contactsById = contacts.ToDictionary( c => c.Id );
             // Loop through each touchpoint and create a bag for it.
             foreach ( ContactTouchpoint touchpoint in pendingTouchpoints )
             {
                 // Get the contact for the current touchpoint.
-                Contact touchpointContact = contacts.Where( c => c.Id == touchpoint.ContactId ).FirstOrDefault();
-
-                var imageUrl = touchpointContact.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( touchpointContact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,;
+                Contact contact = contactsById[touchpoint.ContactId];
 
                 // Create a bag for each touchpoint.
                 var touchpointBag = new ContactTouchPointBag
                 {
                     ContactId = touchpoint.ContactId,
                     Type = touchpoint.Type,
-                    PhotoUrl = imageUrl,
-                    LastUpdated = touchpointContact.ModifiedDateTime ?? touchpointContact.CreatedDateTime ?? DateTime.MinValue,
-                    FirstName = touchpointContact.FirstName,
-                    LastName = touchpointContact.LastName,
-                    ConnectionNote = touchpointContact.ConnectionNote,
-                    PrayerNote = touchpointContact.PrayerNote,
-                    MobilePhone = touchpointContact.MobilePhone,
-                    note = touchpoint.SystemNote,
-                    Email = touchpointContact.Email,
-                    PrayerCadence = touchpointContact.PrayerCadence.ToMobile(),
-                    ConnectionCadence = touchpointContact.ConnectionCadence.ToMobile(),
-                    RelationshipFocus = ( int ) touchpointContact.RelationshipFocus,
-                    RelationshipStrength = ( int ) touchpointContact.RelationshipStrength,
-                    BirthDay = touchpointContact.BirthDay,
-                    BirthMonth = touchpointContact.BirthMonth,
-                    BirthYear = touchpointContact.BirthYear,
-                    AnniversaryDay = touchpointContact.WeddingAnniversaryDay,
-                    AnniversaryMonth = touchpointContact.WeddingAnniversaryMonth,
-                    AnniversaryYear = touchpointContact.WeddingAnniversaryYear,
-                    HasAcceptedJesus = touchpointContact.HasAcceptedJesus,
-                    SalvationDay = touchpointContact.SalvationDay,
-                    SalvationMonth = touchpointContact.SalvationMonth,
-                    SalvationYear = touchpointContact.SalvationYear,
-                    Baptized = touchpointContact.Baptized,
-                    BaptismDay = touchpointContact.BaptismDay,
-                    BaptismMonth = touchpointContact.BaptismMonth,
-                    BaptismYear = touchpointContact.BaptismYear,
+                    PhotoUrl = contact.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
+                    LastUpdated = contact.ModifiedDateTime ?? contact.CreatedDateTime ?? DateTime.MinValue,
+                    FirstName = contact.FirstName,
+                    LastName = contact.LastName,
+                    ConnectionNote = contact.ConnectionNote,
+                    PrayerNote = contact.PrayerNote,
+                    MobilePhone = contact.MobilePhone,
+                    Note = touchpoint.SystemNote,
+                    Email = contact.Email,
+                    PrayerCadence = contact.PrayerCadence.ToMobile(),
+                    ConnectionCadence = contact.ConnectionCadence.ToMobile(),
+                    RelationshipFocus = ( int ) contact.RelationshipFocus,
+                    RelationshipStrength = ( int ) contact.RelationshipStrength,
+                    BirthDay = contact.BirthDay,
+                    BirthMonth = contact.BirthMonth,
+                    BirthYear = contact.BirthYear,
+                    AnniversaryDay = contact.WeddingAnniversaryDay,
+                    AnniversaryMonth = contact.WeddingAnniversaryMonth,
+                    AnniversaryYear = contact.WeddingAnniversaryYear,
+                    HasAcceptedJesus = contact.HasAcceptedJesus,
+                    SalvationDay = contact.SalvationDay,
+                    SalvationMonth = contact.SalvationMonth,
+                    SalvationYear = contact.SalvationYear,
+                    Baptized = contact.Baptized,
+                    BaptismDay = contact.BaptismDay,
+                    BaptismMonth = contact.BaptismMonth,
+                    BaptismYear = contact.BaptismYear,
                     IsBirthday = touchpoint.IsBirthday,         // PS TODO: Ask Braden if this is automatically set somewhere else.
-                    IsAnniversary = touchpoint.IsAnniversary,
+                    IsAnniversary = touchpoint.IsAnniversary,   // PS TODO: Ask Braden if this is automatically set somewhere else.
                     IsSalvationAnniversary = false,             // Default to false, will be updated below if it is a salvation anniversary.
                     IsBaptismAnniversary = false,               // Default to false, will be updated below if it is a baptism anniversary.
                 };
@@ -116,24 +231,25 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 // If the current touchpoint is a special event, check if it is birthday or anniversary or both.
                 if ( touchpointBag.Type == TouchpointType.SpecialEvent )
                 {
-                    touchpointBag.IsBirthday = touchpointContact.BirthDay.HasValue && touchpointContact.BirthMonth.HasValue &&
-                        touchpointContact.BirthDay <= RockDateTime.Today.Day && touchpointContact.BirthMonth <= RockDateTime.Today.Month;
-
-                    touchpointBag.IsAnniversary = touchpointContact.WeddingAnniversaryDay.HasValue && touchpointContact.WeddingAnniversaryMonth.HasValue &&
-                        touchpointContact.WeddingAnniversaryDay <= RockDateTime.Today.Day && touchpointContact.WeddingAnniversaryMonth <= RockDateTime.Today.Month;
-
-                    touchpointBag.IsSalvationAnniversary = touchpointContact.SalvationDay.HasValue && touchpointContact.SalvationMonth.HasValue &&
-                        touchpointContact.SalvationDay <= RockDateTime.Today.Day && touchpointContact.SalvationMonth <= RockDateTime.Today.Month;
-
-                    touchpointBag.IsBaptismAnniversary = touchpointContact.BaptismDay.HasValue && touchpointContact.BaptismMonth.HasValue &&
-                        touchpointContact.BaptismDay <= RockDateTime.Today.Day && touchpointContact.BaptismMonth <= RockDateTime.Today.Month;
+                    SetBagSpecialEventStatus( touchpointBag, contact );
                 }
 
-                touchpointBags.Add( touchpointBag );
+                if ( HasMoreThanOneSpecialEvent( touchpointBag ) )
+                {
+                    // create a new touchpoint for each special event
+                    var newTouchPoints = CreateNewTouchPoints( touchpointBag );
+                    touchpointBags.AddRange( newTouchPoints );
+                }
+                else
+                {
+                    touchpointBags.Add( touchpointBag );
+                }
             }
 
             return ActionOk( touchpointBags );
         }
+
+        #endregion
     }
 
     public class ContactTouchPointBag : ContactProfileBag
@@ -143,6 +259,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         public bool IsAnniversary { get; set; }
         public bool IsSalvationAnniversary { get; set; }
         public bool IsBaptismAnniversary { get; set; }
-        public string note { get; set; }
+        public string Note { get; set; }
     }
 }

@@ -95,6 +95,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 MobilePhone = saveContactBag.MobilePhone,
                 RelationshipStrength = saveContactBag.RelationshipStrength.ToNative(),
                 RelationshipFocus = saveContactBag.RelationshipFocus.ToNative(),
+                PrayerCadence = saveContactBag.PrayerCadence.ToNative(),
                 PrayerNote = saveContactBag.PrayerNote,
                 ConnectionCadence = saveContactBag.ConnectionCadence.ToNative(),
                 ConnectionNote = saveContactBag.ConnectionNote,
