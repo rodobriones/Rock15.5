@@ -1,0 +1,228 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <ContentSection light
+                    disableCollapse>
+        <ContentStack>
+            <div class="row">
+                <div class="col-md-6">
+                    <DropDownList v-model="value"
+                                  label="Request Type"
+                                  :items="options"
+                                  :showBlankItem="true"
+                                  :enhanceForLongLists="false"
+                                  :grouped="false"
+                                  :multiple="false"
+                                  required />
+                </div>
+                <div class="col-md-6">
+                    <DropDownList v-model="value"
+                                  label="Request Status"
+                                  :items="options"
+                                  :showBlankItem="true"
+                                  :enhanceForLongLists="false"
+                                  :grouped="false"
+                                  :multiple="false"
+                                  required />
+                </div>
+            </div>
+            <DatePicker v-model="date"
+                        label="Request Date"
+                        :displayCurrentOption="false"
+                        :isCurrentDateOffset="false"
+                        :disableForceParse="false"
+                        :disableShowOnFocus="false"
+                        :disableHighlightToday="false"
+                        :disallowFutureDateSelection="false"
+                        :disallowPastDateSelection="false"
+                        :startView="startView"
+                        required />
+            <PersonPicker v-model="value"
+                          label="Assigned To"
+                          excludeDeceased
+                          enableSelfSelection />
+            <CampusPicker v-model="value"
+                          label="Campus" />
+        </ContentStack>
+    </ContentSection>
+    <ContentSection title="Requester"
+                    icon="ti ti-user-question">
+        <ContentStack>
+            <div class="row">
+                <div class="col-md-6">
+                    <PersonPicker v-model="value"
+                                  label="Person"
+                                  excludeDeceased
+                                  enableSelfSelection />
+                </div>
+                <div class="col-md-6">
+                    <DropDownList v-model="value"
+                                  label="Connection Status"
+                                  :items="options"
+                                  :showBlankItem="true"
+                                  :enhanceForLongLists="false"
+                                  :grouped="false"
+                                  :multiple="false"
+                                  required />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <TextBox v-model="text"
+                             label="First Name"
+                             required />
+                </div>
+                <div class="col-md-6">
+                    <TextBox v-model="text"
+                             label="Last Name"
+                             required />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <PhoneNumberBox v-model="phoneNumber"
+                                    label="Home Phone" />
+                </div>
+                <div class="col-md-6">
+                    <PhoneNumberBox v-model="phoneNumber"
+                                    label="Cell Phone" />
+                </div>
+                <div class="col-md-6">
+                    <PhoneNumberBox v-model="phoneNumber"
+                                    label="Work Phone" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <EmailBox v-model="value"
+                              label="Email" />
+                </div>
+                <div class="col-md-6">
+                    <LocationAddressPicker v-model="value"
+                                           label="Location" />
+                </div>
+            </div>
+            <TextBox v-model="text"
+                     label="Government ID" />
+            <a href="#" target="_blank" rel="noopener noreferrer">Create Record From Fields</a>
+        </ContentStack>
+    </ContentSection>
+    <ContentSection title="Request Details"
+                    icon="ti ti-list">
+        <ContentStack>
+            <TextBox v-model="text"
+                     label="Description of Request"
+                     textMode="multiline"
+                     required />
+            <div class="row">
+                <div class="col-md-6">
+                    <FileUploader v-model="currentAttachment"
+                                  :binaryFileTypeGuid="baseBlock.config.attachmentsBinaryFileTypeGuid"
+                                  :disabled="isSaving"
+                                  label="Related Documents"
+                                  :uploadAsTemporary="true"
+                                  @update:modelValue="onAttachmentAdded" />
+
+                    <div class="attachment">
+                        <ul class="attachment-content">
+                            <li v-for="binaryFileAttachment in attachments">
+                                <a :href="`/GetFile.ashx?guid=${binaryFileAttachment.value}&fileName=${binaryFileAttachment.text}`" target="_blank" rel="noopener noreferrer">{{ binaryFileAttachment.text }}</a> <a :disabled="isSaving"><i class="ti ti-x" @click="onAttachmentRemoved(binaryFileAttachment)"></i></a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </ContentStack>
+        <ContentSection title="Results"
+                        icon="ti ti-flag">
+            <ContentStack>
+                <TextBox v-model="text"
+                         label="Result Summary"
+                         textMode="multiline"
+                         required />
+                <TextBox v-model="text"
+                         label="Next Steps Provided"
+                         textMode="multiline"
+                         required />
+            </ContentStack>
+        </ContentSection>
+</template>
+
+<script setup lang="ts">
+    import { PropType, ref, watch } from "vue";
+    import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
+    import { setPropertiesBoxValue, watchPropertyChanges } from "@Obsidian/Utility/block";
+    import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
+    import { BenevolenceRequestBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestBag";
+    import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
+    import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import DatePicker from "@Obsidian/Controls/datePicker.obs";
+    import PersonPicker from "@Obsidian/Controls/personPicker.obs";
+    import CampusPicker from "@Obsidian/Controls/campusPicker.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import PhoneNumberBox from "@Obsidian/Controls/phoneNumberBox.obs";
+    import EmailBox from "@Obsidian/Controls/emailBox.obs";
+    import LocationAddressPicker from "@Obsidian/Controls/locationAddressPicker.obs";
+
+    const props = defineProps({
+        modelValue: {
+            type: Object as PropType<ValidPropertiesBox<BenevolenceRequestBag>>,
+            required: true
+        },
+
+        options: {
+            type: Object as PropType<BenevolenceRequestDetailOptionsBag>,
+            required: true
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "update:modelValue", value: ValidPropertiesBox<BenevolenceRequestBag>): void,
+        (e: "propertyChanged", value: string): void
+    }>();
+
+    // #region Values
+
+    const attributes = ref(props.modelValue.bag?.attributes ?? {});
+    const attributeValues = ref(props.modelValue.bag?.attributeValues ?? {});
+
+    // The properties that are being edited. This should only contain
+    // objects returned by propertyRef().
+    const propRefs = [];
+
+    // #endregion
+
+    // #region Computed Values
+
+    // #endregion
+
+    // #region Functions
+
+    // #endregion
+
+    // #region Event Handlers
+
+    // #endregion
+
+    // Watch for parental changes in our model value and update all our values.
+    watch(() => props.modelValue, () => {
+        updateRefValue(attributes, props.modelValue.bag?.attributes ?? {});
+        updateRefValue(attributeValues, props.modelValue.bag?.attributeValues ?? {});
+    });
+
+    // Determines which values we want to track changes on (defined in the
+    // array) and then emit a new object defined as newValue.
+    watch([attributeValues, ...propRefs], () => {
+        const newValue: ValidPropertiesBox<BenevolenceRequestBag> = {
+            bag: { ...props.modelValue.bag } as BenevolenceRequestBag
+        };
+
+        setPropertiesBoxValue(newValue, "attributeValues", attributeValues.value);
+
+        emit("update:modelValue", newValue);
+    });
+
+    // Watch for any changes to props that represent properties and then
+    // automatically emit which property changed.
+    watchPropertyChanges(propRefs, emit);
+</script>

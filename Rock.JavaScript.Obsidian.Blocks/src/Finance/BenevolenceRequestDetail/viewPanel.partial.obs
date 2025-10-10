@@ -1,0 +1,139 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <ContentSection light
+                    disableCollapse>
+        <ContentStack>
+            <!-- Avatar / Name -->
+        </ContentStack>
+    </ContentSection>
+    <ContentSection title="Contact Information"
+                    light
+                    disableCollapse>
+        <ContentStack>
+            <div class="row">
+                <div class="col-md-6">
+                    <div v-if="props.modelValue?.email || props.modelValue?.homePhoneNumber"
+                         class="form-group">
+                        <div v-if="props.modelValue?.email"
+                             class="control-wrapper">
+                            <p>{{ props.modelValue?.email }}</p>
+                        </div>
+                        <div v-if="props.modelValue?.homePhoneNumber"
+                             class="control-wrapper">
+                            <p>{{ props.modelValue?.homePhoneNumber }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div v-if="props.modelValue?.location"
+                         class="form-group">
+                        <label class="control-label">Address</label>
+                        <div class="control-wrapper">
+                            <p>{{ props.modelValue?.location.text }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </ContentStack>
+        <ContentSection title="Summary of Results"
+                        light
+                        disableCollapse>
+            <ContentStack>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="control-label">Results Summary</label>
+                            <div class="control-wrapper">
+                                <p>{{ props.modelValue?.resultSummary ?? '' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="control-label">Next Steps Provided</label>
+                            <div class="control-wrapper">
+                                <p>{{ props.modelValue?.providedNextSteps ?? '' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <BenevolenceResultsList :results="props.modelValue?.results ?? []" />
+            </ContentStack>
+        </ContentSection>
+</template>
+
+<script setup lang="ts">
+    import { computed, PropType, ref } from "vue";
+    import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
+    import ValueDetailList from "@Obsidian/Controls/valueDetailList.obs";
+    import { ValueDetailListItemBuilder } from "@Obsidian/Core/Controls/valueDetailListItemBuilder";
+    import { ValueDetailListItem } from "@Obsidian/Types/Controls/valueDetailListItem";
+    import { BenevolenceRequestBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestBag";
+    import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
+    import ContentSection from "@Obsidian/Controls/contentSection.obs";
+    import BenevolenceResultsList from "./BenevolenceRequestDetail/benevolenceResultsList.partial.obs";
+
+    const props = defineProps({
+        modelValue: {
+            type: Object as PropType<BenevolenceRequestBag | null>,
+            required: false
+        },
+
+        options: {
+            type: Object as PropType<BenevolenceRequestDetailOptionsBag>,
+            required: true
+        }
+    });
+
+    // #region Values
+
+    const attributes = ref(props.modelValue?.attributes ?? {});
+    const attributeValues = ref(props.modelValue?.attributeValues ?? {});
+
+    // #endregion
+
+    // #region Computed Values
+
+    /** The values to display full-width at the top of the block. */
+    const topValues = computed((): ValueDetailListItem[] => {
+        const valueBuilder = new ValueDetailListItemBuilder();
+
+        if (!props.modelValue) {
+            return valueBuilder.build();
+        }
+
+        return valueBuilder.build();
+    });
+
+    /** The values to display at half-width on the left side of the block. */
+    const leftSideValues = computed((): ValueDetailListItem[] => {
+        const valueBuilder = new ValueDetailListItemBuilder();
+
+        if (!props.modelValue) {
+            return valueBuilder.build();
+        }
+
+        return valueBuilder.build();
+    });
+
+    /** The values to display at half-width on the right side of the block. */
+    const rightSideValues = computed((): ValueDetailListItem[] => {
+        const valueBuilder = new ValueDetailListItemBuilder();
+
+        if (!props.modelValue) {
+            return valueBuilder.build();
+        }
+
+        return valueBuilder.build();
+    });
+
+    // #endregion
+
+    // #region Functions
+
+    // #endregion
+
+    // #region Event Handlers
+
+    // #endregion
+</script>

@@ -1,0 +1,74 @@
+<template>
+    <div>
+        <Grid
+              :data="resultsDataSource"
+              keyField="idKey"
+              itemTerm="Result"
+              title="Benevolence Results"
+              :onAddItem="onAddResult"
+              @selectItem="onSelectResult">
+            <TextColumn
+                        name="resultType"
+                        title="Result Type"
+                        field="result"
+                        :filter="pickExistingValueFilter"
+                        visiblePriority="xs" />
+
+            <CurrencyColumn
+                            name="amount"
+                            title="Amount"
+                            field="amount"
+                            :filter="numberValueFilter"
+                            headerClass="title-right"
+                            itemClass="justify-content-end text-right"
+                            visiblePriority="xs" />
+
+            <TextColumn
+                        name="details"
+                        title="Details"
+                        field="details"
+                        :filter="textValueFilter"
+                        visiblePriority="xs" />
+
+            <DeleteColumn @click="onDeleteResult" />
+        </Grid>
+    </div>
+</template>
+
+<script setup lang="ts">
+    import { ref } from "vue";
+    import Grid, { TextColumn, CurrencyColumn, DeleteColumn, textValueFilter, numberValueFilter, pickExistingValueFilter } from "@Obsidian/Controls/grid";
+    import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
+
+    // Props: expects an array of BenevolenceResultBag objects
+    const props = defineProps<{
+        results: Array<BenevolenceResultBag>;
+        isEditable: boolean;
+    }>();
+
+    const emit = defineEmits<{
+        (e: "add"): void;
+        (e: "delete", idKey: string): void;
+        (e: "select", idKey: string): void;
+    }>();
+
+    const resultsDataSource = ref(props.results);
+
+    // Add new result
+    function onAddResult() {
+        emit("add");
+    }
+
+    // Delete result
+    async function onDeleteResult(idKey: string) {
+        // Optionally confirm deletion
+        if (confirm("Are you sure you want to delete this result?")) {
+            emit("delete", idKey);
+        }
+    }
+
+    // Select result (optional, e.g. for editing)
+    function onSelectResult(idKey: string) {
+        emit("select", idKey);
+    }
+</script>
