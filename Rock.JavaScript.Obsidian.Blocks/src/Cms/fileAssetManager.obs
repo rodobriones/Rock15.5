@@ -1,18 +1,14 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <Block :title="config?.title ?? 'Asset Manager'" hasFullscreen>
-        <div v-bind="wrapperAttrs">
-            <FileAssetManager v-model:openFolders="openFolders"
-                              v-model:selectedFolder="selectedFolder"
-                              :height="height"
-                              :browseMode="config?.browseMode as 'image' | 'doc' | undefined ?? 'doc'"
-                              :enableAssetManager="config?.enableAssetProviders ?? false"
-                              :enableFileManager="config?.enableFileManager ?? true"
-                              :enableZipUpload="config?.enableZipUploader ?? true"
-                              :encryptedRootFolder="config?.rootFolder ?? undefined"
-                              :editFilePage="config?.fileEditorPage ?? undefined" />
-        </div>
-    </Block>
+    <FileAssetManager v-model:openFolders="openFolders"
+        v-model:selectedFolder="selectedFolder"
+        :height="height"
+        :browseMode="config?.browseMode as 'image' | 'doc' | undefined ?? 'doc'"
+        :enableAssetManager="config?.enableAssetProviders ?? false"
+        :enableFileManager="config?.enableFileManager ?? true"
+        :enableZipUpload="config?.enableZipUploader ?? true"
+        :encryptedRootFolder="config?.rootFolder ?? undefined"
+        :editFilePage="config?.fileEditorPage ?? undefined" />
 </template>
 
 <script setup lang="ts">
