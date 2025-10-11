@@ -471,8 +471,41 @@
   height: 100%;
 }
 
+.file-asset-manager .panel-body > .panel-flex-fill-body {
+  position: unset;
+  height: 100%;
+  @media (max-width: $screen-medium) {
+    height: unset;
+  }
+}
+
+.file-asset-manager .panel.panel-block:has(.panel-flex-fill-body) {
+  overflow-y: unset;
+}
+
+.file-asset-manager .panel-body:has(.panel-flex-fill-body) {
+  overflow: hidden auto;
+}
+
+.file-asset-manager .panel-body {
+  padding: 0;
+}
+
+.file-asset-manager .panel-body:has(.panel-flex-fill-body) {
+  padding: 0;
+}
+
+.panel-flex-fill-body #pnlAssetManager {
+  border-bottom: 0;
+}
+
 #pnlAssetManager {
   border-radius: var(--rounded-xsmall);
+  border-bottom: 1px solid var(--color-interface-soft);
+  @media (max-width: $screen-medium) {
+    border-bottom: 0;
+    height: 100% !important;
+  }
 }
 
 .panel-body:has(.file-asset-manager) {
@@ -490,6 +523,14 @@
 .file-asset-manager table.assetmanager-files {
   border-left: none;
   border-right: none;
+}
+
+.modal-body:has(#pnlAssetManager) {
+  padding: 0;
+}
+
+.modal-body #pnlAssetManager {
+  border-bottom: 0;
 }
 
 // ================== END ASSET MANAGER ==================
