@@ -21372,6 +21372,21 @@ body.hide-block-role-secondary .block-instance.block-role-secondary:not(.block-r
   border-bottom: 1px solid var(--color-interface-soft);
 }
 
+.group-schedule-roster .location {
+  border-radius: 0;
+}
+.group-schedule-roster .location > .panel-block {
+  border-radius: 0;
+}
+.group-schedule-roster .location:last-of-type {
+  border-bottom-left-radius: var(--rounded-medium);
+  border-bottom-right-radius: var(--rounded-medium);
+}
+.group-schedule-roster .location:last-of-type .panel-block {
+  border-bottom-left-radius: var(--rounded-medium);
+  border-bottom-right-radius: var(--rounded-medium);
+}
+
 /*
 Used to manage styles related to the LMS pages.
 
