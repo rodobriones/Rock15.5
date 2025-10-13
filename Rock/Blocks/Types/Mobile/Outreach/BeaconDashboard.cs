@@ -118,18 +118,18 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <summary>
         /// Gets the contact touch points that are scheduled for today and not yet completed.
         /// </summary>
-        /// <param name="IdKey"></param>
+        /// <param name="idKey"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult GetContactTouchPoints( string IdKey )
+        public BlockActionResult GetContactTouchPoints( string idKey )
         {
-            if ( IdKey.IsNullOrWhiteSpace() )
+            if ( idKey.IsNullOrWhiteSpace() )
             {
                 return ActionBadRequest( "IdKey is required" );
             }
 
             PersonService personService = new PersonService( RockContext );
-            var person = personService.Get( IdKey );
+            var person = personService.Get( idKey );
             if ( person == null )
             {
                 return ActionNotFound( "Person not found." );
@@ -172,6 +172,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 {
                     ContactId = touchpoint.ContactId,
                     Type = touchpoint.Type,
+                    TouchpointIdKey = touchpoint.IdKey,
                     PhotoUrl = contact.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
                     LastUpdated = contact.ModifiedDateTime ?? contact.CreatedDateTime ?? DateTime.MinValue,
                     FirstName = contact.FirstName,
@@ -208,12 +209,45 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk( touchpointBags );
         }
 
+        /// <summary>
+        /// Marks the touchpoint as prayed.
+        /// </summary>
+        /// <param name="idKey"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult PrayedForContact( string idKey )
+        {
+            if ( idKey.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "IdKey is required" );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var touchpoint = contactTouchpointService
+                .Queryable()
+                .Where( tp => tp.IdKey == idKey )
+                .Where( tp => tp.Type == TouchpointType.Prayer )
+                .Where( tp => tp.CompletedDateTime == null )
+                .FirstOrDefault();
+
+            if ( touchpoint == null )
+            {
+                return ActionNotFound( "Touchpoint not found." );
+            }
+
+            touchpoint.CompletedDateTime = RockDateTime.Now;
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
         #endregion
     }
 
     public class ContactTouchPointBag : ContactProfileBag
     {
         public TouchpointType Type { get; set; }
+        public string TouchpointIdKey { get; set; }
         public string Note { get; set; }
         public TouchpointView TouchpointView { get; set; }
     }
