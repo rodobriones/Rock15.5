@@ -21,19 +21,14 @@
 // </copyright>
 //
 
-import { Guid } from "@Obsidian/Types";
+/**
+ * Represents the notification details sent to the client when a proximity-based
+ * attendance event occurs.
+ */
+export type ProximityAttendanceNotificationBag = {
+    /** Gets or sets the body/message content of the notification displayed to the user. */
+    message?: string | null;
 
-/** IP Address filter configuration item. */
-export type IPAddressRequestFilterBag = {
-    /** Gets or sets the beginning IP address. */
-    beginningIPAddress?: string | null;
-
-    /** Gets or sets the ending IP address. */
-    endingIPAddress?: string | null;
-
-    /** Gets or sets the unique identifier. */
-    guid: Guid;
-
-    /** Gets or sets the IP range match type. */
-    matchType: number;
+    /** Gets or sets the title of the notification (e.g. the heading presented to the user). */
+    title?: string | null;
 };
