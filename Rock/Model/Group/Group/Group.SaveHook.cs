@@ -40,6 +40,8 @@ namespace Rock.Model
         {
             private History.HistoryChangeList HistoryChangeList { get; set; }
             private bool _FamilyCampusIsChanged = false;
+            private List<int> _GroupMemberIdsToReactivate;
+            private DateTime? _NewInactiveDateTimeForReactivation;
 
             /// <summary>
             /// Called before the save operation is executed.
@@ -50,6 +52,8 @@ namespace Rock.Model
 
                 var rockContext = ( RockContext ) this.RockContext;
                 _FamilyCampusIsChanged = false;
+                _GroupMemberIdsToReactivate = null;
+                _NewInactiveDateTimeForReactivation = null;
 
                 switch ( State )
                 {
@@ -216,6 +220,16 @@ namespace Rock.Model
                     PersonService.UpdatePrimaryFamilyByGroup( Entity.Id, rockContext );
                 }
 
+                if ( _GroupMemberIdsToReactivate?.Any() ?? false )
+                {
+                    var idsToReactivate = _GroupMemberIdsToReactivate.ToList();
+                    var newInactiveDateTime = _NewInactiveDateTimeForReactivation;
+
+                    // Run validation logic in a separate thread so we don't hold up the UI, as it takes a while if there are a lot of members to process.
+                    // The current validation logic downstream from IsValidGroupMember() is very expensive, and is due for refresh.
+                    Task.Run( async () => await ValidateAndReactivateGroupMembers( idsToReactivate, newInactiveDateTime ) );
+                }
+
                 if ( RockContext.IsRockToChatSyncEnabled && ChatHelper.IsChatEnabled )
                 {
                     Task.Run( async () =>
@@ -277,55 +291,8 @@ namespace Rock.Model
                         .Select( a => a.Id )
                         .ToList();
 
-                    if ( membersToReactivateIds.Any() )
-                    {
-                        var validMemberIds = new List<int>();
-                        const int batchSize = 100;
-
-                        for ( int i = 0; i < membersToReactivateIds.Count; i += batchSize )
-                        {
-                            var batchIds = membersToReactivateIds.Skip( i ).Take( batchSize ).ToList();
-
-                            try
-                            {
-                                using ( var batchContext = new RockContext() )
-                                {
-                                    batchContext.Database.CommandTimeout = 180;
-                                    var groupMemberService = new GroupMemberService( batchContext );
-
-                                    var batchMembers = groupMemberService.Queryable()
-                                        .AsNoTracking()
-                                        .Where( m => batchIds.Contains( m.Id ) )
-                                        .ToList();
-
-                                    foreach ( var member in batchMembers )
-                                    {
-                                        if ( member.IsValidGroupMember( batchContext ) )
-                                        {
-                                            validMemberIds.Add( member.Id );
-                                        }
-                                    }
-                                }
-                            }
-                            catch ( Exception ex )
-                            {
-                                ExceptionLogService.LogException( ex );
-                            }
-                        }
-
-                        if ( validMemberIds.Any() )
-                        {
-                            var membersToActivateQuery = new GroupMemberService( rockContext )
-                                .Queryable()
-                                .Where( m => validMemberIds.Contains( m.Id ) );
-
-                            rockContext.BulkUpdate( membersToActivateQuery, m => new GroupMember
-                            {
-                                GroupMemberStatus = GroupMemberStatus.Active,
-                                InactiveDateTime = newInactiveDateTime
-                            } );
-                        }
-                    }
+                    _GroupMemberIdsToReactivate = membersToReactivateIds;
+                    _NewInactiveDateTimeForReactivation = newInactiveDateTime;
                 }
             }
 
@@ -372,6 +339,65 @@ namespace Rock.Model
                         ArchivedDateTime = newArchivedDateTime
                     } );
                 }
+            }
+
+            private Task ValidateAndReactivateGroupMembers( List<int> membersToReactivateIds, DateTime? newInactiveDateTime )
+            {
+                try
+                {
+                    const int validationBatchSize = 1000;
+
+                    for ( int i = 0; i < membersToReactivateIds.Count; i += validationBatchSize )
+                    {
+                        var batchIds = membersToReactivateIds.Skip( i ).Take( validationBatchSize ).ToList();
+                        var validMemberIds = new List<int>();
+
+                        try
+                        {
+                            using ( var batchContext = new RockContext() )
+                            {
+                                batchContext.Database.CommandTimeout = 180;
+                                var groupMemberService = new GroupMemberService( batchContext );
+
+                                var batchMembers = groupMemberService.Queryable()
+                                    .AsNoTracking()
+                                    .Where( m => batchIds.Contains( m.Id ) )
+                                    .ToList();
+
+                                foreach ( var member in batchMembers )
+                                {
+                                    if ( member.IsValidGroupMember( batchContext ) )
+                                    {
+                                        validMemberIds.Add( member.Id );
+                                    }
+                                }
+
+                                if ( validMemberIds.Any() )
+                                {
+                                    var membersToReactivateQuery = new GroupMemberService( batchContext )
+                                        .Queryable()
+                                        .Where( m => validMemberIds.Contains( m.Id ) );
+
+                                    batchContext.BulkUpdate( membersToReactivateQuery, m => new GroupMember
+                                    {
+                                        GroupMemberStatus = GroupMemberStatus.Active,
+                                        InactiveDateTime = newInactiveDateTime
+                                    } );
+                                }
+                            }
+                        }
+                        catch ( Exception ex )
+                        {
+                            ExceptionLogService.LogException( ex );
+                        }
+                    }
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                }
+
+                return Task.CompletedTask;
             }
         }
     }
