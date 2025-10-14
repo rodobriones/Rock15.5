@@ -32,6 +32,11 @@
         Birthday = 4,
 
         /// <summary>
+        /// Share
+        /// </summary>
+        Share = 5,
+
+        /// <summary>
         /// Wedding Anniversary
         /// </summary>
         WeddingAnniversary = 6,
@@ -45,10 +50,5 @@
         /// Salvation Anniversary
         /// </summary>
         SalvationAnniversary = 8,
-
-        /// <summary>
-        /// Share
-        /// </summary>
-        Share = 5,
     }
 }

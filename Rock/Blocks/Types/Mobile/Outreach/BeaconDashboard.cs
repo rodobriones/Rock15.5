@@ -34,75 +34,75 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <param name="touchpointType"></param>
         /// <param name="contact"></param>
         /// <returns></returns>
-        private TouchpointView GetTouchpointView( TouchpointType touchpointType, Contact contact )
+        private TouchpointViewBag GetTouchpointView( TouchpointType touchpointType, Contact contact )
         {
             switch ( touchpointType )
             {
                 case TouchpointType.Prayer:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
                         Title = "Prayer",
                         InformationText = $"Lift up {contact.FirstName} in prayer."
                     };
                 case TouchpointType.Connection:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-conversation-bubble.svg",
                         Title = "Connection",
                         InformationText = $"Check in to see how {contact.FirstName} doing."
                     };
                 case TouchpointType.Reminder:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-sticky-note.svg",
                         Title = "Reminder",
                         InformationText = "Here’s what you wrote:"
                     };
                 case TouchpointType.Pulse:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-heart.svg",
                         Title = "Pulse",
                         InformationText = $"Has your connection with {contact.FirstName} grown,or has he taken a step toward Christ?"
                     };
                 case TouchpointType.Birthday:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-birthday.svg",
                         Title = "Birthday",
                         InformationText = "Celebrate his life and your relationship", // PS TODO: gender it
                     };
                 case TouchpointType.WeddingAnniversary:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-wedding-anniversary.svg",
                         Title = "Wedding Anniversary",
                         InformationText = "Celebrate her commitment", // PS TODO: Gender it
                     };
                 case TouchpointType.BaptismAnniversary:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-baptism-anniversary.svg",
                         Title = "Baptism Anniversary",
                         InformationText = "Celebrate his decision", // PS TODO: Gender it
                     };
                 case TouchpointType.SalvationAnniversary:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-salvation-anniversary.svg",
                         Title = "Salvation Anniversary",
                         InformationText = "Celebrate her decision", // PS TODO: Gender it
                     };
                 case TouchpointType.Share:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-share.svg",
                         Title = "Share",
                         InformationText = $"Share your faith with {contact.FirstName}.",
                     };
                 default:
-                    return new TouchpointView
+                    return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
                         Title = "Touchpoint",
@@ -110,6 +110,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     };
             }
         }
+
 
         #endregion
 
@@ -158,7 +159,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
                 .ToList();
 
-            var touchpointBags = new List<ContactTouchPointBag>();
+            var touchpointBags = new List<ContactTouchpointBag>();
 
             var contactsById = contacts.ToDictionary( c => c.Id );
             // Loop through each touchpoint and create a bag for it.
@@ -168,7 +169,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 Contact contact = contactsById[touchpoint.ContactId];
 
                 // Create a bag for each touchpoint.
-                var touchpointBag = new ContactTouchPointBag
+                var touchpointBag = new ContactTouchpointBag
                 {
                     ContactId = touchpoint.ContactId,
                     Type = touchpoint.Type,
@@ -200,7 +201,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     BaptismDay = contact.BaptismDay,
                     BaptismMonth = contact.BaptismMonth,
                     BaptismYear = contact.BaptismYear,
-                    TouchpointView = GetTouchpointView( touchpoint.Type, contact )
+                    TouchpointViewBag = GetTouchpointView( touchpoint.Type, contact )
                 };
 
                 touchpointBags.Add( touchpointBag );
@@ -210,12 +211,12 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
-        /// Marks the touchpoint as prayed.
+        /// Updates the completed date.
         /// </summary>
         /// <param name="idKey"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult PrayedForContact( string idKey )
+        public BlockActionResult UpdateCompletedDate( string idKey )
         {
             if ( idKey.IsNullOrWhiteSpace() )
             {
@@ -223,12 +224,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             }
 
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
-            var touchpoint = contactTouchpointService
-                .Queryable()
-                .Where( tp => tp.IdKey == idKey )
-                .Where( tp => tp.Type == TouchpointType.Prayer )
-                .Where( tp => tp.CompletedDateTime == null )
-                .FirstOrDefault();
+            var touchpoint = contactTouchpointService.Get( idKey );
 
             if ( touchpoint == null )
             {
@@ -244,15 +240,15 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         #endregion
     }
 
-    public class ContactTouchPointBag : ContactProfileBag
+    public class ContactTouchpointBag : ContactProfileBag
     {
         public TouchpointType Type { get; set; }
         public string TouchpointIdKey { get; set; }
         public string Note { get; set; }
-        public TouchpointView TouchpointView { get; set; }
+        public TouchpointViewBag TouchpointViewBag { get; set; }
     }
 
-    public class TouchpointView
+    public class TouchpointViewBag
     {
         public string IconSource { get; set; }
         public string Title { get; set; }
