@@ -927,6 +927,10 @@ tr.inactive {
   margin-top: var(--spacing-medium);
 }
 
+.connection-request-board .modal-open .grid-table .grid-select-cell p:empty {
+  display: none;
+}
+
 // ======================== END CONNECTION REQUEST ========================
 
 // ====================== PEOPLE MERGE ======================

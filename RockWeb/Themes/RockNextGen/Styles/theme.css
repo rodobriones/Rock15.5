@@ -24218,6 +24218,10 @@ tr.inactive td {
   margin-top: var(--spacing-medium);
 }
 
+.connection-request-board .modal-open .grid-table .grid-select-cell p:empty {
+  display: none;
+}
+
 .merge-field-cell {
   max-width: 150px;
 }
