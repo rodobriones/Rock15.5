@@ -5592,6 +5592,7 @@ select.form-control:focus::-ms-value {
   .form-inline .control-label {
     margin-bottom: 0;
     vertical-align: middle;
+    margin-right: var(--spacing-tiny);
   }
   .form-inline .radio,
   .form-inline .checkbox {
@@ -5774,7 +5775,7 @@ textarea .input-lg, select[multiple] .input-lg {
 }
 .form-group-sm select.form-control {
   height: 34px;
-  line-height: var(--line-height-normal);
+  line-height: 1.1;
 }
 .form-group-sm textarea.form-control,
 .form-group-sm select[multiple].form-control {
@@ -6001,12 +6002,9 @@ textarea .input-lg, select[multiple] .input-lg {
 .form-horizontal[class*=label-] .form-group label {
   position: relative;
   min-height: 1px;
-  padding-right: 15px;
   padding-left: 15px;
   position: relative;
   min-height: 1px;
-  padding-right: 15px;
-  padding-left: 15px;
 }
 @media (min-width: 768px) {
   .form-horizontal[class*=label-] .form-group label {
