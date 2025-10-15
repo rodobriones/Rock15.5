@@ -74,7 +74,6 @@ namespace Rock.Web.UI
         private BrowserInfo _browserInfo = null;
         private BrowserClient _browserClient = null;
 
-        private bool _showDebugTimings = false;
         private double _previousTiming = 0;
         private TimeSpan _tsDuration;
         private double _duration = 0;
@@ -93,8 +92,6 @@ namespace Rock.Web.UI
         private bool _pageHasObsidianBlock = false;
 
         private readonly string _obsidianPageTimingControlId = "lObsidianPageTimings";
-        private readonly List<DebugTimingViewModel> _debugTimingViewModels = new List<DebugTimingViewModel>();
-        private Stopwatch _onLoadStopwatch = null;
 
         /// <summary>
         /// The fingerprint to use with obsidian files.
@@ -869,24 +866,8 @@ namespace Rock.Web.UI
                 }
             }
 
-            _showDebugTimings = this.PageParameter( "ShowDebugTimings" ).AsBoolean();
-
-            if ( _showDebugTimings )
-            {
-                _tsDuration = RockDateTime.Now.Subtract( ( DateTime ) Context.Items["Request_Start_Time"] );
-                _previousTiming = _tsDuration.TotalMilliseconds;
-                _pageNeedsObsidian = true;
-            }
-
             bool canAdministratePage = false;
             bool canEditPage = false;
-
-            if ( _showDebugTimings )
-            {
-                stopwatchInitEvents.Stop();
-                _debugTimingViewModels.Add( GetDebugTimingOutput( "Server Start Initialization", stopwatchInitEvents.Elapsed.TotalMilliseconds, 0, true ) );
-                stopwatchInitEvents.Restart();
-            }
 
             // Add the ScriptManager to each page
             _scriptManager = ScriptManager.GetCurrent( this.Page );
@@ -934,13 +915,6 @@ namespace Rock.Web.UI
             rockVersion.Attributes.Add( "name", "generator" );
             rockVersion.Attributes.Add( "content", _rockVersion );
             AddMetaTag( this.Page, rockVersion );
-
-            if ( _showDebugTimings )
-            {
-                stopwatchInitEvents.Stop();
-                _debugTimingViewModels.Add( GetDebugTimingOutput( "Check For Logout", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                stopwatchInitEvents.Restart();
-            }
 
             // If the logout parameter was entered, delete the user's forms authentication cookie and redirect them
             // back to the same page.
@@ -993,13 +967,6 @@ namespace Rock.Web.UI
 
             var rockContext = new RockContext();
 
-            if ( _showDebugTimings )
-            {
-                stopwatchInitEvents.Stop();
-                _debugTimingViewModels.Add( GetDebugTimingOutput( "Create Rock Context", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                stopwatchInitEvents.Restart();
-            }
-
             // If the impersonated query key was included or is in session then set the current person
             Page.Trace.Warn( "Checking for person impersonation" );
             if ( !ProcessImpersonation( rockContext ) )
@@ -1010,13 +977,6 @@ namespace Rock.Web.UI
             // Get current user/person info
             Page.Trace.Warn( "Getting CurrentUser" );
             Rock.Model.UserLogin user = CurrentUser;
-
-            if ( _showDebugTimings )
-            {
-                stopwatchInitEvents.Stop();
-                _debugTimingViewModels.Add( GetDebugTimingOutput( "Get Current User", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                stopwatchInitEvents.Restart();
-            }
 
             // If there is a logged in user, see if it has an associated Person Record.  If so, set the UserName to
             // the person's full name (which is then cached in the Session state for future page requests)
@@ -1045,13 +1005,6 @@ namespace Rock.Web.UI
 
                         Session[personNameKey] = UserName;
                     }
-                }
-
-                if ( _showDebugTimings )
-                {
-                    stopwatchInitEvents.Stop();
-                    _debugTimingViewModels.Add( GetDebugTimingOutput( "Get Current Person", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                    stopwatchInitEvents.Restart();
                 }
 
                 // check that they aren't required to change their password
@@ -1161,13 +1114,6 @@ namespace Rock.Web.UI
 
                 var isCurrentPersonAuthorized = _pageCache.IsAuthorized( Authorization.VIEW, CurrentPerson );
 
-                if ( _showDebugTimings )
-                {
-                    stopwatchInitEvents.Stop();
-                    _debugTimingViewModels.Add( GetDebugTimingOutput( "Is Current Person Authorized", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                    stopwatchInitEvents.Restart();
-                }
-
                 if ( !isCurrentPersonAuthorized )
                 {
                     if ( user == null )
@@ -1250,22 +1196,8 @@ namespace Rock.Web.UI
                         // building the model context for the page.
                         SetCookieContextFromQueryString( rockContext );
 
-                        if ( _showDebugTimings )
-                        {
-                            stopwatchInitEvents.Stop();
-                            _debugTimingViewModels.Add( GetDebugTimingOutput( "Set Page Context(s)", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                            stopwatchInitEvents.Restart();
-                        }
-
                         // Build the model context, including all context objects (site-wide and page-specific).
                         this.ModelContext = BuildPageContextData( ContextEntityScope.All );
-
-                        if ( _showDebugTimings )
-                        {
-                            stopwatchInitEvents.Stop();
-                            _debugTimingViewModels.Add( GetDebugTimingOutput( "Check Page Contexts", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                            stopwatchInitEvents.Restart();
-                        }
                     }
                     catch
                     {
@@ -1297,13 +1229,6 @@ namespace Rock.Web.UI
                             canAdministratePage = canAdministratePage || _pageCache.IsAuthorized( Authorization.ADMINISTRATE, impersonatedByUser.Person );
                             canEditPage = canEditPage || _pageCache.IsAuthorized( Authorization.EDIT, impersonatedByUser.Person );
                         }
-                    }
-
-                    if ( _showDebugTimings )
-                    {
-                        stopwatchInitEvents.Stop();
-                        _debugTimingViewModels.Add( GetDebugTimingOutput( "Can Administrate Page", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1 ) );
-                        stopwatchInitEvents.Restart();
                     }
 
                     // Create a javascript object to store information about the current page for client side scripts to use
@@ -1380,13 +1305,6 @@ Rock.settings.initialize({{
 
                     // Flag indicating if user has rights to administer one or more of the blocks on page
                     bool canAdministrateBlockOnPage = false;
-
-                    if ( _showDebugTimings )
-                    {
-                        stopwatchInitEvents.Stop();
-                        _debugTimingViewModels.Add( GetDebugTimingOutput( "Server Block OnInit", stopwatchInitEvents.Elapsed.TotalMilliseconds, 1, true ) );
-                        stopwatchInitEvents.Restart();
-                    }
 
                     // If the block's AttributeProperty values have not yet been verified verify them.
                     // (This provides a mechanism for block developers to define the needed block
@@ -1538,13 +1456,6 @@ Rock.settings.initialize({{
                             if ( control is RockBlockWrapper )
                             {
                                 ( ( RockBlockWrapper ) control ).EnsureBlockControls();
-                            }
-
-                            if ( _showDebugTimings )
-                            {
-
-                                stopwatchBlockInit.Stop();
-                                _debugTimingViewModels.Add( GetDebugTimingOutput( block.Name, stopwatchBlockInit.Elapsed.TotalMilliseconds, 2, false, $"({block.BlockType})" ) );
                             }
                         }
                     }
@@ -1869,22 +1780,16 @@ Obsidian.init({{ debug: true, fingerprint: ""v={_obsidianFingerprint}"" }});
                 Response.Headers.Add( "Critical-CH", "Sec-CH-Prefers-Color-Scheme, Sec-CH-UA-Platform-Version" );
                 Response.Headers.Add( "Permissions-Policy", "ch-ua-platform-version=(self)" );
 
-                if ( _showDebugTimings )
-                {
-                    stopwatchInitEvents.Stop();
-                    _debugTimingViewModels.Add( GetDebugTimingOutput( "Server Complete Initialization", stopwatchInitEvents.Elapsed.TotalMilliseconds, 0, true ) );
-                    _debugTimingViewModels.Add( GetDebugTimingOutput( "Server Block OnLoad", stopwatchInitEvents.Elapsed.TotalMilliseconds, 0, true ) );
-                    stopwatchInitEvents.Restart();
-                }
-
-                if ( _showDebugTimings && canAdministratePage )
+                if ( Context.Items["Rock:DebugTraceEnabled"] is string tracePageIdKey && tracePageIdKey == _pageCache.IdKey && Activity.Current != null )
                 {
                     Page.Trace.Warn( "Initializing Obsidian Page Timings" );
                     Page.Form.Controls.Add( new Literal
                     {
                         ID = _obsidianPageTimingControlId,
-                        Text = $"<div id=\"{_obsidianPageTimingControlId}\"></div>"
+                        Text = $"<div id=\"{_obsidianPageTimingControlId}\" data-trace-id=\"{Activity.Current.TraceId}\"></div>"
                     } );
+
+                    DebugTraceProcessor.ValidateTrace( Activity.Current.TraceId.ToString() );
                 }
             }
         }
@@ -2343,7 +2248,7 @@ Obsidian.init({{ debug: true, fingerprint: ""v={_obsidianFingerprint}"" }});
             }
 
             // Finalize the debug settings
-            if ( _showDebugTimings )
+            if ( Context.Items.Contains( "Rock:DebugTraceEnabled" ) )
             {
                 _tsDuration = RockDateTime.Now.Subtract( ( DateTime ) Context.Items["Request_Start_Time"] );
 
@@ -2356,8 +2261,7 @@ Obsidian.init({{ debug: true, fingerprint: ""v={_obsidianFingerprint}"" }});
 Obsidian.onReady(() => {{
     System.import('@Obsidian/Templates/rockPage.js').then(module => {{
         module.initializePageTimings({{
-            elementId: '{_obsidianPageTimingControlId}',
-            debugTimingViewModels: {_debugTimingViewModels.ToCamelCaseJson( false, true )}
+            elementId: '{_obsidianPageTimingControlId}'
         }});
     }});
 }});";
@@ -2547,8 +2451,6 @@ Obsidian.onReady(() => {{
         /// <param name="e">The <see cref="T:System.EventArgs"/> object that contains the event data.</param>
         protected override void OnLoad( EventArgs e )
         {
-            _onLoadStopwatch = Stopwatch.StartNew();
-
             base.OnLoad( e );
 
             // Attempt to restore the original interaction unique identifier.
@@ -2558,26 +2460,6 @@ Obsidian.onReady(() => {{
             }
 
             Page.Header.DataBind();
-
-            try
-            {
-                bool showDebugTimings = this.PageParameter( "ShowDebugTimings" ).AsBoolean();
-                if ( showDebugTimings && _onLoadStopwatch.Elapsed.TotalMilliseconds > 500 )
-                {
-                    if ( _pageCache.IsAuthorized( Authorization.ADMINISTRATE, CurrentPerson ) )
-                    {
-                        Page.Form.Controls.Add( new Literal
-                        {
-
-                            Text = string.Format( "OnLoad [{0} ms]", _onLoadStopwatch.Elapsed.TotalMilliseconds )
-                        } );
-                    }
-                }
-            }
-            catch
-            {
-                // ignore
-            }
         }
 
         /// <inheritdoc/>
@@ -2607,29 +2489,21 @@ Obsidian.onReady(() => {{
 
             if ( phLoadStats != null )
             {
-                var customPersister = this.PageStatePersister as RockHiddenFieldPageStatePersister;
-
-                if ( customPersister != null )
+                if ( this.PageStatePersister is RockHiddenFieldPageStatePersister customPersister )
                 {
                     this.ViewStateSize = customPersister.ViewStateSize;
                     this.ViewStateSizeCompressed = customPersister.ViewStateSizeCompressed;
                     this.ViewStateIsCompressed = customPersister.ViewStateIsCompressed;
                 }
 
-                string showTimingsUrl = this.Request.UrlProxySafe().ToString();
-                if ( showTimingsUrl.IndexOf( "ShowDebugTimings", StringComparison.OrdinalIgnoreCase ) < 0 )
-                {
-                    if ( showTimingsUrl.Contains( "?" ) )
-                    {
-                        showTimingsUrl += "&ShowDebugTimings=true";
-                    }
-                    else
-                    {
-                        showTimingsUrl += "?ShowDebugTimings=true";
-                    }
-                }
+                var url = Request.UrlProxySafe();
+                var query = url.Query.ParseQueryString();
+                var timingsKey = $"{_pageCache.IdKey}_{CurrentPerson.IdKey}";
+                var timingsHash = timingsKey.HmacSha256Hash( Encryption.GetEphemeralHashingKey() + url.AbsolutePath );
 
-                phLoadStats.Controls.Add( new LiteralControl( $"<span class='cms-admin-footer-property'><a href='{showTimingsUrl}'> Page Load Time: {_tsDuration.TotalSeconds:N2}s </a></span><span class='margin-l-md js-view-state-stats cms-admin-footer-property'></span> <span class='margin-l-md js-html-size-stats cms-admin-footer-property'></span>" ) );
+                query["ShowDebugTimings"] = $"{timingsKey}_{timingsHash}";
+
+                phLoadStats.Controls.Add( new LiteralControl( $"<span class='cms-admin-footer-property'><a href='?{query}'> Page Load Time: {_tsDuration.TotalSeconds:N2}s </a></span><span class='margin-l-md js-view-state-stats cms-admin-footer-property'></span> <span class='margin-l-md js-html-size-stats cms-admin-footer-property'></span>" ) );
 
                 if ( !ClientScript.IsStartupScriptRegistered( "rock-js-view-state-size" ) )
                 {
@@ -2850,31 +2724,6 @@ Sys.Application.add_load(function () {
         #endregion
 
         #region Public Methods
-
-        /// <summary>
-        /// Reports the debug timing.
-        /// </summary>
-        /// <param name="eventTitle">The event title.</param>
-        /// <param name="subtitle">The subtitle.</param>
-        /// <returns></returns>
-        internal void ReportOnLoadDebugTiming( string eventTitle, string subtitle = "" )
-        {
-            if ( !_showDebugTimings || _onLoadStopwatch == null )
-            {
-                return;
-            }
-
-            _onLoadStopwatch.Stop();
-
-            if ( !subtitle.IsNullOrWhiteSpace() && !subtitle.StartsWith( ")" ) )
-            {
-                subtitle = $"({subtitle})";
-            }
-
-            var duration = _onLoadStopwatch.Elapsed.TotalMilliseconds;
-            _debugTimingViewModels.Add( GetDebugTimingOutput( eventTitle, duration, 1, false, subtitle ) );
-            _onLoadStopwatch.Restart();
-        }
 
         /// <summary>
         /// Sets the page.
