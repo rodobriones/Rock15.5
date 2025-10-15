@@ -47,7 +47,7 @@ namespace Rock.Blocks.Cms
     [DisplayName( "Media Element Detail" )]
     [Category( "CMS" )]
     [Description( "Displays the details of a particular media element." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -115,10 +115,7 @@ namespace Rock.Blocks.Cms
 
             SetBoxInitialEntityState( box );
 
-            var rootUrl = RequestContext.ResolveRockUrl( "/" );
-
             RequestContext.Response.AddCssLink( "~/Styles/Blocks/Cms/MediaElementDetail.css", true);
-            RequestContext.Response.AddScript( "mediaElementDetail", $"$.getScript('{rootUrl}Scripts/Rock/Controls/MediaElementDetail/mediaElementPlayAnalytics.js');" );
 
             box.Options = GetBoxOptions( box.IsEditable );
 

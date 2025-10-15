@@ -68,7 +68,7 @@ namespace Rock.Lms
         public override string HighlightColor => "#2f699f";
 
         /// <inheritdoc/>
-        public override string IconCssClass => "fa fa-video";
+        public override string IconCssClass => "ti ti-video";
 
         /// <inheritdoc/>
         public override string Name => "Video Watch";
@@ -109,6 +109,22 @@ namespace Rock.Lms
                     [SettingKey.Video] = componentData.GetValueOrNull( SettingKey.Video )
                 };
             }
+        }
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetComponentData( LearningClassActivity activity, Dictionary<string, string> componentSettings, RockContext rockContext, RockRequestContext requestContext )
+        {
+            // This is a cheat, we shouldn't really be trying to access the original
+            // JSON this way, but we don't have a better way to do it.
+            var oldData = activity.LearningActivity?.ActivityComponentSettingsJson?.FromJsonOrNull<Dictionary<string, string>>();
+
+            new StructuredContentHelper( componentSettings?.GetValueOrNull( SettingKey.HeaderContent ) )
+                .DetectAndApplyDatabaseChanges( oldData?.GetValueOrNull( SettingKey.HeaderContent ), rockContext );
+
+            new StructuredContentHelper( componentSettings?.GetValueOrNull( SettingKey.FooterContent ) )
+                .DetectAndApplyDatabaseChanges( oldData?.GetValueOrNull( SettingKey.FooterContent ), rockContext );
+
+            return base.GetComponentData( activity, componentSettings, rockContext, requestContext );
         }
 
         #endregion

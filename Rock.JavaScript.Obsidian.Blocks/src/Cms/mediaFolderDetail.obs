@@ -47,11 +47,9 @@
     import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";
     import { MediaFolderBag } from "@Obsidian/ViewModels/Blocks/Cms/MediaFolderDetail/mediaFolderBag";
     import { MediaFolderDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Cms/MediaFolderDetail/mediaFolderDetailOptionsBag";
-
     const config = useConfigurationValues<DetailBlockBox<MediaFolderBag, MediaFolderDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
     const securityGrant = getSecurityGrant(config.securityGrantToken);
-
     // #region Values
 
     const blockError = ref("");
@@ -108,7 +106,7 @@
 
         if (mediaFolderViewBag.value?.isContentChannelSyncEnabled) {
             labels.push({
-                iconCssClass: "fa fa-exchange",
+                iconCssClass: "ti ti-switch-3",
                 type: "info"
             });
         }
@@ -261,4 +259,5 @@
         mediaFolderEditBag.value = config.entity;
         panelMode.value = DetailPanelMode.Add;
     }
+
 </script>

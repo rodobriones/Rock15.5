@@ -15,21 +15,24 @@
 // </copyright>
 //
 import { App, Component, createApp, defineComponent, Directive, h, markRaw, onMounted, provide, reactive, ref, VNode } from "vue";
+import DynamicComponent from "@Obsidian/Controls/dynamicComponent.obs";
 import RockBlock from "./rockBlock.partial";
 import { useStore } from "@Obsidian/PageState";
 import "@Obsidian/ValidationRules";
 import "@Obsidian/FieldTypes/index";
 import { DebugTiming } from "@Obsidian/ViewModels/Utility/debugTiming";
 import { ObsidianBlockConfigBag } from "@Obsidian/ViewModels/Cms/obsidianBlockConfigBag";
+import { DynamicComponentDefinitionBag } from "@Obsidian/ViewModels/Controls/dynamicComponentDefinitionBag";
 import { FormError, FormState, provideFormState } from "@Obsidian/Utility/form";
 import { PageConfig } from "@Obsidian/Utility/page";
 import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
 import { BasicSuspenseProvider, provideSuspense } from "@Obsidian/Utility/suspense";
 import { alert } from "@Obsidian/Utility/dialogs";
 import { HttpBodyData, HttpMethod, HttpResult, HttpUrlParams } from "@Obsidian/Types/Utility/http";
-import { doApiCall, provideHttp } from "@Obsidian/Utility/http";
-import { createInvokeBlockAction, provideBlockBrowserBus, provideBlockGuid, provideBlockTypeGuid } from "@Obsidian/Utility/block";
-import { useBrowserBus } from "@Obsidian/Utility/browserBus";
+import { doApiCall, doStreamingApiCall, provideHttp } from "@Obsidian/Utility/http";
+import { createInvokeBlockAction, createInvokeStreamingBlockAction, provideBlockGuid, provideBlockTypeGuid } from "@Obsidian/Utility/block";
+import { safeParseJson } from "@Obsidian/Utility/stringUtils";
+import { Guid } from "@Obsidian/Types";
 
 type DebugTimingConfig = {
     elementId: string;
@@ -72,16 +75,45 @@ const contentDirective: Directive<Element, Node[] | Node | string | null | undef
         }
     },
     updated(el, binding) {
-        el.innerHTML = "";
         if (Array.isArray(binding.value)) {
+            if (binding.value.length === el.childNodes.length) {
+                let allEqual = true;
+
+                for (let i = 0; i < binding.value.length; i++) {
+                    if (binding.value[i] !== el.childNodes[i]) {
+                        allEqual = false;
+                        break;
+                    }
+                }
+
+                // If nothing changed then we don't do anything, otherwise it
+                // will cause a weird flicker in the DOM that can mess up
+                // the inspector and input focus.
+                if (allEqual) {
+                    return;
+                }
+            }
+
+            el.innerHTML = "";
+
             for (const v of binding.value) {
                 el.append(v);
             }
         }
         else if (typeof binding.value === "string") {
-            el.innerHTML = binding.value;
+            if (el.innerHTML !== binding.value) {
+                el.innerHTML = binding.value;
+            }
         }
         else if (binding.value) {
+            if (el.childNodes.length === 1 && el.childNodes[0] === binding.value) {
+                // If nothing changed then we don't do anything, otherwise it
+                // will cause a weird flicker in the DOM that can mess up
+                // the inspector and input focus.
+                return;
+            }
+
+            el.innerHTML = "";
             el.append(binding.value);
         }
     }
@@ -161,6 +193,8 @@ export async function initializeBlock(config: ObsidianBlockConfigBag): Promise<A
 
                 isLoaded = true;
 
+                let loadingTimeout = 0;
+
                 if (rootElement.classList.contains("obsidian-block-has-placeholder")) {
                     wrapperElement.style.padding = "1px 0px";
                     const realHeight = wrapperElement.getBoundingClientRect().height - 2;
@@ -172,6 +206,7 @@ export async function initializeBlock(config: ObsidianBlockConfigBag): Promise<A
                         rootElement.style.height = "";
                         rootElement.classList.remove("obsidian-block-has-placeholder");
                     }, 200);
+                    loadingTimeout = 201;
                 }
 
                 rootElement.classList.remove("obsidian-block-loading");
@@ -183,7 +218,9 @@ export async function initializeBlock(config: ObsidianBlockConfigBag): Promise<A
                     pendingCount--;
                     document.body.setAttribute("data-obsidian-pending-blocks", pendingCount.toString());
                     if (pendingCount === 0) {
-                        document.body.classList.remove("obsidian-loading");
+                        setTimeout(() => {
+                            document.body.classList.remove("obsidian-loading");
+                        }, loadingTimeout);
                     }
                 }
             };
@@ -290,18 +327,32 @@ export function showShortLink(url: string): void {
 
 /**
  * This is an internal method that will be removed in the future. It serves the
- * ObsidianDataComponentWrapper WebForms control to initialize an Obsidian
+ * ObsidianDynamicComponentWrapper WebForms control to initialize an Obsidian
  * component inside a WebForms component.
  *
- * @param url The URL of the Obsidian component to load.
  * @param rootElementId The identifier of the DOM node to mount the component on.
+ * @param componentGuid The unique identifier of the component.
+ * @param componentDefinitionId The identifier of the DOM node that contains the component definition bag.
  * @param componentDataId The identifier of the DOM node that contains the component data.
  * @param componentPropertiesId The identifier of the DOM node that contains the additional component properties.
+ * @param pageGuid The unique identifier of the page.
+ * @param blockGuid The unique identifier of the block.
  */
-export async function initializeDataComponentWrapper(url: string, rootElementId: string, componentDataId: string, componentPropertiesId: string | undefined): Promise<void> {
-    const componentUrl = `${url}.js`;
+export async function initializeDynamicComponentWrapper(rootElementId: string, componentGuid: Guid, componentDefinitionId: string, componentDataId: string, componentPropertiesId: string | undefined, pageGuid: string | null, blockGuid: string | null): Promise<void> {
+    let definition: DynamicComponentDefinitionBag | null = null;
     let component: Component | null = null;
     let errorMessage = "";
+
+    if (componentDefinitionId) {
+        const componentDefinitionElement = document.getElementById(componentDefinitionId) as HTMLInputElement;
+
+        try {
+            definition = safeParseJson<DynamicComponentDefinitionBag>(decodeURIComponent(componentDefinitionElement.value)) ?? null;
+        }
+        catch {
+            definition = null;
+        }
+    }
 
     const rootElement = document.getElementById(rootElementId);
 
@@ -310,7 +361,8 @@ export async function initializeDataComponentWrapper(url: string, rootElementId:
     }
 
     try {
-        const componentModule = await import(componentUrl);
+
+        const componentModule = await import(`${definition?.url}.js`);
         component = componentModule ?
             (componentModule.default || componentModule) :
             null;
@@ -321,7 +373,7 @@ export async function initializeDataComponentWrapper(url: string, rootElementId:
         errorMessage = `${e}`;
     }
 
-    const name = `Root${componentUrl.replace(/\//g, ".")}`;
+    const name = `Root${definition?.url?.replace(/\//g, ".")}`;
 
     // Initialize a fake form state to track errors and proxy them to the
     // WebForms system.
@@ -371,6 +423,9 @@ export async function initializeDataComponentWrapper(url: string, rootElementId:
 
     const app = createApp({
         name,
+        components: {
+            DynamicComponent
+        },
         setup() {
             let componentData: Record<string, string> = {};
             let componentProperties: Record<string, unknown> = {};
@@ -409,10 +464,32 @@ export async function initializeDataComponentWrapper(url: string, rootElementId:
                 }
             }
 
+            async function onExecuteRequest(request: Record<string, string>, securityGrantToken: string | null): Promise<Record<string, string | null | undefined> | null> {
+                const url = `/api/v2/BlockActions/${pageGuid}/${blockGuid}/ExecuteComponentRequest`;
+                const data = {
+                    componentGuid,
+                    request,
+                    securityGrantToken,
+                };
+
+                const result = await doApiCall<Record<string, string | null | undefined>>("POST", url, undefined, data);
+
+                if (result.isSuccess) {
+                    return result.data ?? null;
+                }
+                else {
+                    console.log(result.errorMessage || "Error executing component request");
+                }
+
+                return null;
+            }
+
             return {
                 component: component ? markRaw(component) : null,
                 componentData,
                 componentProperties,
+                definition,
+                onExecuteRequest,
                 onUpdateComponentData,
                 errorMessage
             };
@@ -426,7 +503,12 @@ export async function initializeDataComponentWrapper(url: string, rootElementId:
     <br />
     {{errorMessage}}
 </div>
-<component v-else :is="component" :modelValue="componentData" @update:modelValue="onUpdateComponentData" v-bind="componentProperties" />`
+<DynamicComponent v-else-if="definition"
+        :modelValue="componentData"
+        :definition="definition"
+        :properties="componentProperties"
+        :executeRequest="onExecuteRequest"
+        @update:modelValue="onUpdateComponentData" />`
     });
 
     app.mount(rootElement);
@@ -505,9 +587,11 @@ export async function showCustomBlockAction(actionFileUrl: string, pageGuid: str
             };
 
             const invokeBlockAction = createInvokeBlockAction(post, pageGuid, blockGuid, store.state.pageParameters, store.state.sessionGuid, store.state.interactionGuid);
+            const invokeStreamingBlockAction = createInvokeStreamingBlockAction(doStreamingApiCall, pageGuid, blockGuid, store.state.pageParameters, store.state.sessionGuid, store.state.interactionGuid);
 
             provideHttp({
                 doApiCall,
+                doStreamingApiCall,
                 get,
                 post
             });
@@ -515,9 +599,9 @@ export async function showCustomBlockAction(actionFileUrl: string, pageGuid: str
                 return `/api/v2/BlockActions/${pageGuid}/${blockGuid}/${actionName}`;
             });
             provide("invokeBlockAction", invokeBlockAction);
+            provide("invokeStreamingBlockAction", invokeStreamingBlockAction);
             provideBlockGuid(blockGuid);
             provideBlockTypeGuid(blockTypeGuid);
-            provideBlockBrowserBus(useBrowserBus({ block: blockGuid, blockType: blockTypeGuid }));
 
             return {
                 actionComponent,

@@ -26,13 +26,14 @@ using System.Web.UI.WebControls;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Reporting.DataFilter.Person
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [Description( "Filter people basaed on Interactions" )]
     [Export( typeof( DataFilterComponent ) )]
@@ -64,25 +65,34 @@ namespace Rock.Reporting.DataFilter.Person
             get { return "Additional Filters"; }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/InteractionsFilter.obs";
-
         #endregion
 
         #region Configuration
 
         /// <inheritdoc/>
-        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
         {
             var channelsWithComponents = new InteractionComponentService( rockContext ).Queryable()
                 .Select( icomp => icomp.InteractionChannel.Guid )
                 .Distinct()
                 .ToList();
 
-            var data = new Dictionary<string, string>
+            var options = new Dictionary<string, string>
             {
                 { "channelsWithComponents", channelsWithComponents.ToJson() }
             };
+
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/interactionsFilter.obs" ),
+                Options = options
+            };
+        }
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            var data = new Dictionary<string, string>();
 
             string[] selectionValues = selection.Split( '|' );
             if ( selection.IsNullOrWhiteSpace() || selectionValues[0].IsNullOrWhiteSpace() )
@@ -166,7 +176,7 @@ namespace Rock.Reporting.DataFilter.Person
         /// <summary>
         /// Formats the selection on the client-side.  When the filter is collapsed by the user, the Filterfield control
         /// will set the description of the filter to whatever is returned by this property.  If including script, the
-        /// controls parent container can be referenced through a '$content' variable that is set by the control before 
+        /// controls parent container can be referenced through a '$content' variable that is set by the control before
         /// referencing this property.
         /// </summary>
         /// <value>
@@ -176,7 +186,7 @@ namespace Rock.Reporting.DataFilter.Person
         {
             return @"
 function() {
-  
+
   var result = 'Interactions';
 
   var interactionChannel = $('.js-interaction-channel option:selected', $content).text();

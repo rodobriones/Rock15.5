@@ -6,6 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Moq;
 
+using Rock.CheckIn;
 using Rock.CheckIn.v2;
 using Rock.Data;
 using Rock.Enums.CheckIn;
@@ -52,22 +53,22 @@ namespace Rock.Tests.CheckIn.v2
         // KioskCheckInType has its own test.
         // FamilySearchType has its own test.
         [DataRow( nameof( TemplateConfigurationData.GradeAndAgeMatchingBehavior ), GradeAndAgeMatchingMode.PrioritizeGradeOverAge, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_GRADE_AND_AGE_MATCHING_BEHAVIOR )]
-        [DataRow( nameof( TemplateConfigurationData.IsAgeRequired ), true, "core_checkin_AgeRequired" )]
-        [DataRow( nameof( TemplateConfigurationData.IsCheckoutAtKioskAllowed ), true, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_CHECKOUT_KIOSK )]
-        [DataRow( nameof( TemplateConfigurationData.IsCheckoutInManagerAllowed ), true, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_CHECKOUT_MANAGER )]
-        [DataRow( nameof( TemplateConfigurationData.IsDuplicateCheckInPrevented ), true, "core_checkin_PreventDuplicateCheckin" )]
-        [DataRow( nameof( TemplateConfigurationData.IsGradeRequired ), true, "core_checkin_GradeRequired" )]
-        [DataRow( nameof( TemplateConfigurationData.IsInactivePersonExcluded ), true, "core_checkin_PreventInactivePeople" )]
-        [DataRow( nameof( TemplateConfigurationData.IsLocationCountDisplayed ), true, "core_checkin_DisplayLocationCount" )]
-        [DataRow( nameof( TemplateConfigurationData.IsNumericSecurityCodeRandom ), true, "core_checkin_SecurityCodeNumericRandom" )]
-        [DataRow( nameof( TemplateConfigurationData.IsOverrideAvailable ), true, "core_checkin_EnableOverride" )]
-        [DataRow( nameof( TemplateConfigurationData.IsPhotoHidden ), true, "core_checkin_HidePhotos" )]
+        [DataRow( nameof( TemplateConfigurationData.IsAgeRequired ), false, "core_checkin_AgeRequired" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsCheckoutAtKioskAllowed ), false, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_CHECKOUT_KIOSK )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsCheckoutInManagerAllowed ), false, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_CHECKOUT_MANAGER )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsDuplicateCheckInPrevented ), false, "core_checkin_PreventDuplicateCheckin" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsGradeRequired ), false, "core_checkin_GradeRequired" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsInactivePersonExcluded ), false, "core_checkin_PreventInactivePeople" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsLocationCountDisplayed ), false, "core_checkin_DisplayLocationCount" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsNumericSecurityCodeRandom ), false, "core_checkin_SecurityCodeNumericRandom" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsOverrideAvailable ), false, "core_checkin_EnableOverride" )] // Default is true, so flip it.
+        [DataRow( nameof( TemplateConfigurationData.IsPhotoHidden ), false, "core_checkin_HidePhotos" )] // Default is true, so flip it.
         [DataRow( nameof( TemplateConfigurationData.IsPresenceEnabled ), true, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ENABLE_PRESENCE )]
         [DataRow( nameof( TemplateConfigurationData.IsProximityEnabled ), true, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ENABLE_PROXIMITY_CHECKIN )]
         [DataRow( nameof( TemplateConfigurationData.IsRemoveFromFamilyAtKioskAllowed ), true, GroupTypeAttributeKey.CHECKIN_GROUPTYPE_ALLOW_REMOVE_FROM_FAMILY_KIOSK )]
         [DataRow( nameof( TemplateConfigurationData.IsSameCodeUsedForFamily ), true, "core_checkin_ReuseSameCode" )]
         [DataRow( nameof( TemplateConfigurationData.IsSameOptionUsed ), true, "core_checkin_UseSameOptions" )]
-        [DataRow( nameof( TemplateConfigurationData.IsSupervisorEnabled ), true, "core_checkin_EnableManagerOptions" )]
+        [DataRow( nameof( TemplateConfigurationData.IsSupervisorEnabled ), false, "core_checkin_EnableManagerOption" )] // Default is true, so flip it.
         [DataRow( nameof( TemplateConfigurationData.MaximumNumberOfResults ), 5, "core_checkin_MaxSearchResults" )]
         [DataRow( nameof( TemplateConfigurationData.MaximumPhoneNumberLength ), 10, "core_checkin_MaximumPhoneSearchLength" )]
         [DataRow( nameof( TemplateConfigurationData.MinimumPhoneNumberLength ), 7, "core_checkin_MinimumPhoneSearchLength" )]
@@ -79,7 +80,7 @@ namespace Rock.Tests.CheckIn.v2
         [DataRow( nameof( TemplateConfigurationData.SecurityCodeAlphaLength ), 3, "core_checkin_SecurityCodeAlphaLength" )]
         [DataRow( nameof( TemplateConfigurationData.SecurityCodeAlphaNumericLength ), 2, "core_checkin_SecurityCodeLength" )]
         [DataRow( nameof( TemplateConfigurationData.SecurityCodeNumericLength ), 1, "core_checkin_SecurityCodeNumericLength" )]
-        [DataRow( nameof( TemplateConfigurationData.SuccessLavaTemplateDisplay ), SuccessLavaTemplateDisplayMode.Append, GroupTypeAttributeKey.CHECKIN_SUCCESS_LAVA_TEMPLATE_OVERRIDE_DISPLAY_MODE )]
+        [DataRow( nameof( TemplateConfigurationData.SuccessLavaTemplateDisplay ), Enums.CheckIn.SuccessLavaTemplateDisplayMode.Append, GroupTypeAttributeKey.CHECKIN_SUCCESS_LAVA_TEMPLATE_OVERRIDE_DISPLAY_MODE )]
         // Start Lava templates section.
         [DataRow( nameof( TemplateConfigurationData.AbilityLevelSelectHeaderLavaTemplate ), "testtemplate", GroupTypeAttributeKey.CHECKIN_ABILITY_LEVEL_SELECT_HEADER_LAVA_TEMPLATE )]
         [DataRow( nameof( TemplateConfigurationData.ActionSelectHeaderLavaTemplate ), "testtemplate", GroupTypeAttributeKey.CHECKIN_ACTION_SELECT_HEADER_LAVA_TEMPLATE )]
@@ -160,6 +161,98 @@ namespace Rock.Tests.CheckIn.v2
             {
                 Assert.AreEqual( expectedValue, propertyValue );
             }
+        }
+
+        [TestMethod]
+        public void Constructor_WithDisplayMobilePhoneOnChildrenSetting_InitializesProperty()
+        {
+            var rockContextMock = GetRockContextMock();
+            rockContextMock.SetupDbSet<GroupType>();
+
+            var groupType = CreateEntityMock<GroupType>( 1, new Guid( "4b8fd000-2043-4f4b-a2f6-31d58e26123c" ) );
+
+            var settings = new CheckInTemplateSettings
+            {
+                DisplayMobilePhoneOnChildren = RequirementLevel.Required
+            };
+
+            groupType.Object.SetAdditionalSettings( settings );
+
+            var groupTypeCache = new GroupTypeCache();
+            groupTypeCache.SetFromEntity( groupType.Object );
+
+            var instance = new TemplateConfigurationData( groupTypeCache, rockContextMock.Object );
+
+            Assert.AreEqual( RequirementLevel.Required, instance.DisplayMobilePhoneForChildren );
+        }
+
+        [TestMethod]
+        public void Constructor_WithDisplaySuffixSetting_InitializesProperty()
+        {
+            var rockContextMock = GetRockContextMock();
+            rockContextMock.SetupDbSet<GroupType>();
+
+            var groupType = CreateEntityMock<GroupType>( 1, new Guid( "4b8fd000-2043-4f4b-a2f6-31d58e26123c" ) );
+
+            var settings = new CheckInTemplateSettings
+            {
+                DisplaySuffix = AdultsOrChildrenSelectionMode.ChildrenOnly
+            };
+
+            groupType.Object.SetAdditionalSettings( settings );
+
+            var groupTypeCache = new GroupTypeCache();
+            groupTypeCache.SetFromEntity( groupType.Object );
+
+            var instance = new TemplateConfigurationData( groupTypeCache, rockContextMock.Object );
+
+            Assert.AreEqual( AdultsOrChildrenSelectionMode.ChildrenOnly, instance.DisplaySuffix );
+        }
+
+        [TestMethod]
+        public void Constructor_WithForceSelectionOfKnownRelationshipTypeSetting_InitializesProperty()
+        {
+            var rockContextMock = GetRockContextMock();
+            rockContextMock.SetupDbSet<GroupType>();
+
+            var groupType = CreateEntityMock<GroupType>( 1, new Guid( "4b8fd000-2043-4f4b-a2f6-31d58e26123c" ) );
+
+            var settings = new CheckInTemplateSettings
+            {
+                ForceSelectionOfKnownRelationshipType = true
+            };
+
+            groupType.Object.SetAdditionalSettings( settings );
+
+            var groupTypeCache = new GroupTypeCache();
+            groupTypeCache.SetFromEntity( groupType.Object );
+
+            var instance = new TemplateConfigurationData( groupTypeCache, rockContextMock.Object );
+
+            Assert.IsTrue( instance.ForceSelectionOfKnownRelationshipType );
+        }
+
+        [TestMethod]
+        public void Constructor_WithGradeConfirmationAgeSetting_InitializesProperty()
+        {
+            var rockContextMock = GetRockContextMock();
+            rockContextMock.SetupDbSet<GroupType>();
+
+            var groupType = CreateEntityMock<GroupType>( 1, new Guid( "4b8fd000-2043-4f4b-a2f6-31d58e26123c" ) );
+
+            var settings = new CheckInTemplateSettings
+            {
+                GradeConfirmationAge = 2.34M
+            };
+
+            groupType.Object.SetAdditionalSettings( settings );
+
+            var groupTypeCache = new GroupTypeCache();
+            groupTypeCache.SetFromEntity( groupType.Object );
+
+            var instance = new TemplateConfigurationData( groupTypeCache, rockContextMock.Object );
+
+            Assert.AreEqual( 2.34M, instance.GradeConfirmationAge );
         }
 
         [DataRow( nameof( TemplateConfigurationData.DisplayBirthdateForAdults ), GroupTypeAttributeKey.CHECKIN_REGISTRATION_DISPLAYBIRTHDATEONADULTS )]
@@ -410,13 +503,37 @@ namespace Rock.Tests.CheckIn.v2
         }
 
         [TestMethod]
+        public void Constructor_WithNotificationTemplate_InitializesProperty()
+        {
+            var expectedValue = "You've been checked in.";
+            var rockContextMock = GetRockContextMock();
+            rockContextMock.SetupDbSet<GroupType>();
+
+            var groupType = CreateEntityMock<GroupType>( 1, new Guid( "4b8fd000-2043-4f4b-a2f6-31d58e26123c" ) );
+
+            var settings = new CheckInTemplateSettings
+            {
+                ProximityAttendanceNotificationTemplate = expectedValue
+            };
+
+            groupType.Object.SetAdditionalSettings( settings );
+
+            var groupTypeCache = new GroupTypeCache();
+            groupTypeCache.SetFromEntity( groupType.Object );
+
+            var instance = new TemplateConfigurationData( groupTypeCache, rockContextMock.Object );
+
+            Assert.AreEqual( expectedValue, instance.ProximityAttendanceNotificationTemplate );
+        }
+
+        [TestMethod]
         public void DeclaredType_HasExpectedPropertyCount()
         {
             // This is a simple test to help us know when new properties are
             // added so we can update the other tests to check for those
             // properties.
             var type = typeof( TemplateConfigurationData );
-            var expectedPropertyCount = 75;
+            var expectedPropertyCount = 80;
 
             var propertyCount = type.GetProperties().Length;
 

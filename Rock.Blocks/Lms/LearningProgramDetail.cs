@@ -22,6 +22,7 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
+using Rock.Cms.StructuredContent;
 using Rock.Constants;
 using Rock.Data;
 using Rock.Enums.Lms;
@@ -43,7 +44,7 @@ namespace Rock.Blocks.Lms
     [DisplayName( "Learning Program Detail" )]
     [Category( "LMS" )]
     [Description( "Displays the details of a particular learning program." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -296,6 +297,7 @@ namespace Rock.Blocks.Lms
                 IsActive = entity.IsActive,
                 IsCompletionStatusTracked = entity.IsCompletionStatusTracked,
                 IsPublic = entity.IsPublic,
+                EnforcePublicSecurity = entity.EnforcePublicSecurity,
                 Name = entity.Name,
                 PublicName = entity.PublicName,
                 ShowKpis = showKpis,
@@ -403,8 +405,13 @@ namespace Rock.Blocks.Lms
             box.IfValidProperty( nameof( box.Bag.DefaultGradingSystem ),
                 () => entity.DefaultLearningGradingSystemId = box.Bag.DefaultGradingSystem.GetEntityId<LearningGradingSystem>( RockContext ) );
 
-            box.IfValidProperty( nameof( box.Bag.Description ),
-                () => entity.Description = box.Bag.Description );
+            box.IfValidProperty( nameof( box.Bag.Description ), () =>
+            {
+                new StructuredContentHelper( box.Bag.Description )
+                    .DetectAndApplyDatabaseChanges( entity.Description, RockContext );
+
+                entity.Description = box.Bag.Description;
+            } );
 
             box.IfValidProperty( nameof( box.Bag.HighlightColor ),
                 () => entity.HighlightColor = box.Bag.HighlightColor );
@@ -423,6 +430,9 @@ namespace Rock.Blocks.Lms
 
             box.IfValidProperty( nameof( box.Bag.IsPublic ),
                 () => entity.IsPublic = box.Bag.IsPublic );
+
+            box.IfValidProperty( nameof( box.Bag.EnforcePublicSecurity ),
+                () => entity.EnforcePublicSecurity = box.Bag.EnforcePublicSecurity );
 
             box.IfValidProperty( nameof( box.Bag.Name ),
                 () => entity.Name = box.Bag.Name );

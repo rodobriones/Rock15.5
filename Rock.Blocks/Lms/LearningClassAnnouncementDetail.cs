@@ -21,6 +21,7 @@ using System.ComponentModel;
 using System.Linq;
 
 using Rock.Attribute;
+using Rock.Cms.StructuredContent;
 using Rock.Communication;
 using Rock.Constants;
 using Rock.Data;
@@ -41,7 +42,7 @@ namespace Rock.Blocks.Lms
     [DisplayName( "Learning Class Announcement Detail" )]
     [Category( "LMS" )]
     [Description( "Displays the details of a particular learning class announcement." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -228,8 +229,16 @@ namespace Rock.Blocks.Lms
             box.IfValidProperty( nameof( box.Bag.CommunicationMode ),
                 () => entity.CommunicationMode = box.Bag.CommunicationMode );
 
-            box.IfValidProperty( nameof( box.Bag.Description ),
-                () => entity.Description = box.Bag.Description );
+            box.IfValidProperty( nameof( box.Bag.Description ), () =>
+            {
+                if ( entity.CommunicationMode != Enums.Lms.CommunicationMode.SMS )
+                {
+                    new StructuredContentHelper( box.Bag.Description )
+                        .DetectAndApplyDatabaseChanges( entity.Description, RockContext );
+                }
+
+                entity.Description = box.Bag.Description;
+            } );
 
             if ( box.Bag.PublishDateTime.HasValue )
             {
@@ -256,7 +265,8 @@ namespace Rock.Blocks.Lms
                 return new LearningClassAnnouncement
                 {
                     Id = 0,
-                    Guid = Guid.Empty
+                    Guid = Guid.Empty,
+                    LearningClassId = RequestContext.PageParameterAsId( PageParameterKey.LearningClassId )
                 };
             }
 

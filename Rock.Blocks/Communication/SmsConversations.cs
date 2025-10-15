@@ -14,6 +14,7 @@ using Rock.Enums.Core;
 using Rock.Model;
 using Rock.Reporting;
 using Rock.Security;
+using Rock.Security.SecurityGrantRules;
 using Rock.Utility;
 using Rock.ViewModels.Blocks.Communication.SmsConversations;
 using Rock.ViewModels.Controls;
@@ -27,7 +28,7 @@ namespace Rock.Blocks.Communication
     [DisplayName( "SMS Conversations" )]
     [Category( "Communication" )]
     [Description( "Block for having SMS Conversations between an SMS enabled phone and a Rock SMS Phone number that has 'Enable Mobile Conversations' set to false." )]
-    [IconCssClass( "fa fa-message" )]
+    [IconCssClass( "ti ti-message" )]
     [SupportedSiteTypes( SiteType.Web )]
 
     #region Block Attributes
@@ -85,12 +86,12 @@ namespace Rock.Blocks.Communication
         Order = 7
          )]
 
-    [CustomCheckboxListField("Note Types",
+    [CustomCheckboxListField( "Note Types",
         Description = @"Optional list of note types to limit the note editor to. Note types must have the ""User Selectable"" property enabled and Person Entity Type selected.",
         ListSource = ListSource.SQL_SELECTABLE_PERSON_NOTE_TYPES,
         IsRequired = false,
         Order = 8,
-        Key = AttributeKey.NoteTypes)]
+        Key = AttributeKey.NoteTypes )]
 
     [IntegerField(
         "Database Timeout",
@@ -99,6 +100,13 @@ namespace Rock.Blocks.Communication
         IsRequired = false,
         DefaultIntegerValue = 180,
         Order = 9 )]
+
+    [BooleanField( "Allow Unrestricted Uploads",
+        Description = "If true, anyone with access to send messages can upload images or files. Otherwise, it'll use the permissions set for Communication Attachment binary file type.",
+        IsRequired = false,
+        DefaultValue = "True",
+        Key = AttributeKey.AllowUnrestrictedUploads,
+        Order = 10 )]
 
     #endregion
 
@@ -119,6 +127,7 @@ namespace Rock.Blocks.Communication
             public const string PersonInfoLavaTemplate = "PersonInfoLavaTemplate";
             public const string NoteTypes = "NoteTypes";
             public const string DatabaseTimeoutSeconds = "DatabaseTimeoutSeconds";
+            public const string AllowUnrestrictedUploads = "AllowUnrestrictedUploads";
         }
 
         private static class PreferenceKey
@@ -187,6 +196,7 @@ namespace Rock.Blocks.Communication
             box.Snippets = GetSnippetBags();
             box.IsNewMessageButtonVisible = GetAttributeValue( AttributeKey.EnableSmsSend ).AsBoolean();
             box.CanEditOrAdministrate = BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) || BlockCache.IsAuthorized( Authorization.ADMINISTRATE, RequestContext.CurrentPerson );
+            box.SecurityGrantToken = GetSecurityGrantToken();
 
             if ( box.SystemPhoneNumbers.Count == 0 )
             {
@@ -339,6 +349,25 @@ namespace Rock.Blocks.Communication
         }
 
         /// <summary>
+        /// Gets the security grant token that will be used by UI controls on
+        /// this block to ensure they have the proper permissions.
+        /// </summary>
+        /// <returns>A string that represents the security grant token.</string>
+        private string GetSecurityGrantToken()
+        {
+            var securityGrant = new Rock.Security.SecurityGrant();
+
+            if ( GetAttributeValue( AttributeKey.AllowUnrestrictedUploads ).AsBoolean() )
+            {
+                // Enable uploading communication attachments without the normal permission restrictions
+                BinaryFileType binaryFileType = new BinaryFileTypeService( new RockContext() ).Get( Rock.SystemGuid.BinaryFiletype.COMMUNICATION_ATTACHMENT.AsGuid() );
+                securityGrant.AddRule( new EntitySecurityGrantRule( binaryFileType.TypeId, binaryFileType.Id, Authorization.EDIT ) );
+            }
+
+            return securityGrant.ToToken();
+        }
+
+        /// <summary>
         /// Retrieves the GUID hierarchy of a snippet's category, traversing up the parent categories.
         /// </summary>
         /// <param name="category">The category to start traversing from.</param>
@@ -351,7 +380,7 @@ namespace Rock.Blocks.Communication
             while ( category != null )
             {
                 // If guids already contains this category Guid, we got a circular reference. So just return the path so far.
-                if (guids.Contains( category.Guid ) )
+                if ( guids.Contains( category.Guid ) )
                 {
                     return guids;
                 }
@@ -478,8 +507,19 @@ namespace Rock.Blocks.Communication
         /// <param name="recipientPersonPrimaryAliasId">The primary alias ID of the recipient person.</param>
         /// <param name="bag">The message data, including text and attachments.</param>
         /// <returns>An error message if the message could not be sent; otherwise, an empty string.</returns>
-        private string SendMessage( int? recipientPersonPrimaryAliasId, SendMessageBag bag )
+        private string SendMessage( Person recipientPerson, SendMessageBag bag )
         {
+            var smsNumber = recipientPerson?.PhoneNumbers.GetFirstSmsNumber();
+            if ( smsNumber == null )
+            {
+                if ( recipientPerson?.PhoneNumbers?.Any( p => p.IsMessagingOptedOut ) == true )
+                {
+                    return "The selected person has opted-out of receiving SMS messages.";
+                }
+
+                return "The selected person does not have an SMS enabled Phone number.";
+            }
+
             if ( bag.RecipientPersonAliasIdKey == string.Empty || ( bag.Message.IsNullOrWhiteSpace() && bag.AttachmentGuid == null ) )
             {
                 return "Message cannot be sent without text or an image.";
@@ -508,7 +548,7 @@ namespace Rock.Blocks.Communication
             var photos = binaryFile != null ? new List<BinaryFile> { binaryFile } : null;
 
             // Create and enqueue the communication
-            Rock.Communication.Medium.Sms.CreateCommunicationMobile( RequestContext.CurrentPerson, recipientPersonPrimaryAliasId, bag.Message, smsSystemPhoneNumber, responseCode, photos, RockContext );
+            Rock.Communication.Medium.Sms.CreateCommunicationMobile( RequestContext.CurrentPerson, recipientPerson.PrimaryAliasId, bag.Message, smsSystemPhoneNumber, responseCode, photos, RockContext );
 
             return string.Empty;
         }
@@ -754,9 +794,18 @@ namespace Rock.Blocks.Communication
         [BlockAction]
         public BlockActionResult SendMessageToNewRecipient( SendMessageBag bag )
         {
-            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) || !BlockCache.IsAuthorized( Authorization.ADMINISTRATE, RequestContext.CurrentPerson ) )
+            var smsSystemPhoneNumber = SelectedSystemPhoneNumber.HasValue
+                ? SystemPhoneNumberCache.Get( SelectedSystemPhoneNumber.Value )
+                : null;
+
+            if ( !BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson ) || smsSystemPhoneNumber?.IsAuthorized( Rock.Security.Authorization.VIEW, RequestContext.CurrentPerson ) == false )
             {
                 return ActionBadRequest( "You are not authorized to send a message." );
+            }
+
+            if ( smsSystemPhoneNumber == null )
+            {
+                return ActionBadRequest( "A System Phone Number must be selected." );
             }
 
             var recipientPerson = FindRecipientFromPersonKey( bag.RecipientPersonAliasIdKey );
@@ -765,13 +814,7 @@ namespace Rock.Blocks.Communication
                 return ActionBadRequest( "Could not find the Recipient Person." );
             }
 
-            var personHasSMSNumbers = recipientPerson.PhoneNumbers.Where( a => a.IsMessagingEnabled ).Any();
-            if ( !personHasSMSNumbers )
-            {
-                return ActionBadRequest( "The selected person does not have an SMS enabled Phone number." );
-            }
-
-            var sendMessageResult = SendMessage( recipientPerson.PrimaryAliasId, bag );
+            var sendMessageResult = SendMessage( recipientPerson, bag );
 
             if ( sendMessageResult.IsNotNullOrWhiteSpace() )
             {
@@ -789,9 +832,18 @@ namespace Rock.Blocks.Communication
         [BlockAction]
         public BlockActionResult SendMessageToExistingRecipient( SendMessageBag bag )
         {
-            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) || !BlockCache.IsAuthorized( Authorization.ADMINISTRATE, RequestContext.CurrentPerson ) )
+            var smsSystemPhoneNumber = SelectedSystemPhoneNumber.HasValue
+                ? SystemPhoneNumberCache.Get( SelectedSystemPhoneNumber.Value )
+                : null;
+
+            if ( !BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson ) || smsSystemPhoneNumber?.IsAuthorized( Rock.Security.Authorization.VIEW, RequestContext.CurrentPerson ) == false )
             {
                 return ActionBadRequest( "You are not authorized to send a message." );
+            }
+
+            if ( smsSystemPhoneNumber == null )
+            {
+                return ActionBadRequest( "A System Phone Number must be selected." );
             }
 
             var recipientPerson = FindRecipientFromPersonKey( bag.RecipientPersonAliasIdKey );
@@ -800,7 +852,7 @@ namespace Rock.Blocks.Communication
                 return ActionBadRequest( "Could not find the Recipient Person." );
             }
 
-            var sendMessageResult = SendMessage( recipientPerson.PrimaryAliasId, bag );
+            var sendMessageResult = SendMessage( recipientPerson, bag );
 
             if ( sendMessageResult.IsNotNullOrWhiteSpace() )
             {
@@ -817,14 +869,14 @@ namespace Rock.Blocks.Communication
         [BlockAction]
         public BlockActionResult ToggleConversationReadStatus( ConversationBag bag )
         {
-            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) || !BlockCache.IsAuthorized( Authorization.ADMINISTRATE, RequestContext.CurrentPerson ) )
-            {
-                return ActionBadRequest( "You are not authorized to change the read status of a conversation." );
-            }
-
             var smsSystemPhoneNumber = SelectedSystemPhoneNumber.HasValue
                 ? SystemPhoneNumberCache.Get( SelectedSystemPhoneNumber.Value )
                 : null;
+
+            if ( !BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson ) || smsSystemPhoneNumber?.IsAuthorized( Rock.Security.Authorization.VIEW, RequestContext.CurrentPerson ) == false )
+            {
+                return ActionBadRequest( "You are not authorized to change the read status of a conversation." );
+            }
 
             if ( smsSystemPhoneNumber == null )
             {
@@ -1099,7 +1151,7 @@ namespace Rock.Blocks.Communication
         [BlockAction]
         public BlockActionResult InsertSnippet( Guid snippetGuid, string recipientPersonAliasIdKey )
         {
-            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) || !BlockCache.IsAuthorized( Authorization.ADMINISTRATE, RequestContext.CurrentPerson ) )
+            if ( !BlockCache.IsAuthorized( Authorization.VIEW, RequestContext.CurrentPerson ) )
             {
                 return ActionBadRequest( "You are not authorized to insert a Snippet." );
             }

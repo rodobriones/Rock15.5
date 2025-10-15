@@ -1055,9 +1055,9 @@ namespace Rock.Data
         /// <param name="pageRouteGuid">The page route unique identifier.</param>
         public void DeletePageRoute( string pageRouteGuid )
         {
-            string sql = $@"
+            Migration.Sql( $@"
                 DELETE FROM [dbo].[PageRoute] WHERE [Guid] = '{pageRouteGuid}';
-            ";
+            " );
         }
 
         /// <summary>
@@ -1903,8 +1903,25 @@ END" );
         /// <remarks>
         /// The block type attribute and category must already exist in the database.
         /// </remarks>
+        [Obsolete( "This migration is not needed (see engineering note below)." )]
+        [RockObsolete( "18.0" )]
         public void AddBlockTypeAttributeToCategoryIfNotAlreadyAdded( string blockTypeAttributeGuid, string categoryName )
         {
+            /*
+                8/21/2025 - JPH
+
+                We don't need to manually seed a block type attribute's category, as Rock automatically manages these
+                categories well:
+
+                Startup process verifies all currently-used block type attributes are updated to match the latest code:
+                https://github.com/SparkDevNetwork/Rock/blob/e9ce12561a257d5368ce08ea488160fdb88bfea2/RockWeb/App_Code/Global.asax.cs#L384-L423
+
+                Page initialization process does the same for all blocks on the page:
+                https://github.com/SparkDevNetwork/Rock/blob/a3df8181c4c2e5cf6add0f944b7c4fafe4ca58e6/Rock/Web/UI/RockPage.cs#L1395
+
+                Reason: Call out that this migration - while safe to run - is not needed.
+             */
+
             Migration.Sql( $@"
 DECLARE @AttributeEntityTypeId INT = (SELECT TOP 1 [Id] FROM [EntityType] WHERE [Guid] = '{Rock.SystemGuid.EntityType.ATTRIBUTE}');
 DECLARE @BlockEntityTypeId INT = (SELECT TOP 1 [Id] FROM [EntityType] WHERE [Guid] = '{Rock.SystemGuid.EntityType.BLOCK}');
@@ -3183,6 +3200,82 @@ END" );
         }
 
         /// <summary>
+        /// Adds or updates the Entity Attribute for the given Attribute Guid.
+        /// </summary>
+        /// <param name="entityTypeName">Name of the entity type.</param>
+        /// <param name="fieldTypeGuid">The field type unique identifier.</param>
+        /// <param name="entityTypeQualifierColumn">The entity type qualifier column.</param>
+        /// <param name="entityTypeQualifierValue">The entity type qualifier value.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="abbreviatedName">The abbreviated name of the entity attribute.</param>
+        /// <param name="description">The description.</param>
+        /// <param name="order">The order.</param>
+        /// <param name="defaultValue">The default value.</param>
+        /// <param name="guid">The unique identifier.</param>
+        /// <param name="key">If null or empty the key will be set to the name without whitespace.</param>
+        public void AddOrUpdateEntityAttributeByGuid( string entityTypeName, string fieldTypeGuid, string entityTypeQualifierColumn, string entityTypeQualifierValue, string name, string abbreviatedName, string description, int order, string defaultValue, string guid, string key )
+        {
+            EnsureEntityTypeExists( entityTypeName );
+
+            key = key.IsNullOrWhiteSpace() ? name.Replace( " ", string.Empty ) : key;
+
+            string formattedDescription = description.Replace( "'", "''" );
+            string formattedDefaultValue = defaultValue.Replace( "'", "''" );
+
+            Migration.Sql( $@"
+                DECLARE @EntityTypeId INT = (SELECT [Id] FROM [EntityType] WHERE [Name] = '{entityTypeName}')
+                DECLARE @FieldTypeId INT = (SELECT [Id] FROM [FieldType] WHERE [Guid] = '{fieldTypeGuid}')
+
+                IF EXISTS (
+                    SELECT [Id]
+                    FROM [Attribute]
+                    WHERE [Guid] = '{guid}' )
+                BEGIN
+                    UPDATE [Attribute] SET
+                          [Name] = '{name}'
+                        , [Description] = '{formattedDescription}'
+                        , [Order] = {order}
+                        , [DefaultValue] = '{formattedDefaultValue}'
+                        , [Guid] = '{guid}'
+                        , [AbbreviatedName] = '{abbreviatedName}'
+                    WHERE [Guid] = '{guid}'
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO [Attribute] (
+                          [IsSystem]
+                        , [FieldTypeId]
+                        , [EntityTypeId]
+                        , [EntityTypeQualifierColumn]
+                        , [EntityTypeQualifierValue]
+                        , [Key]
+                        , [Name]
+                        , [Description]
+                        , [Order]
+                        , [IsGridColumn]
+                        , [DefaultValue]
+                        , [IsMultiValue]
+                        , [IsRequired]
+                        , [Guid])
+                    VALUES(
+                          1
+                        , @FieldTypeId
+                        , @EntityTypeid
+                        , '{entityTypeQualifierColumn}'
+                        , '{entityTypeQualifierValue}'
+                        , '{key}'
+                        , '{name}'
+                        , '{formattedDescription}'
+                        , {order}
+                        , 0
+                        , '{formattedDefaultValue}'
+                        , 0
+                        , 0
+                        , '{guid}')
+                END" );
+        }
+
+        /// <summary>
         /// Updates the entity attribute.
         /// </summary>
         /// <param name="modelEntityTypeName">Name of the model entity type.</param>
@@ -4068,7 +4161,7 @@ END";
                         [Guid])
                     VALUES(
                         1,@FieldTypeId,@Order,
-                        @CategoryId,'{1}','{2}','{4}',
+                        @CategoryId,N'{1}',N'{2}',N'{4}',
                         '{3}')
                 END
                 ELSE
@@ -4078,9 +4171,9 @@ END";
                         [IsSystem] = 1,
                         [FieldTypeId] = @FieldTypeId,
                         [CategoryId] = @CategoryId,
-                        [Name] = '{1}',
-                        [Description] = '{2}',
-                        [HelpText] = '{4}'
+                        [Name] = N'{1}',
+                        [Description] = N'{2}',
+                        [HelpText] = N'{4}'
                     WHERE [Guid] = '{3}'
 
                 END
@@ -4231,7 +4324,7 @@ END";
                         [Guid])
                     VALUES(
                         1,@FieldTypeId, @EntityTypeId,'DefinedTypeId',CAST(@DefinedTypeId as varchar),
-                        '{2}','{3}','{4}',
+                        N'{2}',N'{3}',N'{4}',
                         {5},0,'{6}',0,0,
                         '{7}')
 
@@ -4242,10 +4335,10 @@ END";
                     UPDATE [Attribute] SET
                         [IsSystem] = 1,
                         [FieldTypeId] = @FieldTypeId,
-                        [Name] = '{3}',
-                        [Description] = '{4}',
+                        [Name] = N'{3}',
+                        [Description] = N'{4}',
                         [Order] = {5},
-                        [DefaultValue] = '{6}',
+                        [DefaultValue] = N'{6}',
                         [Guid] = '{7}'
                     WHERE [EntityTypeId] = @EntityTypeId
                     AND [EntityTypeQualifierColumn] = 'DefinedTypeId'
@@ -8821,8 +8914,8 @@ END
         VALUES ( 
             1
             ,1
-            ,'{name}'
-            ,'{description}'
+            ,'{name.Replace( "'", "''" )}'
+            ,'{description.Replace( "'", "''" )}'
             ,'{jobType}'
             ,'{cronExpression}'
             ,1

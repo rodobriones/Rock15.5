@@ -18,6 +18,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Constants;
@@ -39,7 +40,7 @@ namespace Rock.Blocks.Cms
     [DisplayName( "Media Account Detail" )]
     [Category( "CMS" )]
     [Description( "Displays the details of a particular media account." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -184,6 +185,7 @@ namespace Rock.Blocks.Cms
                 ComponentEntityType = entity.ComponentEntityType.ToListItemBag(),
                 IsActive = entity.IsActive,
                 Name = entity.Name,
+                ShowDownloadButton = !( entity.GetMediaAccountComponent()?.AllowsManualEntry ?? true ),
                 MetricData = entity.GetMediaAccountComponent()?.GetAccountHtmlSummary( entity )
             };
 
@@ -397,7 +399,7 @@ namespace Rock.Blocks.Cms
                 }
 
                 var breadCrumbPageRef = new PageReference( pageReference.PageId, 0, pageParameters );
-                var breadCrumb = new BreadCrumbLink( name ?? "New Media Account", breadCrumbPageRef );
+                var breadCrumb = new BreadCrumbLink( $"{name}'s Media" ?? "New Media Account", breadCrumbPageRef );
 
                 return new BreadCrumbResult
                 {
@@ -434,6 +436,31 @@ namespace Rock.Blocks.Cms
                 };
 
                 return ActionOk( box );
+            }
+        }
+
+        /// <summary>
+        /// Syncs the media account with its provider.
+        /// </summary>
+        /// <param name="key">The identifier of the entity to be synced.</param>
+        /// <returns>A success message.</returns>
+        [BlockAction]
+        public BlockActionResult SyncWithProvider( string key )
+        {
+            using ( var rockContext = new RockContext() )
+            {
+                if ( !TryGetEntityForEditAction( key, rockContext, out var entity, out var actionError ) )
+                {
+                    return actionError;
+                }
+
+                Task.Run( async () =>
+                {
+                    await MediaAccountService.SyncMediaInAccountAsync( entity.Id );
+                    await MediaAccountService.SyncAnalyticsInAccountAsync( entity.Id );
+                } );
+
+                return ActionOk( "Synchronization with provider started and will continue in the background." );
             }
         }
 

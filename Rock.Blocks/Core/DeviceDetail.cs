@@ -40,7 +40,7 @@ namespace Rock.Blocks.Core
     [DisplayName( "Device Detail" )]
     [Category( "Core" )]
     [Description( "Displays the details of the given device." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -111,6 +111,10 @@ namespace Rock.Blocks.Core
             options.PrintFromOptions = typeof( PrintFrom ).ToEnumListItemBag();
             options.PrinterOptions = new DeviceService( rockContext )
                 .GetByDeviceTypeGuid( new Guid( Rock.SystemGuid.DefinedValue.DEVICE_TYPE_PRINTER ) )
+                .OrderBy( d => d.Name )
+                .ToListItemBagList();
+            options.ProxyItems = new DeviceService( rockContext )
+                .GetByDeviceTypeGuid( new Guid( Rock.SystemGuid.DefinedValue.DEVICE_TYPE_CLOUD_PRINT_PROXY ) )
                 .OrderBy( d => d.Name )
                 .ToListItemBagList();
             options.KioskTypeOptions = typeof( KioskType ).ToEnumListItemBag();
@@ -234,6 +238,7 @@ namespace Rock.Blocks.Core
                 Location = entity.Location.ToListItemBag(),
                 Name = entity.Name,
                 PrinterDevice = entity.PrinterDevice.ToListItemBag(),
+                ProxyDevice = entity.ProxyDevice.ToListItemBag(),
                 PrintFrom = entity.PrintFrom,
                 PrintToOverride = entity.PrintToOverride,
                 KioskType = entity.KioskType,
@@ -334,6 +339,9 @@ namespace Rock.Blocks.Core
 
             box.IfValidProperty( nameof( box.Entity.PrinterDevice ),
                 () => entity.PrinterDeviceId = box.Entity.PrinterDevice.GetEntityId<Device>( rockContext ) );
+
+            box.IfValidProperty( nameof( box.Entity.ProxyDevice ),
+                () => entity.ProxyDeviceId = box.Entity.ProxyDevice.GetEntityId<Device>( rockContext ) );
 
             box.IfValidProperty( nameof( box.Entity.PrintFrom ),
                 () => entity.PrintFrom = box.Entity.PrintFrom );

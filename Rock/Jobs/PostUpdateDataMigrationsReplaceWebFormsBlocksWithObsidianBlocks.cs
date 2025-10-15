@@ -22,6 +22,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
+using Microsoft.EntityFrameworkCore;
+
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -226,7 +228,7 @@ namespace Rock.Jobs
                         }
                     }
 
-                    rockContext.Database.CommandTimeout = commandTimeout;
+                    rockContext.Database.SetCommandTimeout( commandTimeout );
                     var jobMigration = new JobMigration( rockContext );
                     var migrationHelper = new MigrationHelper( jobMigration );
                     ReplaceBlocksOfOneBlockTypeWithBlocksOfAnotherBlockType( blockTypeGuidPair.Key, blockTypeGuidPair.Value, rockContext, migrationHelper );
@@ -382,7 +384,14 @@ namespace Rock.Jobs
                 newBlockPreferences.Add( newBlockPersonPreference );
                 var newBlockPersonPreferenceKeyPrefix = PersonPreferenceService.GetPreferencePrefix( blockEntityType.GetEntityType(), newBlockPersonPreference.EntityId.ToIntSafe() );
                 var oldBlockPersonPreferenceKeyPrefix = PersonPreferenceService.GetPreferencePrefix( blockEntityType.GetEntityType(), oldBlockPersonPreference.EntityId.ToIntSafe() );
-                newBlockPersonPreference.Key = $"{newBlockPersonPreferenceKeyPrefix}{oldBlockPersonPreference.Key.Substring( oldBlockPersonPreferenceKeyPrefix.Length )}";
+                if ( oldBlockPersonPreference.Key.Contains( oldBlockPersonPreferenceKeyPrefix ) && oldBlockPersonPreference.Key.Length > oldBlockPersonPreferenceKeyPrefix.Length )
+                {
+                    newBlockPersonPreference.Key = $"{newBlockPersonPreferenceKeyPrefix}{oldBlockPersonPreference.Key.Substring( oldBlockPersonPreferenceKeyPrefix.Length )}";
+                }
+                else
+                {
+                    newBlockPersonPreference.Key = $"{newBlockPersonPreferenceKeyPrefix}{oldBlockPersonPreference.Key}";
+                }
             }
 
             personPreferenceService.AddRange( newBlockPreferences );

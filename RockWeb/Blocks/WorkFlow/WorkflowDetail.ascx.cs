@@ -39,6 +39,8 @@ namespace RockWeb.Blocks.WorkFlow
     [DisplayName( "Workflow Detail" )]
     [Category( "WorkFlow" )]
     [Description( "Displays the details of a workflow instance." )]
+
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Primary )]
     [Rock.SystemGuid.BlockTypeGuid( "4A9D62CE-5822-490F-B9EE-6D80037B4F5F" )]
     public partial class WorkflowDetail : RockBlock
     {
@@ -660,11 +662,28 @@ namespace RockWeb.Blocks.WorkFlow
         private void ShowDetail( int workflowId )
         {
             var rockContext = new RockContext();
+            var workflowService = new WorkflowService( rockContext );
 
-            Workflow = new WorkflowService( rockContext )
+            Workflow = workflowService
                     .Queryable( "WorkflowType, Activities")
                     .Where( w => w.Id == workflowId )
                     .FirstOrDefault();
+
+            if ( Workflow == null )
+            {
+                var workflowIdKey = PageParameter( "WorkflowId" );
+                if ( workflowIdKey.IsNotNullOrWhiteSpace() )
+                {
+                    var workflow = workflowService.Get( workflowIdKey );
+                    if ( workflow != null )
+                    {
+                        Workflow = workflowService
+                            .Queryable( "WorkflowType, Activities" )
+                            .Where( w => w.Id == workflow.Id )
+                            .FirstOrDefault();
+                    }
+                }
+            }
 
             if ( Workflow == null )
             {

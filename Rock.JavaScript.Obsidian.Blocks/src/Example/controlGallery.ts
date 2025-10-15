@@ -46,7 +46,7 @@
  * - timeIntervalPicker
  */
 
-import { Component, computed, defineComponent, onMounted, onUnmounted, ref } from "vue";
+import { Component, computed, defineComponent, onMounted, onUnmounted, ref, watch } from "vue";
 import { convertComponentName, getTemplateImportPath } from "./ControlGallery/common/utils.partial";
 import { getSecurityGrant, provideSecurityGrant, useConfigurationValues, onConfigurationValuesChanged, useReloadBlock } from "@Obsidian/Utility/block";
 import { ControlGalleryInitializationBox } from "@Obsidian/ViewModels/Blocks/Example/ControlGallery/controlGalleryInitializationBox";
@@ -251,6 +251,17 @@ import EmailEditorGallery from "./ControlGallery/emailEditorGallery.partial.obs"
 import KpiGallery from "./ControlGallery/kpiGallery.partial.obs";
 import LearningClassPickerGallery from "./ControlGallery/learningClassPickerGallery.partial.obs";
 import LearningClassActivityPickerGallery from "./ControlGallery/learningClassActivityPickerGallery.partial.obs";
+import DisplayCardGallery from "./ControlGallery/displayCardGallery.partial.obs";
+import DisplayCardContainerGallery from "./ControlGallery/displayCardContainerGallery.partial.obs";
+import IconPickerGallery from "./ControlGallery/iconPickerGallery.partial.obs";
+import ContentStackGallery from "./ControlGallery/contentStackGallery.partial.obs";
+import ContentSectionGallery from "./ControlGallery/contentSectionGallery.partial.obs";
+import ContentSectionContainerGallery from "./ControlGallery/contentSectionContainerGallery.partial.obs";
+import LineChartGallery from "./ControlGallery/lineChartGallery.partial.obs";
+import ContextSlicerGallery from "./ControlGallery/contextSlicerGallery.partial.obs";
+import CampusContextPickerGallery from "./ControlGallery/campusContextPickerGallery.partial.obs";
+import BarChartGallery from "./ControlGallery/barChartGallery.partial.obs";
+import PieChartGallery from "./ControlGallery/pieChartGallery.partial.obs";
 
 const controlGalleryComponents: Record<string, Component> = [
     NotificationBoxGallery,
@@ -442,6 +453,17 @@ const controlGalleryComponents: Record<string, Component> = [
     KpiGallery,
     LearningClassPickerGallery,
     LearningClassActivityPickerGallery,
+    DisplayCardGallery,
+    DisplayCardContainerGallery,
+    IconPickerGallery,
+    ContentStackGallery,
+    ContentSectionGallery,
+    ContentSectionContainerGallery,
+    LineChartGallery,
+    ContextSlicerGallery,
+    CampusContextPickerGallery,
+    BarChartGallery,
+    PieChartGallery
 ]
     // Fix vue 3 SFC putting name in __name.
     .map(a => {
@@ -478,13 +500,13 @@ const detailBlockGallery = defineComponent({
 
             return [
                 {
-                    iconCssClass: "fa fa-user",
+                    iconCssClass: "ti ti-user",
                     title: "Action 1",
                     type: "default",
                     handler: () => alert("Action 1 selected.")
                 },
                 {
-                    iconCssClass: "fa fa-group",
+                    iconCssClass: "ti ti-users",
                     title: "Action 2",
                     type: "success",
                     handler: () => alert("Action 2 selected.")
@@ -499,13 +521,13 @@ const detailBlockGallery = defineComponent({
 
             return [
                 {
-                    iconCssClass: "fa fa-user",
+                    iconCssClass: "ti ti-user",
                     title: "Action 1",
                     type: "info",
                     handler: () => alert("Action 1 selected.")
                 },
                 {
-                    iconCssClass: "fa fa-group",
+                    iconCssClass: "ti ti-users",
                     title: "Action 2",
                     type: "success",
                     handler: () => alert("Action 2 selected.")
@@ -520,13 +542,13 @@ const detailBlockGallery = defineComponent({
 
             return [
                 {
-                    iconCssClass: "fa fa-user",
+                    iconCssClass: "ti ti-user",
                     title: "Action 1",
                     type: "default",
                     handler: () => alert("Action 1 selected.")
                 },
                 {
-                    iconCssClass: "fa fa-group",
+                    iconCssClass: "ti ti-users",
                     title: "Action 2",
                     type: "success",
                     handler: () => alert("Action 2 selected.")
@@ -541,13 +563,13 @@ const detailBlockGallery = defineComponent({
 
             return [
                 {
-                    iconCssClass: "fa fa-user",
+                    iconCssClass: "ti ti-user",
                     title: "Action 1",
                     type: "default",
                     handler: () => alert("Action 1 selected.")
                 },
                 {
-                    iconCssClass: "fa fa-group",
+                    iconCssClass: "ti ti-users",
                     title: "Action 2",
                     type: "success",
                     handler: () => alert("Action 2 selected.")
@@ -562,13 +584,13 @@ const detailBlockGallery = defineComponent({
 
             return [
                 {
-                    iconCssClass: "fa fa-user",
+                    iconCssClass: "ti ti-user",
                     title: "Action 1",
                     type: "default",
                     handler: () => alert("Action 1 selected.")
                 },
                 {
-                    iconCssClass: "fa fa-group",
+                    iconCssClass: "ti ti-users",
                     title: "Action 2",
                     type: "success",
                     handler: () => alert("Action 2 selected.")
@@ -1008,6 +1030,7 @@ export default defineComponent({
     components: {
         Panel,
         SectionHeader,
+        TextBox,
         ...controlGalleryComponents,
         ...templateGalleryComponents,
         ...generalInformationGalleryComponents
@@ -1020,6 +1043,7 @@ export default defineComponent({
 
         onConfigurationValuesChanged(useReloadBlock());
 
+        const componentFilter = ref<string>("");
         const currentComponent = ref<Component>(Object.values(controlGalleryComponents)[0]);
 
         function getComponentFromHash(): void {
@@ -1036,7 +1060,45 @@ export default defineComponent({
             }
         }
 
+        function getComponentFilterFromQueryString(): void {
+            const url = new URL(window.location.href);
+
+            componentFilter.value = url.searchParams.get("q") ?? "";
+        }
+
+        function filterComponents(source: Record<string, Component>): Record<string, Component> {
+            const components = { ...source };
+
+            if (componentFilter.value) {
+                Object.keys(components).forEach(key => {
+                    if (!components[key].name!.toLowerCase().includes(componentFilter.value.toLowerCase())) {
+                        delete components[key];
+                    }
+                });
+            }
+            return components;
+        }
+
+        const filteredControlGalleryComponents = computed(() => {
+            return filterComponents(controlGalleryComponents);
+        });
+
+        const filteredTemplateGalleryComponents = computed(() => {
+            return filterComponents(templateGalleryComponents);
+        });
+
+        const filteredGeneralInformationGalleryComponents = computed(() => {
+            return filterComponents(generalInformationGalleryComponents);
+        });
+
         getComponentFromHash();
+        getComponentFilterFromQueryString();
+
+        watch(componentFilter, () => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("q", componentFilter.value);
+            window.history.replaceState({}, "", url.toString());
+        });
 
         onMounted(() => {
             window.addEventListener("hashchange", getComponentFromHash);
@@ -1047,28 +1109,58 @@ export default defineComponent({
         });
 
         return {
+            componentFilter,
             currentComponent,
             convertComponentName,
-            controlGalleryComponents,
-            templateGalleryComponents,
-            generalInformationGalleryComponents
+            controlGalleryComponents: filteredControlGalleryComponents,
+            templateGalleryComponents: filteredTemplateGalleryComponents,
+            generalInformationGalleryComponents: filteredGeneralInformationGalleryComponents
         };
     },
 
     template: `
 <v-style>
+.galleryContainer {
+    overflow: hidden;
+}
+
+.galleryContainer .input-container {
+    padding: var(--spacing-xsmall);
+    border-right: 1px solid var(--color-interface-soft);
+    background-color: var(--color-interface-softer);
+}
+
 .gallerySidebar {
     border-radius: 0;
     margin: -1px 0 -1px -1px;
     overflow-y: auto;
-    flex-shrink: 0;
+    flex-grow: 1;
+    width: 300px;
+}
+
+.gallerySidebar li {
+    margin-bottom: var(--spacing-tiny);
+}
+
+.gallerySidebar li:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: var(--spacing-tiny);
 }
 
 .gallerySidebar li.current {
     font-weight: 700;
 }
 
+.gallerySidebar li > a {
+    display: block;
+    margin-left: var(--spacing-small);
+    text-indent: calc(0px - var(--spacing-small));
+    padding: var(--spacing-tiny);
+}
+
 .galleryContent {
+    display: flex;
+    flex-direction: column;
     flex-grow: 1;
     overflow-x: clip;
     overflow-y: auto;
@@ -1096,30 +1188,36 @@ export default defineComponent({
     </template>
     <template #default>
         <div class="panel-flex-fill-body flex-row galleryContainer">
+            <div class="d-flex flex-column">
+                <TextBox v-model="componentFilter"
+                         class="search-input"
+                         placeholder="Search"
+                         isClearable />
 
-            <div class="gallerySidebar well">
-                <h4>Components</h4>
+                <div class="gallerySidebar well">
+                    <h4>Components</h4>
 
-                <ul class="list-unstyled mb-0">
-                    <li v-for="(component, key) in controlGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
-                        <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
-                    </li>
-                </ul>
+                    <ul class="list-unstyled mb-0">
+                        <li v-for="(component, key) in controlGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
+                            <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
+                        </li>
+                    </ul>
 
-                <h4 class="mt-3">Templates</h4>
+                    <h4 class="mt-3">Templates</h4>
 
-                <ul class="list-unstyled mb-0">
-                    <li v-for="(component, key) in templateGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
-                        <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
-                    </li>
-                </ul>
+                    <ul class="list-unstyled mb-0">
+                        <li v-for="(component, key) in templateGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
+                            <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
+                        </li>
+                    </ul>
 
-                <h4 class="mt-3">General Information</h4>
-                <ul class="list-unstyled mb-0">
-                    <li v-for="(component, key) in generalInformationGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
-                        <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
-                    </li>
-                </ul>
+                    <h4 class="mt-3">General Information</h4>
+                    <ul class="list-unstyled mb-0">
+                        <li v-for="(component, key) in generalInformationGalleryComponents" :key="key" :class="{current: currentComponent.name === component.name}">
+                            <a :href="'#' + key" @click="currentComponent = component">{{ convertComponentName(component.name) }}</a>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <div class="galleryContent">

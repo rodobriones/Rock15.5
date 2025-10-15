@@ -21,22 +21,34 @@
 // </copyright>
 //
 
+import { ChatViewStyle } from "@Obsidian/Enums/Communication/Chat/chatViewStyle";
+import { ChatReactionBag } from "@Obsidian/ViewModels/Blocks/Communication/Chat/ChatView/chatReactionBag";
+
 /** A bag of settings for the chat view block. */
 export type ChatViewConfigurationBag = {
+    /** Gets or sets the selected channel ID. */
+    channelId?: string | null;
+
+    /** Gets or sets the style of the chat view. */
+    chatStyle: ChatViewStyle;
+
     /** Gets or sets the key for the direct message channel type. */
     directMessageChannelTypeKey?: string | null;
 
     /** Whether or not to filter shared channels by campus. */
     filterSharedChannelsByCampus: boolean;
 
+    /** Gets or sets the selected message ID. */
+    jumpToMessageId?: string | null;
+
     /** Gets or sets the public API key for the chat service. */
     publicApiKey?: string | null;
 
+    /** Gets or sets the supported reactions. */
+    reactions?: ChatReactionBag[] | null;
+
     /** Gets or sets the selected channel ID. */
     selectedChannelId?: string | null;
-
-    /** Gets or sets the selected message ID. */
-    selectedMessageId?: string | null;
 
     /** Gets or sets the key for the shared channel type. */
     sharedChannelTypeKey?: string | null;

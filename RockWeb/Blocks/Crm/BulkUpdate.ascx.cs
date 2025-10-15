@@ -257,7 +257,7 @@ namespace RockWeb.Blocks.Crm
             script = string.Format( @"
 
     // Add the 'bulk-item-selected' class to form-group of any item selected after postback
-    $( 'label.control-label' ).has( 'span.js-select-item > i.fa-check-circle-o').each( function() {{
+    $( 'label.control-label' ).has( 'span.js-select-item > i.ti-circle-check').each( function() {{
         $(this).closest('.form-group').addClass('bulk-item-selected');
     }});
 
@@ -272,8 +272,8 @@ namespace RockWeb.Blocks.Crm
         var enabled = formGroup.hasClass('bulk-item-selected');
 
         // Set the selection icon to show selected
-        selectIcon.toggleClass('fa-check-circle-o', enabled);
-        selectIcon.toggleClass('fa-circle-o', !enabled);
+        selectIcon.toggleClass('ti-circle-check', enabled);
+        selectIcon.toggleClass('ti-circle', !enabled);
 
         // Checkboxes needs special handling
         var checkboxes = formGroup.find(':checkbox');
@@ -1114,8 +1114,8 @@ namespace RockWeb.Blocks.Crm
         private void SetControlSelection( IRockControl control, string label )
         {
             var controlEnabled = SelectedFields.Contains( control.ClientID, StringComparer.OrdinalIgnoreCase );
-            var iconCss = controlEnabled ? "fa-check-circle-o" : "fa-circle-o";
-            control.Label = string.Format( "<span class='js-select-item'><i class='fa {0}'></i></span> {1}", iconCss, label );
+            var iconCss = controlEnabled ? "ti-circle-check" : "ti-circle";
+            control.Label = string.Format( "<span class='js-select-item'><i class='ti {0}'></i></span> {1}", iconCss, label );
             var webControl = control as WebControl;
             if ( webControl != null )
             {
@@ -1174,9 +1174,9 @@ namespace RockWeb.Blocks.Crm
 
                         string clientId = string.Format( "{0}_attribute_field_{1}", pw.ClientID, attribute.Id );
                         bool controlEnabled = SelectedFields.Contains( clientId, StringComparer.OrdinalIgnoreCase );
-                        string iconCss = controlEnabled ? "fa-check-circle-o" : "fa-circle-o";
+                        string iconCss = controlEnabled ? "ti-circle-check" : "ti-circle";
 
-                        string labelText = string.Format( "<span class='js-select-item'><i class='fa {0}'></i></span> {1}", iconCss, attributeCache.Name );
+                        string labelText = string.Format( "<span class='js-select-item'><i class='ti {0}'></i></span> {1}", iconCss, attributeCache.Name );
                         Control control = attributeCache.AddControl( pw.Controls, string.Empty, string.Empty, setValues, true, false, labelText );
 
                         if ( !( control is RockCheckBox ) && !( control is PersonPicker ) && !( control is ItemPicker ) )
@@ -1310,8 +1310,8 @@ namespace RockWeb.Blocks.Crm
                         string clientId = string.Format( "{0}_attribute_field_{1}", phAttributes.NamingContainer.ClientID, attributeCache.Id );
                         controlEnabled = SelectedFields.Contains( clientId, StringComparer.OrdinalIgnoreCase );
 
-                        string iconCss = controlEnabled ? "fa-check-circle-o" : "fa-circle-o";
-                        labelText = string.Format( "<span class='js-select-item'><i class='fa {0}'></i></span> {1}", iconCss, attributeCache.Name );
+                        string iconCss = controlEnabled ? "ti-circle-check" : "ti-circle";
+                        labelText = string.Format( "<span class='js-select-item'><i class='ti {0}'></i></span> {1}", iconCss, attributeCache.Name );
                     }
 
                     Control control = attributeCache.AddControl( phAttributes.Controls, attributeCache.DefaultValue, string.Empty, setValues, true, attributeCache.IsRequired, labelText );
@@ -1363,10 +1363,7 @@ namespace RockWeb.Blocks.Crm
                 return;
             }
 
-            var rockContext = new RockContext();
-            var stepProgram = new StepProgramService( rockContext ).Queryable()
-                .AsNoTracking()
-                .FirstOrDefault( p => p.Id == stepProgramId.Value );
+            var stepProgram = StepProgramCache.Get( stepProgramId.Value );
             var stepType = stepProgram.StepTypes.FirstOrDefault( st => st.Id == stepTypeId.Value );
             if ( stepType == null )
             {
@@ -2864,21 +2861,29 @@ namespace RockWeb.Blocks.Crm
                                         stepToUpdate.Note = UpdateStepNote;
                                     }
 
+                                    bool checkCompletionDate = false;
+
                                     if ( SelectedFields.Contains( FieldNames.StepEndDate ) )
                                     {
                                         stepToUpdate.EndDateTime = UpdateStepEndDate;
+                                        checkCompletionDate = true;
                                     }
 
                                     if ( SelectedFields.Contains( FieldNames.StepStartDate ) )
                                     {
                                         stepToUpdate.StartDateTime = UpdateStepStartDate;
+                                        checkCompletionDate = true;
                                     }
 
                                     if ( SelectedFields.Contains( FieldNames.StepStatus ) && UpdateStepStatusId.HasValue )
                                     {
                                         stepToUpdate.StepStatusId = UpdateStepStatusId;
+                                        checkCompletionDate = true;
+                                    }
 
-                                        var stepStatus = new StepStatusService( rockContext ).Get( UpdateStepStatusId.Value );
+                                    if ( checkCompletionDate && stepToUpdate.StepStatusId.HasValue )
+                                    {
+                                        var stepStatus = new StepStatusService( rockContext ).Get( stepToUpdate.StepStatusId.Value );
                                         if ( !stepStatus.IsCompleteStatus )
                                         {
                                             stepToUpdate.CompletedDateTime = null;
@@ -3274,7 +3279,7 @@ namespace RockWeb.Blocks.Crm
 
                 if ( this.UpdateStepAction != StepChangeActionSpecifier.None )
                 {
-                    var stepType = new StepTypeService( rockContext ).Get( this.UpdateStepTypeId.Value );
+                    var stepType = StepTypeCache.Get( this.UpdateStepTypeId.Value );
                     if ( stepType != null )
                     {
                         if ( this.UpdateStepAction == StepChangeActionSpecifier.Remove )

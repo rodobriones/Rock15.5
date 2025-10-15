@@ -161,13 +161,13 @@
 
         if (panelMode.value === DetailPanelMode.View) {
             actions.push({
-                iconCssClass: "fa fa-sitemap",
+                iconCssClass: "ti ti-sitemap",
                 title: "Child Pages",
                 type: "default",
                 handler: onChildPagesClick
             });
             actions.push({
-                iconCssClass: "fa fa-clone",
+                iconCssClass: "ti ti-copy",
                 title: "Copy",
                 type: "default",
                 handler: onCopyClick
@@ -175,7 +175,7 @@
 
             if (config.options?.canAdministrate) {
                 actions.push({
-                    iconCssClass: "fa fa-lock",
+                    iconCssClass: "ti ti-lock",
                     title: pageViewBag.value?.internalName ?? "Edit Security",
                     type: "default",
                     handler: onSecurityClick
@@ -290,8 +290,8 @@
      */
     async function onCancelEdit(): Promise<boolean | string> {
         if (!pageEditBag.value.bag?.idKey) {
-            if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
-                return config.navigationUrls[NavigationUrlKey.ParentPage];
+            if (config.navigationUrls?.[NavigationUrlKey.ReturnPage]) {
+                return config.navigationUrls[NavigationUrlKey.ReturnPage];
             }
 
             return false;

@@ -41,7 +41,7 @@ namespace Rock.Blocks.Group.Scheduling
     [DisplayName( "Group Scheduler" )]
     [Category( "Group Scheduling" )]
     [Description( "Allows group schedules for groups and locations to be managed by a scheduler." )]
-    [IconCssClass( "fa fa-calendar-alt" )]
+    [IconCssClass( "ti ti-calendar-month" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -1608,7 +1608,7 @@ namespace Rock.Blocks.Group.Scheduling
                     d.GroupId == source.GroupId
                     && d.LocationId == source.LocationId
                     && d.ScheduleId == source.ScheduleId
-                    && d.OccurrenceDateTime == source.OccurrenceDateTime.AddDays( daysDifference )
+                    && d.OccurrenceDateTime.Date == source.OccurrenceDateTime.Date.AddDays( daysDifference )
                 );
 
                 if ( destination == null )

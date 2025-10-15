@@ -17,6 +17,7 @@
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
@@ -66,12 +67,32 @@ namespace Rock.Reporting.DataFilter.Interaction
             get { return "Additional Filters"; }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/WebsitePageViewFilter.obs";
-
         #endregion
 
         #region Configuration
+
+        /// <inheritdoc/>
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            var websiteGuid = SystemGuid.DefinedValue.INTERACTIONCHANNELTYPE_WEBSITE.AsGuid();
+            var activeSiteIds = SiteCache.All().Where( s => s.IsActive ).Select( s => s.Id );
+
+            var siteOptions = new InteractionChannelService( rockContext )
+                .Queryable()
+                .Where( ic => ic.ChannelTypeMediumValue.Guid == websiteGuid && ic.IsActive && activeSiteIds.Contains( ic.ChannelEntityId.Value ) )
+                .Select( x => new ListItemBag() { Text = x.Name, Value = x.Guid.ToString() } )
+                .OrderBy( m => m.Text )
+                .ToList();
+
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/websitePageViewFilter.obs" ),
+                Options = new Dictionary<string, string>
+                {
+                    { "siteOptions", siteOptions.ToCamelCaseJson( false, true ) }
+                },
+            };
+        }
 
         /// <inheritdoc/>
         public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
@@ -85,20 +106,9 @@ namespace Rock.Reporting.DataFilter.Interaction
 
             var sites = InteractionChannelCache.GetMany( config.WebsiteIds ).Select( dv => dv.Guid );
 
-            var websiteGuid = SystemGuid.DefinedValue.INTERACTIONCHANNELTYPE_WEBSITE.AsGuid();
-            var activeSiteIds = SiteCache.All().Where( s => s.IsActive ).Select( s => s.Id );
-
-            var siteOptions = new InteractionChannelService( new RockContext() )
-                .Queryable()
-                .Where( ic => ic.ChannelTypeMediumValue.Guid == websiteGuid && ic.IsActive && activeSiteIds.Contains( ic.ChannelEntityId.Value ) )
-                .Select( x => new ListItemBag() { Text = x.Name, Value = x.Guid.ToString() } )
-                .OrderBy( m => m.Text )
-                .ToList();
-
             return new Dictionary<string, string>
             {
                 { "sites", sites.ToCamelCaseJson( false, true ) },
-                { "siteOptions", siteOptions.ToCamelCaseJson( false, true ) },
                 { "comparisonType", config.ComparisonValue },
                 { "count", config.ViewsCount.ToString() },
                 { "dateRange", config.DelimitedDateRangeValues },
@@ -159,11 +169,11 @@ namespace Rock.Reporting.DataFilter.Interaction
         {
             return @"
 function() {
-  
+
     var result = 'Interactions';
 
     var websiteNames = $('.js-websites', $content).find(':selected');
-console.log(websiteNames);
+
     if ( websiteNames.length > 0 ) {
         var websiteNamesDelimitedList = websiteNames.map(function() {{ return $(this).text() }}).get().join(', ');
         result += "" with: "" + websiteNamesDelimitedList +""."";
@@ -528,7 +538,7 @@ console.log(websiteNames);
         }
 
         /// <summary>
-        /// Viewmodel for interaction channels 
+        /// Viewmodel for interaction channels
         /// </summary>
         private sealed class InteractionChannelViewModel
         {

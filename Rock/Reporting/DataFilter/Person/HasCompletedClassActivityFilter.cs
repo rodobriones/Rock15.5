@@ -29,6 +29,7 @@ using System.Web.UI.WebControls.Expressions;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.UI.Controls;
 using Rock.Web.Utilities;
@@ -53,27 +54,13 @@ namespace Rock.Reporting.DataFilter.Person
             get { return typeof( Rock.Model.Person ).FullName; }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/hasCompletedClassActivityFilter.obs";
-
         #endregion
 
         #region Configuration
 
         /// <inheritdoc/>
-        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
         {
-            var config = SelectionConfig.Parse( selection ) ?? new SelectionConfig();
-
-            var learningClassActivity = new LearningClassActivityService( rockContext ).Get( config.LearningClassActivityGuid ?? Guid.Empty );
-            var learningClassActivityBag = learningClassActivity?.ToListItemBag();
-            var learningClass = learningClassActivity?.LearningClass;
-            var learningClassBag = learningClass?.ToListItemBag();
-            var learningCourse = learningClass?.LearningCourse;
-            var learningCourseGuid = learningCourse?.Guid;
-            var learningProgram = learningCourse?.LearningProgram;
-            var learningProgramGuid = learningProgram?.Guid;
-
             var learningProgramOptions = new LearningProgramService( rockContext )
                 .Queryable()
                 .Where( lp => lp.IsActive && lp.IsCompletionStatusTracked )
@@ -105,11 +92,34 @@ namespace Rock.Reporting.DataFilter.Person
                 }
             }
 
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/hasCompletedClassActivityFilter.obs" ),
+                Options = new Dictionary<string, string>
+                {
+                    { "learningProgramOptions", learningProgramOptions.ToCamelCaseJson( false, true ) },
+                    { "learningCourseOptions", learningCourseOptionsByProgram.ToCamelCaseJson( false, true ) }
+                }
+            };
+        }
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            var config = SelectionConfig.Parse( selection ) ?? new SelectionConfig();
+
+            var learningClassActivity = new LearningClassActivityService( rockContext ).Get( config.LearningClassActivityGuid ?? Guid.Empty );
+            var learningClassActivityBag = learningClassActivity?.ToListItemBag();
+            var learningClass = learningClassActivity?.LearningClass;
+            var learningClassBag = learningClass?.ToListItemBag();
+            var learningCourse = learningClass?.LearningCourse;
+            var learningCourseGuid = learningCourse?.Guid;
+            var learningProgram = learningCourse?.LearningProgram;
+            var learningProgramGuid = learningProgram?.Guid;
+
             var data = new Dictionary<string, string>
             {
-                { "learningProgramOptions", learningProgramOptions.ToCamelCaseJson( false, true ) },
                 { "learningProgram", learningProgramGuid?.ToString() },
-                { "learningCourseOptions", learningCourseOptionsByProgram.ToCamelCaseJson( false, true ) },
                 { "learningCourse", learningCourseGuid?.ToString() },
                 { "learningClass", learningClassBag.ToCamelCaseJson( false, true ) },
                 { "learningClassActivity", learningClassActivityBag.ToCamelCaseJson( false, true ) },

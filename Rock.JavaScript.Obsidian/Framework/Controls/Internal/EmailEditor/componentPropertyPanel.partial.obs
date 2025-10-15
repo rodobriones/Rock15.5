@@ -3,6 +3,7 @@
     <TitleComponentPropertyPanel v-if="componentTypeName === 'title'"
                                  :componentElement="componentElement"
                                  :hasScrollableBody="true"
+                                 :ltr="ltr"
                                  @clone="$emit('clone')"
                                  @complete="$emit('complete')"
                                  @delete="$emit('delete')"
@@ -11,6 +12,7 @@
     <VideoComponentPropertyPanel v-else-if="componentTypeName === 'video'"
                                  :componentElement="componentElement"
                                  :hasScrollableBody="true"
+                                 :ltr="ltr"
                                  :videoProviderNames="videoProviderNames"
                                  @clone="$emit('clone')"
                                  @complete="$emit('complete')"
@@ -20,6 +22,7 @@
     <ButtonComponentPropertyPanel v-else-if="componentTypeName === 'button'"
                                   :componentElement="componentElement"
                                   :hasScrollableBody="true"
+                                  :ltr="ltr"
                                   @clone="$emit('clone')"
                                   @complete="$emit('complete')"
                                   @delete="$emit('delete')"
@@ -28,11 +31,13 @@
     <TextComponentPropertyPanel v-else-if="componentTypeName === 'text'"
                                 :componentElement="componentElement"
                                 :hasScrollableBody="true"
+                                :ltr="ltr"
                                 :mergeFields="mergeFields"
                                 :shortLinkCheckToken="shortLinkCheckToken"
                                 :shortLinkGetPageId="shortLinkGetPageId"
                                 :shortLinkSites="shortLinkSites"
                                 :shortLinkTokenMinLength="shortLinkTokenMinLength"
+                                :usageType="usageType"
                                 @clone="$emit('clone')"
                                 @complete="$emit('complete')"
                                 @delete="$emit('delete')"
@@ -41,6 +46,7 @@
     <DividerComponentPropertyPanel v-else-if="componentTypeName === 'divider'"
                                    :componentElement="componentElement"
                                    :hasScrollableBody="true"
+                                   :ltr="ltr"
                                    @clone="$emit('clone')"
                                    @complete="$emit('complete')"
                                    @delete="$emit('delete')"
@@ -49,6 +55,7 @@
     <AdaptiveMessageComponentPropertyPanel v-else-if="componentTypeName === 'message'"
                                            :componentElement="componentElement"
                                            :hasScrollableBody="true"
+                                           :ltr="ltr"
                                            @clone="$emit('clone')"
                                            @complete="$emit('complete')"
                                            @delete="$emit('delete')" />
@@ -57,15 +64,18 @@
                                  :componentElement="componentElement"
                                  :hasScrollableBody="true"
                                  :imageComponentBinaryFileTypeGuid="imageComponentBinaryFileTypeGuid"
+                                 :ltr="ltr"
                                  @clone="$emit('clone')"
                                  @complete="$emit('complete')"
                                  @delete="$emit('delete')"
-                                 @migrate="$emit('migrate', $event)"  />
+                                 @migrate="$emit('migrate', $event)" />
 
     <CodeComponentPropertyPanel v-else-if="componentTypeName === 'code'"
                                 :componentElement="componentElement"
                                 :hasScrollableBody="true"
+                                :ltr="ltr"
                                 :mergeFields="mergeFields"
+                                :usageType="usageType"
                                 @clone="$emit('clone')"
                                 @complete="$emit('complete')"
                                 @delete="$emit('delete')"
@@ -74,6 +84,7 @@
     <RsvpComponentPropertyPanel v-else-if="componentTypeName === 'rsvp'"
                                 :componentElement="componentElement"
                                 :hasScrollableBody="true"
+                                :ltr="ltr"
                                 :recipientPersonIds="recipientPersonIds"
                                 @clone="$emit('clone')"
                                 @complete="$emit('complete')"
@@ -84,6 +95,7 @@
                                    :componentElement="componentElement"
                                    :hasScrollableBody="true"
                                    :isCloneDisabled="isRootSectionComponent && !parentStructureDropzone"
+                                   :ltr="ltr"
                                    @clone="$emit('clone')"
                                    @complete="$emit('complete')"
                                    @delete="$emit('delete')"
@@ -93,6 +105,7 @@
     <RowComponentPropertyPanel v-else-if="componentTypeName === 'row'"
                                :componentElement="componentElement"
                                :hasScrollableBody="true"
+                               :ltr="ltr"
                                @clone="$emit('clone')"
                                @complete="$emit('complete')"
                                @delete="$emit('delete')"
@@ -115,6 +128,7 @@
     import TitleComponentPropertyPanel from "./propertyPanels/titleComponentPropertyPanel.partial.obs";
     import VideoComponentPropertyPanel from "./propertyPanels/videoComponentPropertyPanel.partial.obs";
     import { EditorComponentTypeName } from "./types.partial";
+    import { UsageType } from "./types";
     import { getComponentTypeName } from "./utils.partial";
     import { Guid } from "@Obsidian/Types";
     import { isHTMLElement } from "@Obsidian/Utility/dom";
@@ -130,6 +144,11 @@
         imageComponentBinaryFileTypeGuid: {
             type: String as PropType<Guid>,
             required: true
+        },
+
+        ltr: {
+            type: Boolean as PropType<boolean>,
+            default: false
         },
 
         mergeFields: {
@@ -156,6 +175,11 @@
 
         shortLinkTokenMinLength: {
             type: Number as PropType<number | null | undefined>
+        },
+
+        usageType: {
+            type: String as PropType<UsageType>,
+            default: "email" as const
         },
 
         videoProviderNames: {

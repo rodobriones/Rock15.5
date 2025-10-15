@@ -16,7 +16,8 @@
                     <TextBox v-model="internalName"
                              label="Internal Name"
                              rules="required"
-                             help="The internal page name to use when administering this page" />
+                             help="The internal page name to use when administering this page"
+                             @blur="handleInternalNameBlur" />
 
                     <TextBox v-model="pageTitle"
                              label="Page Title"
@@ -42,8 +43,8 @@
                     <CheckBox v-model="menuDisplayIcon"
                               label="Show Icon" />
 
-                    <TextBox v-model="iconCssClass"
-                             label="Icon CSS Class" />
+                    <IconPicker v-model="iconCssClass"
+                                label="Icon CSS Class" />
                 </div>
             </div>
             <div class="row">
@@ -199,6 +200,7 @@
     import PagePicker from "@Obsidian/Controls/pagePicker.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import IconPicker from "@Obsidian/Controls/iconPicker.obs";
     import InlineCheckbox from "./InlineCheckbox.partial.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import DefinedValuePicker from "@Obsidian/Controls/definedValuePicker.obs";
@@ -398,6 +400,18 @@
         updateRefValue(blockContexts, props.modelValue.bag?.blockContexts?.map(context => ({ ...context, text: context.text ?? "" })) ?? []);
         updateRefValue(breadCrumbDisplayIcon, props.modelValue.bag?.breadCrumbDisplayIcon ?? false);
     });
+
+    // Handle the blur event on the Internal Name field so that we can auto-fill pageTitle and browserTitle textboxes.
+    function handleInternalNameBlur(): void {
+        if (internalName.value) {
+            if (!pageTitle.value || pageTitle.value.trim() === "") {
+                pageTitle.value = internalName.value;
+            }
+            if (!browserTitle.value || browserTitle.value.trim() === "") {
+                browserTitle.value = internalName.value;
+            }
+        }
+    }
 
     // Determines which values we want to track changes on (defined in the
     // array) and then emit a new object defined as newValue.

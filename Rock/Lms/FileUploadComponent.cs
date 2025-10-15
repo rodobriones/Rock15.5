@@ -66,7 +66,7 @@ namespace Rock.Lms
         public override string HighlightColor => "#d8f9e5";
 
         /// <inheritdoc/>
-        public override string IconCssClass => "fa fa-file-alt";
+        public override string IconCssClass => "ti ti-file";
 
         /// <inheritdoc/>
         public override string Name => "File Upload";
@@ -107,6 +107,23 @@ namespace Rock.Lms
                     [SettingKey.ShowRubricOnUpload] = componentData.GetValueOrNull( SettingKey.ShowRubricOnUpload )
                 };
             }
+        }
+
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetComponentData( LearningClassActivity activity, Dictionary<string, string> componentSettings, RockContext rockContext, RockRequestContext requestContext )
+        {
+            // This is a cheat, we shouldn't really be trying to access the original
+            // JSON this way, but we don't have a better way to do it.
+            var oldData = activity.LearningActivity?.ActivityComponentSettingsJson?.FromJsonOrNull<Dictionary<string, string>>();
+
+            new StructuredContentHelper( componentSettings?.GetValueOrNull( SettingKey.Instructions ) )
+                .DetectAndApplyDatabaseChanges( oldData?.GetValueOrNull( SettingKey.Instructions ), rockContext );
+
+            new StructuredContentHelper( componentSettings?.GetValueOrNull( SettingKey.Rubric ) )
+                .DetectAndApplyDatabaseChanges( oldData?.GetValueOrNull( SettingKey.Rubric ), rockContext );
+
+            return base.GetComponentData( activity, componentSettings, rockContext, requestContext );
         }
 
         /// <inheritdoc/>

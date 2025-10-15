@@ -48,7 +48,7 @@ namespace Rock.Blocks.Workflow
     [DisplayName( "Workflow Entry" )]
     [Category( "Worfklow" )]
     [Description( "Used to enter information for a workflow that has interactive elements." )]
-    [IconCssClass( "fa fa-gears" )]
+    [IconCssClass( "ti ti-settings-cog" )]
     [ConfigurationChangedReload( BlockReloadMode.Block )]
     [SupportedSiteTypes( SiteType.Web, SiteType.Mobile )]
 
@@ -176,7 +176,7 @@ namespace Rock.Blocks.Workflow
 
     [BooleanField(
         "Enable for Form Sharing",
-        Description = "Marks this block instance as available for form sharing. When enabled, the Form Builder can display this block as a shareable link option.",
+        Description = "When enabled and Workflow Type is blank, the Form Builder will be able to generate a shareable link to this page so the chosen form can be filled out using this block instance.",
         DefaultBooleanValue = false,
         Key = AttributeKey.EnableForFormSharing,
         Order = 15 )]
@@ -190,6 +190,7 @@ namespace Rock.Blocks.Workflow
 
     #endregion
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Primary )]
     [Rock.SystemGuid.EntityTypeGuid( "02D2DBA8-5300-4367-B15B-E37DFB3F7D1E" )]
     [Rock.SystemGuid.BlockTypeGuid( SystemGuid.BlockType.OBSIDIAN_WORKFLOW_ENTRY )]
     public class WorkflowEntry : RockBlockType, IBreadCrumbBlock
@@ -248,7 +249,7 @@ namespace Rock.Blocks.Workflow
             public const string WorkflowName = "WorkflowName";
 
             public const string ActionId = "ActionId";
-            
+
             /// <summary>
             /// "WorkflowType" supports integer IDs, unique IDs, ID keys, and slugs.
             /// It is used to load the workflow type associated with the workflow.
@@ -303,7 +304,7 @@ namespace Rock.Blocks.Workflow
 
         #region Page Parameters
 
-        private string WorkflowTypePageParameter => PageParameter( PageParameterKey.WorkflowType ); 
+        private string WorkflowTypePageParameter => PageParameter( PageParameterKey.WorkflowType );
 
         private int? WorkflowTypeIdPageParameter =>
             PageParameter( PageParameterKey.WorkflowType ).AsIntegerOrNull()
@@ -368,7 +369,7 @@ namespace Rock.Blocks.Workflow
             {
                 this.RequestContext.Response.SetPageTitle( workflow.WorkflowTypeCache.Name );
             }
-                 
+
             var actionId = RequestContext.GetPageParameter( PageParameterKey.ActionId ).AsIntegerOrNull();
             var initialAction = ProcessWorkflow( workflow, actionId, null, null, null );
 
@@ -386,7 +387,7 @@ namespace Rock.Blocks.Workflow
             var workflowTypeGuidPageParam = this.WorkflowTypeGuidPageParameter;
             var workflowTypeKeyOrSlugPageParam = this.WorkflowTypePageParameter;
             var workflowTypeSlugPageParam = this.WorkflowTypeSlugPageParameter;
-            var allowPassingWorkflowTypeId = !GetAttributeValue( AttributeKey.DisablePassingWorkflowTypeId ).AsBoolean(); 
+            var allowPassingWorkflowTypeId = !GetAttributeValue( AttributeKey.DisablePassingWorkflowTypeId ).AsBoolean();
 
             if ( workflowTypeGuidBlockSetting.HasValue )
             {
@@ -395,7 +396,7 @@ namespace Rock.Blocks.Workflow
             else if ( workflowTypeGuidPageParam.HasValue )
             {
                 return WorkflowTypeCache.Get( workflowTypeGuidPageParam.Value, this.RockContext );
-            } 
+            }
             else if ( workflowTypeIdPageParam.HasValue && allowPassingWorkflowTypeId )
             {
                 return WorkflowTypeCache.Get( workflowTypeIdPageParam.Value, this.RockContext );
@@ -638,6 +639,7 @@ namespace Rock.Blocks.Workflow
             Guid? lastActionTypeGuid = null;
             WorkflowAction lastAction = null;
             IEntity entity = null;
+            var processedMultipleInteractiveActions = false;
 
             if ( workflow.Id == 0 )
             {
@@ -665,6 +667,15 @@ namespace Rock.Blocks.Workflow
                 if ( action.Guid == lastAction?.Guid )
                 {
                     return CreateErrorMessage( workflow, workflow.WorkflowTypeCache, "Invalid action", "We detected an invalid action state that prevents further processing." );
+                }
+
+                // If lastAction is not null and we get to this point then that
+                // means we have processed at least one interactive action
+                // already. Mark that we have processed multiple interactive
+                // actions so we know to save later on.
+                if ( lastAction != null )
+                {
+                    processedMultipleInteractiveActions = true;
                 }
 
                 // Check if we have a previous interactive action result that
@@ -715,6 +726,23 @@ namespace Rock.Blocks.Workflow
 
                 lastAction = action;
                 lastActionTypeGuid = action.ActionTypeCache.Guid;
+
+                // If the LastProcessedDateTime is equal to RockDateTime.Now
+                // then the processing of the activity will be skipped. In
+                // general terms, this means some actions might not be processed
+                // if the server is too fast. However, this can be difficult to
+                // track down if the workflow type is not set to persist
+                // automatically since one of the later actions that didn't run
+                // might be the persist action.
+                // 
+                // The resolution of System.DateTime.UTCNow is between .5 and 15
+                // ms. So we need to wait until the values are no longer equal.
+                // https://docs.microsoft.com/en-us/dotnet/api/system.datetime.utcnow?view=netframework-4.7#remarks
+                while ( workflow.LastProcessedDateTime == RockDateTime.Now )
+                {
+                    // TODO: In the future this should be an async Task.Delay.
+                    System.Threading.Thread.Sleep( 1 );
+                }
             }
 
             if ( workflow.IsPersisted )
@@ -724,6 +752,14 @@ namespace Rock.Blocks.Workflow
             else if ( lastActionTypeGuid.HasValue && actionTypeGuid.HasValue && lastActionTypeGuid != actionTypeGuid )
             {
                 // If we have multiple interactive actions then we must persist.
+                // This only catches the case where the two actions are different
+                // types. It will not catch two back to back entry forms. This
+                // check may not even be needed since we now have the check that
+                // comes next.
+                new WorkflowService( RockContext ).PersistImmediately( lastAction );
+            }
+            else if ( processedMultipleInteractiveActions )
+            {
                 new WorkflowService( RockContext ).PersistImmediately( lastAction );
             }
 
@@ -1114,7 +1150,7 @@ namespace Rock.Blocks.Workflow
                 iconCssClass = workflowTypeCache?.IconCssClass;
             }
 
-            return iconCssClass ?? "fa fa-gear";
+            return iconCssClass ?? "ti ti-settings";
         }
 
         /// <summary>

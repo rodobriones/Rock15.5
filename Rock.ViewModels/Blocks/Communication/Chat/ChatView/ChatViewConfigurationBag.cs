@@ -14,6 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
+using System.Collections.Generic;
+
+using Rock.Enums.Communication.Chat;
+using Rock.ViewModels.Utility;
+
 namespace Rock.ViewModels.Blocks.Communication.Chat.ChatView
 {
     /// <summary>
@@ -44,11 +49,26 @@ namespace Rock.ViewModels.Blocks.Communication.Chat.ChatView
         /// <summary>
         /// Gets or sets the selected channel ID.
         /// </summary>
+        public string ChannelId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the selected channel ID.
+        /// </summary>
         public string SelectedChannelId { get; set; }
 
         /// <summary>
         /// Gets or sets the selected message ID.
         /// </summary>
-        public string SelectedMessageId { get; set; }
+        public string JumpToMessageId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the style of the chat view.
+        /// </summary>
+        public ChatViewStyle ChatStyle { get; set; }
+
+        /// <summary>
+        /// Gets or sets the supported reactions.
+        /// </summary>
+        public List<ChatReactionBag> Reactions { get; set; }
     }
 }

@@ -117,7 +117,7 @@ namespace RockWeb.Blocks.WorkFlow
 
     [BooleanField(
         "Enable for Form Sharing",
-        Description = "Marks this block instance as available for form sharing. When enabled, the Form Builder can display this block as a shareable link option.",
+        Description = "When enabled and Workflow Type is blank, the Form Builder will be able to generate a shareable link to this page so the chosen form can be filled out using this block instance.",
         DefaultBooleanValue = false,
         Key = AttributeKey.EnableForFormSharing,
         Order = 9 )]
@@ -131,6 +131,7 @@ namespace RockWeb.Blocks.WorkFlow
 
     #endregion Block Attributes
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Primary )]
     [Rock.SystemGuid.BlockTypeGuid( Rock.SystemGuid.BlockType.WORKFLOW_ENTRY )]
     public partial class WorkflowEntry : Rock.Web.UI.RockBlock, IPostBackEventHandler
     {
@@ -167,7 +168,7 @@ namespace RockWeb.Blocks.WorkFlow
             public const string WorkflowGuid = "WorkflowGuid";
             public const string WorkflowName = "WorkflowName";
             public const string ActionId = "ActionId";
-            
+
             /// <summary>
             /// "WorkflowType" supports integer IDs, unique IDs, ID keys, and slugs.
             /// It is used to load the workflow type associated with the workflow.
@@ -292,9 +293,9 @@ namespace RockWeb.Blocks.WorkFlow
             set { ViewState[ViewStateKey.IsCaptchaValid] = value; }
         }
 
-        private string WorkflowTypePageParameter => PageParameter( PageParameterKey.WorkflowType ); 
+        private string WorkflowTypePageParameter => PageParameter( PageParameterKey.WorkflowType );
 
-        private string WorkflowTypeSlugPageParameter => PageParameter( PageParameterKey.WorkflowTypeSlug ); 
+        private string WorkflowTypeSlugPageParameter => PageParameter( PageParameterKey.WorkflowTypeSlug );
 
         private bool UseFormNameForPageTitle => GetAttributeValue( AttributeKey.UseFormNameForPageTitle ).AsBoolean();
 
@@ -922,7 +923,7 @@ namespace RockWeb.Blocks.WorkFlow
 
                     if ( workflowType == null )
                     {
-                        // If the workflowType is still not set, try to find it from the "WorkflowType" PageParameter, which supports Guid, int ID, ID key, and slug values.
+                        // If the workflowType is still not set, try to find it from the "WorkflowType" PageParameter, which supports Guid, int ID, and slug values.
                         var workflowTypeIdKeyOrSlugPageParam = this.WorkflowTypePageParameter;
 
                         if ( workflowTypeIdKeyOrSlugPageParam.IsNotNullOrWhiteSpace() )
@@ -934,6 +935,16 @@ namespace RockWeb.Blocks.WorkFlow
                                 // Try loading it from a slug.
                                 workflowType = WorkflowTypeCache.GetBySlug( workflowTypeIdKeyOrSlugPageParam );
                             }
+                        }
+                    }
+
+                    if ( workflowType == null )
+                    {
+                        // If the workflowType is still not set, try to find it from the "WorkflowTypeId" as an IdKey.
+                        var workflowTypeId = PageParameter( PageParameterKey.WorkflowTypeId );
+                        if ( workflowTypeId.IsNotNullOrWhiteSpace() )
+                        {
+                            workflowType = WorkflowTypeCache.GetByIdKey( workflowTypeId );
                         }
                     }
                 }
@@ -1438,7 +1449,7 @@ namespace RockWeb.Blocks.WorkFlow
                 pePerson2.Visible = cbShowPerson2.Checked;
 
                 // Default Marital Status to Married if Spouse Entry is mandatory
-                if( pePerson2.Visible && !dvpMaritalStatus.SelectedDefinedValueId.HasValue )
+                if ( pePerson2.Visible && !dvpMaritalStatus.SelectedDefinedValueId.HasValue )
                 {
                     var maritalStatusMarriedValueId = DefinedValueCache.GetId( Rock.SystemGuid.DefinedValue.PERSON_MARITAL_STATUS_MARRIED.AsGuid() );
                     dvpMaritalStatus.SetValue( maritalStatusMarriedValueId );
@@ -2281,6 +2292,28 @@ namespace RockWeb.Blocks.WorkFlow
 
             if ( workflowType.IsPersisted == false && workflowType.IsFormBuilder )
             {
+                /*
+                    06/04/2025 - JMH
+
+                    Before saving the WorkflowAction, ensure that the Workflow.InitiatorPersonAlias is set or is tracked by _workflowRockContext.
+                    This guarantees that the saved WorkflowAction correctly associates the tracked PersonAlias with the Workflow.InitiatorPersonAlias navigation property.
+                    This association is necessary because the InitiatorPersonAlias is used in downstream Lava within the NotificationEmail System Communication.
+
+                    Reason: To ensure the correct PersonAlias is available for Lava in system emails.
+                */
+                var initiatorPersonAlias = _action?.Activity?.Workflow?.InitiatorPersonAlias;
+                var initiatorPersonAliasId = _action?.Activity?.Workflow?.InitiatorPersonAliasId;
+
+                if ( initiatorPersonAliasId.HasValue
+                    && initiatorPersonAlias == null
+                    && !_workflowRockContext.ChangeTracker
+                        .Entries<PersonAlias>()
+                        .Any( pa => pa.Entity.Id == initiatorPersonAliasId.Value ) )
+                {
+                    // Set the InitiatorPersonAlias manually as saving the WorkflowAction will not automatically set it.
+                    _action.Activity.Workflow.InitiatorPersonAlias = new PersonAliasService( _workflowRockContext ).Get( initiatorPersonAliasId.Value );
+                }
+
                 /* 3/14/2022 MP
                  If this is a FormBuilder workflow, the WorkflowType probably has _workflowType.IsPersisted == false.
                  This is because we don't want to persist the workflow until they have submitted.
@@ -2570,7 +2603,9 @@ namespace RockWeb.Blocks.WorkFlow
                     return;
                 }
 
-                recipients.Add( new RockEmailMessageRecipient( recipientPerson, workflowMergeFields ) );
+                var recipient = new RockEmailMessageRecipient( recipientPerson, workflowMergeFields );
+                recipient.MergeFields.AddOrReplace( recipient.PersonMergeFieldKey, recipientPerson );
+                recipients.Add( recipient );
             }
             else if ( formNotificationEmailDestination == FormNotificationEmailDestination.CampusTopic
                 && notificationEmailSettings.CampusTopicValueId.HasValue )
@@ -2773,7 +2808,7 @@ namespace RockWeb.Blocks.WorkFlow
 
                 if ( buttonHtml.IsNullOrWhiteSpace() )
                 {
-                    buttonHtml = "<a href=\"{{ ButtonLink }}\" onclick=\"{{ ButtonClick }}\" class='btn btn-primary' data-loading-text='<i class=\"fa fa-refresh fa-spin\"></i> {{ ButtonText }}'>{{ ButtonText }}</a>";
+                    buttonHtml = "<a href=\"{{ ButtonLink }}\" onclick=\"{{ ButtonClick }}\" class='btn btn-primary' data-loading-text='<i class=\"ti ti-refresh ti-spin\"></i> {{ ButtonText }}'>{{ ButtonText }}</a>";
                 }
 
                 var buttonMergeFields = new Dictionary<string, object>();
@@ -3087,7 +3122,7 @@ namespace RockWeb.Blocks.WorkFlow
 
             if ( workflowInteractionOperationType == WorkflowInteractionOperationType.FormCompleted )
             {
-                interactionTransactionInfo.InteractionSummary = $"Completed a workflow of type: { workflowType?.Name }";
+                interactionTransactionInfo.InteractionSummary = $"Completed a workflow of type: {workflowType?.Name}";
                 interactionTransactionInfo.InteractionOperation = "Form Completed";
 
                 if ( this.InteractionStartDateTime.HasValue )
@@ -3097,7 +3132,7 @@ namespace RockWeb.Blocks.WorkFlow
             }
             else
             {
-                interactionTransactionInfo.InteractionSummary = $"Launched a workflow of type: { workflowType?.Name }";
+                interactionTransactionInfo.InteractionSummary = $"Launched a workflow of type: {workflowType?.Name}";
                 interactionTransactionInfo.InteractionOperation = "Form Viewed";
             }
 

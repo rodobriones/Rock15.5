@@ -27,6 +27,7 @@ using System.Web.UI.WebControls;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
@@ -79,18 +80,13 @@ namespace Rock.Reporting.DataFilter.Person
             get { return "Additional Filters"; }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/hasPhoneFilter.obs";
-
         #endregion
 
         #region Configuration
 
         /// <inheritdoc/>
-        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
         {
-            var data = new Dictionary<string, string>();
-
             var phoneTypeOptions = new List<ListItemBag>
             {
                 new ListItemBag { Text = "Any Phone", Value = string.Empty }
@@ -108,8 +104,21 @@ namespace Rock.Reporting.DataFilter.Person
                 .ToList();
 
             phoneTypeOptions = phoneTypeOptions.Concat( phoneTypes ).ToList();
-            data.Add( "phoneTypeOptions", phoneTypeOptions.ToCamelCaseJson( false, true ) );
 
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/hasPhoneFilter.obs" ),
+                Options = new Dictionary<string, string>
+                {
+                    { "phoneTypeOptions", phoneTypeOptions.ToCamelCaseJson( false, true ) }
+                }
+            };
+        }
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            var data = new Dictionary<string, string>();
 
             var selections = selection.Split( '|' );
             if ( selections.Count() >= 3 )

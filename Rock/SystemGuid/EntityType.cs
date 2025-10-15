@@ -1,4 +1,4 @@
-// <copyright>
+﻿// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -107,6 +107,36 @@ namespace Rock.SystemGuid
         /// The content channel item type
         /// </summary>
         public const string CONTENT_CHANNEL_ITEM = "BF12AE64-21FB-433B-A8A4-E40E8C426DDA";
+
+        /// <summary>
+        /// The guid for the communication flow
+        /// </summary>
+        public const string COMMUNICATION_FLOW = "C7A67172-9A41-4421-94B0-F59DFEACF705";
+
+        /// <summary>
+        /// The guid for the communication flow communication
+        /// </summary>
+        public const string COMMUNICATION_FLOW_COMMUNICATION = "07D0CECC-066F-45A8-95BC-7C8F5199D53C";
+
+        /// <summary>
+        /// The guid for the communication flow instance
+        /// </summary>
+        public const string COMMUNICATION_FLOW_INSTANCE = "7B487D88-0667-4AFF-BC6C-1FC8482392C8";
+
+        /// <summary>
+        /// The guid for the communication flow instance communication
+        /// </summary>
+        public const string COMMUNICATION_FLOW_INSTANCE_COMMUNICATION = "FC2D426E-07E4-4803-BCB6-09CB43031856";
+
+        /// <summary>
+        /// The guid for the communication flow instance recipient
+        /// </summary>
+        public const string COMMUNICATION_FLOW_INSTANCE_RECIPIENT = "F615AC08-8ACD-48F9-B42E-2F4CE02D4206";
+
+        /// <summary>
+        /// The guid for the communication flow instance communication conversion
+        /// </summary>
+        public const string COMMUNICATION_FLOW_INSTANCE_COMMUNICATION_CONVERSION = "726B5B81-B4B2-4E74-9069-0409A3D19753";
 
         /// <summary>
         /// The guid for the email communication medium
@@ -708,6 +738,16 @@ namespace Rock.SystemGuid
         /// The GUID for the entity Rock.Blocks.Types.Mobile.Finance.ScheduledTransactionList.
         /// </summary>
         public const string MOBILE_FINANCE_SCHEDULED_TRANSACTION_LIST_BLOCK_TYPE = "7698E529-6834-46B0-BC5A-D466A6BCE4F6";
+
+        /// <summary>
+        /// The GUID for the entity Rock.Blocks.Types.Mobile.Finance.FinancialBatchList.
+        /// </summary>
+        public const string MOBILE_FINANCE_FINANCIAL_BATCH_LIST_BLOCK_TYPE = "E7E18663-7EF9-454C-9C6E-F4A839DB60C8";
+
+        /// <summary>
+        /// The GUID for the entity Rock.Blocks.Types.Mobile.Finance.FinancialBatchDetail.
+        /// </summary>
+        public const string MOBILE_FINANCE_FINANCIAL_BATCH_DETAIL_BLOCK_TYPE = "14FE11A8-A4AA-43EF-9F36-354CE60240CA";
 
         /// <summary>
         /// The GUID for the entity Rock.Blocks.Types.Mobile.Finance.TransactionDetail.
@@ -2050,5 +2090,50 @@ namespace Rock.SystemGuid
         /// The EntityType Guid for <see cref="Rock.Model.LavaEndpoint"/> 
         /// </summary>
         public const string LAVA_ENDPOINT = "F1BBF7D4-CAFD-450D-A89A-B3312C9738A2";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AutomationEvent"/> 
+        /// </summary>
+        public const string AUTOMATION_EVENT = "905DE2D9-1EA8-4E59-B0CF-E2BAC8383927";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AutomationTrigger"/> 
+        /// </summary>
+        public const string AUTOMATION_TRIGGER = "89ABFA37-68E5-41B7-B43C-A0CF823DEA61";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AIAgent"/> 
+        /// </summary>
+        public const string AI_AGENT = "EE3FE609-5C7C-492E-B0E9-5461045FC825";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AIAgentSkill"/> 
+        /// </summary>
+        public const string AI_AGENT_SKILL = "36DEDA2F-75BD-4BEE-AC36-46D20DCD1331";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AISkill"/> 
+        /// </summary>
+        public const string AI_SKILL = "D953AB34-4AB6-47C6-857B-53044A99ED75";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AISkillTool"/> 
+        /// </summary>
+        public const string AI_SKILL_TOOL = "357D2625-FDCA-41F8-AB8D-1CF2CE0ABEED";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AIAgentSession"/> 
+        /// </summary>
+        public const string AI_AGENT_SESSION = "2415941A-8A3F-49FE-8039-DB27096B0EDF";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AIAgentSessionAnchor"/> 
+        /// </summary>
+        public const string AI_AGENT_SESSION_ANCHOR = "3ED1476A-B7FC-40E2-BBAB-AF084C82D7F1";
+
+        /// <summary>
+        /// The EntityType Guid for <see cref="Rock.Model.AIAgentSessionHistory"/> 
+        /// </summary>
+        public const string AI_AGENT_SESSION_HISTORY = "6AD212BE-F8D0-4C58-AB0E-D723ED5E2155";
     }
 }

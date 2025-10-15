@@ -27,6 +27,7 @@ using Rock;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
@@ -68,18 +69,13 @@ namespace Rock.Reporting.DataFilter.Person
             get { return "Additional Filters"; }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/hasNoteFilter.obs";
-
         #endregion
 
         #region Configuration
 
         /// <inheritdoc/>
-        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
         {
-            var config = SelectionConfig.Parse( selection );
-
             var entityTypeIdPerson = EntityTypeCache.GetId<Rock.Model.Person>();
             var noteTypeOptions = NoteTypeCache.All()
                 .Where( a => a.EntityTypeId == entityTypeIdPerson )
@@ -88,11 +84,25 @@ namespace Rock.Reporting.DataFilter.Person
                 .Select( a => a.ToListItemBag() )
                 .ToList();
 
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/hasNoteFilter.obs" ),
+                Options = new Dictionary<string, string>
+                {
+                    { "noteTypeOptions", noteTypeOptions.ToCamelCaseJson(false, true) },
+                }
+            };
+        }
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            var config = SelectionConfig.Parse( selection );
+
             var noteType = NoteTypeCache.Get( config?.NoteTypeId ?? 0 )?.Guid;
 
             var data = new Dictionary<string, string>
             {
-                { "noteTypeOptions", noteTypeOptions.ToCamelCaseJson(false, true) },
                 { "noteType", noteType.ToString() },
                 { "dateRange", config?.DelimitedValues ?? "" },
                 { "contains", config?.NoteContains ?? "" },

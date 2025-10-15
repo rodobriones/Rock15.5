@@ -278,10 +278,16 @@ namespace Rock.Security.Authentication
                 }
                 else
                 {
+                    var errorMessage = "Unable to send confirmation code. Make sure to use a mobile phone that can receive text messages.";
+                    if ( errorMessages?.Count() == 1 && errorMessages.First().Contains( TransportComponent.UnsubscribedSmsRecipientMessage ) )
+                    {
+                        errorMessage = $"We're unable to send a confirmation code to the number provided. {errorMessages.First()}";
+                    }
+
                     return new SendOneTimePasscodeResult()
                     {
                         IsSuccessful = false,
-                        ErrorMessage = "Unable to send confirmation code. Make sure to use a mobile phone that can receive text messages.",
+                        ErrorMessage = errorMessage,
                         State = null
                     };
                 }
@@ -384,9 +390,11 @@ namespace Rock.Security.Authentication
         {
             if ( !IsPasswordlessAuthenticationAllowedForProtectionProfile( user.Person ) )
             {
+                var securitySettings = new SecuritySettingsService().SecuritySettings;
+
                 return new OneTimePasscodeAuthenticationResult
                 {
-                    ErrorMessage = "Passwordless sign-in not available for your protection profile. Please request assistance from the organization administrator."
+                    ErrorMessage = securitySettings.MessageForDisabledPasswordlessSignIn
                 };
             }
 
@@ -498,9 +506,11 @@ namespace Rock.Security.Authentication
             // Check if passwordless authentication is allowed.
             if ( !IsPasswordlessAuthenticationAllowedForProtectionProfile( person ) )
             {
+                var securitySettings = new SecuritySettingsService().SecuritySettings;
+
                 return new OneTimePasscodeAuthenticationResult
                 {
-                    ErrorMessage = "Passwordless sign-in not available for your protection profile. Please request assistance from the organization administrator."
+                    ErrorMessage = securitySettings.MessageForDisabledPasswordlessSignIn
                 };
             }
 

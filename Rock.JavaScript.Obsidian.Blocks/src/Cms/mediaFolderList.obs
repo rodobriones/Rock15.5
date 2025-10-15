@@ -4,7 +4,8 @@
           :definition="config.gridDefinition ?? undefined"
           :data="gridDataSource"
           keyField="idKey"
-          :itemTerm="config?.options?.mediaAccountName + ' Folders'"
+          :title="config?.options?.mediaAccountName + ' Folders'"
+          itemTerm="Folders"
           :entityTypeGuid="EntityType.MediaFolder"
           stickyHeader
           liveUpdates
@@ -29,10 +30,10 @@
         </NumberColumn>
 
         <TextColumn name="contentChannelSync"
-                       title="Content Channel Sync"
-                       field="contentChannelSync"
-                       :filter="pickExistingValueFilter"
-                       visiblePriority="xs" />
+                    title="Content Channel Sync"
+                    field="contentChannelSync"
+                    :filter="pickExistingValueFilter"
+                    visiblePriority="xs" />
 
         <NumberColumn name="watchCount"
                       title="Watch Count"

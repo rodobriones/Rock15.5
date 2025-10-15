@@ -24,6 +24,7 @@ using System.Linq;
 using System.Net;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Threading.Tasks;
 
 using Rock.Communication.Chat;
 using Rock.Data;
@@ -1575,9 +1576,9 @@ namespace Rock.Model
             if ( !string.IsNullOrWhiteSpace( signalColor ) )
             {
                 return string.Format(
-                    "<i class='{1}' style='color: {0};'></i>",
+                    "<i class='{1}' style='color: {0};' title='signal'></i>",
                     signalColor,
-                    !string.IsNullOrWhiteSpace( signalIconCssClass ) ? signalIconCssClass : "fa fa-flag" );
+                    !string.IsNullOrWhiteSpace( signalIconCssClass ) ? signalIconCssClass : "ti ti-flag" );
             }
 
             return string.Empty;
@@ -1937,58 +1938,95 @@ namespace Rock.Model
         /// </summary>
         public void BulkIndexDocuments()
         {
-            List<PersonIndex> indexablePersonList = new List<PersonIndex>();
+            // Index all people
+            IndexPeopleRecords( false );
+            // Index all businesses
+            IndexPeopleRecords( true );
+        }
 
+        private IOrderedQueryable<Person> GetPersonIndexQuery( PersonService personService )
+        {
             var recordTypePersonId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+            return personService.Queryable().AsNoTracking().Where( p => p.RecordTypeValueId == recordTypePersonId ).OrderBy( p => p.Id );
+        }
+
+        private IOrderedQueryable<Person> GetBusinessIndexQuery( PersonService personService )
+        {
             var recordTypeBusinessId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_RECORD_TYPE_BUSINESS.AsGuid() ).Id;
+            return personService.Queryable().AsNoTracking().Where( p => p.IsSystem == false && p.RecordTypeValueId == recordTypeBusinessId ).OrderBy( p => p.Id );
+        }
 
-            RockContext rockContext = new RockContext();
+        /// <summary>
+        /// Indexes People  process the indexed documents and send them to the IndexContainer.
+        /// </summary>
+        /// <param name="isBusiness">Flag indicating whether the records in the query should be indexed as businesses.</param>
+        private void IndexPeopleRecords( bool isBusiness = false )
+        {            
+            var bulkChunkSize = 1000;
+            var segmentCount = 8;
+            IndexBulkQueryInSegments( segmentCount, bulkChunkSize, isBusiness );
+        }
 
-            // return people
-            var people = new PersonService( rockContext ).Queryable().AsNoTracking()
-                                .Where( p => p.RecordTypeValueId == recordTypePersonId );
+        /// <summary>
+        /// Called by <see cref="IndexPeopleRecords( bool )"/> to process all matching records in a single thread,
+        /// batching them into fixed-size chunks for indexing.  Processes a very large person query in N disjoint
+        /// segments to limit memory usage. Segments are selected via modulo on Person.Id to avoid Skip/Take on
+        /// huge sets.
+        /// </summary>
+        /// <param name="segmentCount">Number of modulo-based segments (e.g., 8) to split the query into.</param>
+        /// <param name="bulkChunkSize">The maximum number of documents to send to the index in a single batch operation.</param>
+        /// <param name="isBusiness">If <c>true</c>, indexes business records instead of person records.</param>
+        private void IndexBulkQueryInSegments( int segmentCount, int bulkChunkSize, bool isBusiness )
+        {
+            var rockContext = new RockContext();
+            rockContext.Database.CommandTimeout = 180; // Set a longer timeout for indexing operations
+            var personService = new PersonService( rockContext );
 
-            int recordCounter = 0;
-
-            foreach ( var person in people )
+            if ( isBusiness )
             {
-                recordCounter++;
+                var businessQuery = GetBusinessIndexQuery( personService );
 
-                var indexablePerson = PersonIndex.LoadByModel( person );
-                indexablePersonList.Add( indexablePerson );
+                var recordCounter = 0;
+                var businessIndexes = new List<IndexModelBase>();
 
-                if ( recordCounter > 100 )
+                foreach ( var business in businessQuery )
                 {
-                    IndexContainer.IndexDocuments( indexablePersonList );
-                    indexablePersonList = new List<PersonIndex>();
-                    recordCounter = 0;
+                    recordCounter++;
+
+                    businessIndexes.Add( BusinessIndex.LoadByModel( business ) );
+
+                    if ( recordCounter >= bulkChunkSize )
+                    {
+                        IndexContainer.IndexDocuments( businessIndexes );
+                        businessIndexes = new List<IndexModelBase>();
+                        recordCounter = 0;
+                    }
+                }
+
+                if ( businessIndexes.Any() )
+                {
+                    IndexContainer.IndexDocuments( businessIndexes );
                 }
             }
-
-            IndexContainer.IndexDocuments( indexablePersonList );
-
-            // return businesses
-            var businesses = new PersonService( rockContext ).Queryable().AsNoTracking()
-                                .Where( p =>
-                                     p.IsSystem == false
-                                     && p.RecordTypeValueId == recordTypeBusinessId );
-
-            List<BusinessIndex> indexableBusinessList = new List<BusinessIndex>();
-
-            foreach ( var business in businesses )
+            else
             {
-                var indexableBusiness = BusinessIndex.LoadByModel( business );
-                indexableBusinessList.Add( indexableBusiness );
+                var basePersonQuery = GetPersonIndexQuery( personService );
 
-                if ( recordCounter > 100 )
+                for ( int shard = 0; shard < segmentCount; shard++ )
                 {
-                    IndexContainer.IndexDocuments( indexableBusinessList );
-                    indexableBusinessList = new List<BusinessIndex>();
-                    recordCounter = 0;
+                    var shardQuery = basePersonQuery.Where( p => ( p.Id % segmentCount ) == shard );
+
+                    var personIndexes = PersonIndex.LoadByModelBulk( shardQuery, rockContext );
+                    var indexOperationCount = ( personIndexes.Count + bulkChunkSize - 1 ) / bulkChunkSize;
+                    for ( int i = 0; i < indexOperationCount; i++ )
+                    {
+                        var startIndex = ( i * bulkChunkSize );
+                        var limit = Math.Min( bulkChunkSize, personIndexes.Count - startIndex );
+                        var bulkIndexes = personIndexes.GetRange( startIndex, limit );
+                        IndexContainer.IndexDocuments( bulkIndexes );
+                    }
                 }
             }
-
-            IndexContainer.IndexDocuments( indexableBusinessList );
         }
 
         /// <summary>

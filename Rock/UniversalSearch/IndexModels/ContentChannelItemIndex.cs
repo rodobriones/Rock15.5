@@ -146,10 +146,10 @@ namespace Rock.UniversalSearch.IndexModels
                 iconCssClass = value;
             }
         }
-        private string iconCssClass = "fa fa-bullhorn";
+        private string iconCssClass = "ti ti-speakerphone";
 
         /// <summary>
-        /// Loads the by model.
+        /// Loads the indexable document from the ContentChannelItem.
         /// </summary>
         /// <param name="contentChannelItem">The content channel item.</param>
         /// <returns></returns>
@@ -167,7 +167,7 @@ namespace Rock.UniversalSearch.IndexModels
             contentChannelItemIndex.StartDate = contentChannelItem.StartDateTime;
             contentChannelItemIndex.ExpireDate = contentChannelItem.ExpireDateTime;
             contentChannelItemIndex.Permalink = contentChannelItem.Permalink;
-            contentChannelItemIndex.IconCssClass = string.IsNullOrWhiteSpace( contentChannelItem.ContentChannel.IconCssClass ) ? "fa fa-bullhorn" : contentChannelItem.ContentChannel.IconCssClass;
+            contentChannelItemIndex.IconCssClass = string.IsNullOrWhiteSpace( contentChannelItem.ContentChannel.IconCssClass ) ? "ti ti-speakerphone" : contentChannelItem.ContentChannel.IconCssClass;
             contentChannelItemIndex.IsApproved = false;
             contentChannelItemIndex.ContentChannel = contentChannelItem.ContentChannel.Name;
             contentChannelItemIndex.DocumentName = contentChannelItem.Title;
@@ -251,6 +251,14 @@ namespace Rock.UniversalSearch.IndexModels
             }
 
             return base.FormatSearchResult( person, displayOptions );
+        }
+
+        /// <inheritdoc/>
+        public override bool IsViewAllowed( Person person, RockContext rockContext )
+        {
+            var contentChannelItem = new ContentChannelItemService( rockContext ).Get( ( int ) this.Id );
+
+            return contentChannelItem?.IsAuthorized( Security.Authorization.VIEW, person ) ?? false;
         }
     }
 }

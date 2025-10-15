@@ -48,7 +48,7 @@ namespace Rock.Blocks.Lms
     [DisplayName( "Learning Class Activity Completion Detail" )]
     [Category( "LMS" )]
     [Description( "Displays the details of a particular learning class activity completion." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( Model.SiteType.Web )]
 
     [Rock.SystemGuid.EntityTypeGuid( "19474eb0-eeda-4fcb-b1ea-a35e23e6f691" )]
@@ -246,6 +246,7 @@ namespace Rock.Blocks.Lms
             // Create the participant bags
             var bags = classParticipants.Select( p => new LearningActivityParticipantBag
             {
+                PersonId = p.PersonId,
                 Email = p.Email,
                 Guid = p.Guid,
                 IdKey = Rock.Utility.IdHasher.Instance.GetHash( p.Id ),
@@ -385,7 +386,7 @@ namespace Rock.Blocks.Lms
                 () => entity.IsFacilitatorCompleted = box.Bag.IsFacilitatorCompleted );
 
             box.IfValidProperty( nameof( box.Bag.DueDate ),
-                () => entity.DueDate = box.Bag.DueDate );
+                () => entity.DueDate = box.Bag.DueDate?.DateTime );
 
             if ( !entity.GradedByPersonAliasId.HasValue || box.Bag.PointsEarned != entity.PointsEarned )
             {

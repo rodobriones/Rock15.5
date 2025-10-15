@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Rock.Data;
 using Rock.Model;
 using Rock.UniversalSearch.IndexModels.Attributes;
 using Rock.Utility;
@@ -129,10 +130,10 @@ namespace Rock.UniversalSearch.IndexModels
                 iconCssClass = value;
             }
         }
-        private string iconCssClass = "fa fa-calendar-alt";
+        private string iconCssClass = "ti ti-calendar-month";
 
         /// <summary>
-        /// Loads the by model.
+        /// Loads the indexable document from the EventItem.
         /// </summary>
         /// <param name="eventItem">The event item.</param>
         /// <returns></returns>
@@ -255,6 +256,14 @@ namespace Rock.UniversalSearch.IndexModels
                 result.IsViewAllowed = false;
                 return result;
             }
+        }
+
+        /// <inheritdoc/>
+        public override bool IsViewAllowed( Person person, RockContext rockContext )
+        {
+            var eventItem = new EventItemService( rockContext ).Get( ( int ) this.Id );
+
+            return eventItem?.IsAuthorized( Security.Authorization.VIEW, person ) ?? false;
         }
     }
 

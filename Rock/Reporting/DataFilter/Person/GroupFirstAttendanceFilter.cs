@@ -26,6 +26,7 @@ using System.Web.UI.WebControls;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
+using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
@@ -71,12 +72,18 @@ namespace Rock.Reporting.DataFilter.Person
             }
         }
 
-        /// <inheritdoc/>
-        public override string ObsidianFileUrl => "~/Obsidian/Reporting/DataFilters/Person/groupFirstAttendanceFilter.obs";
-
         #endregion
 
         #region Configuration
+
+        /// <inheritdoc/>
+        public override DynamicComponentDefinitionBag GetComponentDefinition( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
+        {
+            return new DynamicComponentDefinitionBag
+            {
+                Url = requestContext.ResolveRockUrl( "~/Obsidian/Reporting/DataFilters/Person/groupFirstAttendanceFilter.obs" )
+            };
+        }
 
         /// <inheritdoc/>
         public override Dictionary<string, string> GetObsidianComponentData( Type entityType, string selection, RockContext rockContext, RockRequestContext requestContext )
@@ -196,8 +203,11 @@ namespace Rock.Reporting.DataFilter.Person
             var comparisonType = groupFirstAttendanceFilterSelection.IntegerCompare.ConvertToEnum<ComparisonType>( ComparisonType.GreaterThanOrEqualTo );
 
             string dateRangeText = SlidingDateRangePicker.FormatDelimitedValues( groupFirstAttendanceFilterSelection.SlidingDateRange );
+            var dateRangeType = SlidingDateRangePicker.GetSlidingDateRangeTypeFromDelimitedValues( groupFirstAttendanceFilterSelection.SlidingDateRange );
 
-            selectionOutput = $"Attended '{groupsList}' for the first time in the Date Range: {dateRangeText}";
+            bool isDateRange = dateRangeType == SlidingDateRangePicker.SlidingDateRangeType.DateRange;
+
+            selectionOutput = $"Returns individuals who attended any one of the following groups for the first time within the {( isDateRange ? "date range" : "" )} {dateRangeText.ToLower()}: {groupsList}.";
 
             return selectionOutput;
         }

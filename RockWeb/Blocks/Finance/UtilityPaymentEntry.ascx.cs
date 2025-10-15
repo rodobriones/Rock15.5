@@ -543,6 +543,7 @@ namespace RockWeb.Blocks.Finance
 
     #endregion Block Attributes
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Primary )]
     [Rock.SystemGuid.BlockTypeGuid( "4CCC45A5-4AB9-4A36-BF8D-A6E316790004" )]
     public partial class UtilityPaymentEntry : Rock.Web.UI.RockBlock
     {
@@ -1397,7 +1398,7 @@ mission. We are so grateful for your commitment.</p>
                 var literal = new LiteralControl() { ID = "btnAddAccountLiteral" };
                 var openingHtml = $@"
 <div class=""btn-group js-button-dropdownlist"">
-    <button type=""button"" class=""btn btn-default dropdown-toggle js-buttondropdown-btn-select"" data-toggle=""dropdown"" aria-expanded=""false"">{GetAttributeValue( AttributeKey.AddAccountText )} <span class=""fa fa-caret-down""></span></button>
+    <button type=""button"" class=""btn btn-default dropdown-toggle js-buttondropdown-btn-select"" data-toggle=""dropdown"" aria-expanded=""false"">{GetAttributeValue( AttributeKey.AddAccountText )} <span class=""ti ti-caret-down-filled""></span></button>
     <ul class=""dropdown-menu"">
 ";
 
@@ -1640,6 +1641,20 @@ mission. We are so grateful for your commitment.</p>
                 .Select( a => a.Value.Value )
                 .Where( a => a is IHostedGatewayComponent && !( a is TestGateway ) )
                 .Select( a => a as IHostedGatewayComponent ).ToList();
+
+            // Now remove any components that have no active instances
+            hostedGatewayComponentList = hostedGatewayComponentList
+                .Where( item =>
+                {
+                    using ( var rockContext = new Rock.Data.RockContext() )
+                    {
+                        var entityType = Rock.Web.Cache.EntityTypeCache.Get( item.TypeGuid );
+                        return new FinancialGatewayService( rockContext )
+                            .Queryable()
+                            .Any( g => g.EntityTypeId == entityType.Id && g.IsActive );
+                    }
+                } )
+                .ToList();
 
             rptInstalledGateways.DataSource = hostedGatewayComponentList;
             rptInstalledGateways.DataBind();
@@ -2117,6 +2132,18 @@ mission. We are so grateful for your commitment.</p>
             if ( enableACH && financialGatewayComponent.SupportsSavedAccount( achCurrency ) )
             {
                 allowedCurrencyTypes.Add( achCurrency );
+            }
+
+            var applePayCurrency = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_APPLE_PAY.AsGuid() );
+            if ( financialGatewayComponent.SupportsSavedAccount( applePayCurrency ) )
+            {
+                allowedCurrencyTypes.Add( applePayCurrency );
+            }
+
+            var googlePayCurrency = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_ANDROID_PAY.AsGuid() );
+            if ( financialGatewayComponent.SupportsSavedAccount( googlePayCurrency ) )
+            {
+                allowedCurrencyTypes.Add( googlePayCurrency );
             }
 
             int[] allowedCurrencyTypeIds = allowedCurrencyTypes.Select( a => a.Id ).ToArray();

@@ -1045,7 +1045,7 @@ namespace RockWeb.Blocks.Cms
                 string cssIcon = contentItem.ContentChannel.IconCssClass;
                 if ( string.IsNullOrWhiteSpace( cssIcon ) )
                 {
-                    cssIcon = "fa fa-certificate";
+                    cssIcon = "ti ti-certificate";
                 }
 
                 lIcon.Text = string.Format( "<i class='{0}'></i>", cssIcon );
@@ -1102,7 +1102,23 @@ namespace RockWeb.Blocks.Cms
                 sceContent.Visible = false;
                 if ( !contentItem.ContentChannelType.DisableContentField )
                 {
-                    if ( contentItem.ContentChannel.IsStructuredContent )
+                    var useStructuredContent = contentItem.ContentChannel.IsStructuredContent;
+
+                    // If the content channel is set to structured content but
+                    // the item they are editing already exists and is in HTML
+                    // mode then do not use the structured editor. This allows
+                    // Admins to switch a Content Channel to use the structured
+                    // editor for new items but not break existing ones.
+                    if ( useStructuredContent && contentItem.Id != 0 && contentItem.StructuredContent.IsNullOrWhiteSpace() )
+                    {
+                        useStructuredContent = false;
+                    }
+                    else if ( !useStructuredContent && contentItem.Id != 0 && contentItem.StructuredContent.IsNotNullOrWhiteSpace() )
+                    {
+                        useStructuredContent = true;
+                    }
+
+                    if ( useStructuredContent )
                     {
                         sceContent.StructuredContent = contentItem.StructuredContent;
                         sceContent.StructuredContentToolValueId = contentItem.ContentChannel.StructuredContentToolValueId;
@@ -1171,7 +1187,7 @@ namespace RockWeb.Blocks.Cms
                     var hlOccurrence = new HighlightLabel();
                     hlOccurrence.LabelType = LabelType.Info;
                     hlOccurrence.ID = string.Format( "hlOccurrence_{0}", occurrence.Id );
-                    hlOccurrence.Text = string.Format( "<a href='{0}'><i class='fa fa-calendar-o'></i> {1}</a>", url, occurrence.ToString() );
+                    hlOccurrence.Text = string.Format( "<a href='{0}'><i class='ti ti-calendar'></i> {1}</a>", url, occurrence.ToString() );
                     phOccurrences.Controls.Add( hlOccurrence );
                 }
 
@@ -1199,12 +1215,12 @@ namespace RockWeb.Blocks.Cms
                 phPills.Visible = canHaveChildren && canHaveParents;
                 if ( canHaveChildren && !canHaveParents )
                 {
-                    lChildrenParentsTitle.Text = "<i class='fa fa-arrow-circle-down'></i> Child Items";
+                    lChildrenParentsTitle.Text = "<i class='ti ti-circle-arrow-down'></i> Child Items";
                 }
 
                 if ( !canHaveChildren && canHaveParents )
                 {
-                    lChildrenParentsTitle.Text = "<i class='fa fa-arrow-circle-up'></i> Parent Items";
+                    lChildrenParentsTitle.Text = "<i class='ti ti-circle-arrow-up'></i> Parent Items";
                     divParentItems.AddCssClass( "active" );
                 }
 

@@ -52,7 +52,7 @@ namespace Rock.Lms
 
             public const string MultipleChoiceWeight = "multipleChoiceWeight";
 
-            public const string ShowMissedQuestionsOnResults = "shoeMissedQuestionsOnResults";
+            public const string ShowMissedQuestionsOnResults = "showMissedQuestionsOnResults";
 
             public const string ShowResultsOnCompletion = "showResultsOnCompletion";
         }
@@ -72,7 +72,7 @@ namespace Rock.Lms
         public override string HighlightColor => "#a9551d";
 
         /// <inheritdoc/>
-        public override string IconCssClass => "fa fa-list";
+        public override string IconCssClass => "ti ti-list";
 
         /// <inheritdoc/>
         public override string Name => "Assessment";
@@ -128,6 +128,20 @@ namespace Rock.Lms
                     [SettingKey.ShowResultsOnCompletion] = componentData.GetValueOrNull( SettingKey.ShowResultsOnCompletion )
                 };
             }
+        }
+
+
+        /// <inheritdoc/>
+        public override Dictionary<string, string> GetComponentData( LearningClassActivity activity, Dictionary<string, string> componentSettings, RockContext rockContext, RockRequestContext requestContext )
+        {
+            // This is a cheat, we shouldn't really be trying to access the original
+            // JSON this way, but we don't have a better way to do it.
+            var oldData = activity.LearningActivity?.ActivityComponentSettingsJson?.FromJsonOrNull<Dictionary<string, string>>();
+
+            new StructuredContentHelper( componentSettings?.GetValueOrNull( SettingKey.Header ) )
+                .DetectAndApplyDatabaseChanges( oldData?.GetValueOrNull( SettingKey.Header ), rockContext );
+
+            return base.GetComponentData( activity, componentSettings, rockContext, requestContext );
         }
 
         /// <inheritdoc/>

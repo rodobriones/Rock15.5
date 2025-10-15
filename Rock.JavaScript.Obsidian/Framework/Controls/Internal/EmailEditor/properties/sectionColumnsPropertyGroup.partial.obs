@@ -7,7 +7,7 @@
                         btnSize="xs"
                         btnType="link"
                         @click="$emit('add')">
-                <i class="fa fa-plus" aria-hidden="true"></i> Add Column
+                <i class="ti ti-plus" aria-hidden="true"></i> Add Column
             </RockButton>
         </div>
 
@@ -23,7 +23,7 @@
                     </template>
 
                     <template v-else>
-                        <template v-for="(columns, index, sfd) in columnValues" :key="'column-' + index">
+                        <template v-for="(columns, index) in columnValues" :key="'column-' + index">
                             <div :class="['column', selectedColumnElement === columnElements[index] ? 'selected' : '']"
                                  :style="{ flexBasis: getColumnPercentage(columns) }"
                                  @click="$emit('select', columnElements[index])">

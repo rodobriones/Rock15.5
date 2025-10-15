@@ -246,6 +246,12 @@ namespace RockWeb.Blocks.Crm
                 // Process Query String parameter "Set", specifying a set of people to merge.
                 int? setId = PageParameter( "Set" ).AsIntegerOrNull();
 
+                if ( setId == null )
+                {
+                    var mergeIdKey = PageParameter( "Set" );
+                    setId = Rock.Utility.IdHasher.Instance.GetId( mergeIdKey );
+                }
+
                 if ( setId.HasValue )
                 {
                     selectedPersonIds = new EntitySetItemService( new RockContext() )
@@ -582,7 +588,7 @@ namespace RockWeb.Blocks.Crm
                         primaryPerson.SetBirthDate( GetNewDateTimeValue( "BirthDate" ) );
                         primaryPerson.AnniversaryDate = GetNewDateTimeValue( "AnniversaryDate" );
                         primaryPerson.GraduationYear = GetNewIntValue( "GraduationYear" );
-                        primaryPerson.Email = GetNewStringValue( "Email" );
+                        primaryPerson.Email = GetNewStringValue( "Email" )?.Trim().ToLower();
                         primaryPerson.IsEmailActive = GetNewBoolValue( "EmailActive" ) ?? true;
                         primaryPerson.EmailNote = GetNewStringValue( "EmailNote" );
                         primaryPerson.EmailPreference = ( EmailPreference ) GetNewEnumValue( "EmailPreference", typeof( EmailPreference ) );
@@ -601,7 +607,9 @@ namespace RockWeb.Blocks.Crm
                             string oldValue = phoneNumber != null ? phoneNumber.Number : string.Empty;
 
                             string key = "phone_" + phoneType.Id.ToString();
-                            string newValue = GetNewStringValue( key );
+                            var selectedValue = GetNewValue( key );
+                            string newValue = selectedValue != null ? selectedValue.Value : string.Empty;
+
                             bool phoneNumberDeleted = false;
 
                             if ( !oldValue.Equals( newValue, StringComparison.OrdinalIgnoreCase ) )
@@ -617,8 +625,30 @@ namespace RockWeb.Blocks.Crm
                                         primaryPerson.PhoneNumbers.Add( phoneNumber );
                                     }
 
-                                    // Update phone number
-                                    phoneNumber.Number = newValue;
+                                    string selectedCountryCode = null;
+                                    string selectedNumberOnly = null;
+
+                                    var parts = newValue.Split( '|' );
+                                    if ( parts.Length == 2 )
+                                    {
+                                        selectedCountryCode = parts[0];
+                                        selectedNumberOnly = parts[1];
+                                    }
+                                    else
+                                    {
+                                        selectedNumberOnly = newValue;
+                                    }
+
+                                    phoneNumber.Number = PhoneNumber.CleanNumber( selectedNumberOnly );
+
+                                    if ( !string.IsNullOrWhiteSpace( selectedCountryCode ) )
+                                    {
+                                        phoneNumber.CountryCode = PhoneNumber.CleanNumber( selectedCountryCode );
+                                    }
+                                    else if ( string.IsNullOrWhiteSpace( phoneNumber.CountryCode ) )
+                                    {
+                                        phoneNumber.CountryCode = PhoneNumber.DefaultCountryCode();
+                                    }
                                 }
                                 else
                                 {
@@ -1581,7 +1611,19 @@ namespace RockWeb.Blocks.Crm
             var showWarning = conflictingHiddenProperties.Any();
             nbPermissionNotice.Visible = showWarning;
 
-            var conflictingGroupMemberProperties = MergeData.GroupMemberProperties.Where( p => p.Values.Select( v => v.Value ).Distinct().Count() > 1 || !p.Values.Any( v => v.PersonId == MergeData.PrimaryPersonId ) ).ToList();
+            /*
+                10/6/2025 - MSE
+
+                A conflict should only be flagged when merge candidates have different
+                values for an attribute, within the same group.
+
+                Do not flag conflicts for the attribute when:
+                1) Candidates are in different groups (even if the attribute key matches across those groups).
+                2) Candidates have matching values for the attribute within the same group.
+
+                Reason: https://github.com/SparkDevNetwork/Rock/issues/6473
+            */
+            var conflictingGroupMemberProperties = MergeData.GroupMemberProperties.Where( p => p.Values.Select( v => v.Value ).Distinct().Count() > 1 ).ToList();
 
             nbGroupMemberAttributeConflict.Visible = conflictingGroupMemberProperties.Count > 0;
             if ( conflictingGroupMemberProperties.Count > 0 )
@@ -2343,15 +2385,16 @@ AND Attendance.Id != @FirstTimeRecordId
 
                         if ( phoneNumber.IsUnlisted )
                         {
-                            iconHtml += " <span class='label label-info' title='Unlisted' data-toggle='tooltip' data-placement='top'><i class='fa fa-phone-slash'></i></span>";
+                            iconHtml += " <span class='label label-info' title='Unlisted' data-toggle='tooltip' data-placement='top'><i class='ti ti-phone-off'></i></span>";
                         }
 
                         if ( phoneNumber.IsMessagingEnabled )
                         {
-                            iconHtml += " <span class='label label-success' title='SMS Enabled' data-toggle='tooltip' data-placement='top'><i class='fa fa-sms'></i></span>";
+                            iconHtml += " <span class='label label-success' title='SMS Enabled' data-toggle='tooltip' data-placement='top'><i class='ti ti-device-mobile-message'></i></span>";
                         }
 
-                        AddProperty( key, phoneType.Value, person.Id, phoneNumber.Number, phoneNumber.NumberFormatted + iconHtml );
+                        var countryCodeAndNumber = string.Format( "{0}|{1}", phoneNumber.CountryCode, phoneNumber.Number );
+                        AddProperty( key, phoneType.Value, person.Id, countryCodeAndNumber, phoneNumber.NumberFormatted + iconHtml );
                     }
                     else
                     {
@@ -2392,12 +2435,12 @@ AND Attendance.Id != @FirstTimeRecordId
 
                             if ( address.IsMailingLocation )
                             {
-                                iconHtml += " <span class='label label-info' title='Mailing' data-toggle='tooltip' data-placement='top'><i class='fa fa-envelope'></i></span>";
+                                iconHtml += " <span class='label label-info' title='Mailing' data-toggle='tooltip' data-placement='top'><i class='ti ti-mail'></i></span>";
                             }
 
                             if ( address.IsMappedLocation )
                             {
-                                iconHtml += " <span class='label label-success' title='Mapped' data-toggle='tooltip' data-placement='top'><i class='fa fa-map-marker'></i></span>";
+                                iconHtml += " <span class='label label-success' title='Mapped' data-toggle='tooltip' data-placement='top'><i class='ti ti-map-pin'></i></span>";
                             }
 
                             var addressKey = key;
@@ -2455,7 +2498,8 @@ AND Attendance.Id != @FirstTimeRecordId
                         var hasViewPermission = attribute.Value.IsAuthorized( Rock.Security.Authorization.VIEW, currentPerson )
                                                 || grantPermissionForAllAttributes;
 
-                        AddGroupMemberProperty( "gm_attr_" + attribute.Key, attribute.Value.Name, groupMember, value, formattedValue, hasViewPermission, selected: false, attribute: attribute.Value );
+                        var theKey = $"gm_{groupMember.GroupId}_attr_{attribute.Key}";
+                        AddGroupMemberProperty( theKey, attribute.Value.Name, groupMember, value, formattedValue, hasViewPermission, selected: false, attribute: attribute.Value );
                     }
                 }
             }
@@ -2626,9 +2670,20 @@ AND Attendance.Id != @FirstTimeRecordId
                 valuesRow.PersonPersonPropertyList = new List<ValuesRowPersonPersonProperty>();
 
                 // Check if this row should be considered "matching" and set the IsMatchingRow property
-                if ( personProperty.Values.Select( v => v.Value ).Distinct().Count() == 1 )
+                if ( personProperty.Key != "Email" )
                 {
-                    valuesRow.IsMatchingRow = true;
+                    if ( personProperty.Values.Select( v => v.Value ?? string.Empty ).Distinct().Count() == 1 )
+                    {
+                        valuesRow.IsMatchingRow = true;
+                    }
+                }
+                else
+                {
+                    // Disregard capitalization for email addresses
+                    if ( personProperty.Values.Select( v => v.Value?.Trim().ToLower() ?? string.Empty ).Distinct().Count() == 1 )
+                    {
+                        valuesRow.IsMatchingRow = true;
+                    }
                 }
 
                 foreach ( var person in People )
