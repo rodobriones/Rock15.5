@@ -634,7 +634,7 @@ namespace Rock.Lava
                 }
                 else
                 {
-                    if ( parameters.Context.GetType() == typeof( LavaRenderContext ) )
+                    if ( typeof( LavaRenderContextBase ).IsAssignableFrom( parameters.Context?.GetType() ) )
                     {
                         callParameters = parameters.Clone();
 
