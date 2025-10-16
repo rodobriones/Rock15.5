@@ -549,6 +549,11 @@
         }
     }
 
+    &:not(:has(.grid-footing > *)) .grid-row:has(.table-empty) {
+        border-bottom-left-radius: var(--rounded-medium);
+        border-bottom-right-radius: var(--rounded-medium);
+    }
+
     @media (max-width: 767px) {
         .grid-obsidian > .grid-footing > .grid-paging-footer > .grid-page-picker > .page-num {
             display: none;
