@@ -6588,6 +6588,12 @@ tr.row-highlight td {
 .grid.grid-panel .grid-table {
   border: 0 !important;
 }
+.grid.grid-panel .grid-table:not(:has(tfoot)) tr:last-child, .grid.grid-panel .grid-table:not(:has(tfoot)) tr:last-child > td:first-child {
+  border-bottom-left-radius: var(--rounded-medium);
+}
+.grid.grid-panel .grid-table:not(:has(tfoot)) tr:last-child > td:last-child {
+  border-bottom-right-radius: var(--rounded-medium);
+}
 .grid.grid-panel tfoot > tr:last-child td:first-child {
   border-bottom-left-radius: var(--rounded-medium);
 }
