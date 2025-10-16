@@ -895,6 +895,7 @@ WHERE [RT].[Guid] = '" + SystemGuid.DefinedValue.PERSON_RECORD_TYPE_RESTUSER + "
                 IsSmsButtonVisible = template.IsSmsButtonVisible,
                 IsSmsButtonCheckedByDefault = template.IsSmsButtonCheckedByDefault,
                 IsCheckInAfterRegistrationAllowed = template.IsCheckInAfterRegistrationAllowed,
+                DisplayAddressOnFamilies = template.DisplayAddressOnFamilies,
                 DisplayBirthdateForAdults = template.DisplayBirthdateForAdults,
                 DisplayBirthdateForChildren = template.DisplayBirthdateForChildren,
                 DisplayEthnicityForAdults = template.DisplayEthnicityForAdults,
