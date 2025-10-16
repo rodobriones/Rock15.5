@@ -11196,8 +11196,8 @@ a.rock-bookmark {
 .panel-block > .panel-header .panel-title .label {
   margin-left: var(--spacing-xsmall);
 }
-.panel-block > .panel-heading > .panel-header-actions:has(div:only-child),
-.panel-block > .panel-header > .panel-header-actions:has(div:only-child) {
+.panel-block > .panel-heading > .panel-header-actions:has(div:only-child > .label),
+.panel-block > .panel-header > .panel-header-actions:has(div:only-child > .label) {
   margin-right: var(--spacing-medium);
 }
 .panel-block > .panel-body {
@@ -15802,6 +15802,10 @@ textarea:focus,
 .panel.panel-flex > .panel-header > .panel-action .rock-fullscreen-toggle {
   position: relative;
   border-left: 0;
+}
+.panel.panel-flex > .panel-heading .panel-header-actions:not(:has(.action)),
+.panel.panel-flex > .panel-header .panel-header-actions:not(:has(.action)) {
+  margin-right: var(--spacing-medium);
 }
 .panel.panel-flex > .panel-heading .panel-header-actions,
 .panel.panel-flex > .panel-header .panel-header-actions {
