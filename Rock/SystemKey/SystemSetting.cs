@@ -455,5 +455,11 @@ namespace Rock.SystemKey
         /// The system settings for AI Agent features.
         /// </summary>
         public const string AI_AGENT_SYSTEM_SETTINGS = "core_AIAgentSystemSettings";
+
+        /// <summary>
+        /// When trailblazer mode is enabled the system will show more advanced
+        /// configuration options in the UI.
+        /// </summary>
+        public const string TRAILBLAZER_MODE = "core_TrailblazerMode";
     }
 }

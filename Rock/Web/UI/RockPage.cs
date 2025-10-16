@@ -1502,6 +1502,8 @@ Rock.settings.initialize({{
                                 sanitizedPageParameters.AddOrReplace( sanitizedKey, sanitizedValue );
                             }
 
+                            var trailblazerMode = SystemSettings.GetValue( SystemKey.SystemSetting.TRAILBLAZER_MODE ).AsBoolean();
+
                             var script = $@"
 Obsidian.onReady(() => {{
     System.import('@Obsidian/Templates/rockPage.js').then(module => {{
@@ -1514,7 +1516,8 @@ Obsidian.onReady(() => {{
             interactionGuid: '{RequestContext.RelatedInteractionGuid}',
             currentPerson: {currentPersonJson},
             isAnonymousVisitor: {( isAnonymousVisitor ? "true" : "false" )},
-            loginUrlWithReturnUrl: '{GetLoginUrlWithReturnUrl()}'
+            loginUrlWithReturnUrl: '{GetLoginUrlWithReturnUrl()}',
+            trailblazerMode: {( trailblazerMode ? "true" : "false" )}
         }});
     }});
 }});
