@@ -8401,11 +8401,10 @@ ul.activeusers {
 .panel-toolbar .btn-tool,
 .panel-toolbar .picker .picker-label {
   padding: 1px var(--spacing-tiny);
-  color: var(--color-interface-medium);
+  color: var(--color-interface-strong);
   font-size: var(--font-size-xsmall);
   font-weight: var(--font-weight-semibold);
   line-height: 24px;
-  color: var(--color-interface-medium);
   background: transparent;
   border: 1px solid transparent;
 }
@@ -18647,6 +18646,18 @@ iframe.file-browser {
   display: none;
 }
 
+.connection-request-board .modal-open .modal-body .panel-body .photo > img {
+  width: 100%;
+}
+
+.connection-request-board .modal-open .modal-body .nav-tabs {
+  margin-top: var(--spacing-medium);
+}
+
+.connection-request-board .modal-open .grid-table .grid-select-cell p:empty {
+  display: none;
+}
+
 .hero-section {
   height: calc(300px + var(--spacing-xlarge));
   align-items: center;
@@ -24237,18 +24248,6 @@ tr.inactive td {
   .phonegroup-label {
     padding-top: var(--spacing-tiny);
   }
-}
-
-.connection-request-board .modal-open .modal-body .panel-body .photo > img {
-  width: 100%;
-}
-
-.connection-request-board .modal-open .modal-body .nav-tabs {
-  margin-top: var(--spacing-medium);
-}
-
-.connection-request-board .modal-open .grid-table .grid-select-cell p:empty {
-  display: none;
 }
 
 .merge-field-cell {
