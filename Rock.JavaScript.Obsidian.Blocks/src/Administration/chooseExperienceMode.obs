@@ -128,7 +128,7 @@
     // #region Values
 
     const isVisible = ref(true);
-    const internalValue = ref("false");
+    const internalValue = ref(false);
 
     // #endregion
 
@@ -140,7 +140,7 @@
      */
     async function onSaveClick(): Promise<void> {
         const data = {
-            trailblazerMode: internalValue.value === "true"
+            trailblazerMode: internalValue.value
         };
 
         const result = await invokeBlockAction("SaveExperienceMode", data);
