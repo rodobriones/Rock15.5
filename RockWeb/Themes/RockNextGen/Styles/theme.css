@@ -8653,6 +8653,10 @@ ul.activeusers {
 .panel-block .panel-body .grid.grid-panel .table-bordered > tfoot > tr > td {
   border: 0;
 }
+.panel-block .panel-body .panel-fullwidth .table-bordered > tfoot > tr > td.grid-actions,
+.panel-block .panel-body .grid.grid-panel .table-bordered > tfoot > tr > td.grid-actions {
+  border-top: 1px solid var(--color-interface-soft);
+}
 .panel-block .panel-inline-heading {
   background: var(--color-interface-softer);
   border-bottom: 1px solid var(--color-interface-softer);

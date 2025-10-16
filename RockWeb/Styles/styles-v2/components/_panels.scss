@@ -874,6 +874,9 @@ ul.activeusers {
 
         & > tfoot > tr > td {
           border:     0;
+          &.grid-actions {
+            border-top: 1px solid var(--color-interface-soft);
+          }
         }
       }
     }
