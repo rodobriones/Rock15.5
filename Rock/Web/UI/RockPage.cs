@@ -74,9 +74,7 @@ namespace Rock.Web.UI
         private BrowserInfo _browserInfo = null;
         private BrowserClient _browserClient = null;
 
-        private double _previousTiming = 0;
         private TimeSpan _tsDuration;
-        private double _duration = 0;
 
         private PageStatePersister _PageStatePersister = null;
 
@@ -2683,35 +2681,6 @@ Sys.Application.add_load(function () {
         #region Private Methods
 
         /// <summary>
-        /// Gets the debug timing view model.
-        /// </summary>
-        /// <param name="eventTitle">The event title.</param>
-        /// <param name="stepDuration">Duration of the step.</param>
-        /// <param name="indentLevel">The indent level.</param>
-        /// <param name="boldTitle">if set to <c>true</c> [bold title].</param>
-        /// <param name="subtitle">The subtitle.</param>
-        /// <returns></returns>
-        private DebugTimingViewModel GetDebugTimingOutput( string eventTitle, double stepDuration, int indentLevel = 0, bool boldTitle = false, string subtitle = "" )
-        {
-            _tsDuration = RockDateTime.Now.Subtract( ( DateTime ) Context.Items["Request_Start_Time"] );
-            _duration = Math.Round( stepDuration, 2 );
-
-            var viewModel = new DebugTimingViewModel
-            {
-                TimestampMs = _previousTiming,
-                DurationMs = _duration,
-                Title = eventTitle,
-                SubTitle = subtitle,
-                IsTitleBold = boldTitle,
-                IndentLevel = indentLevel
-            };
-
-            _previousTiming += _duration;
-
-            return viewModel;
-        }
-
-        /// <summary>
         /// Creates the service scope and initializes any required values.
         /// </summary>
         /// <returns>An new service scope.</returns>
@@ -5114,6 +5083,8 @@ Sys.Application.add_load(function () {
     /// <summary>
     /// Debug Timing
     /// </summary>
+    [Obsolete]
+    [RockObsolete( "18.0" )]
     public sealed class DebugTimingViewModel
     {
         /// <summary>
