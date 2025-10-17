@@ -3657,27 +3657,6 @@ Sys.Application.add_load(function () {
         }
 
         /// <summary>
-        /// Gets the cookie value.
-        /// </summary>
-        /// <param name="name">The name.</param>
-        /// <param name="preferResponseCookie">The prefer response cookie.</param>
-        /// <returns>string.</returns>
-        private string GetCookieValue( string name, bool preferResponseCookie )
-        {
-            string requestValue = GetCookieValueFromRequest( name );
-            string responseValue = GetCookieValueFromResponse( name );
-
-            if ( preferResponseCookie )
-            {
-                return responseValue ?? requestValue;
-            }
-            else
-            {
-                return requestValue ?? responseValue;
-            }
-        }
-
-        /// <summary>
         /// Adds an update trigger for when the block instance properties are updated.
         /// </summary>
         /// <param name="updatePanel">The <see cref="System.Web.UI.UpdatePanel"/> to add the <see cref="System.Web.UI.AsyncPostBackTrigger"/> to.</param>
@@ -4895,6 +4874,7 @@ Sys.Application.add_load(function () {
                 BlockUpdated( this, new BlockUpdatedEventArgs( blockId ) );
             }
         }
+
         /// <summary>
         /// Handles the Navigate event of the scriptManager control.
         /// </summary>
@@ -4943,6 +4923,7 @@ Sys.Application.add_load(function () {
                 }
             }
         }
+
         #endregion
 
         #region IHttpAsyncHandler Implementation
@@ -5005,55 +4986,6 @@ Sys.Application.add_load(function () {
         public BlockUpdatedEventArgs( int blockId )
         {
             BlockID = blockId;
-        }
-    }
-
-    /// <summary>
-    /// JSON Object used for client/server communication
-    /// </summary>
-    internal class JsonResult
-    {
-        /// <summary>
-        /// Gets or sets the action.
-        /// </summary>
-        /// <value>
-        /// A <see cref="System.String"/> representing the Action.
-        /// </value>
-        public string Action { get; set; }
-
-        /// <summary>
-        /// Gets or sets the result.
-        /// </summary>
-        /// <value>
-        /// The return <see cref="System.Object"/>
-        /// </value>
-        public object Result { get; set; }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="JsonResult"/> class.
-        /// </summary>
-        /// <param name="action">A <see cref="System.String"/>representing the action.</param>
-        /// <param name="result">A <see cref="System.Object"/> representing the result.</param>
-        public JsonResult( string action, object result )
-        {
-            Action = action;
-            Result = result;
-        }
-
-        /// <summary>
-        /// Serializes this instance.
-        /// </summary>
-        /// <returns>A <see cref="System.String"/> representing a serialized version of this instance.</returns>
-        public string Serialize()
-        {
-            System.Web.Script.Serialization.JavaScriptSerializer serializer =
-                new System.Web.Script.Serialization.JavaScriptSerializer();
-
-            StringBuilder sb = new StringBuilder();
-
-            serializer.Serialize( this, sb );
-
-            return sb.ToString();
         }
     }
 
@@ -5136,4 +5068,3 @@ Sys.Application.add_load(function () {
         public bool IsTitleBold { get; set; }
     }
 }
-

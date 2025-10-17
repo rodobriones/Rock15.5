@@ -529,7 +529,7 @@ namespace Rock.WebStartup
                 try
                 {
                     var startupException = new RockStartupException( "Error sending version update notifications", ex );
-                    LogError( startupException, null );
+                    LogError( startupException );
                     ExceptionLogService.LogException( startupException, null );
                 }
                 catch
@@ -880,14 +880,14 @@ namespace Rock.WebStartup
                 // if a plugin migration got an error, it gets wrapped with a RockStartupException
                 // If this occurs, we'll log the migration that occurred,  and stop running migrations for this assembly
                 System.Diagnostics.Debug.WriteLine( rockStartupException.Message );
-                LogError( rockStartupException, null );
+                LogError( rockStartupException );
             }
             catch ( Exception ex )
             {
                 // If an exception occurs in an an assembly, log the error, and stop running migrations for this assembly
                 var startupException = new RockStartupException( $"Error running migrations from {pluginAssemblyName}" );
                 System.Diagnostics.Debug.WriteLine( startupException.Message );
-                LogError( ex, null );
+                LogError( ex );
             }
 
             return result;
@@ -1449,39 +1449,9 @@ WHERE [PQ].[row_number] = 1
         /// Logs the error to database (or filesystem if database isn't available)
         /// </summary>
         /// <param name="ex">The ex.</param>
-        /// <param name="context">The context.</param>
-        private static void LogError( Exception ex, HttpContext context )
+        private static void LogError( Exception ex )
         {
-            int? pageId;
-            int? siteId;
-            PersonAlias personAlias = null;
-
-            if ( context == null )
-            {
-                pageId = null;
-                siteId = null;
-            }
-            else
-            {
-                var pid = context.Items["Rock:PageId"];
-                pageId = pid != null ? int.Parse( pid.ToString() ) : ( int? ) null;
-                var sid = context.Items["Rock:SiteId"];
-                siteId = sid != null ? int.Parse( sid.ToString() ) : ( int? ) null;
-                try
-                {
-                    var user = UserLoginService.GetCurrentUser();
-                    if ( user != null && user.Person != null )
-                    {
-                        personAlias = user.Person.PrimaryAlias;
-                    }
-                }
-                catch
-                {
-                    // Intentionally left blank
-                }
-            }
-
-            ExceptionLogService.LogException( ex, context, pageId, siteId, personAlias );
+            ExceptionLogService.LogException( ex, null );
         }
 
         /// <summary>
