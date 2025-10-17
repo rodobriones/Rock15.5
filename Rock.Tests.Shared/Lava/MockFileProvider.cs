@@ -102,6 +102,11 @@ namespace Rock.Tests.Shared.Lava
             throw new NotImplementedException();
         }
 
+        public DateTimeOffset? FileLastModified( string filePath )
+        {
+            return null;
+        }
+
         #endregion
     }
 }

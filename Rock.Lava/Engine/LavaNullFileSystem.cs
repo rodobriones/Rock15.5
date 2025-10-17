@@ -14,6 +14,8 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
+
 namespace Rock.Lava
 {
     /// <summary>
@@ -30,6 +32,11 @@ namespace Rock.Lava
         public bool FileExists( string filePath )
         {
             return false;
+        }
+
+        public DateTimeOffset? FileLastModified( string filePath )
+        {
+            return null;
         }
 
         /// <summary>
