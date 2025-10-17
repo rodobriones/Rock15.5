@@ -542,6 +542,76 @@ namespace Rock.Mobile
     }
 
     /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.TouchpointType"/>.
+    /// </summary>
+    public static class MobileExtensionTouchpointType
+    {
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/> to a web native <see cref="Enums.Outreach.TouchpointType"/>.
+        /// </summary>
+        /// <param name="touchpointType"></param>
+        /// <returns></returns>
+        public static Enums.Outreach.TouchpointType ToNative( this Rock.Common.Mobile.Enums.TouchpointType touchpointType )
+        {
+            switch ( touchpointType )
+            {
+                case Rock.Common.Mobile.Enums.TouchpointType.Prayer:
+                    return Enums.Outreach.TouchpointType.Prayer;
+                case Rock.Common.Mobile.Enums.TouchpointType.Connection:
+                    return Enums.Outreach.TouchpointType.Connection;
+                case Rock.Common.Mobile.Enums.TouchpointType.Reminder:
+                    return Enums.Outreach.TouchpointType.Reminder;
+                case Rock.Common.Mobile.Enums.TouchpointType.Pulse:
+                    return Enums.Outreach.TouchpointType.Pulse;
+                case Rock.Common.Mobile.Enums.TouchpointType.Birthday:
+                    return Enums.Outreach.TouchpointType.Birthday;
+                case Rock.Common.Mobile.Enums.TouchpointType.Share:
+                    return Enums.Outreach.TouchpointType.Share;
+                case Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary:
+                    return Enums.Outreach.TouchpointType.WeddingAnniversary;
+                case Rock.Common.Mobile.Enums.TouchpointType.BaptismAnniversary:
+                    return Enums.Outreach.TouchpointType.BaptismAnniversary;
+                case Rock.Common.Mobile.Enums.TouchpointType.SalvationAnniversary:
+                    return Enums.Outreach.TouchpointType.SalvationAnniversary;
+                default:
+                    return Enums.Outreach.TouchpointType.Prayer;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Outreach.TouchpointType"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/>.
+        /// </summary>
+        /// <param name="touchpointType"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.TouchpointType ToMobile( this Enums.Outreach.TouchpointType touchpointType )
+        {
+            switch ( touchpointType )
+            {
+                case Enums.Outreach.TouchpointType.Prayer:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Prayer;
+                case Enums.Outreach.TouchpointType.Connection:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Connection;
+                case Enums.Outreach.TouchpointType.Reminder:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Reminder;
+                case Enums.Outreach.TouchpointType.Pulse:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Pulse;
+                case Enums.Outreach.TouchpointType.Birthday:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Birthday;
+                case Enums.Outreach.TouchpointType.Share:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Share;
+                case Enums.Outreach.TouchpointType.WeddingAnniversary:
+                    return Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary;
+                case Enums.Outreach.TouchpointType.BaptismAnniversary:
+                    return Rock.Common.Mobile.Enums.TouchpointType.BaptismAnniversary;
+                case Enums.Outreach.TouchpointType.SalvationAnniversary:
+                    return Rock.Common.Mobile.Enums.TouchpointType.SalvationAnniversary;
+                default:
+                    return Rock.Common.Mobile.Enums.TouchpointType.Prayer;
+            }
+        }
+    }
+
+    /// <summary>
     /// Extension methods for <see cref="Rock.Common.Mobile.Enums.DayOfWeekFlag"/>.
     /// </summary>
     public static class MobileExtensionDayOfWeekFlag
@@ -602,5 +672,4 @@ namespace Rock.Mobile
             }
         }
     }
-
 }

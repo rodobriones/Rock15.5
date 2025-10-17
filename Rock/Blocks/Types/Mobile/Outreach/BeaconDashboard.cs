@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+using System.Windows.Documents;
 
 using Rock.Attribute;
+using Rock.Common.Mobile;
+using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
@@ -111,10 +114,38 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             }
         }
 
-
         #endregion
 
         #region Block Actions
+
+        [BlockAction]
+        public BlockActionResult GetInitialData()
+        {
+            var person = RequestContext.CurrentPerson;
+            var mobilePerson = MobileHelper.GetMobilePerson( person, PageCache.Layout.Site );
+
+            ContactService contactService = new ContactService( RockContext );
+            var personContactIds = contactService
+                .Queryable()
+                .Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId )
+                .Select( c => c.Id );
+
+            ContactTouchpointService touchpointService = new ContactTouchpointService( RockContext );
+            var pendingTouchpointCount = touchpointService
+                .Queryable()
+                .Where( tp => personContactIds.Contains( tp.ContactId ) )
+                .Where( tp => tp.CompletedDateTime == null )
+                .Count();
+
+            var data = new InitialDataBag
+            {
+                CurrentPerson = mobilePerson,
+                ContactCount = personContactIds.Count(),
+                PendingTouchpointCount = pendingTouchpointCount,
+            };
+
+            return ActionOk( data );
+        }
 
         /// <summary>
         /// Gets the contact touch points that are scheduled for today and not yet completed.
@@ -122,7 +153,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <param name="idKey"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult GetContactTouchPoints( string idKey )
+        public BlockActionResult GetTouchpoints( string idKey )
         {
             if ( idKey.IsNullOrWhiteSpace() )
             {
@@ -172,7 +203,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 var touchpointBag = new ContactTouchpointBag
                 {
                     ContactId = touchpoint.ContactId,
-                    Type = touchpoint.Type,
+                    Type = touchpoint.Type.ToMobile(),
                     TouchpointIdKey = touchpoint.IdKey,
                     PhotoUrl = contact.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
                     LastUpdated = contact.ModifiedDateTime ?? contact.CreatedDateTime ?? DateTime.MinValue,
@@ -181,6 +212,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     ConnectionNote = contact.ConnectionNote,
                     PrayerNote = contact.PrayerNote,
                     MobilePhone = contact.MobilePhone,
+                    SystemNote = touchpoint.SystemNote,
                     Note = touchpoint.Note,
                     Email = contact.Email,
                     PrayerCadence = contact.PrayerCadence.ToMobile(),
@@ -216,7 +248,36 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <param name="idKey"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult UpdateCompletedDate( string idKey )
+        public BlockActionResult CompleteTouchpoint( CompleteTouchpointRequestBag bag )
+        {
+            if ( bag == null )
+            {
+                return ActionBadRequest( "Bag is required" );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var touchpoint = contactTouchpointService.Get( bag.IdKey );
+
+            if ( touchpoint == null )
+            {
+                return ActionNotFound( "Touchpoint not found." );
+            }
+
+            touchpoint.Note = bag.Note;
+            touchpoint.CompletedDateTime = bag.CompletedDate.HasValue ? bag.CompletedDate.Value.DateTime : RockDateTime.Now;
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        /// <summary>
+        /// Updates the in person connect date.
+        /// </summary>
+        /// <param name="idKey"></param>
+        /// <param name="connectDate"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult UpdateCompleteDate( string idKey, DateTime connectDate )
         {
             if ( idKey.IsNullOrWhiteSpace() )
             {
@@ -231,7 +292,35 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionNotFound( "Touchpoint not found." );
             }
 
-            touchpoint.CompletedDateTime = RockDateTime.Now;
+            touchpoint.CompletedDateTime = connectDate;
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        /// <summary>
+        /// Updates the scheduled date.
+        /// </summary>
+        /// <param name="idKey"></param>
+        /// <param name="scheduledDate"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult UpdateScheduledDate( string idKey, DateTime scheduledDate )
+        {
+            if ( idKey.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "IdKey is required" );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var touchpoint = contactTouchpointService.Get( idKey );
+
+            if ( touchpoint == null )
+            {
+                return ActionNotFound( "Touchpoint not found." );
+            }
+
+            touchpoint.ScheduledDateTime = scheduledDate;
             RockContext.SaveChanges();
 
             return ActionOk();
@@ -240,18 +329,17 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         #endregion
     }
 
-    public class ContactTouchpointBag : ContactProfileBag
+    public class CompleteTouchpointRequestBag
     {
-        public TouchpointType Type { get; set; }
-        public string TouchpointIdKey { get; set; }
+        public string IdKey { get; set; }
         public string Note { get; set; }
-        public TouchpointViewBag TouchpointViewBag { get; set; }
+        public DateTimeOffset? CompletedDate { get; set; }
     }
 
-    public class TouchpointViewBag
+    public class InitialDataBag
     {
-        public string IconSource { get; set; }
-        public string Title { get; set; }
-        public string InformationText { get; set; }
+        public MobilePerson CurrentPerson { get; set; }
+        public int ContactCount { get; set; }
+        public int PendingTouchpointCount { get; set; }
     }
 }

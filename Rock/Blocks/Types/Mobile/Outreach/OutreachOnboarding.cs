@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Enums;
+using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Common.Mobile.ViewModel;
-using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
 
@@ -100,15 +94,5 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
-    }
-
-    public class OutreachOnboardingOption
-    {
-        public string CurrentPersonIdKey { get; set; }
-        public int DayOfWeekFlags { get; set; }
-
-        public int DailyPrayerGoal { get; set; }
-
-        public Common.Mobile.Enums.OutreachCadence OutreachCadence { get; set; }
     }
 }
