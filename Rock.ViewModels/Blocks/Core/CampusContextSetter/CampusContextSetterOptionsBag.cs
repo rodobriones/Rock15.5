@@ -17,21 +17,28 @@
 
 using System.Collections.Generic;
 
-namespace Rock.ViewModels.Blocks.Cms.PageSearch
+using Rock.ViewModels.Utility;
+
+namespace Rock.ViewModels.Blocks.Core.CampusContextSetter
 {
     /// <summary>
-    /// The additional configuration options for the Page List block.
+    /// The initialization options for the Campus Context Setter block.
     /// </summary>
-    public class PageSearchBag
+    public class CampusContextSetterOptionsBag
     {
         /// <summary>
-        /// The list of pages that should be displayed.
+        /// The alignment of the dropdown. 1 = Left, 2 = Right.
         /// </summary>
-        public List<PageSearchPageBag> Pages { get; set; }
+        public int Alignment { get; set; }
 
         /// <summary>
-        /// The HTML content that should be displayed below the section list.
+        /// The list of campuses to display in the dropdown.
         /// </summary>
-        public string AdditionalContent { get; set; }
+        public List<ListItemBag> Campuses { get; set; }
+
+        /// <summary>
+        /// The text to display as the current selection.
+        /// </summary>
+        public string CurrentSelectionText { get; set; }
     }
 }

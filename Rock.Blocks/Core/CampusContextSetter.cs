@@ -14,28 +14,32 @@
 // limitations under the License.
 // </copyright>
 //
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Web;
-using System.Web.UI.WebControls;
 
-using Rock;
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Enums.Cms;
 using Rock.Model;
+using Rock.ViewModels.Blocks.Core.CampusContextSetter;
+using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-using Rock.Web.UI;
 
-namespace RockWeb.Blocks.Core
+namespace Rock.Blocks.Core
 {
-    /// <summary>
     /// Block that can be used to set the default campus context for the site or page
     /// </summary>
     [DisplayName( "Campus Context Setter" )]
     [Category( "Core" )]
     [Description( "Block that can be used to set the default campus context for the site or page." )]
+    [IconCssClass( "ti ti-building" )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
+
+    #region Block Attributes
+
     [CustomRadioListField( "Context Scope",
         Description = "The scope of context to set",
         ListSource = "Site,Page",
@@ -125,10 +129,16 @@ namespace RockWeb.Blocks.Core
         Order = 12,
         Key = AttributeKey.CampusStatuses )]
 
-    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.System )]
+    #endregion
+
+    [ConfigurationChangedReload( BlockReloadMode.Block )]
+    [Rock.Cms.DefaultBlockRole( BlockRole.System )]
+    [SystemGuid.EntityTypeGuid( "22d6fd92-efd2-4f88-8355-792a459e453c" )]
     [Rock.SystemGuid.BlockTypeGuid( "4A5AAFFC-B1C7-4EFD-A9E4-84363242EA85" )]
-    public partial class CampusContextSetter : RockBlock
+    public class CampusContextSetter : RockBlockType
     {
+        #region Keys
+
         public static class AttributeKey
         {
             public const string ContextScope = "ContextScope";
@@ -146,99 +156,129 @@ namespace RockWeb.Blocks.Core
             public const string CampusStatuses = "CampusStatuses";
         }
 
-        #region Base Control Methods
+        #endregion
+
+        #region Fields
 
         /// <summary>
-        /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
+        /// This is a private variable used by <see cref="GetConfigurationOptionsBag"/>
+        /// to return a cached version of the options during startup.
         /// </summary>
-        /// <param name="e">An <see cref="T:System.EventArgs" /> object that contains the event data.</param>
-        protected override void OnInit( EventArgs e )
-        {
-            base.OnInit( e );
-
-            // repaint the screen after block settings are updated
-            this.BlockUpdated += Block_BlockUpdated;
-            this.AddConfigurationUpdateTrigger( upnlContent );
-        }
-
-        /// <summary>
-        /// Raises the <see cref="E:System.Web.UI.Control.Load" /> event.
-        /// </summary>
-        /// <param name="e">The <see cref="T:System.EventArgs" /> object that contains the event data.</param>
-        protected override void OnLoad( EventArgs e )
-        {
-            LoadDropdowns();
-
-            if ( GetAttributeValue( AttributeKey.Alignment ) == "2" )
-            {
-                ulDropdownMenu.AddCssClass( "dropdown-menu-right" );
-            }
-
-            base.OnLoad( e );
-        }
-
-        /// <summary>
-        /// Handles the BlockUpdated event of the control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void Block_BlockUpdated( object sender, EventArgs e )
-        {
-            LoadDropdowns();
-        }
+        private CampusContextSetterOptionsBag _options;
 
         #endregion
 
         #region Methods
 
+        /// <inheritdoc/>
+        public override object GetObsidianBlockInitialization()
+        {
+            return GetConfigurationOptionsBag();
+        }
+
+        /// <inheritdoc/>
+        protected override string GetInitialHtmlContent()
+        {
+            // Since this block is expected to be placed on a public facing
+            // site, we want to avoid any potential snapping or loading
+            // issues by rendering the initial HTML server-side.
+            var options = GetConfigurationOptionsBag();
+
+            return $@"
+<ul class=""nav navbar-nav contextsetter contextsetter-campus"">
+    <li class=""dropdown"">
+        <a class=""dropdown-toggle navbar-link"" href=""#"" data-toggle=""dropdown"">
+            {options.CurrentSelectionText}
+            <b class=""ti ti-caret-down-filled""></b>
+        </a>
+    </li>
+</ul>";
+        }
+
         /// <summary>
-        /// Loads the campuses
+        /// Get the configuration options that will be sent down to the client.
         /// </summary>
-        protected void LoadDropdowns()
+        /// <returns>The configuration options.</returns>
+        private CampusContextSetterOptionsBag GetConfigurationOptionsBag()
+        {
+            if ( _options != null )
+            {
+                return _options;
+            }
+
+            var options = new CampusContextSetterOptionsBag
+            {
+                Alignment = GetAttributeValue( AttributeKey.Alignment ).AsIntegerOrNull() ?? 1, // 2=Right [dropdown-menu-right]
+            };
+
+            InitializeCampusSelections( options );
+
+            _options = options;
+
+            return options;
+        }
+
+        /// <summary>
+        /// Initializes the campus selections in <paramref name="options"/>.
+        /// </summary>
+        /// <param name="options">The options to be updated.</param>
+        private void InitializeCampusSelections( CampusContextSetterOptionsBag options )
         {
             var campusEntityType = EntityTypeCache.Get( typeof( Campus ) );
-            var currentCampus = RockPage.GetCurrentContext( campusEntityType ) as Campus;
+            var currentCampus = RequestContext.GetContextEntity<Campus>();
 
-            var campusIdString = Request.QueryString["CampusId"];
+            var campusIdString = RequestContext.QueryString["CampusId"];
             if ( campusIdString != null )
             {
                 var campusId = campusIdString.AsInteger();
 
-                // if there is a query parameter, ensure that the Campus Context cookie is set (and has an updated expiration)
-                // note, the Campus Context might already match due to the query parameter, but has a different cookie context, so we still need to ensure the cookie context is updated
-                currentCampus = SetCampusContext( campusId, false );
+                // If there is a query parameter, ensure that the Campus
+                // Context cookie is set (and has an updated expiration).
+                //
+                // Note: The Campus Context might already match due to the query
+                // parameter, but has a different cookie context, so we still
+                // need to ensure the cookie context is updated
+                currentCampus = SetCampusContext( campusId, false, null, out _ );
             }
 
-            // if the currentCampus isn't determined yet, and DefaultToCurrentUser, and the person has a CampusId, use that as the campus context
-            if ( currentCampus == null && GetAttributeValue( AttributeKey.DefaultToCurrentUser ).AsBoolean() && CurrentPerson != null )
+            // If the currentCampus isn't determined yet, and
+            // DefaultToCurrentUser, and the person has a CampusId, use that
+            // as the campus context.
+            if ( currentCampus == null && GetAttributeValue( AttributeKey.DefaultToCurrentUser ).AsBoolean() && RequestContext.CurrentPerson != null )
             {
-                var campusId = CurrentPerson.GetFamily().CampusId;
+                var campusId = RequestContext.CurrentPerson.GetFamily().CampusId;
                 if ( campusId.HasValue )
                 {
-                    currentCampus = SetCampusContext( campusId.Value, false );
+                    currentCampus = SetCampusContext( campusId.Value, false, null, out _ );
                 }
             }
 
-            // If currentCampus still isn't determined, and DefaultCampus is defined, use that as the campus context.
+            // If currentCampus still isn't determined, and DefaultCampus is
+            // defined, use that as the campus context.
             var defaultCampusGuid = GetAttributeValue( AttributeKey.DefaultCampus ).AsGuidOrNull();
             if ( currentCampus == null && defaultCampusGuid.HasValue )
             {
                 var defaultCampusId = CampusCache.GetId( defaultCampusGuid.Value );
                 if ( defaultCampusId.HasValue )
                 {
-                    currentCampus = SetCampusContext( defaultCampusId.Value, true );
+                    currentCampus = SetCampusContext( defaultCampusId.Value, true, null, out var redirectUrl );
+
+                    RequestContext.Response.RedirectToUrl( redirectUrl );
                 }
             }
 
             if ( currentCampus != null )
             {
-                var mergeObjects = new Dictionary<string, object>();
-                mergeObjects.Add( "CampusName", currentCampus.Name );
-                lCurrentSelection.Text = GetAttributeValue( AttributeKey.CurrentItemTemplate ).ResolveMergeFields( mergeObjects );
+                var mergeObjects = new Dictionary<string, object>
+                {
+                    { "CampusName", currentCampus.Name }
+                };
+
+                options.CurrentSelectionText = GetAttributeValue( AttributeKey.CurrentItemTemplate ).ResolveMergeFields( mergeObjects );
             }
             else
             {
-                lCurrentSelection.Text = GetAttributeValue( AttributeKey.NoCampusText );
+                options.CurrentSelectionText = GetAttributeValue( AttributeKey.NoCampusText );
             }
 
             var includeInactive = GetAttributeValue( AttributeKey.IncludeInactiveCampuses ).AsBoolean();
@@ -262,66 +302,67 @@ namespace RockWeb.Blocks.Core
             var campusList = CampusCache.All( includeInactive )
                 .Where( c => !campusTypeIds.Any() || ( c.CampusTypeValueId.HasValue && campusTypeIds.Contains( c.CampusTypeValueId.Value ) ) )
                 .Where( c => !campusStatusIds.Any() || ( c.CampusStatusValueId.HasValue && campusStatusIds.Contains( c.CampusStatusValueId.Value ) ) )
-                .Select( a => new CampusItem { Name = a.Name, Id = a.Id } )
-                .ToList();
+                .ToListItemBagList();
 
-            // run lava on each campus
-            string dropdownItemTemplate = GetAttributeValue( AttributeKey.DropdownItemTemplate );
-            if ( !string.IsNullOrWhiteSpace( dropdownItemTemplate ) )
+            // Run lava on each campus.
+            var dropdownItemTemplate = GetAttributeValue( AttributeKey.DropdownItemTemplate );
+            if ( dropdownItemTemplate.IsNotNullOrWhiteSpace() )
             {
                 foreach ( var campus in campusList )
                 {
-                    var mergeObjects = new Dictionary<string, object>();
-                    mergeObjects.Add( "CampusName", campus.Name );
-                    campus.Name = dropdownItemTemplate.ResolveMergeFields( mergeObjects );
+                    var mergeObjects = new Dictionary<string, object>
+                    {
+                        { "CampusName", campus.Text }
+                    };
+                    campus.Text = dropdownItemTemplate.ResolveMergeFields( mergeObjects );
                 }
             }
 
-            // check if the campus can be unselected
+            // Check if the campus can be unselected.
             if ( !string.IsNullOrEmpty( GetAttributeValue( AttributeKey.ClearSelectionText ) ) )
             {
-                var blankCampus = new CampusItem
+                var blankCampus = new ListItemBag
                 {
-                    Name = GetAttributeValue( AttributeKey.ClearSelectionText ),
-                    Id = Rock.Constants.All.Id
+                    Text = GetAttributeValue( AttributeKey.ClearSelectionText ),
+                    Value = Guid.Empty.ToString()
                 };
 
                 campusList.Insert( 0, blankCampus );
             }
 
-            rptCampuses.DataSource = campusList;
-            rptCampuses.DataBind();
+            options.Campuses = campusList;
         }
 
         /// <summary>
         /// Sets the campus context.
         /// </summary>
         /// <param name="campusId">The campus identifier.</param>
-        /// <param name="refreshPage">if set to <c>true</c> [refresh page].</param>
-        /// <returns></returns>
-        protected Campus SetCampusContext( int campusId, bool refreshPage = false )
+        /// <param name="refreshPage">If true, then the <paramref name="redirectUrl"/> will be set with the URL to redirect to.</param>
+        /// <param name="redirectUrl">On exit, contains the URL to redirect to.</param>
+        /// <returns>The campus object.</returns>
+        private Campus SetCampusContext( int campusId, bool refreshPage, string originalUrl, out string redirectUrl )
         {
-            bool pageScope = GetAttributeValue( AttributeKey.ContextScope ) == "Page";
+            var pageScope = GetAttributeValue( AttributeKey.ContextScope ) == "Page";
             var campus = new CampusService( new RockContext() ).Get( campusId );
-            if ( campus == null )
-            {
-                // clear the current campus context
-                campus = new Campus()
-                {
-                    Name = GetAttributeValue( AttributeKey.NoCampusText ),
-                    Guid = Guid.Empty
-                };
-            }
 
-            // set context and refresh below with the correct query string if needed
-            RockPage.SetContextCookie( campus, pageScope, false );
+            if ( campus != null )
+            {
+                RequestContext.SetContextEntity( campus, pageScope );
+            }
+            else
+            {
+                RequestContext.RemoveContextEntity( typeof( Campus ), pageScope );
+            }
 
             // Only redirect if refreshPage is true
             if ( refreshPage )
             {
-                if ( !string.IsNullOrWhiteSpace( PageParameter( "CampusId" ) ) || GetAttributeValue( AttributeKey.DisplayQueryStrings ).AsBoolean() )
+                redirectUrl = originalUrl ?? RequestContext.RequestUri.ToString();
+
+                if ( PageParameter( "CampusId" ).IsNotNullOrWhiteSpace() || GetAttributeValue( AttributeKey.DisplayQueryStrings ).AsBoolean() )
                 {
-                    var queryString = HttpUtility.ParseQueryString( Request.QueryString.ToStringSafe() );
+                    var uri = new Uri( redirectUrl, UriKind.Absolute );
+                    var queryString = uri.Query.ParseQueryString();
 
                     /*
                         11/28/2023 - JPH
@@ -345,98 +386,78 @@ namespace RockWeb.Blocks.Core
                         queryString.Remove( "CampusId" );
                     }
 
-                    Response.Redirect( string.Format( "{0}?{1}", Request.UrlProxySafe().AbsolutePath, queryString ), false );
+                    redirectUrl = $"{uri.AbsolutePath}?{queryString.ToQueryString()}";
                 }
-                else
-                {
-                    Response.Redirect( Request.RawUrl, false );
-                }
-
-                Context.ApplicationInstance.CompleteRequest();
+            }
+            else
+            {
+                redirectUrl = null;
             }
 
             return campus;
         }
 
-        #endregion
-
-        #region Events
-
         /// <summary>
-        /// Handles the ItemCommand event of the rptCampuses control.
-        /// </summary>
-        /// <param name="source">The source of the event.</param>
-        /// <param name="e">The <see cref="RepeaterCommandEventArgs"/> instance containing the event data.</param>
-        protected void rptCampuses_ItemCommand( object source, RepeaterCommandEventArgs e )
-        {
-            var campusId = e.CommandArgument.ToString().AsIntegerOrNull();
-
-            if ( !campusId.HasValue )
-            {
-                return;
-            }
-
-            var campus = SetCampusContext( campusId.Value, true );
-
-            // If the campus context was set with the selected value, try to update the individual's primary family campus ID.
-            if ( campus != null && campus.Id == campusId.Value )
-            {
-                UpdateFamilyCampus( campusId.Value );
-            }
-        }
-
-        /// <summary>
-        /// Updates the individual's primary family campus if enabled in block settings.
+        /// Updates the individual's primary family campus if enabled in
+        /// block settings.
         /// </summary>
         /// <param name="campusId">The campus identifier.</param>
-        private void UpdateFamilyCampus( int campusId )
+        private void UpdateFamilyCampusIfRequired( int campusId )
         {
             if ( !GetAttributeValue( AttributeKey.UpdateFamilyCampusOnChange ).AsBoolean() )
             {
                 return;
             }
 
-            var primaryFamilyId = this.CurrentPerson?.PrimaryFamilyId;
+            var primaryFamilyId = RequestContext.CurrentPerson?.PrimaryFamilyId;
             if ( !primaryFamilyId.HasValue )
             {
                 return;
             }
 
-            using ( var rockContext = new RockContext() )
+            var primaryFamily = new GroupService( RockContext ).Get( primaryFamilyId.Value );
+            if ( primaryFamily == null )
             {
-                var primaryFamily = new GroupService( rockContext ).Get( primaryFamilyId.Value );
-                if ( primaryFamily == null )
-                {
-                    return;
-                }
-
-                primaryFamily.CampusId = campusId;
-                rockContext.SaveChanges();
+                return;
             }
+
+            primaryFamily.CampusId = campusId;
+            RockContext.SaveChanges();
         }
 
         #endregion
 
-        /// <summary>
-        /// Campus Item
-        /// </summary>
-        public class CampusItem
-        {
-            /// <summary>
-            /// Gets or sets the name.
-            /// </summary>
-            /// <value>
-            /// The name.
-            /// </value>
-            public string Name { get; set; }
+        #region Block Actions
 
-            /// <summary>
-            /// Gets or sets the identifier.
-            /// </summary>
-            /// <value>
-            /// The identifier.
-            /// </value>
-            public int Id { get; set; }
+        [BlockAction]
+        public BlockActionResult SetCampus( Guid campusGuid, string url )
+        {
+            var campusId = campusGuid != Guid.Empty
+                ? CampusCache.Get( campusGuid, RockContext )?.Id
+                : -1;
+
+            if ( !campusId.HasValue )
+            {
+                return ActionBadRequest( "Campus not found." );
+            }
+
+            var campus = SetCampusContext( campusId.Value, true, url, out var redirectUrl );
+
+            // If the campus context was set with the selected value, try to
+            // update the individual's primary family campus Id.
+            if ( campus != null && campus.Id == campusId.Value )
+            {
+                UpdateFamilyCampusIfRequired( campusId.Value );
+            }
+
+            var result = new
+            {
+                RedirectUrl = redirectUrl
+            };
+
+            return ActionOk( result );
         }
+
+        #endregion
     }
 }

@@ -21,13 +21,16 @@
 // </copyright>
 //
 
-import { PageSearchPageBag } from "@Obsidian/ViewModels/Blocks/Cms/PageSearch/pageSearchPageBag";
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
-/** The additional configuration options for the Page List block. */
-export type PageSearchBag = {
-    /** The HTML content that should be displayed below the section list. */
-    additionalContent?: string | null;
+/** The initialization options for the Campus Context Setter block. */
+export type CampusContextSetterOptionsBag = {
+    /** The alignment of the dropdown. 1 = Left, 2 = Right. */
+    alignment: number;
 
-    /** The list of pages that should be displayed. */
-    pages?: PageSearchPageBag[] | null;
+    /** The list of campuses to display in the dropdown. */
+    campuses?: ListItemBag[] | null;
+
+    /** The text to display as the current selection. */
+    currentSelectionText?: string | null;
 };
