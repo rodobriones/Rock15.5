@@ -183,6 +183,17 @@
     cursor: pointer;
 }
 
+
+// Hide the filter button by default and only show it when hovering over the header, to help with alignment and give more space.
+.btn-grid-column-filter:not(.active) {
+    display: none;
+}
+.grid-column-header:has(.btn-grid-column-filter):hover {
+    .btn-grid-column-filter {
+        display: inline-flex;
+    }
+}
+
 .grid-column-header.sortable:hover {
     background-color: var(--color-info-soft);
 }
@@ -240,6 +251,7 @@
 .grid-column-header > .btn-grid-column-filter svg {
     width: 14px;
     height: 14px;
+    align-self: center;
 }
 
 .grid-column-header > .btn-grid-column-filter.active {
@@ -466,11 +478,6 @@
 .grid-obsidian .grid-column-header-boolean {
     text-align: center;
     justify-content: center;
-}
-
-// Offset the title when there is a filter button
-.grid-obsidian .grid-column-header-boolean:has(.btn-grid-column-filter) .grid-column-title {
-    padding-left: 26px; // button width
 }
 
 .grid-obsidian .grid-cell-number,
