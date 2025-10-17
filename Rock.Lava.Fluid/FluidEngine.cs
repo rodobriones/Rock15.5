@@ -652,11 +652,33 @@ namespace Rock.Lava.Fluid
             {
                 try
                 {
-                    template.Render( templateContext.FluidContext, encoder, writer );
+                    /*
+                        10/16/2025 - N.A.
+
+                        In Fluid v2.20, this original Fluid `Render` method was obsoleted and also updated to call an internal method that defaults `isolateContext` to true:
+
+                            public static void Render(this IFluidTemplate template, TemplateContext context, TextEncoder encoder, TextWriter writer)
+
+                        This change introduced a regression (see https://github.com/sebastienros/fluid/issues/811) due to the unexpected context isolation behavior.
+
+                        To resolve this, we've updated the call:
+                            template.Render( templateContext.FluidContext, encoder, writer );
+
+                        to use the non-isolating async version instead:
+                            var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
+                            ...
+
+                        Reason: Prevent unintended context isolation introduced by the new default behavior in Fluid.
+                    */
+
+                    var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
+                    if ( !task.IsCompletedSuccessfully )
+                    {
+                        task.AsTask().GetAwaiter().GetResult();
+                    }
 
                     writer.Flush();
                     result.Text = sb.ToString();
-
                 }
                 catch ( LavaInterruptException )
                 {
