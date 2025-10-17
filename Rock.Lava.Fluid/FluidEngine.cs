@@ -41,7 +41,6 @@ namespace Rock.Lava.Fluid
 
         private static readonly Guid _engineIdentifier = new Guid( "605445FE-6ECC-4E67-9A95-98F7173F7389" );
 
-
         /// <summary>
         /// The descriptive name of the engine.
         /// </summary>
