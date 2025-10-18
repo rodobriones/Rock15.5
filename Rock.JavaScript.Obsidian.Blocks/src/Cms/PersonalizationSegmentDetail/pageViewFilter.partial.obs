@@ -142,7 +142,7 @@
     import { BtnSize } from "@Obsidian/Enums/Controls/btnSize";
     import { numericComparisonTypes, stringComparisonTypes } from "@Obsidian/Core/Reporting/comparisonType";
     import { getFilteredComparisonTypeOptions } from "@Obsidian/Core/Reporting/comparisonTypeOptions";
-    import { IPageViewSegmentFilter } from "./types.partial";
+    import { PageViewSegmentFilter } from "./types.partial";
     import { useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import { slidingDateRangeToString, parseSlidingDateRangeString, SlidingDateRange } from "@Obsidian/Utility/slidingDateRange";
@@ -155,7 +155,7 @@
 
     const props = defineProps({
         modelValue: {
-            type: Object as PropType<IPageViewSegmentFilter>,
+            type: Object as PropType<PageViewSegmentFilter>,
             required: true
         },
 
@@ -165,12 +165,38 @@
     });
 
     const emit = defineEmits<{
-        (e: "update:modelValue", value: IPageViewSegmentFilter): void
+        (e: "update:modelValue", value: PageViewSegmentFilter): void
     }>();
+
+    function createDefaultFilter(): PageViewSegmentFilterBag {
+        return {
+            guid: newGuid(),
+            comparisonType: ComparisonType.EqualTo,
+            comparisonValue: 0,
+            siteGuids: [],
+            pageGuids: [],
+            slidingDateRangeDelimitedValues: "",
+            pageUrlComparisonType: ComparisonType.StartsWith,
+            pageUrlComparisonValue: "",
+            pageReferrerComparisonType: ComparisonType.StartsWith,
+            pageReferrerComparisonValue: "",
+            sourceComparisonType: ComparisonType.StartsWith,
+            sourceComparisonValue: "",
+            mediumComparisonType: ComparisonType.StartsWith,
+            mediumComparisonValue: "",
+            campaignComparisonType: ComparisonType.StartsWith,
+            campaignComparisonValue: "",
+            contentComparisonType: ComparisonType.StartsWith,
+            contentComparisonValue: "",
+            termComparisonType: ComparisonType.StartsWith,
+            termComparisonValue: "",
+            includeChildPages: false
+        };
+    }
 
     // #region Values
 
-    const theFilter = ref<PageViewSegmentFilterBag>({} as PageViewSegmentFilterBag);
+    const theFilter = ref<PageViewSegmentFilterBag>(createDefaultFilter());
 
     const comparisonTypes = getFilteredComparisonTypeOptions(numericComparisonTypes);
     const advancedOptionsComparisonTypes = getFilteredComparisonTypeOptions(stringComparisonTypes);
@@ -257,29 +283,7 @@
     }
 
     function onAdd(): void {
-        theFilter.value = {
-            guid: newGuid(),
-            comparisonType: ComparisonType.EqualTo,
-            comparisonValue: 0,
-            siteGuids: [],
-            pageGuids: [],
-            slidingDateRangeDelimitedValues: "",
-            pageUrlComparisonType: ComparisonType.StartsWith,
-            pageUrlComparisonValue: "",
-            pageReferrerComparisonType: ComparisonType.StartsWith,
-            pageReferrerComparisonValue: "",
-            sourceComparisonType: ComparisonType.StartsWith,
-            sourceComparisonValue: "",
-            mediumComparisonType: ComparisonType.StartsWith,
-            mediumComparisonValue: "",
-            campaignComparisonType: ComparisonType.StartsWith,
-            campaignComparisonValue: "",
-            contentComparisonType: ComparisonType.StartsWith,
-            contentComparisonValue: "",
-            termComparisonType: ComparisonType.StartsWith,
-            termComparisonValue: "",
-            includeChildPages: false
-        };
+        theFilter.value = createDefaultFilter();
         isModalVisible.value = true;
         isEditing.value = false;
     }
@@ -355,7 +359,7 @@
             termComparisonValue: theFilter.value.termComparisonValue ?? "",
             includeChildPages: theFilter.value.includeChildPages ?? false,
             description: theFilter.value.description ?? ""
-        } as PageViewSegmentFilterBag;
+        };
 
         if (idx >= 0) {
             filters.splice(idx, 1, item);

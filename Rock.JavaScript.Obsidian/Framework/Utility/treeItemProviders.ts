@@ -865,7 +865,7 @@ export class ScheduleTreeItemProvider implements ITreeItemProvider {
     /** Whether to exclude private schedules in the results. */
     public includePublicOnly: boolean = false;
 
-    /** The category GUID to filter schedules by. */
+    /** The category GUIDs to filter schedules by. */
     public includeCategoryGuids: Guid[] | null = null;
 
     /**

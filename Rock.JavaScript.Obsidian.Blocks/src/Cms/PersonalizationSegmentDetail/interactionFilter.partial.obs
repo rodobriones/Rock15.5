@@ -101,7 +101,7 @@
     import { numericComparisonTypes } from "@Obsidian/Core/Reporting/comparisonType";
     import { getFilteredComparisonTypeOptions } from "@Obsidian/Core/Reporting/comparisonTypeOptions";
     import { getComparisonName } from "@Obsidian/Core/Reporting/comparisonType";
-    import { IInteractionSegmentFilter } from "./types.partial";
+    import { InteractionSegmentFilter } from "./types.partial";
     import { slidingDateRangeToString, parseSlidingDateRangeString, SlidingDateRange, RangeType, calculateSlidingDateRange, getTimeUnitText, getRangeTypeText } from "@Obsidian/Utility/slidingDateRange";
     import { DateTimeFormat } from "@Obsidian/Utility/rockDateTime";
     import { pluralize } from "@Obsidian/Utility/stringUtils";
@@ -111,18 +111,30 @@
 
     const props = defineProps({
         modelValue: {
-            type: Object as PropType<IInteractionSegmentFilter>,
+            type: Object as PropType<InteractionSegmentFilter>,
             required: true
         }
     });
 
     const emit = defineEmits<{
-        (e: "update:modelValue", value: IInteractionSegmentFilter): void
+        (e: "update:modelValue", value: InteractionSegmentFilter): void
     }>();
+
+    function createDefaultFilter(): InteractionSegmentFilterBag {
+        return {
+            guid: newGuid(),
+            comparisonType: 1,
+            comparisonValue: 0,
+            interactionChannel: null,
+            interactionComponent: null,
+            operation: "",
+            slidingDateRangeDelimitedValues: ""
+        };
+    }
 
     // #region Values
 
-    const theFilter = ref<InteractionSegmentFilterBag>({} as InteractionSegmentFilterBag);
+    const theFilter = ref<InteractionSegmentFilterBag>(createDefaultFilter());
 
     const comparisonTypes = getFilteredComparisonTypeOptions(numericComparisonTypes);
     const isModalVisible = ref(false);
@@ -214,15 +226,7 @@
     }
 
     function onAdd(): void {
-        theFilter.value = {
-            guid: newGuid(),
-            comparisonType: 1,
-            comparisonValue: 0,
-            interactionChannel: null,
-            interactionComponent: null,
-            operation: "",
-            slidingDateRangeDelimitedValues: ""
-        };
+        theFilter.value = createDefaultFilter();
         isModalVisible.value = true;
         isEditing.value = false;
     }
@@ -263,7 +267,7 @@
             interactionComponent: theFilter.value.interactionComponent ?? null,
             operation: theFilter.value.operation,
             slidingDateRangeDelimitedValues: theFilter.value.slidingDateRangeDelimitedValues ?? ""
-        } as InteractionSegmentFilterBag;
+        };
 
         if (idx >= 0) {
             filters.splice(idx, 1, item);

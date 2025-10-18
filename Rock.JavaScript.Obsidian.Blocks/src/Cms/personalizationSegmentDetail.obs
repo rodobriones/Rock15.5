@@ -36,6 +36,7 @@
     import { DetailPanelMode } from "@Obsidian/Enums/Controls/detailPanelMode";
     import { PanelAction } from "@Obsidian/Types/Controls/panelAction";
     import EditPanel from "./PersonalizationSegmentDetail/editPanel.partial.obs";
+    import ViewPanel from "./PersonalizationSegmentDetail/viewPanel.partial.obs";
     import { onConfigurationValuesChanged, useConfigurationValues, useEntityDetailBlock, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { NavigationUrlKey } from "./PersonalizationSegmentDetail/types.partial";
     import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";

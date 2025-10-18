@@ -23,17 +23,17 @@ export const enum NavigationUrlKey {
     ParentPage = "ParentPage"
 }
 
-export interface ISessionCountSegmentFilter {
+export type SessionCountSegmentFilter = {
     sessionFilterExpressionType: number;
     sessionSegmentFilters: SessionCountSegmentFilterBag[];
-}
+};
 
-export interface IPageViewSegmentFilter {
+export type PageViewSegmentFilter = {
     pageViewFilterExpressionType: number;
     pageViewSegmentFilters: PageViewSegmentFilterBag[];
-}
+};
 
-export interface IInteractionSegmentFilter {
+export type InteractionSegmentFilter = {
     interactionFilterExpressionType: number;
     interactionSegmentFilters: InteractionSegmentFilterBag[];
-}
+};

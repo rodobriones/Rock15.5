@@ -64,16 +64,20 @@ namespace Rock.Blocks.Cms
             public const string ParentPage = "ParentPage";
         }
 
+        private static class PersistenceType
+        {
+            public const string Schedule = "Schedule";
+            public const string Interval = "Interval";
+        }
+        private static class ScheduleType
+        {
+            public const string Named = "Named";
+            public const string Unique = "Unique";
+        }
+
         #endregion Keys
 
         #region Methods
-
-        private enum SegmentFilterType
-        {
-            Session,
-            PageView,
-            Interaction
-        }
 
         /// <inheritdoc/>
         public override object GetObsidianBlockInitialization()
@@ -83,7 +87,7 @@ namespace Rock.Blocks.Cms
             SetBoxInitialEntityState( box );
 
             box.NavigationUrls = GetBoxNavigationUrls();
-            box.Options = GetBoxOptions( box.IsEditable );
+            box.Options = GetBoxOptions();
 
             return box;
         }
@@ -94,7 +98,7 @@ namespace Rock.Blocks.Cms
         /// </summary>
         /// <param name="isEditable"><c>true</c> if the entity is editable; otherwise <c>false</c>.</param>
         /// <returns>The options that provide additional details to the block.</returns>
-        private PersonalizationSegmentDetailOptionsBag GetBoxOptions( bool isEditable )
+        private PersonalizationSegmentDetailOptionsBag GetBoxOptions()
         {
             var options = new PersonalizationSegmentDetailOptionsBag();
 
@@ -103,20 +107,6 @@ namespace Rock.Blocks.Cms
                 .ToList();
 
             return options;
-        }
-
-        /// <summary>
-        /// Validates the PersonalizationSegment for any final information that might not be
-        /// valid after storing all the data from the client.
-        /// </summary>
-        /// <param name="personalizationSegment">The PersonalizationSegment to be validated.</param>
-        /// <param name="errorMessage">On <c>false</c> return, contains the error message.</param>
-        /// <returns><c>true</c> if the PersonalizationSegment is valid, <c>false</c> otherwise.</returns>
-        private bool ValidatePersonalizationSegment( PersonalizationSegment personalizationSegment, out string errorMessage )
-        {
-            errorMessage = null;
-
-            return true;
         }
 
         /// <summary>
@@ -177,8 +167,8 @@ namespace Rock.Blocks.Cms
                 return null;
             }
 
-            bool isNamedSchedule = false;
-            string iCalendarContent = "";
+            var isNamedSchedule = false;
+            var iCalendarContent = "";
 
             if ( entity.PersistedScheduleId.HasValue )
             {
@@ -208,8 +198,8 @@ namespace Rock.Blocks.Cms
                 Name = entity.Name,
                 PersistedLastRefreshDateTime = entity.PersistedLastRefreshDateTime,
                 PersistedLastRunDurationMilliseconds = entity.PersistedLastRunDurationMilliseconds,
-                PersistenceType = entity.PersistedScheduleId.HasValue ? "Schedule" : ( entity.PersistedScheduleIntervalMinutes.HasValue ? "Interval" : null ),
-                PersistenceScheduleType = isNamedSchedule ? "Named" : "Unique",
+                PersistenceType = entity.PersistedScheduleId.HasValue ? PersistenceType.Schedule : ( entity.PersistedScheduleIntervalMinutes.HasValue ? PersistenceType.Interval : null ),
+                PersistenceScheduleType = isNamedSchedule ? ScheduleType.Named : ScheduleType.Unique,
                 PersistedSchedule = entity.PersistedSchedule.ToListItemBag(),
                 UniqueScheduleICalendarContent = iCalendarContent,
                 PersistedScheduleIntervalMinutes = entity.PersistedScheduleIntervalMinutes,
@@ -238,7 +228,7 @@ namespace Rock.Blocks.Cms
             return bag;
         }
 
-        //// <inheritdoc/>
+        /// <inheritdoc/>
         protected override PersonalizationSegmentBag GetEntityBagForEdit( PersonalizationSegment entity )
         {
             if ( entity == null )
@@ -287,9 +277,6 @@ namespace Rock.Blocks.Cms
             box.IfValidProperty( nameof( box.Bag.FilterDataView ),
                 () => entity.FilterDataViewId = box.Bag.FilterDataView.GetEntityId<DataView>( RockContext ) );
 
-            box.IfValidProperty( nameof( box.Bag.FilterDataViewId ),
-                () => entity.FilterDataViewId = box.Bag.FilterDataViewId );
-
             box.IfValidProperty( nameof( box.Bag.IsActive ),
                 () => entity.IsActive = box.Bag.IsActive );
 
@@ -302,19 +289,16 @@ namespace Rock.Blocks.Cms
             box.IfValidProperty( nameof( box.Bag.PersistedLastRunDurationMilliseconds ),
                 () => entity.PersistedLastRunDurationMilliseconds = box.Bag.PersistedLastRunDurationMilliseconds );
 
-            box.IfValidProperty( nameof( box.Bag.PersistedLastRunDurationMilliseconds ),
-                () => entity.PersistedLastRunDurationMilliseconds = box.Bag.PersistedLastRunDurationMilliseconds );
-
             box.IfValidProperty( nameof( box.Bag.PersistedSchedule ),
                 () =>
                 {
-                    if ( box.Bag.PersistenceType == "Schedule" )
+                    if ( box.Bag.PersistenceType == PersistenceType.Schedule )
                     {
-                        if ( box.Bag.PersistenceScheduleType == "Named" )
+                        if ( box.Bag.PersistenceScheduleType == ScheduleType.Named )
                         {
                             entity.PersistedScheduleId = box.Bag.PersistedSchedule.GetEntityId<Schedule>( RockContext );
                         }
-                        else if ( box.Bag.PersistenceScheduleType == "Unique" )
+                        else if ( box.Bag.PersistenceScheduleType == ScheduleType.Unique )
                         {
                             var newSchedule = new Schedule
                             {
@@ -324,16 +308,23 @@ namespace Rock.Blocks.Cms
                             scheduleService.Add( newSchedule );
                             entity.PersistedScheduleId = newSchedule.Id;
                         }
+                        else
+                        {
+                            entity.PersistedScheduleId = null;
+                        }
+                    }
+                    else
+                    {
+                        entity.PersistedScheduleId = null;
                     }
                 } );
 
             box.IfValidProperty( nameof( box.Bag.PersistedScheduleIntervalMinutes ),
                 () =>
                 {
-                    if ( box.Bag.PersistenceType == "Interval" )
+                    if ( box.Bag.PersistenceType == PersistenceType.Interval )
                     {
                         entity.PersistedScheduleIntervalMinutes = box.Bag.PersistedScheduleIntervalMinutes;
-                        entity.PersistedScheduleId = null;
                     }
                     else
                     {
@@ -371,7 +362,10 @@ namespace Rock.Blocks.Cms
                 oldAdditionalFilterConfiguration != entity.AdditionalFilterConfiguration;
 
             // Mark segment as dirty to signal the PostSave hook to update the sometimes long running Personalization data on a background task.
-            entity.IsDirty = isSegmentDefinitionChanged;
+            if ( isSegmentDefinitionChanged )
+            {
+                entity.IsDirty = true;
+            }
 
             return true;
         }
@@ -585,27 +579,42 @@ namespace Rock.Blocks.Cms
         /// </summary>
         /// <param name="bag">The bag containing the category information.</param>
         /// <param name="entity">The personalization segment entity.</param>
-        /// <param name="rockContext">The rock context.</param>
         private void UpdateCategories( PersonalizationSegmentBag bag, PersonalizationSegment entity )
         {
-            entity.Categories.Clear();
+            bool hasChanges = false;
+            var categoryService = new CategoryService( RockContext );
 
-            if ( bag.Categories != null )
+            var incomingCategoryGuids = bag.Categories?.Select( c => c.Value.AsGuid() ).ToList() ?? new List<Guid>();
+
+            var categoriesToRemove = entity.Categories
+                .Where( c => !incomingCategoryGuids.Contains( c.Guid ) )
+                .ToList();
+
+            foreach ( var category in categoriesToRemove )
             {
-                var categoryService = new CategoryService( RockContext );
-                foreach ( var categoryGuid in bag.Categories.Select( c => c.Value.AsGuid() ) )
+                entity.Categories.Remove( category );
+                hasChanges = true;
+            }
+
+            foreach ( var categoryGuid in incomingCategoryGuids )
+            {
+                if ( !entity.Categories.Any( c => c.Guid == categoryGuid ) )
                 {
                     var category = categoryService.Get( categoryGuid );
                     if ( category != null )
                     {
                         entity.Categories.Add( category );
+                        hasChanges = true;
                     }
                 }
             }
 
-            // Since changes to Categories isn't tracked by ChangeTracker, set the ModifiedDateTime
-            entity.ModifiedDateTime = RockDateTime.Now;
+            if ( hasChanges )
+            {
+                entity.ModifiedDateTime = RockDateTime.Now;
+            }
         }
+
         #endregion
 
         #region Block Actions
@@ -684,12 +693,6 @@ namespace Rock.Blocks.Cms
             if ( !UpdateEntityFromBox( entity, box ) )
             {
                 return ActionBadRequest( "Invalid data." );
-            }
-
-            // Ensure everything is valid before saving.
-            if ( !ValidatePersonalizationSegment( entity, out var validationMessage ) )
-            {
-                return ActionBadRequest( validationMessage );
             }
 
             var isNew = entity.Id == 0;

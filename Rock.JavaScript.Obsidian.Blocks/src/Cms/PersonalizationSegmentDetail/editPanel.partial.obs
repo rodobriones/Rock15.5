@@ -90,7 +90,7 @@
 
         <ContentSection title="Page View Filters" icon="ti ti-sitemap">
             <ContentStack>
-                <PageViewFitler v-model="pageViewSegmentFilter" :sites="sites" />
+                <PageViewFilter v-model="pageViewSegmentFilter" :sites="sites" />
             </ContentStack>
         </ContentSection>
 
@@ -143,14 +143,12 @@
     import ContentStack from "@Obsidian/Controls/contentStack.obs";
     import { Category } from "@Obsidian/SystemGuids/category";
     import { FilterExpressionType } from "@Obsidian/Enums/Reporting/filterExpressionType";
-
     import { AdditionalFilterConfigurationBag } from "@Obsidian/ViewModels/Blocks/Cms/PersonalizationSegmentDetail/additionalFilterConfigurationBag";
-    import { SessionCountSegmentFilterBag } from "@Obsidian/ViewModels/Blocks/Cms/PersonalizationSegmentDetail/sessionCountSegmentFilterBag";
-    import { PageViewSegmentFilterBag } from "@Obsidian/ViewModels/Blocks/Cms/PersonalizationSegmentDetail/pageViewSegmentFilterBag";
-    import { InteractionSegmentFilterBag } from "@Obsidian/ViewModels/Blocks/Cms/PersonalizationSegmentDetail/interactionSegmentFilterBag";
     import SessionFilter from "./sessionFilter.partial.obs";
-    import PageViewFitler from "./pageViewFilter.partial.obs";
+    import PageViewFilter from "./pageViewFilter.partial.obs";
     import InteractionFilter from "./interactionFilter.partial.obs";
+    import { InteractionSegmentFilter, PageViewSegmentFilter, SessionCountSegmentFilter } from "./types.partial";
+    import { isNullish } from "@Obsidian/Utility/util";
 
     const props = defineProps({
         modelValue: {
@@ -213,11 +211,11 @@
         return Object.keys(attributes.value).length > 0;
     });
 
-    const sessionCountSegmentFilter = computed({
+    const sessionCountSegmentFilter = computed<SessionCountSegmentFilter>({
         get() {
             return {
                 sessionFilterExpressionType: additionalFilterConfiguration.value.sessionFilterExpressionType ?? FilterExpressionType.GroupAny,
-                sessionSegmentFilters: (additionalFilterConfiguration.value.sessionSegmentFilters as SessionCountSegmentFilterBag[]) ?? []
+                sessionSegmentFilters: (additionalFilterConfiguration.value.sessionSegmentFilters) ?? []
             };
         },
         set(value) {
@@ -229,11 +227,11 @@
         }
     });
 
-    const pageViewSegmentFilter = computed({
+    const pageViewSegmentFilter = computed<PageViewSegmentFilter>({
         get() {
             return {
                 pageViewFilterExpressionType: additionalFilterConfiguration.value.pageViewFilterExpressionType ?? FilterExpressionType.GroupAny,
-                pageViewSegmentFilters: (additionalFilterConfiguration.value.pageViewSegmentFilters as PageViewSegmentFilterBag[]) ?? []
+                pageViewSegmentFilters: (additionalFilterConfiguration.value.pageViewSegmentFilters) ?? []
             };
         },
         set(value) {
@@ -245,11 +243,11 @@
         }
     });
 
-    const interactionSegmentFilter = computed({
+    const interactionSegmentFilter = computed<InteractionSegmentFilter>({
         get() {
             return {
                 interactionFilterExpressionType: additionalFilterConfiguration.value.interactionFilterExpressionType ?? FilterExpressionType.GroupAny,
-                interactionSegmentFilters: (additionalFilterConfiguration.value.interactionSegmentFilters as InteractionSegmentFilterBag[]) ?? []
+                interactionSegmentFilters: (additionalFilterConfiguration.value.interactionSegmentFilters) ?? []
             };
         },
         set(value) {
@@ -290,7 +288,7 @@
     }
 
     function intervalBagToMinutes(bag: TimeIntervalBag | null): number {
-        if (!bag || bag.value == null) {
+        if (isNullish(bag) || isNullish(bag.value)) {
             return 0;
         }
 

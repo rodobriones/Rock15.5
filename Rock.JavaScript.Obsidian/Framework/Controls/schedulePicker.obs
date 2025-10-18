@@ -41,6 +41,7 @@
             default: false
         },
 
+        /** Optional array of category GUIDs to filter schedules. When provided, only schedules within these categories will be displayed. */
         includeCategoryGuids: {
             type: Array as PropType<Guid[] | null>,
             default: null

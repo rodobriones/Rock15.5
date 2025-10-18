@@ -88,7 +88,6 @@ namespace Rock.ViewModels.Blocks.Cms.PersonalizationSegmentDetail
         /// </summary>
         public ListItemBag PersistedSchedule { get; set; }
 
-
         /// <summary>
         /// Gets or sets the iCalendar content for a unique schedule.
         /// </summary>

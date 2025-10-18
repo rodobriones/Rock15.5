@@ -92,7 +92,7 @@
     import { newGuid } from "@Obsidian/Utility/guid";
     import { numericComparisonTypes } from "@Obsidian/Core/Reporting/comparisonType";
     import { getFilteredComparisonTypeOptions } from "@Obsidian/Core/Reporting/comparisonTypeOptions";
-    import { ISessionCountSegmentFilter } from "./types.partial";
+    import { SessionCountSegmentFilter } from "./types.partial";
     import { useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { FilterExpressionType } from "@Obsidian/Enums/Reporting/filterExpressionType";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
@@ -102,7 +102,7 @@
 
     const props = defineProps({
         modelValue: {
-            type: Object as PropType<ISessionCountSegmentFilter>,
+            type: Object as PropType<SessionCountSegmentFilter>,
             required: true
         },
 
@@ -112,12 +112,22 @@
     });
 
     const emit = defineEmits<{
-        (e: "update:modelValue", value: ISessionCountSegmentFilter): void
+        (e: "update:modelValue", value: SessionCountSegmentFilter): void
     }>();
+
+    function createDefaultFilter(): SessionCountSegmentFilterBag {
+        return {
+            guid: newGuid(),
+            comparisonType: 1,
+            comparisonValue: 0,
+            siteGuids: [],
+            slidingDateRangeDelimitedValues: ""
+        };
+    }
 
     // #region Values
 
-    const theFilter = ref<SessionCountSegmentFilterBag>({} as SessionCountSegmentFilterBag);
+    const theFilter = ref<SessionCountSegmentFilterBag>(createDefaultFilter());
 
     const comparisonTypes = getFilteredComparisonTypeOptions(numericComparisonTypes);
     const sites = ref(props.sites ?? []);
@@ -174,13 +184,7 @@
     // #region Functions
 
     function onAdd(): void {
-        theFilter.value = {
-            guid: newGuid(),
-            comparisonType: 1,
-            comparisonValue: 0,
-            siteGuids: [],
-            slidingDateRangeDelimitedValues: ""
-        };
+        theFilter.value = createDefaultFilter();
         isModalVisible.value = true;
         isEditing.value = false;
     }
@@ -224,7 +228,7 @@
             siteGuids: theFilter.value.siteGuids ?? [],
             slidingDateRangeDelimitedValues: theFilter.value.slidingDateRangeDelimitedValues ?? "",
             description: theFilter.value.description ?? ""
-        } as SessionCountSegmentFilterBag;
+        };
 
         if (idx >= 0) {
             filters.splice(idx, 1, item);
