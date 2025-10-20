@@ -248,7 +248,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <param name="idKey"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult CompleteTouchpoint( CompleteTouchpointRequestBag bag )
+        public BlockActionResult CompleteTouchpoint( CompleteTouchpointBag bag )
         {
             if ( bag == null )
             {
@@ -326,14 +326,53 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk();
         }
 
-        #endregion
-    }
+        /// <summary>
+        /// Pulses the touchpoint contact update.
+        /// </summary>
+        /// <param name="bag"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult PulseTouchpointContactUpdate( PulseContactUpdateBag bag )
+        {
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            ContactService contactService = new ContactService( RockContext );
+            var contactRelationshipStrengthChangesService = new ContactRelationshipStrengthChangesService( RockContext );
 
-    public class CompleteTouchpointRequestBag
-    {
-        public string IdKey { get; set; }
-        public string Note { get; set; }
-        public DateTimeOffset? CompletedDate { get; set; }
+            var touchpoint = contactTouchpointService.Get( bag.IdKey );
+            var contact = contactService.Get( touchpoint.ContactId );
+
+            // If the relationship strength change.
+            if ( contact.RelationshipStrength != bag.RelationshipStrength.ToNative() )
+            {
+                var newRelationshipStrength = new ContactRelationshipStrengthChanges
+                {
+                    ContactId = contact.Id,
+                    PreviousRelationshipStrength = contact.RelationshipStrength,
+                    NewRelationshipStrength = bag.RelationshipStrength.ToNative(),
+                    //AppInfluencedGrowth =  // PS TODO: Where do we get the value?
+                };
+                contactRelationshipStrengthChangesService.Add( newRelationshipStrength );
+            }
+
+            contact.RelationshipStrength = bag.RelationshipStrength.ToNative();
+            contact.RelationshipFocus = bag.RelationshipFocus.ToNative();
+            contact.HasAcceptedJesus = bag.hasAcceptedJesus;
+            contact.SalvationDay = bag.SalvationDay;
+            contact.SalvationMonth = bag.SalvationMonth;
+            contact.SalvationYear = bag.SalvationYear;
+            contact.Baptized = bag.Baptized;
+            contact.BaptismDay = bag.BaptismDay;
+            contact.BaptismMonth = bag.BaptismMonth;
+            contact.BaptismYear = bag.BaptismYear;
+
+            touchpoint.CompletedDateTime = RockDateTime.Now;
+
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        #endregion
     }
 
     public class InitialDataBag
