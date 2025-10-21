@@ -18,16 +18,13 @@
 namespace Rock.ViewModels.Rest.Controls
 {
     /// <summary>
-    /// The results from the Validate Token API action of the Captcha control.
+    /// The results of the CaptchaInitialize API action of the Captcha control.
     /// </summary>
-    public class CaptchaControlTokenValidateTokenResultBag
+    public class CaptchaInitializeResultBag
     {
         /// <summary>
-        /// Gets or sets a value indicating whether the solved token is valid.
+        /// Gets or sets the bag containing proof-of-work CAPTCHA initialization information.
         /// </summary>
-        /// <value>
-        ///   <c>true</c> if the token is valid; otherwise, <c>false</c>.
-        /// </value>
-        public bool IsTokenValid { get; set; }
+        public CaptchaInitializeProofOfWorkBag Pow { get; set; }
     }
 }

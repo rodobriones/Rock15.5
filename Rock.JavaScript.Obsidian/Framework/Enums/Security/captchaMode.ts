@@ -21,22 +21,26 @@
 // </copyright>
 //
 
-import { CaptchaMode } from "@Obsidian/Enums/Cms/captchaMode";
+/** The captcha mode. */
+export const CaptchaMode = {
+    /** CAPTCHA should be visible and requires manual interaction. */
+    Visible: 0,
 
-/** Contains the Ui Settings configuration details. */
-export type UiSettingsConfigurationBag = {
-    /** Gets or sets the captcha mode. */
-    captchaMode: CaptchaMode;
+    /** CAPTCHA should be invisible and run automatically. */
+    Invisible: 1,
 
-    /** Gets or sets the value indicating whether or not default address state selection is enabled. */
-    enableDefaultAddressStateSelection: boolean;
+    /** CAPTCHA is disabled. */
+    Disabled: 2
+} as const;
 
-    /** Gets or sets the ethnicity label. */
-    ethnicityLabel?: string | null;
+/** The captcha mode. */
+export const CaptchaModeDescription: Record<number, string> = {
+    0: "Visible",
 
-    /** Gets or sets the race label. */
-    raceLabel?: string | null;
+    1: "Invisible",
 
-    /** Gets or sets the SMS opt in message. */
-    smsOptInMessage?: string | null;
+    2: "Disabled"
 };
+
+/** The captcha mode. */
+export type CaptchaMode = typeof CaptchaMode[keyof typeof CaptchaMode];

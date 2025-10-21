@@ -21,22 +21,13 @@
 // </copyright>
 //
 
-import { CaptchaMode } from "@Obsidian/Enums/Cms/captchaMode";
+import { CaptchaVerifyProofOfWorkOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/captchaVerifyProofOfWorkOptionsBag";
 
-/** Contains the Ui Settings configuration details. */
-export type UiSettingsConfigurationBag = {
-    /** Gets or sets the captcha mode. */
-    captchaMode: CaptchaMode;
-
-    /** Gets or sets the value indicating whether or not default address state selection is enabled. */
-    enableDefaultAddressStateSelection: boolean;
-
-    /** Gets or sets the ethnicity label. */
-    ethnicityLabel?: string | null;
-
-    /** Gets or sets the race label. */
-    raceLabel?: string | null;
-
-    /** Gets or sets the SMS opt in message. */
-    smsOptInMessage?: string | null;
+/**
+ * The options that can be passed to the CaptchaRedeemChallenge API action of
+ * the Captcha control.
+ */
+export type CaptchaVerifyOptionsBag = {
+    /** Gets or sets the proof-of-work CAPTCHA verification options. */
+    powOptions?: CaptchaVerifyProofOfWorkOptionsBag | null;
 };

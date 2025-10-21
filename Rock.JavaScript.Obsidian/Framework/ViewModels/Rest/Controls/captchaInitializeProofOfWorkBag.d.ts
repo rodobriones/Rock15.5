@@ -21,22 +21,17 @@
 // </copyright>
 //
 
-import { CaptchaMode } from "@Obsidian/Enums/Cms/captchaMode";
+/** Represents a configuration bag for initializing proof-of-work challenges in a CAPTCHA system. */
+export type CaptchaInitializeProofOfWorkBag = {
+    /** Gets or sets the number of challenges to generate. */
+    challengeCount: number;
 
-/** Contains the Ui Settings configuration details. */
-export type UiSettingsConfigurationBag = {
-    /** Gets or sets the captcha mode. */
-    captchaMode: CaptchaMode;
+    /** Gets or sets the difficulty level of the challenge. */
+    challengeDifficulty: number;
 
-    /** Gets or sets the value indicating whether or not default address state selection is enabled. */
-    enableDefaultAddressStateSelection: boolean;
+    /** Gets or sets the size of each challenge in bytes. */
+    challengeSize: number;
 
-    /** Gets or sets the ethnicity label. */
-    ethnicityLabel?: string | null;
-
-    /** Gets or sets the race label. */
-    raceLabel?: string | null;
-
-    /** Gets or sets the SMS opt in message. */
-    smsOptInMessage?: string | null;
+    /** Gets or sets the challenge token that should be redeemed, along with the challenge solution, for a verified token. */
+    challengeToken?: string | null;
 };

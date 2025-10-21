@@ -21,11 +21,10 @@
 // </copyright>
 //
 
-/**
- * The options that can be passed to the GetConfiguration API action of
- * the Captcha control.
- */
-export type CaptchaControlConfigurationBag = {
-    /** Gets or sets the site key. */
-    siteKey?: string | null;
+import { CaptchaInitializeProofOfWorkBag } from "@Obsidian/ViewModels/Rest/Controls/captchaInitializeProofOfWorkBag";
+
+/** The results of the CaptchaInitialize API action of the Captcha control. */
+export type CaptchaInitializeResultBag = {
+    /** Gets or sets the bag containing proof-of-work CAPTCHA initialization information. */
+    pow?: CaptchaInitializeProofOfWorkBag | null;
 };

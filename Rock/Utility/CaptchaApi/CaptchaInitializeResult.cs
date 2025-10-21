@@ -15,20 +15,16 @@
 // </copyright>
 //
 
-namespace Rock.ViewModels.Rest.Controls
+namespace Rock.Utility.CaptchaApi
 {
     /// <summary>
-    /// The options that can be passed to the GetConfiguration API action of
-    /// the Captcha control.
+    /// Represents the specification for a CAPTCHA client.
     /// </summary>
-    public class CaptchaControlConfigurationBag
+    internal sealed class CaptchaInitializeResult
     {
         /// <summary>
-        /// Gets or sets the site key.
+        /// Gets or sets the result of the CAPTCHA proof-of-work initialization.
         /// </summary>
-        /// <value>
-        /// The site key.
-        /// </value>
-        public string SiteKey { get; set; }
+        internal CaptchaInitializeProofOfWorkResult Pow { get; set; }
     }
 }

@@ -21,22 +21,13 @@
 // </copyright>
 //
 
-import { CaptchaMode } from "@Obsidian/Enums/Cms/captchaMode";
+import { Guid } from "@Obsidian/Types";
 
-/** Contains the Ui Settings configuration details. */
-export type UiSettingsConfigurationBag = {
-    /** Gets or sets the captcha mode. */
-    captchaMode: CaptchaMode;
+/** Represents a captcha token. */
+export type CaptchaTokenBag = {
+    /** Gets or sets the unix timestamp when the captcha token expires. */
+    expires: number;
 
-    /** Gets or sets the value indicating whether or not default address state selection is enabled. */
-    enableDefaultAddressStateSelection: boolean;
-
-    /** Gets or sets the ethnicity label. */
-    ethnicityLabel?: string | null;
-
-    /** Gets or sets the race label. */
-    raceLabel?: string | null;
-
-    /** Gets or sets the SMS opt in message. */
-    smsOptInMessage?: string | null;
+    /** Gets or sets the unique identifier for the captcha token. */
+    guid: Guid;
 };

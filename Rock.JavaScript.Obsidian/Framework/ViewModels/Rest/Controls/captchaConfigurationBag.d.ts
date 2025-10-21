@@ -23,20 +23,8 @@
 
 import { CaptchaMode } from "@Obsidian/Enums/Cms/captchaMode";
 
-/** Contains the Ui Settings configuration details. */
-export type UiSettingsConfigurationBag = {
+/** The options that can be passed to the CaptchaGetConfiguration API action of the Captcha control. */
+export type CaptchaConfigurationBag = {
     /** Gets or sets the captcha mode. */
     captchaMode: CaptchaMode;
-
-    /** Gets or sets the value indicating whether or not default address state selection is enabled. */
-    enableDefaultAddressStateSelection: boolean;
-
-    /** Gets or sets the ethnicity label. */
-    ethnicityLabel?: string | null;
-
-    /** Gets or sets the race label. */
-    raceLabel?: string | null;
-
-    /** Gets or sets the SMS opt in message. */
-    smsOptInMessage?: string | null;
 };

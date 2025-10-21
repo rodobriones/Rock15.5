@@ -21,8 +21,17 @@
 // </copyright>
 //
 
-/** The results from the Validate Token API action of the Captcha control. */
-export type CaptchaControlTokenValidateTokenResultBag = {
-    /** Gets or sets a value indicating whether the solved token is valid. */
-    isTokenValid: boolean;
+/** The results of the CaptchaRedeemChallenge API action of the Captcha control. */
+export type CaptchaVerifyResultBag = {
+    /** Gets or sets the failure message. */
+    error?: string | null;
+
+    /** Gets or sets the token expiration time. */
+    expires?: number | null;
+
+    /** Gets or sets whether the challenge is successful or not. */
+    isVerified: boolean;
+
+    /** Gets or sets the token generated after the challenge is successfully completed. */
+    token?: string | null;
 };
