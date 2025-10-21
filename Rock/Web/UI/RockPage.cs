@@ -35,6 +35,7 @@ using Microsoft.Extensions.Logging;
 
 using Rock.Attribute;
 using Rock.Blocks;
+using Rock.Cms;
 using Rock.Cms.Utm;
 using Rock.Configuration;
 using Rock.Crm.RecordSource;
@@ -90,16 +91,6 @@ namespace Rock.Web.UI
         private bool _pageHasObsidianBlock = false;
 
         private readonly string _obsidianPageTimingControlId = "lObsidianPageTimings";
-
-        /// <summary>
-        /// The fingerprint to use with obsidian files.
-        /// </summary>
-        private static long _obsidianFingerprint = 0;
-
-        /// <summary>
-        /// The obsidian file watchers.
-        /// </summary>
-        private static readonly List<FileSystemWatcher> _obsidianFileWatchers = new List<FileSystemWatcher>();
 
         /// <summary>
         /// The service scopes that should be disposed.
@@ -650,7 +641,6 @@ namespace Rock.Web.UI
         /// </summary>
         static RockPage()
         {
-            InitializeObsidianFingerprint();
             _rockVersion = "Rock v" + typeof( Rock.Web.UI.RockPage ).Assembly.GetName().Version.ToString();
         }
 
@@ -1501,6 +1491,7 @@ Rock.settings.initialize({{
                             }
 
                             var trailblazerMode = SystemSettings.GetValue( SystemKey.SystemSetting.TRAILBLAZER_MODE ).AsBoolean();
+                            var fingerprint = RockApp.Current.GetRequiredService<ObsidianFingerprintManager>().GetFingerprint();
 
                             var script = $@"
 Obsidian.onReady(() => {{
@@ -1520,7 +1511,7 @@ Obsidian.onReady(() => {{
     }});
 }});
 
-Obsidian.init({{ debug: true, fingerprint: ""v={_obsidianFingerprint}"" }});
+Obsidian.init({{ debug: true, fingerprint: ""v={fingerprint}"" }});
 ";
 
                             if ( _pageHasObsidianBlock )
@@ -4541,139 +4532,6 @@ Sys.Application.add_load(function () {
             }
 
             return WebRequestHelper.GetClientIpAddress( new HttpRequestWrapper( request ) );
-        }
-
-        #endregion
-
-        #region Obsidian Fingerprinting
-
-        /// <summary>
-        /// Initializes the obsidian file fingerprint. This sets the initial
-        /// fingerprint value and then if we are in Debug mode it monitors for
-        /// any file system changes related to Obsidian and updates the
-        /// fingerprint used when loading files to bust cache.
-        /// </summary>
-        private static void InitializeObsidianFingerprint()
-        {
-            // Do everything in a try/catch because this is called from the
-            // static initializer, meaning if something goes wrong Rock will
-            // fail to start.
-            try
-            {
-                var obsidianPath = System.Web.Hosting.HostingEnvironment.MapPath( "~/Obsidian" );
-                var pluginsPath = System.Web.Hosting.HostingEnvironment.MapPath( "~/Plugins" );
-                var now = RockDateTime.Now;
-
-                // Find the last date any obsidian file was modified.
-                var lastWriteTime = Directory.EnumerateFiles( obsidianPath, "*.js", SearchOption.AllDirectories )
-                    .Union( Directory.EnumerateFiles( pluginsPath, "*.js", SearchOption.AllDirectories ) )
-                    .Select( f =>
-                    {
-                        try
-                        {
-                            return ( DateTime? ) new FileInfo( f ).LastWriteTime;
-                        }
-                        catch
-                        {
-                            return null;
-                        }
-                    } )
-                    .Where( d => d.HasValue )
-                    .Select( d => ( DateTime? ) RockDateTime.ConvertLocalDateTimeToRockDateTime( d.Value ) )
-                    // This is an attempt to fix random issues where people have the
-                    // JS file cached in the browser. A theory is that some JS file
-                    // has a future date time, so even after an upgrade the same
-                    // fingerprint value is used. Ignore any dates in the future.
-                    .Where( d => d < now )
-                    .OrderByDescending( d => d )
-                    .FirstOrDefault();
-
-                _obsidianFingerprint = ( lastWriteTime ?? now ).Ticks;
-
-                // Check if we are in debug mode and if so enable the watchers.
-                var cfg = ( CompilationSection ) ConfigurationManager.GetSection( "system.web/compilation" );
-                if ( cfg != null && cfg.Debug )
-                {
-                    AddObsidianFileSystemWatcher( obsidianPath, "*.js" );
-                    AddObsidianFileSystemWatcher( pluginsPath, "*.js" );
-                }
-            }
-            catch ( Exception ex )
-            {
-                _obsidianFingerprint = RockDateTime.Now.Ticks;
-                Debug.WriteLine( ex.Message );
-            }
-        }
-
-        /// <summary>
-        /// Add a new file system watcher for the specified <paramref name="directory"/>.
-        /// It will update the fingerprint whenever a file matching the
-        /// <paramref name="filter"/> changes.
-        /// </summary>
-        /// <param name="directory">The directory, and any sub-directories, to watch.</param>
-        /// <param name="filter">The filename filter to use when watching for changes.</param>
-        private static void AddObsidianFileSystemWatcher( string directory, string filter )
-        {
-            // Setup a watcher to notify us of any changes to the directory.
-            var watcher = new FileSystemWatcher
-            {
-                Path = directory,
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                Filter = filter
-            };
-
-            // Add event handlers.
-            watcher.Changed += ObsidianFileSystemWatcher_OnChanged;
-            watcher.Created += ObsidianFileSystemWatcher_OnChanged;
-            watcher.Renamed += ObsidianFileSystemWatcher_OnRenamed;
-
-            _obsidianFileWatchers.Add( watcher );
-
-            // Begin watching.
-            watcher.EnableRaisingEvents = true;
-        }
-
-        /// <summary>
-        /// Handles the OnRenamed event of the Obsidian FileSystemWatcher.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="renamedEventArgs">The <see cref="RenamedEventArgs"/> instance containing the event data.</param>
-        private static void ObsidianFileSystemWatcher_OnRenamed( object sender, RenamedEventArgs renamedEventArgs )
-        {
-            try
-            {
-                var dateTime = new FileInfo( renamedEventArgs.FullPath ).LastWriteTime;
-
-                dateTime = RockDateTime.ConvertLocalDateTimeToRockDateTime( dateTime );
-
-                _obsidianFingerprint = Math.Max( _obsidianFingerprint, dateTime.Ticks );
-            }
-            catch
-            {
-                _obsidianFingerprint = RockDateTime.Now.Ticks;
-            }
-        }
-
-        /// <summary>
-        /// Handles the OnChanged event of the Obsidian FileSystemWatcher.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="fileSystemEventArgs">The <see cref="FileSystemEventArgs"/> instance containing the event data.</param>
-        private static void ObsidianFileSystemWatcher_OnChanged( object sender, FileSystemEventArgs fileSystemEventArgs )
-        {
-            try
-            {
-                var dateTime = new FileInfo( fileSystemEventArgs.FullPath ).LastWriteTime;
-
-                dateTime = RockDateTime.ConvertLocalDateTimeToRockDateTime( dateTime );
-
-                _obsidianFingerprint = Math.Max( _obsidianFingerprint, dateTime.Ticks );
-            }
-            catch
-            {
-                _obsidianFingerprint = RockDateTime.Now.Ticks;
-            }
         }
 
         #endregion

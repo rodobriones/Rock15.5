@@ -34,6 +34,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Rock.AI.Agent;
 using Rock.Blocks;
 using Rock.Bus;
+using Rock.Cms;
 using Rock.Communication.Chat;
 using Rock.Configuration;
 using Rock.Data;
@@ -338,6 +339,7 @@ namespace Rock.WebStartup
                 WebRootPath = AppDomain.CurrentDomain.BaseDirectory
             } );
             sc.AddSingleton<MetadataHelper>();
+            sc.AddSingleton<ObsidianFingerprintManager>();
 
             sc.AddScoped<RockContext>();
 
