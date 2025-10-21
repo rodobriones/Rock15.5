@@ -190,7 +190,7 @@
 }
 .grid-column-header:has(.btn-grid-column-filter):hover {
     .btn-grid-column-filter {
-        display: inline-flex;
+        display: inherit;
     }
 }
 
@@ -231,8 +231,8 @@
     text-align: center;
     background-color: transparent;
     margin-left: var(--spacing-tiny);
-    width: 26px;
-    height: 24px;
+    width: 24px;
+    height: 20px;
     border-radius: var(--rounded-xsmall);
     color: var(--color-interface-medium);
     opacity: 0;
@@ -257,6 +257,7 @@
 .grid-column-header > .btn-grid-column-filter.active {
     opacity: 1;
     color: var(--color-info-strong);
+    display: inherit;
 }
 
 .grid-filter-popup-container {
