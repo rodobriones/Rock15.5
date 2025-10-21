@@ -118,6 +118,10 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
         #region Block Actions
 
+        /// <summary>
+        /// Gets the initial data.
+        /// </summary>
+        /// <returns></returns>
         [BlockAction]
         public BlockActionResult GetInitialData()
         {
