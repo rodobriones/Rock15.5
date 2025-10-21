@@ -35,7 +35,6 @@ using Microsoft.Extensions.Logging;
 
 using Rock.Attribute;
 using Rock.Blocks;
-using Rock.Cms;
 using Rock.Cms.Utm;
 using Rock.Configuration;
 using Rock.Crm.RecordSource;
@@ -793,46 +792,6 @@ namespace Rock.Web.UI
         /// <param name="e"></param>
         protected override void OnInit( EventArgs e )
         {
-            // Add configuration specific to Rock Page to the observability activity
-            if ( Activity.Current != null )
-            {
-                Activity.Current.DisplayName = $"PAGE: {Context.Request.HttpMethod} {PageReference.Route}";
-
-                // If the route has parameters show the route slug, otherwise use the request path
-                if ( PageReference.Parameters.Count > 0 )
-                {
-                    Activity.Current.DisplayName = $"PAGE: {Context.Request.HttpMethod} {PageReference.Route}";
-                }
-                else
-                {
-                    Activity.Current.DisplayName = $"PAGE: {Context.Request.HttpMethod} {Context.Request.Path}";
-                }
-
-                // Highlight postbacks
-                if ( this.IsPostBack )
-                {
-                    Activity.Current.DisplayName = Activity.Current.DisplayName + " [Postback]";
-                }
-                else
-                {
-                    // Only add a metric if for non-postback requests
-                    var pageTags = RockMetricSource.CommonTags;
-                    pageTags.Add( "rock-page", this.PageId );
-                    pageTags.Add( "rock-site", this.Site.Name );
-                    RockMetricSource.PageRequestCounter.Add( 1, pageTags );
-                }
-
-                // Add attributes
-                Activity.Current.AddTag( "rock.otel_type", "rock-page" );
-                Activity.Current.AddTag( "rock.current_user", this.CurrentUser?.UserName );
-                Activity.Current.AddTag( "rock.current_person", this.CurrentPerson?.FullName );
-                Activity.Current.AddTag( "rock.current_visitor", this.CurrentVisitor?.AliasPersonGuid );
-                Activity.Current.AddTag( "rock.site.id", this.Site.Id );
-                Activity.Current.AddTag( "rock.page.id", this.PageId );
-                Activity.Current.AddTag( "rock.page.ispostback", this.IsPostBack );
-                Activity.Current.AddTag( "rock.page.issystem", _pageCache?.IsSystem ?? false );
-            }
-
             var stopwatchInitEvents = Stopwatch.StartNew();
 
             // Register shortcut keys
@@ -1783,6 +1742,9 @@ Obsidian.init({{ debug: true, fingerprint: ""v={fingerprint}"" }});
 
                     DebugTraceProcessor.ValidateTrace( Activity.Current.TraceId.ToString() );
                 }
+
+                // Add configuration specific to Rock Page to the observability activity.
+                RockPageHelper.ConfigureActivity( Activity.Current, RequestContext, PageReference, IsPostBack );
             }
         }
 

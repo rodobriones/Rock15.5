@@ -22,9 +22,10 @@ using System.IO;
 using System.Linq;
 using System.Web.Configuration;
 
+using Rock;
 using Rock.Configuration;
 
-namespace Rock.Cms
+namespace Rock.Web
 {
     /// <summary>
     /// Manages automatic fingerprinting of Obsidian files so we can update
