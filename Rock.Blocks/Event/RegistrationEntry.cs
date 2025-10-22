@@ -1909,10 +1909,7 @@ namespace Rock.Blocks.Event
                             ( !l.RegistrationInstance.EndDateTime.HasValue || l.RegistrationInstance.EndDateTime > dateTime ) )
                         .FirstOrDefault();
 
-                    if ( linkage != null )
-                    {
-                        groupId = linkage.GroupId;
-                    }
+                    return linkage?.GroupId;
                 }
                 else if ( eventOccurrenceId.HasValue && registrationInstanceId.HasValue )
                 {
@@ -1924,10 +1921,7 @@ namespace Rock.Blocks.Event
                         .Select( l => l.GroupId )
                         .FirstOrDefault();
 
-                    if ( linkageGroupId.HasValue )
-                    {
-                        groupId = linkageGroupId.Value;
-                    }
+                    return linkageGroupId;
                 }
             }
 
