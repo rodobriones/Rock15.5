@@ -1931,7 +1931,10 @@ namespace Rock.Blocks.Event
                 }
             }
 
-            return groupId;
+            // If there is no slug or event occurrence id then don't use/trust the groupId in the query string
+            // There is some if logic refactoring that could be done here but leaving as we're only addressing a
+            // security concern and don't want to inadvertently change behavior.
+            return null;
         }
 
         /// <summary>
