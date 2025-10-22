@@ -24102,7 +24102,7 @@ span.field-value {
 }
 
 #fluidbox-overlay {
-  background: var(--color-interface-strongest);
+  background: rgba(10, 10, 10, 0.5);
 }
 
 .panel-widget.pageviewsession .pageviewsession-client {

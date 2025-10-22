@@ -698,7 +698,7 @@ span.field-value {
 
 // ======================== FLUID BOX ========================
 #fluidbox-overlay {
-  background:     var(--color-interface-strongest);
+  background:     rgba(10, 10, 10, 0.5); // Hardcoded color with opacity to keep it consistent with JS implementation
 }
 // ====================== END FLUID BOX ======================
 
