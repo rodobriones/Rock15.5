@@ -667,9 +667,9 @@ BEGIN
     WHERE [PersonId] = 1 AND [AliasPersonGuid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
 
     -- Update the Person with the new top primary alias  (NOT AVAILABLE IN v16.x)
-    --UPDATE [Person]
-    --SET [PrimaryAliasGuid] = (SELECT TOP 1 [Guid] FROM [PersonAlias] WHERE Id = Person.PrimaryAliasId)
-    --WHERE [Guid] = @NewPersonGuid
+    UPDATE [Person]
+    SET [PrimaryAliasGuid] = (SELECT TOP 1 [Guid] FROM [PersonAlias] WHERE Id = Person.PrimaryAliasId)
+    WHERE [Guid] = @NewPersonGuid
 
     -- Update attribute values that reference the old person alias guid
     UPDATE av
