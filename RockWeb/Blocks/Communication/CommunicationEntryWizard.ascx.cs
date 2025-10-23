@@ -39,6 +39,7 @@ using Rock.Observability;
 using Rock.Security;
 using Rock.Tasks;
 using Rock.Utility;
+using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -150,6 +151,13 @@ namespace RockWeb.Blocks.Communication
         IsRequired = false,
         Order = 14 )]
 
+    [BooleanField( "Show Upgrade Message",
+        Key = AttributeKey.ShowUpgradeMessage,
+        Description = "Displays a message that encourages switching to the newer Communication Wizard. <br>This helps guide staff toward using the updated experience unless you plan to continue using the legacy wizard long-term.",
+        DefaultBooleanValue = true,
+        IsRequired = false,
+        Order = 15 )]
+
     // *** Advanced Category attributes.
 
     [BooleanField( "Disable Navigation Shortcuts",
@@ -186,6 +194,7 @@ namespace RockWeb.Blocks.Communication
             public const string DefaultAsBulk = "DefaultAsBulk";
             public const string EnablePersonParameter = "EnablePersonParameter";
             public const string DisableAddingIndividualsToRecipientLists = "DisableAddingIndividualsToRecipientLists";
+            public const string ShowUpgradeMessage = "ShowUpgradeMessage";
 
             public const string DisableNavigationShortcuts = "DisableNavigationShortcuts";
         }
@@ -601,7 +610,7 @@ function onTaskCompleted( resultData )
             var pushCommunication = new CommunicationDetails();
             var emailMedium = GetEmailMediumWithActiveTransport();
 
-            if ( communicationId != 0 )
+            if (communicationId != 0)
             {
                 communication = new CommunicationService( rockContext ).Get( communicationId );
             }
@@ -610,7 +619,9 @@ function onTaskCompleted( resultData )
 
             nbCommunicationNotWizardCompatible.Visible = false;
 
-            if ( communication == null )
+            ShowOrHideUpgradeMessage( rockContext );
+
+            if (communication == null)
             {
                 communication = new Rock.Model.Communication
                 {
@@ -625,9 +636,9 @@ function onTaskCompleted( resultData )
             }
             else
             {
-                if ( !string.IsNullOrEmpty( communication.Message ) )
+                if (!string.IsNullOrEmpty( communication.Message ))
                 {
-                    if ( !communication.CommunicationTemplateId.HasValue || !communication.CommunicationTemplate.SupportsEmailWizard() )
+                    if (!communication.CommunicationTemplateId.HasValue || !communication.CommunicationTemplate.SupportsEmailWizard())
                     {
                         // If this communication was previously created, but doesn't have a CommunicationTemplateId or uses a template that doesn't support the EmailWizard,
                         // it is a communication (or a copy of a communication) that was created using the 'Simple Editor' or the editor prior to v7.
@@ -653,14 +664,14 @@ function onTaskCompleted( resultData )
 
             // If the communication is not yet edited by a user, apply any appropriate block default settings.
             // This occurs for new communications or those passed in from another process, such as an action on a Person list from a data grid or report.
-            if ( communication.Status == CommunicationStatus.Transient )
+            if (communication.Status == CommunicationStatus.Transient)
             {
                 communication.EnabledLavaCommands = GetAttributeValue( AttributeKey.EnabledLavaCommands );
                 communication.IsBulkCommunication = _isBulkCommunicationForced || GetAttributeValue( AttributeKey.DefaultAsBulk ).AsBoolean();
             }
 
             var allowedCommunicationTypes = GetAllowedCommunicationTypes();
-            if ( !allowedCommunicationTypes.Contains( communication.CommunicationType ) )
+            if (!allowedCommunicationTypes.Contains( communication.CommunicationType ))
             {
                 communication.CommunicationType = allowedCommunicationTypes.First();
             }
@@ -668,13 +679,13 @@ function onTaskCompleted( resultData )
             // If viewing a new, transient, draft, or are the approver of a pending-approval communication, use this block
             // otherwise, set this block visible=false and if there is a communication detail block on this page, it'll be shown instead
             CommunicationStatus[] editableStatuses = new CommunicationStatus[] { CommunicationStatus.Transient, CommunicationStatus.Draft, CommunicationStatus.Denied };
-            if ( editableStatuses.Contains( communication.Status ) || ( communication.Status == CommunicationStatus.PendingApproval && editingApproved ) )
+            if (editableStatuses.Contains( communication.Status ) || (communication.Status == CommunicationStatus.PendingApproval && editingApproved))
             {
                 // Make sure they are authorized to edit, or the owner, or the approver/editor
                 bool isAuthorizedEditor = communication.IsAuthorized( Rock.Security.Authorization.EDIT, CurrentPerson );
                 bool isCreator = communication.CreatedByPersonAlias != null && CurrentPersonId.HasValue && communication.CreatedByPersonAlias.PersonId == CurrentPersonId.Value;
                 bool isApprovalEditor = communication.Status == CommunicationStatus.PendingApproval && editingApproved;
-                if ( isAuthorizedEditor || isCreator || isApprovalEditor )
+                if (isAuthorizedEditor || isCreator || isApprovalEditor)
                 {
                     // communication is either new or OK to edit
                 }
@@ -695,7 +706,7 @@ function onTaskCompleted( resultData )
             SetupCommunicationMediumSection();
 
             hfCommunicationId.Value = communication.Id.ToString();
-            lTitle.Text = ( communication.Name ?? communication.Subject ?? "New Communication" ).FormatAsHtmlTitle();
+            lTitle.Text = (communication.Name ?? communication.Subject ?? "New Communication").FormatAsHtmlTitle();
             cbDuplicatePreventionOption.Visible = this.GetAttributeValue( AttributeKey.ShowDuplicatePreventionOption ).AsBoolean();
             cbDuplicatePreventionOption.Checked = communication.ExcludeDuplicateRecipientAddress;
             cbRecipientListDuplicatePreventionOption.Visible = this.GetAttributeValue( AttributeKey.ShowDuplicatePreventionOption ).AsBoolean();
@@ -704,13 +715,13 @@ function onTaskCompleted( resultData )
             swBulkCommunication.Checked = _isBulkCommunicationForced || communication.IsBulkCommunication;
 
             var segmentDataviewGuids = communication.Segments.SplitDelimitedValues().AsGuidList();
-            if ( segmentDataviewGuids.Any() )
+            if (segmentDataviewGuids.Any())
             {
                 var segmentDataviewIds = new DataViewService( rockContext ).GetByGuids( segmentDataviewGuids ).Select( a => a.Id ).ToList();
                 cblCommunicationGroupSegments.SetValues( segmentDataviewIds );
             }
 
-            if ( communication.ListGroupId == null )
+            if (communication.ListGroupId == null)
             {
                 var recipientIds = new CommunicationRecipientService( rockContext )
                     .Queryable()
@@ -722,21 +733,21 @@ function onTaskCompleted( resultData )
             }
 
             int? personId = null;
-            if ( GetAttributeValue( AttributeKey.EnablePersonParameter ).AsBoolean() )
+            if (GetAttributeValue( AttributeKey.EnablePersonParameter ).AsBoolean())
             {
                 // if either 'Person' or 'PersonId' is specified add that person to the communication
                 personId = PageParameter( PageParameterKey.Person ).AsIntegerOrNull()
                     ?? PageParameter( PageParameterKey.PersonId ).AsIntegerOrNull();
             }
 
-            if ( personId.HasValue && !communication.ListGroupId.HasValue )
+            if (personId.HasValue && !communication.ListGroupId.HasValue)
             {
                 communication.IsBulkCommunication = _isBulkCommunicationForced;
                 var context = new RockContext();
                 var person = new PersonService( context ).Get( personId.Value );
-                if ( person != null )
+                if (person != null)
                 {
-                    if ( !this.IndividualRecipientPersonIds.Contains( person.Id ) )
+                    if (!this.IndividualRecipientPersonIds.Contains( person.Id ))
                     {
                         this.IndividualRecipientPersonIds.Add( person.Id );
                     }
@@ -746,13 +757,13 @@ function onTaskCompleted( resultData )
             // If a template guid was passed in and this is a new communication, set that as the selected template
             Guid? templateGuid = PageParameter( PageParameterKey.TemplateGuid ).AsGuidOrNull();
 
-            if ( communication.Id > 0 && templateGuid.HasValue )
+            if (communication.Id > 0 && templateGuid.HasValue)
             {
                 var template = new CommunicationTemplateService( rockContext ).Get( templateGuid.Value );
 
                 // NOTE: Only set the selected template if the user has auth for this template
                 // and the template supports the Email Wizard
-                if ( template != null && template.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) && template.SupportsEmailWizard() )
+                if (template != null && template.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) && template.SupportsEmailWizard())
                 {
                     communication.CommunicationTemplateId = template.Id;
                     this.InitializeFieldsFromCommunicationTemplate( template.Id );
@@ -764,20 +775,20 @@ function onTaskCompleted( resultData )
             // Set the visibility of the Individual Recipients panel.
             var showIndividualRecipientsPanel = false;
 
-            if ( IndividualRecipientPersonIds.Count > 0 )
+            if (IndividualRecipientPersonIds.Count > 0)
             {
                 showIndividualRecipientsPanel = true;
             }
             else
             {
                 // If there aren't any Communication Groups, hide the option and only show the Individual Recipient selection
-                if ( ddlCommunicationGroupList.Items.Count <= 1 || ( communication.Id != 0 && communication.ListGroupId == null ) )
+                if (ddlCommunicationGroupList.Items.Count <= 1 || (communication.Id != 0 && communication.ListGroupId == null))
                 {
                     showIndividualRecipientsPanel = true;
                 }
             }
 
-            if ( showIndividualRecipientsPanel )
+            if (showIndividualRecipientsPanel)
             {
                 BindIndividualRecipientsPanelControls();
 
@@ -808,7 +819,7 @@ function onTaskCompleted( resultData )
             ebCCList.Text = communication.CCEmails;
             ebBCCList.Text = communication.BCCEmails;
 
-            hfShowAdditionalFields.Value = ( !string.IsNullOrEmpty( communication.ReplyToEmail ) || !string.IsNullOrEmpty( communication.CCEmails ) || !string.IsNullOrEmpty( communication.BCCEmails ) ).ToTrueFalse().ToLower();
+            hfShowAdditionalFields.Value = (!string.IsNullOrEmpty( communication.ReplyToEmail ) || !string.IsNullOrEmpty( communication.CCEmails ) || !string.IsNullOrEmpty( communication.BCCEmails )).ToTrueFalse().ToLower();
 
             tbEmailSubject.Text = communication.Subject;
 
@@ -819,10 +830,10 @@ function onTaskCompleted( resultData )
 
             // Mobile Text Editor
             var valueItem = ddlSMSFrom.Items.FindByValue( communication.SmsFromSystemPhoneNumberId.ToString() );
-            if ( valueItem == null && communication.SmsFromSystemPhoneNumberId != null )
+            if (valueItem == null && communication.SmsFromSystemPhoneNumberId != null)
             {
                 var lookupSystemPhoneNumber = SystemPhoneNumberCache.Get( communication.SmsFromSystemPhoneNumberId.GetValueOrDefault() );
-                if ( lookupSystemPhoneNumber != null && lookupSystemPhoneNumber.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) )
+                if (lookupSystemPhoneNumber != null && lookupSystemPhoneNumber.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ))
                 {
                     ddlSMSFrom.Items.Add( new ListItem( lookupSystemPhoneNumber.Name, lookupSystemPhoneNumber.Id.ToString() ) );
                 }
@@ -845,17 +856,49 @@ function onTaskCompleted( resultData )
             htmlEditor.MergeFields.Add( "Communication.FromEmail|From Address" );
             htmlEditor.MergeFields.Add( "Communication.ReplyTo|Reply To" );
             htmlEditor.MergeFields.Add( "UnsubscribeOption" );
-            if ( communication.AdditionalMergeFields.Any() )
+            if (communication.AdditionalMergeFields.Any())
             {
                 htmlEditor.MergeFields.AddRange( communication.AdditionalMergeFields );
             }
 
             var pushNotificationControl = phPushControl.Controls[0] as PushNotification;
-            if ( pushNotificationControl != null )
+            if (pushNotificationControl != null)
             {
                 pushNotificationControl.SetFromCommunication( pushCommunication );
                 pushNotificationControl.AdditionalMergeFields = communication.AdditionalMergeFields;
             }
+        }
+
+        private void ShowOrHideUpgradeMessage( RockContext rockContext )
+        {
+            nbUpgradeMessage.Visible = false;
+
+            if ( GetAttributeValue( AttributeKey.ShowUpgradeMessage ).AsBoolean() )
+            {
+                // Try to get a URL to the new communication entry wizard page.
+                var url = GetObsidianCommunicationEntryWizardUrl( rockContext );
+
+                if ( url.IsNotNullOrWhiteSpace() )
+                {
+                    // The block setting is enabled and we have a URL to the page with the new block.
+                    nbUpgradeMessage.Visible = true;
+                    nbUpgradeMessage.Text = $"This version of the Communication Wizard is no longer recommended. For the best experience and access to the latest features, we suggest using the new <a href=\"{url}\">Communication Wizard <i class=\"ti ti-square-arrow-right\"></i></a>. Start fresh with a new message to take full advantage of what's available.";
+                }
+            }
+        }
+
+        private string GetObsidianCommunicationEntryWizardUrl( RockContext rockContext )
+        {
+            var pageParameters = PageParameters();
+
+            var pageRef = new PageReference( Rock.SystemGuid.Page.NEW_COMMUNICATION_OBSIDIAN, pageParameters?.Where( p => p.Key != "PageId" ).ToDictionary( kvp => kvp.Key, kvp => kvp.Value?.ToString() ) );
+
+            if ( pageRef.PageId > 0 )
+            {
+                return pageRef.BuildUrl();
+            }
+
+            return null;
         }
 
         /// <summary>
