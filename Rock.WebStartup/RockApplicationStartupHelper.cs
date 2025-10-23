@@ -31,6 +31,7 @@ using System.Web;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
+using Rock.AI.Agent;
 using Rock.Blocks;
 using Rock.Bus;
 using Rock.Communication.Chat;
@@ -45,6 +46,7 @@ using Rock.Net;
 using Rock.Net.Geolocation;
 using Rock.Observability;
 using Rock.Utility.Settings;
+using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.WebFarm;
@@ -101,10 +103,10 @@ namespace Rock.WebStartup
         {
             LogStartupMessage( "Application Starting" );
 
+            AppDomain.CurrentDomain.AssemblyResolve += AppDomain_AssemblyResolve;
+
             InitializeRockApp();
             Rock.JsonExtensions.ReferenceEqualityComparer = new Rock.Utility.EntityReferenceEqualityComparer();
-
-            AppDomain.CurrentDomain.AssemblyResolve += AppDomain_AssemblyResolve;
 
             // Indicate to always log to file during initialization.
             ExceptionLogService.AlwaysLogToFile = true;
@@ -134,6 +136,8 @@ namespace Rock.WebStartup
             }
 
             ShowDebugTimingMessage( "EF Migrations" );
+
+            TempOneTimeDataMigration();
 
             // Register Entity SaveHooks.
             LogStartupMessage( "Configuring Entity SaveHooks" );
@@ -292,10 +296,18 @@ namespace Rock.WebStartup
             Rock.Transactions.RockQueue.StartFastQueue();
             ShowDebugTimingMessage( "Rock Fast Queue" );
 
+            // Register all the AI skills into the database.
+            LogStartupMessage( "Registering AI Skills" );
+            AISkillService.RegisterSkills();
+            ShowDebugTimingMessage( "AI Skills" );
+
             // Start the Automation system.
             LogStartupMessage( "Starting the Automation System" );
-            AutomationTriggerCache.CreateAllMonitors();
-            AutomationEventCache.CreateAllExecutors();
+            using ( var scope = RockApp.Current.CreateScope() )
+            {
+                AutomationTriggerCache.CreateAllMonitors( scope.ServiceProvider.GetRequiredService<Core.Automation.AutomationTriggerContainer>() );
+                AutomationEventCache.CreateAllExecutors( scope.ServiceProvider.GetRequiredService<Core.Automation.AutomationEventContainer>() );
+            }
             ShowDebugTimingMessage( "Automation System" );
 
             bool anyThemesUpdated = UpdateThemes();
@@ -317,6 +329,7 @@ namespace Rock.WebStartup
         {
             var sc = new ServiceCollection();
 
+            // Register basic hosting services.
             sc.AddSingleton<IConnectionStringProvider, WebFormsConnectionStringProvider>();
             sc.AddSingleton<IInitializationSettings, WebFormsInitializationSettings>();
             sc.AddSingleton<IDatabaseConfiguration, DatabaseConfiguration>();
@@ -327,9 +340,8 @@ namespace Rock.WebStartup
             {
                 WebRootPath = AppDomain.CurrentDomain.BaseDirectory
             } );
-            sc.AddSingleton<Core.Automation.AutomationTriggerContainer>();
-            sc.AddSingleton<Core.Automation.AutomationEventContainer>();
             sc.AddSingleton<MetadataHelper>();
+            sc.AddSingleton<ObsidianFingerprintManager>();
 
             sc.AddScoped<RockContext>();
 
@@ -340,7 +352,39 @@ namespace Rock.WebStartup
             // source.
             sc.AddTransient<InitializationSettings, WebFormsInitializationSettings>();
 
-            RockApp.Current = new RockApp( sc.BuildServiceProvider() );
+            // Register Light Containers.
+            sc.AddSingleton( typeof( Extension.LightComponentLoader<> ), typeof( Extension.LightComponentLoader<> ) );
+            sc.AddScoped<Core.Automation.AutomationTriggerContainer>();
+            sc.AddScoped<Core.Automation.AutomationEventContainer>();
+            sc.AddScoped<AI.Agent.AgentSkillContainer>();
+
+            sc.AddSingleton<IRockContextFactory, RockContextFactory>();
+
+            foreach ( var configurationType in Rock.Reflection.FindTypes( typeof( Plugin.IConfigureServices ) ) )
+            {
+                try
+                {
+                    var configurationInstance = Activator.CreateInstance( configurationType.Value ) as Plugin.IConfigureServices;
+                    configurationInstance.ConfigureServices( sc );
+
+                }
+                catch ( Exception ex )
+                {
+                    // We are too early in the startup to use any meaningful
+                    // logging. So just write it to the debug console for now.
+                    Debug.WriteLine( $"Error configuring services for {configurationType.Value.FullName}: {ex.Message}" );
+                }
+            }
+
+            // If we are running under Visual Studio then turn on scope validation
+            // to help catch misconfigurations.
+            var serviceOptions = new ServiceProviderOptions
+            {
+                ValidateOnBuild = System.Web.Hosting.HostingEnvironment.IsDevelopmentEnvironment,
+                ValidateScopes = System.Web.Hosting.HostingEnvironment.IsDevelopmentEnvironment
+            };
+
+            RockApp.Current = new RockApp( sc.BuildServiceProvider( serviceOptions ) );
         }
 
         /// <summary>
@@ -489,7 +533,7 @@ namespace Rock.WebStartup
                 try
                 {
                     var startupException = new RockStartupException( "Error sending version update notifications", ex );
-                    LogError( startupException, null );
+                    LogError( startupException );
                     ExceptionLogService.LogException( startupException, null );
                 }
                 catch
@@ -592,6 +636,52 @@ namespace Rock.WebStartup
             }
 
             return false;
+        }
+
+        private static void TempOneTimeDataMigration()
+        {
+            var sql = @"
+IF EXISTS (SELECT 1 FROM dbo.[Person] WHERE [Guid] = 'ad28da19-4af1-408f-9090-2672f8376f27')
+BEGIN
+
+    BEGIN TRANSACTION
+
+    DECLARE @NewPersonGuid uniqueidentifier = NEWID()
+    DECLARE @NewPersonAliasGuid uniqueidentifier = NEWID()
+
+    UPDATE [Person]
+    SET [Guid] = @NewPersonGuid
+    WHERE [Guid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
+
+    DECLARE @PersonFieldTypeId int = (SELECT TOP 1 [Id] FROM [FieldType] WHERE [Guid] = 'E4EAB7B2-0B76-429B-AFE4-AD86D7428C70')
+
+    -- Update built-in admin user person alias guid (if it still exists)
+    UPDATE [PersonAlias]
+    SET [Guid] = @NewPersonAliasGuid
+        ,[AliasPersonGuid] = @NewPersonGuid
+    WHERE [Guid] = '996c8b72-c255-40e6-bb98-b1d5cf345f3b' AND [AliasPersonGuid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
+
+    -- Update the old PersonAlias.[AliasPersonGuid] with their new @NewPersonGuid
+    UPDATE [PersonAlias]
+    SET [AliasPersonGuid] = @NewPersonGuid
+    WHERE [PersonId] = 1 AND [AliasPersonGuid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
+
+    -- Update the Person with the new top primary alias  (NOT AVAILABLE IN v16.x)
+    UPDATE [Person]
+    SET [PrimaryAliasGuid] = (SELECT TOP 1 [Guid] FROM [PersonAlias] WHERE Id = Person.PrimaryAliasId)
+    WHERE [Guid] = @NewPersonGuid
+
+    -- Update attribute values that reference the old person alias guid
+    UPDATE av
+        SET av.[Value] = CAST(@NewPersonAliasGuid AS nvarchar(36))
+    FROM [AttributeValue] av
+    INNER JOIN [Attribute] a ON av.[AttributeId] = a.[Id]
+    WHERE a.[FieldTypeId] = @PersonFieldTypeId AND av.[ValueChecksum] = '817829624' AND av.[Value] = '996c8b72-c255-40e6-bb98-b1d5cf345f3b'
+
+    COMMIT TRANSACTION
+END
+";
+            DbService.ExecuteCommand( sql, System.Data.CommandType.Text, null, 60 );
         }
 
         /// <summary>
@@ -840,14 +930,14 @@ namespace Rock.WebStartup
                 // if a plugin migration got an error, it gets wrapped with a RockStartupException
                 // If this occurs, we'll log the migration that occurred,  and stop running migrations for this assembly
                 System.Diagnostics.Debug.WriteLine( rockStartupException.Message );
-                LogError( rockStartupException, null );
+                LogError( rockStartupException );
             }
             catch ( Exception ex )
             {
                 // If an exception occurs in an an assembly, log the error, and stop running migrations for this assembly
                 var startupException = new RockStartupException( $"Error running migrations from {pluginAssemblyName}" );
                 System.Diagnostics.Debug.WriteLine( startupException.Message );
-                LogError( ex, null );
+                LogError( ex );
             }
 
             return result;
@@ -1054,6 +1144,9 @@ AS
     [E].[Id] AS [EntityId],
     [A].[Id] AS [AttributeId],
     [A].[Key],
+    [A].[Name],
+    [A].[IsPublic],
+    [A].[IsGridColumn],
     CASE WHEN ISNULL([AV].[Value], '') != '' THEN [AV].[Value] ELSE ISNULL([A].[DefaultValue], '') END AS [Value],
     CASE WHEN ISNULL([AV].[Value], '') != '' THEN [AV].[PersistedTextValue] ELSE [A].[DefaultPersistedTextValue] END AS [PersistedTextValue],
     CASE WHEN ISNULL([AV].[Value], '') != '' THEN [AV].[PersistedHtmlValue] ELSE [A].[DefaultPersistedHtmlValue] END AS [PersistedHtmlValue],
@@ -1406,39 +1499,9 @@ WHERE [PQ].[row_number] = 1
         /// Logs the error to database (or filesystem if database isn't available)
         /// </summary>
         /// <param name="ex">The ex.</param>
-        /// <param name="context">The context.</param>
-        private static void LogError( Exception ex, HttpContext context )
+        private static void LogError( Exception ex )
         {
-            int? pageId;
-            int? siteId;
-            PersonAlias personAlias = null;
-
-            if ( context == null )
-            {
-                pageId = null;
-                siteId = null;
-            }
-            else
-            {
-                var pid = context.Items["Rock:PageId"];
-                pageId = pid != null ? int.Parse( pid.ToString() ) : ( int? ) null;
-                var sid = context.Items["Rock:SiteId"];
-                siteId = sid != null ? int.Parse( sid.ToString() ) : ( int? ) null;
-                try
-                {
-                    var user = UserLoginService.GetCurrentUser();
-                    if ( user != null && user.Person != null )
-                    {
-                        personAlias = user.Person.PrimaryAlias;
-                    }
-                }
-                catch
-                {
-                    // Intentionally left blank
-                }
-            }
-
-            ExceptionLogService.LogException( ex, context, pageId, siteId, personAlias );
+            ExceptionLogService.LogException( ex, null );
         }
 
         /// <summary>
