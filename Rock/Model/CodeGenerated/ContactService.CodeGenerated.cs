@@ -21,6 +21,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Rock.Data;
@@ -52,6 +53,24 @@ namespace Rock.Model
         {
             errorMessage = string.Empty;
             return true;
+        }
+    }
+
+    [HasQueryableAttributes( typeof( Contact.ContactQueryableAttributeValue ), nameof( ContactAttributeValues ) )]
+    public partial class Contact
+    {
+        /// <summary>
+        /// Gets the entity attribute values. This should only be used inside
+        /// LINQ statements when building a where clause for the query. This
+        /// property should only be used inside LINQ statements for filtering
+        /// or selecting values. Do <b>not</b> use it for accessing the
+        /// attributes after the entity has been loaded.
+        /// </summary>
+        public virtual ICollection<ContactQueryableAttributeValue> ContactAttributeValues { get; set; } 
+
+        /// <inheritdoc/>
+        public class ContactQueryableAttributeValue : QueryableAttributeValue
+        {
         }
     }
 
@@ -95,6 +114,10 @@ namespace Rock.Model
             target.ForeignKey = null;
             target.ForeignId = null;
             target.ForeignGuid = null;
+            target.CreatedByPersonAliasId = null;
+            target.CreatedDateTime = RockDateTime.Now;
+            target.ModifiedByPersonAliasId = null;
+            target.ModifiedDateTime = RockDateTime.Now;
 
             return target;
         }
@@ -111,7 +134,6 @@ namespace Rock.Model
             target.BaptismDay = source.BaptismDay;
             target.BaptismMonth = source.BaptismMonth;
             target.BaptismYear = source.BaptismYear;
-            target.Baptized = source.Baptized;
             target.BirthDay = source.BirthDay;
             target.BirthMonth = source.BirthMonth;
             target.BirthYear = source.BirthYear;
@@ -124,6 +146,7 @@ namespace Rock.Model
             target.ForeignKey = source.ForeignKey;
             target.Gender = source.Gender;
             target.HasAcceptedJesus = source.HasAcceptedJesus;
+            target.HasBeenBaptized = source.HasBeenBaptized;
             target.InstagramProfileUrl = source.InstagramProfileUrl;
             target.LastName = source.LastName;
             target.LastRelationshipCheckin = source.LastRelationshipCheckin;
@@ -145,6 +168,10 @@ namespace Rock.Model
             target.WeddingAnniversaryMonth = source.WeddingAnniversaryMonth;
             target.WeddingAnniversaryYear = source.WeddingAnniversaryYear;
             target.XProfileUrl = source.XProfileUrl;
+            target.CreatedDateTime = source.CreatedDateTime;
+            target.ModifiedDateTime = source.ModifiedDateTime;
+            target.CreatedByPersonAliasId = source.CreatedByPersonAliasId;
+            target.ModifiedByPersonAliasId = source.ModifiedByPersonAliasId;
             target.Guid = source.Guid;
             target.ForeignId = source.ForeignId;
 

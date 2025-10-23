@@ -149,7 +149,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                         ContactId = contact.Id,
                         PreviousRelationshipStrength = contact.RelationshipStrength,
                         NewRelationshipStrength = newRelationshipStrength,
-                        AppInfluencedGrowth = false, // PS TODO: How should we determine this?
+                        //AppInfluencedGrowth = false, // PS TODO: How should we determine this?
                     };
 
                     contactRelationshipStrengthChangesService.Add( contactRelationshipStrengthChange );

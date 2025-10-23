@@ -103,7 +103,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 SalvationDay = saveContactBag.SalvationDay,
                 SalvationMonth = saveContactBag.SalvationMonth,
                 SalvationYear = saveContactBag.SalvationYear,
-                Baptized = saveContactBag.HasBeenBaptized,
+                HasBeenBaptized = saveContactBag.HasBeenBaptized,
                 BaptismDay = saveContactBag.BaptismDay,
                 BaptismMonth = saveContactBag.BaptismMonth,
                 BaptismYear = saveContactBag.BaptismYear

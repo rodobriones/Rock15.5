@@ -189,7 +189,7 @@ namespace Rock.Model
         /// Gets or sets a value indicating whether this contact has been baptized.
         /// </summary>
         [DataMember]
-        public bool? Baptized { get; set; }
+        public bool? HasBeenBaptized { get; set; }
 
         /// <summary>
         /// Gets or sets the baptism day.

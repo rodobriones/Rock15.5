@@ -42,7 +42,25 @@ namespace Rock.Model
         /// Gets or sets a value indicating whether the change was app influenced growth.
         /// </summary>
         [DataMember]
-        public bool AppInfluencedGrowth { get; set; }
+        public bool? HasAcceptedJesus { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether acceptance was influenced by the app.
+        /// </summary>
+        [DataMember]
+        public bool? WasAcceptanceInfluencedByApp { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the contact has been baptized.
+        /// </summary>
+        [DataMember]
+        public bool? HasBeenBaptized { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the baptism was influenced by the app.
+        /// </summary>
+        [DataMember]
+        public bool? WasBaptismInfluencedByApp { get; set; }
 
         #endregion
 

@@ -233,7 +233,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     SalvationDay = contact.SalvationDay,
                     SalvationMonth = contact.SalvationMonth,
                     SalvationYear = contact.SalvationYear,
-                    Baptized = contact.Baptized,
+                    Baptized = contact.HasBeenBaptized,
                     BaptismDay = contact.BaptismDay,
                     BaptismMonth = contact.BaptismMonth,
                     BaptismYear = contact.BaptismYear,
@@ -364,7 +364,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             contact.SalvationDay = bag.SalvationDay;
             contact.SalvationMonth = bag.SalvationMonth;
             contact.SalvationYear = bag.SalvationYear;
-            contact.Baptized = bag.Baptized;
+            contact.HasBeenBaptized = bag.Baptized;
             contact.BaptismDay = bag.BaptismDay;
             contact.BaptismMonth = bag.BaptismMonth;
             contact.BaptismYear = bag.BaptismYear;
