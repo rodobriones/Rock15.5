@@ -169,7 +169,7 @@ namespace Rock.Lava
         /// </summary>
         /// <param name="templatePath">The template path.</param>
         /// <returns></returns>
-        private string ResolveTemplatePath( string templatePath )
+        public string ResolveTemplatePath( string templatePath )
         {
             if ( templatePath == null )
             {

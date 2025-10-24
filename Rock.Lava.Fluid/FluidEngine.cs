@@ -221,6 +221,15 @@ namespace Rock.Lava.Fluid
             }
 
             templateOptions.FileProvider = new FluidFileSystem( options.FileSystem );
+
+            /*
+                10/24/2025 - NA
+
+                Overrides the default Fluid TemplateCache to correctly process our custom ~~ theme path syntax.
+
+                Reason: The default cache uses the path as a cache key which is not unique when ~~ is used.
+            */
+            templateOptions.TemplateCache = new FluidTemplateCache( options.FileSystem );
         }
 
         private TemplateOptions GetTemplateOptions()
@@ -670,7 +679,7 @@ namespace Rock.Lava.Fluid
                         Reason: Prevent unintended context isolation introduced by the new default behavior in Fluid.
                     */
 
-                    var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
+            var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
                     if ( !task.IsCompletedSuccessfully )
                     {
                         task.AsTask().GetAwaiter().GetResult();

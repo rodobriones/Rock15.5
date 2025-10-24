@@ -48,6 +48,13 @@ namespace Rock.Lava
         string ReadTemplateFile( ILavaRenderContext context, string templateName );
 
         /// <summary>
+        /// Resolves the specified file path to an absolute file system path.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
+        string ResolveTemplatePath( string filePath );
+
+        /// <summary>
         /// Gets the date and time that the specified file was last modified.
         /// </summary>
         /// <param name="filePath"></param>

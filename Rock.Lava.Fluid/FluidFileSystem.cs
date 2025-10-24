@@ -149,6 +149,12 @@ namespace Rock.Lava
 
             return filePath;
         }
+
+        /// <inheritdoc>
+        public string ResolveTemplatePath( string filePath )
+        {
+            return filePath;
+        }
     }
 
     #region Support Classes

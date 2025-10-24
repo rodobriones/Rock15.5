@@ -34,9 +34,20 @@ namespace Rock.Lava
             return false;
         }
 
+        /// <summary>
+        /// In a real filesystem, this would return the date and time that the specified file was last modified.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
         public DateTimeOffset? FileLastModified( string filePath )
         {
             return null;
+        }
+
+        /// <inheritdoc>
+        public string ResolveTemplatePath( string filePath )
+        {
+            return filePath;
         }
 
         /// <summary>
