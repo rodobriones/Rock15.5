@@ -466,6 +466,11 @@ namespace Rock.CheckIn.v2
         /// editing a family during registration.
         /// </summary>
         public virtual RequirementLevel DisplayAddressOnFamilies { get; }
+        /// Gets the default person record source unique identifier when
+        /// adding a new person on the kiosk registration screen.
+        /// </summary>
+        /// <value>The default person record source unique identifier.</value>
+        public virtual Guid DefaultPersonRecordSourceGuid { get; }
 
         /// <summary>
         /// Gets a value indicating if the birthdate field is visible and/or
@@ -704,6 +709,9 @@ namespace Rock.CheckIn.v2
             CanCheckInKnownRelationshipRoleGuids = GetRelationshipRoleGuids( groupTypeCache.GetAttributeValue( GroupTypeAttributeKey.CHECKIN_REGISTRATION_CANCHECKINKNOWNRELATIONSHIPTYPES ), rockContext );
             DefaultPersonConnectionStatusGuid = groupTypeCache.GetAttributeValue( GroupTypeAttributeKey.CHECKIN_REGISTRATION_DEFAULTPERSONCONNECTIONSTATUS ).AsGuidOrNull() ?? SystemGuid.DefinedValue.PERSON_CONNECTION_STATUS_VISITOR.AsGuid();
             DisplayAddressOnFamilies = templateSettings.DisplayAddressOnFamilies;
+            DefaultPersonRecordSourceGuid = groupTypeCache.GroupMemberRecordSourceValueId.HasValue
+                ? DefinedValueCache.GetGuid( groupTypeCache.GroupMemberRecordSourceValueId.Value ).Value
+                : SystemGuid.DefinedValue.RECORD_SOURCE_TYPE_CHECK_IN.AsGuid();
             DisplayBirthdateForAdults = GetRequirementLevel( groupTypeCache.GetAttributeValue( GroupTypeAttributeKey.CHECKIN_REGISTRATION_DISPLAYBIRTHDATEONADULTS ) );
             DisplayBirthdateForChildren = GetRequirementLevel( groupTypeCache.GetAttributeValue( GroupTypeAttributeKey.CHECKIN_REGISTRATION_DISPLAYBIRTHDATEONCHILDREN ) );
             DisplayGradeForChildren = GetRequirementLevel( groupTypeCache.GetAttributeValue( GroupTypeAttributeKey.CHECKIN_REGISTRATION_DISPLAYGRADEONCHILDREN ) );
