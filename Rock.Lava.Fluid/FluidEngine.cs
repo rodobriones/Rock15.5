@@ -679,7 +679,7 @@ namespace Rock.Lava.Fluid
                         Reason: Prevent unintended context isolation introduced by the new default behavior in Fluid.
                     */
 
-            var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
+                    var task = template.RenderAsync( writer, encoder, templateContext.FluidContext );
                     if ( !task.IsCompletedSuccessfully )
                     {
                         task.AsTask().GetAwaiter().GetResult();
