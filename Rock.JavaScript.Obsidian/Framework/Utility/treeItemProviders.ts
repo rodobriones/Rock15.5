@@ -442,7 +442,7 @@ export class PageTreeItemProvider implements ITreeItemProvider {
     private async getHierarchyToSelectedPage(rootLayer: TreeItemBag[]): Promise<TreeItemBag[]> {
         const parents = await this.getParentList();
 
-        if (!parents || parents.length == 0) {
+        if (!parents || parents.length === 0) {
             // Selected page has no parents, so we're done.
             return rootLayer;
         }
@@ -451,7 +451,7 @@ export class PageTreeItemProvider implements ITreeItemProvider {
         const allPages = rootLayer.concat(flatten(childLists));
 
         parents.forEach((parentGuid, i) => {
-            const parentPage: TreeItemBag | undefined = allPages.find(page => page.value == parentGuid);
+            const parentPage: TreeItemBag | undefined = allPages.find(page => page.value === parentGuid);
             if (parentPage) {
                 parentPage.children = childLists[i];
             }
@@ -1008,7 +1008,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
         }
 
         // If we're getting child nodes or if there is no selected page
-        if (parentId || !this.selectedIds || this.selectedIds.length == 0) {
+        if (parentId || !this.selectedIds || this.selectedIds.length === 0) {
             return result;
         }
 
@@ -1027,7 +1027,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
     private async getHierarchyToSelectedMergeField(rootLayer: TreeItemBag[]): Promise<TreeItemBag[]> {
         const parents = this.getParentList();
 
-        if (!parents || parents.length == 0) {
+        if (!parents || parents.length === 0) {
             // Selected page has no parents, so we're done.
             return rootLayer;
         }
@@ -1036,7 +1036,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
         const allMergeFields = rootLayer.concat(flatten(childLists));
 
         parents.forEach((parentGuid, i) => {
-            const parentMergeField: TreeItemBag | undefined = allMergeFields.find(page => page.value == parentGuid);
+            const parentMergeField: TreeItemBag | undefined = allMergeFields.find(page => page.value === parentGuid);
             if (parentMergeField) {
                 parentMergeField.children = childLists[i];
             }
@@ -1051,7 +1051,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
      * @returns A list of IDs of the parent merge fields
      */
     private getParentList(): string[] | null {
-        if (!this.selectedIds || this.selectedIds.length == 0) {
+        if (!this.selectedIds || this.selectedIds.length === 0) {
             return null;
         }
 
