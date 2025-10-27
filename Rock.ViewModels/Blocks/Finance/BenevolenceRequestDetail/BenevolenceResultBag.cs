@@ -13,39 +13,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
-//
+
+using Rock.ViewModels.Utility;
 
 namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
 {
     /// <summary>
-    /// Contains details on the Benevolence Request Result.
+    /// Represents a container for storing information about a benevolence result, including its type, amount, and
+    /// summary details.
     /// </summary>
-    public class BenevolenceResultBag
+    /// <remarks>This class is used to encapsulate the details of a benevolence result, which may include the
+    /// type of result, the amount involved, and a summary of the result.</remarks>
+    public class BenevolenceResultBag : EntityBagBase
     {
         /// <summary>
-        /// Gets or sets the unique identifier key.
-        /// </summary>
-        public string idKey { get; set; }
-
-        /// <summary>
-        /// Gets or sets the result.
+        /// Gets or sets the Id of the Defined Value <see cref="Rock.Model.DefinedValue"/> representing the type of Benevolence Result.
         /// </summary>
         /// <value>
-        /// The result.
+        /// A <see cref="System.Int32"/> representing the type of Benevolence Result.
         /// </value>
-        public string Result { get; set; }
+        public int ResultTypeValueId { get; set; }
 
         /// <summary>
-        /// Gets or sets the amount.
+        /// Gets or sets the amount of benevolence
         /// </summary>
         /// <value>
-        /// The amount.
+        /// A <see cref="System.String" /> containing the amount of benevolence.
         /// </value>
         public decimal? Amount { get; set; }
 
         /// <summary>
-        /// Gets or sets the detailed description.
+        /// Gets or sets the text of the result details.
         /// </summary>
-        public string Details { get; set; }
+        /// <value>
+        /// A <see cref="System.String"/> representing the details of the result.
+        /// </value>
+        public string ResultSummary { get; set; }
     }
 }
