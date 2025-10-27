@@ -605,7 +605,17 @@ namespace Rock.Lava.Fluid
             string error;
             IFluidTemplate fluidTemplate;
 
-            var success = _parser.TryParse( lavaTemplate, out fluidTemplate, out error );
+            /*
+                10/27/2025 - NA
+
+                Added the ReplaceElseIf method while having to remove our custom RegisterLavaElseIfTag() in our custom LavaFluidParser in order
+                to get shortcodes working inside of {% lava %} blocks. It might be possible to make RegisterLavaElseIfTag()
+                also work with shortcodes inside of {% lava %} blocks with more effort.
+                See also https://app.asana.com/1/20866866924293/project/1208321217019996/task/1210049417532194?focus=true
+
+                Reason: Ensures proper parsing of conditional blocks when {% lava %} tags and shortcodes are present.
+            */
+            var success = _parser.TryParse( ReplaceElseIf( lavaTemplate ), out fluidTemplate, out error );
 
             var fluidTemplateObject = ( FluidTemplate ) fluidTemplate;
 
@@ -619,6 +629,10 @@ namespace Rock.Lava.Fluid
             }
 
             return template;
+        }
+        private static string ReplaceElseIf( string s )
+        {
+            return s.Replace( " elseif ", " elsif " );
         }
 
         protected override LavaRenderResult OnRenderTemplate( ILavaTemplate inputTemplate, LavaRenderParameters parameters )
