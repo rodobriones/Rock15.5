@@ -182,15 +182,12 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
 
-            var todayStart = RockDateTime.Today;
-            var tomorrowStart = todayStart.AddDays( 1 );
             var pendingTouchpoints = contactTouchpointService
                 .Queryable()
                 .AsNoTracking()
                 .Where( tp => contactIdList.Contains( tp.ContactId ) )      // Grab the person contact touchpoints
                 .Where( tp => tp.CompletedDateTime == null )                // Only get the uncompleted touchpoints
-                .Where( tp => tp.ScheduledDateTime >= todayStart
-                            && tp.ScheduledDateTime < tomorrowStart )       // Only get the touchpoints that are scheduled for today
+                .Where( tp => tp.ScheduledDateTime < RockDateTime.Now )     // Only get the touchpoints that are scheduled for now or earlier
                 .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
                 .ToList();
 
@@ -209,6 +206,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     ContactId = touchpoint.ContactId,
                     Type = touchpoint.Type.ToMobile(),
                     TouchpointIdKey = touchpoint.IdKey,
+                    ScheduledDate = touchpoint.ScheduledDateTime,
                     PhotoUrl = contact.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
                     LastUpdated = contact.ModifiedDateTime ?? contact.CreatedDateTime ?? DateTime.MinValue,
                     FirstName = contact.FirstName,
