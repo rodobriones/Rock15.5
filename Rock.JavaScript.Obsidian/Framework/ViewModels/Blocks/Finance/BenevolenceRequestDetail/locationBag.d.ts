@@ -22,22 +22,26 @@
 //
 
 import { Guid } from "@Obsidian/Types";
+import { AddressControlBag } from "@Obsidian/ViewModels/Controls/addressControlBag";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
-/** The additional configuration options for the Benevolence Request Detail block. */
-export type BenevolenceRequestDetailOptionsBag = {
-    /** Gets or sets the unique identifier for the binary file type associated with benevolence documents. */
-    benevolenceDocumentBinaryFileTypeGuid: Guid;
+/** Contains details of the location that are relevevant in the context of a benevolence request. */
+export type LocationBag = {
+    /** Gets or sets the address fields. */
+    addressFields?: AddressControlBag | null;
 
-    /** Gets or sets the benevolence type. */
-    benevolenceRequestTypes?: ListItemBag[] | null;
+    /** Gets or sets the guid. */
+    guid?: Guid | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
-    connectionStatusValues?: ListItemBag[] | null;
+    /** Gets or sets the unique identifier for the entity. */
+    id?: number | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Benevolence Request's status. */
-    requestStatusValues?: ListItemBag[] | null;
+    /**
+     * Gets or sets the Id of the LocationType Rock.Model.DefinedValue that is used to identify the type of Rock.Model.Location
+     * that this is. Examples: Campus, Building, Room, etc
+     */
+    locationTypeValue?: ListItemBag | null;
 
-    /** Gets or sets the collection of result type values. */
-    resultTypeValues?: ListItemBag[] | null;
+    /** Gets or sets the Location's Name. */
+    name?: string | null;
 };

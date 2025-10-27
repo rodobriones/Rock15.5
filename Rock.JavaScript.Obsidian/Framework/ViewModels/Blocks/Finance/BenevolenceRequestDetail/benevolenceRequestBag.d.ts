@@ -21,8 +21,10 @@
 // </copyright>
 //
 
+import { BenevolenceDocumentBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceDocumentBag";
 import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+import { CampusBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/campusBag";
+import { PersonBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/personBag";
 import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
 
 /** The item details for the Benevolence Request Detail block. */
@@ -33,80 +35,30 @@ export type BenevolenceRequestBag = {
     /** Gets or sets the attribute values. */
     attributeValues?: Record<string, string> | null;
 
-    /** Gets or sets a collection of BenevolenceResults */
-    benevolenceResults?: ListItemBag[] | null;
-
-    /** Gets or sets the benevolence type. */
-    benevolenceType?: ListItemBag | null;
-
     /** Gets or sets the benevolence type identifier. */
     benevolenceTypeId: number;
 
-    /** Gets or sets the Rock.Model.Campus that this Benevolence Request is associated with. */
-    campus?: ListItemBag | null;
+    /** Gets or sets the campus. */
+    campus?: CampusBag | null;
 
-    /** Gets or sets the campus identifier. */
-    campusId?: number | null;
+    caseWorker?: PersonBag | null;
 
-    /** Gets or sets the case worker Rock.Model.PersonAlias. */
-    caseWorkerPersonAlias?: ListItemBag | null;
-
-    /** Gets or sets the PersonAliasId of the Rock.Model.PersonAlias who is the case worker for this request. */
-    caseWorkerPersonAliasId?: number | null;
-
-    /** Gets or sets the Cell Phone Number of the person who requested benevolence. */
-    cellPhoneNumber?: string | null;
-
-    /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
-    connectionStatusValue?: ListItemBag | null;
-
-    /** Gets or sets the Id of the Defined Value Rock.Model.DefinedValue representing the connection status of the Requester. */
-    connectionStatusValueId?: number | null;
-
-    /** Gets or sets the documents. */
-    documents?: ListItemBag[] | null;
-
-    /** Gets or sets the email address of the person requesting benevolence. */
-    email?: string | null;
-
-    /** Gets or sets the First Name of the person that this benevolence request is about. This property is required. */
-    firstName?: string | null;
-
-    /** Gets or sets the GovernmentId of the person who requested benevolence. */
-    governmentId?: string | null;
-
-    /** Gets or sets the Home Phone Number of the person who requested benevolence. */
-    homePhoneNumber?: string | null;
-
-    /** Gets or sets the identifier key of this entity. */
+    /** Gets or sets the unique identifier key for the entity. */
     idKey?: string | null;
-
-    /** Gets or sets the Last Name of the person that this benevolence request is about. This property is required. */
-    lastName?: string | null;
-
-    /** Gets or sets the Rock.Model.Location that is associated with this Benevolence Request. */
-    location?: ListItemBag | null;
-
-    /** Gets or sets the Id of the Rock.Model.Location that is associated with this BenevolenceRequest. */
-    locationId?: number | null;
 
     /** Gets or sets the provided next steps. */
     providedNextSteps?: string | null;
 
-    /** Gets the request date key. */
-    requestDateKey: number;
-
     /** Gets or sets the date that this benevolence request was entered. */
     requestDateTime?: string | null;
 
-    /** Gets or sets the requested by Rock.Model.PersonAlias. */
-    requestedByPersonAlias?: ListItemBag | null;
+    /**
+     * Gets or sets the collection of documents associated with the request,
+     * represented as a list of Rock.ViewModels.Utility.ListItemBag objects.
+     */
+    requestDocuments?: BenevolenceDocumentBag[] | null;
 
-    /** Gets or sets the PersonAliasId of the Rock.Model.PersonAlias who is submitting the BenevolenceRequest */
-    requestedByPersonAliasId?: number | null;
-
-    /** Gets or sets the Rock.Model.DefinedValue representing the Benevolence Request's status. */
-    requestStatusValue?: ListItemBag | null;
+    requester?: PersonBag | null;
 
     /** Gets or sets the Id of the Defined Value Rock.Model.DefinedValue representing the status of the Benevolence Request. */
     requestStatusValueId?: number | null;
@@ -119,7 +71,4 @@ export type BenevolenceRequestBag = {
 
     /** Gets or sets the summary of the request result. */
     resultSummary?: string | null;
-
-    /** Gets or sets the Work Phone Number of the person who requested benevolence. */
-    workPhoneNumber?: string | null;
 };

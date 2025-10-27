@@ -22,22 +22,25 @@
 //
 
 import { Guid } from "@Obsidian/Types";
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
 
-/** The additional configuration options for the Benevolence Request Detail block. */
-export type BenevolenceRequestDetailOptionsBag = {
-    /** Gets or sets the unique identifier for the binary file type associated with benevolence documents. */
-    benevolenceDocumentBinaryFileTypeGuid: Guid;
+/** Represents a BenevolenceRequestDocument associated with a benevolence request. */
+export type BenevolenceDocumentBag = {
+    /** Gets or sets the attributes. */
+    attributes?: Record<string, PublicAttributeBag> | null;
 
-    /** Gets or sets the benevolence type. */
-    benevolenceRequestTypes?: ListItemBag[] | null;
+    /** Gets or sets the attribute values. */
+    attributeValues?: Record<string, string> | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
-    connectionStatusValues?: ListItemBag[] | null;
+    /** Gets or sets the file name of the BenevolenceRequestDocument. */
+    fileName?: string | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Benevolence Request's status. */
-    requestStatusValues?: ListItemBag[] | null;
+    /** Gets or sets the unique identifier for the BenevolenceRequestDocument. */
+    guid: Guid;
 
-    /** Gets or sets the collection of result type values. */
-    resultTypeValues?: ListItemBag[] | null;
+    /** Gets or sets the identifier key of this entity. */
+    idKey?: string | null;
+
+    /** Gets or sets a value indicating whether this BenevolenceRequestDocument is marked for deletion. */
+    isMarkedForDeletion: boolean;
 };

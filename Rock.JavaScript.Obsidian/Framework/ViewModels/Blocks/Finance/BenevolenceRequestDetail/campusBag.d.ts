@@ -22,22 +22,21 @@
 //
 
 import { Guid } from "@Obsidian/Types";
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
-/** The additional configuration options for the Benevolence Request Detail block. */
-export type BenevolenceRequestDetailOptionsBag = {
-    /** Gets or sets the unique identifier for the binary file type associated with benevolence documents. */
-    benevolenceDocumentBinaryFileTypeGuid: Guid;
+/**
+ * Represents a container for campus-related information, including identifiers and descriptive details
+ * that are relevevant in the context of a benevolence request.
+ */
+export type CampusBag = {
+    /** Gets or sets the description. */
+    description?: string | null;
 
-    /** Gets or sets the benevolence type. */
-    benevolenceRequestTypes?: ListItemBag[] | null;
+    /** Gets or sets the unique identifier for the entity. */
+    guid?: Guid | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
-    connectionStatusValues?: ListItemBag[] | null;
+    /** Gets or sets the unique identifier for the entity. */
+    id?: number | null;
 
-    /** Gets or sets the Rock.Model.DefinedValue representing the Benevolence Request's status. */
-    requestStatusValues?: ListItemBag[] | null;
-
-    /** Gets or sets the collection of result type values. */
-    resultTypeValues?: ListItemBag[] | null;
+    /** Gets or sets the name of the Campus. This property is required. */
+    name?: string | null;
 };

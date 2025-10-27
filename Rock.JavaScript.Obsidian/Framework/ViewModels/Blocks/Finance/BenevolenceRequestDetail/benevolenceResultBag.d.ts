@@ -21,17 +21,28 @@
 // </copyright>
 //
 
-/** Contains details on the Benevolence Request Result. */
+import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
+
+/**
+ * Represents a container for storing information about a benevolence result, including its type, amount, and
+ * summary details.
+ */
 export type BenevolenceResultBag = {
-    /** Gets or sets the amount. */
+    /** Gets or sets the amount of benevolence */
     amount?: number | null;
 
-    /** Gets or sets the detailed description. */
-    details?: string | null;
+    /** Gets or sets the attributes. */
+    attributes?: Record<string, PublicAttributeBag> | null;
 
-    /** Gets or sets the unique identifier key. */
+    /** Gets or sets the attribute values. */
+    attributeValues?: Record<string, string> | null;
+
+    /** Gets or sets the identifier key of this entity. */
     idKey?: string | null;
 
-    /** Gets or sets the result. */
-    result?: string | null;
+    /** Gets or sets the text of the result details. */
+    resultSummary?: string | null;
+
+    /** Gets or sets the Id of the Defined Value Rock.Model.DefinedValue representing the type of Benevolence Result. */
+    resultTypeValueId: number;
 };
