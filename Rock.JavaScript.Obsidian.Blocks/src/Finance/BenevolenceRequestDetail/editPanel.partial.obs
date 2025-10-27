@@ -4,157 +4,227 @@
                     disableCollapse>
         <ContentStack>
             <div class="row">
-                <div class="col-md-6">
-                    <DropDownList v-model="value"
+                <div class="col-md-3">
+                    <DropDownList v-model="benevolenceTypeIdString"
                                   label="Request Type"
-                                  :items="options"
-                                  :showBlankItem="true"
+                                  :items="benevolenceRequestTypes"
                                   :enhanceForLongLists="false"
                                   :grouped="false"
                                   :multiple="false"
-                                  required />
+                                  :showBlankItem="true"
+                                  rules="required" />
                 </div>
-                <div class="col-md-6">
-                    <DropDownList v-model="value"
+                <div class="col-md-3">
+                    <DropDownList v-model="requestStatusValueIdString"
                                   label="Request Status"
-                                  :items="options"
-                                  :showBlankItem="true"
+                                  :items="requestStatusValues"
                                   :enhanceForLongLists="false"
                                   :grouped="false"
                                   :multiple="false"
-                                  required />
+                                  :showBlankItem="true"
+                                  rules="required" />
                 </div>
             </div>
-            <DatePicker v-model="date"
-                        label="Request Date"
-                        :displayCurrentOption="false"
-                        :isCurrentDateOffset="false"
-                        :disableForceParse="false"
-                        :disableShowOnFocus="false"
-                        :disableHighlightToday="false"
-                        :disallowFutureDateSelection="false"
-                        :disallowPastDateSelection="false"
-                        :startView="startView"
-                        required />
-            <PersonPicker v-model="value"
-                          label="Assigned To"
-                          excludeDeceased
-                          enableSelfSelection />
-            <CampusPicker v-model="value"
-                          label="Campus" />
+            <div class="row">
+                <div class="col-md-3">
+                    <DatePicker :modelValue="requestDateTime"
+                                @update:modelValue="onRequestDateTimeChanged"
+                                label="Request Date"
+                                :displayCurrentOption="false"
+                                :isCurrentDateOffset="false"
+                                :disableForceParse="false"
+                                :disableShowOnFocus="false"
+                                :disableHighlightToday="false"
+                                :disallowFutureDateSelection="false"
+                                :disallowPastDateSelection="false"
+                                :startView="0"
+                                rules="required" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <PersonPicker v-model="assignedCaseWorker"
+                                  label="Assigned To"
+                                  :isClearable="true"
+                                  @update:selectedPersonChanged="onCaseWorkerSelectionChanged"
+                                  excludeDeceased
+                                  enableSelfSelection />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <CampusPicker v-model="selectedCampus"
+                                  label="Campus"
+                                  :showBlankItem="true" />
+                </div>
+            </div>
         </ContentStack>
     </ContentSection>
+    <br>
     <ContentSection title="Requester"
                     icon="ti ti-user-question">
         <ContentStack>
             <div class="row">
-                <div class="col-md-6">
-                    <PersonPicker v-model="value"
+                <div class="col-md-3">
+                    <PersonPicker v-model="selectedBenevolenceRequester"
                                   label="Person"
+                                  @update:selectedPersonChanged="onRequesterSelectionChanged"
+                                  :disabled="isSavingPersonRecord"
                                   excludeDeceased
                                   enableSelfSelection />
                 </div>
-                <div class="col-md-6">
-                    <DropDownList v-model="value"
+                <div class="col-md-3">
+                    <DropDownList v-model="requesterConnectionStatusValueIdString"
                                   label="Connection Status"
-                                  :items="options"
+                                  :items="connectionStatusValues"
                                   :showBlankItem="true"
                                   :enhanceForLongLists="false"
                                   :grouped="false"
                                   :multiple="false"
-                                  required />
+                                  :disabled="isConnectionStatusDisabled || isSavingPersonRecord"
+                                  rules="required" />
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-6">
-                    <TextBox v-model="text"
+                <div class="col-md-3">
+                    <TextBox v-model="requesterFirstName"
                              label="First Name"
-                             required />
+                             :disabled="isFirstNameDisabled || isSavingPersonRecord"
+                             rules="required" />
                 </div>
-                <div class="col-md-6">
-                    <TextBox v-model="text"
+                <div class="col-md-3">
+                    <TextBox v-model="requesterLastName"
                              label="Last Name"
-                             required />
+                             :disabled="isLastNameDisabled || isSavingPersonRecord"
+                             rules="required" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <PhoneNumberBox v-model="requesterHomePhoneNumber"
+                                    label="Home Phone"
+                                    :disabled="isHomePhoneDisabled || isSavingPersonRecord" />
+                </div>
+                <div class="col-md-3">
+                    <PhoneNumberBox v-model="requesterCellPhoneNumber"
+                                    label="Cell Phone"
+                                    :disabled="isCellPhoneDisabled || isSavingPersonRecord" />
+                </div>
+                <div class="col-md-3">
+                    <PhoneNumberBox v-model="requesterWorkPhoneNumber"
+                                    label="Work Phone"
+                                    :disabled="isWorkPhoneDisabled || isSavingPersonRecord" />
                 </div>
             </div>
             <div class="row">
                 <div class="col-md-6">
-                    <PhoneNumberBox v-model="phoneNumber"
-                                    label="Home Phone" />
+                    <EmailBox v-model="requesterEmail"
+                              label="Email"
+                              :disabled="isEmailDisabled || isSavingPersonRecord" />
                 </div>
-                <div class="col-md-6">
-                    <PhoneNumberBox v-model="phoneNumber"
-                                    label="Cell Phone" />
-                </div>
-                <div class="col-md-6">
-                    <PhoneNumberBox v-model="phoneNumber"
-                                    label="Work Phone" />
+                <div class="col-md-3">
+                    <LocationAddressPicker v-model="requesterLocationAddressFields"
+                                           label="Location"
+                                           :disabled="isAddressFieldDisabled || isSavingPersonRecord"
+                                           :isRequired="false" />
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-6">
-                    <EmailBox v-model="value"
-                              label="Email" />
-                </div>
-                <div class="col-md-6">
-                    <LocationAddressPicker v-model="value"
-                                           label="Location" />
+                <div class="col-md-3">
+                    <TextBox v-model="requesterGovernmentId"
+                             label="Government ID"
+                             :disabled="isSavingPersonRecord" />
+                    <div class="d-flex flex-row" v-if="!isCreateRecordFromFieldsHidden">
+                        <div class="d-flex flex-col">
+                            <a class="btn btn-link" @click.prevent="onCreateRecordFromFields">Create Record From Fields</a>
+                        </div>
+                        <div class="d-flex flex-col">
+                            <LoadingIndicator v-if="isSavingPersonRecord" class="text-body pull-right p-2" isSmall />
+                        </div>
+                    </div>
                 </div>
             </div>
-            <TextBox v-model="text"
-                     label="Government ID" />
-            <a href="#" target="_blank" rel="noopener noreferrer">Create Record From Fields</a>
+            <div class="row">
+                <div class="col-md-3">
+                    <NotificationBox v-if="createRecordError" alertType="danger" class="mt-2">
+                        <strong><i class="ti ti-exclamation-circle"></i> Error </strong>
+                        <span>{{ createRecordError }}</span>
+                    </NotificationBox>
+                </div>
+            </div>
         </ContentStack>
     </ContentSection>
+    <br>
     <ContentSection title="Request Details"
                     icon="ti ti-list">
         <ContentStack>
-            <TextBox v-model="text"
+            <TextBox v-model="requestText"
                      label="Description of Request"
                      textMode="multiline"
-                     required />
-            <div class="row">
-                <div class="col-md-6">
-                    <FileUploader v-model="currentAttachment"
-                                  :binaryFileTypeGuid="baseBlock.config.attachmentsBinaryFileTypeGuid"
-                                  :disabled="isSaving"
-                                  label="Related Documents"
-                                  :uploadAsTemporary="true"
-                                  @update:modelValue="onAttachmentAdded" />
-
-                    <div class="attachment">
-                        <ul class="attachment-content">
-                            <li v-for="binaryFileAttachment in attachments">
-                                <a :href="`/GetFile.ashx?guid=${binaryFileAttachment.value}&fileName=${binaryFileAttachment.text}`" target="_blank" rel="noopener noreferrer">{{ binaryFileAttachment.text }}</a> <a :disabled="isSaving"><i class="ti ti-x" @click="onAttachmentRemoved(binaryFileAttachment)"></i></a>
-                            </li>
-                        </ul>
+                     rules="required" />
+            <Label class="control-label mt-3">Related Documents</Label>
+            <div class="d-flex flex-row mb-2">
+                <FileUploader v-model="currentAttachment"
+                              :binaryFileTypeGuid="props.options.benevolenceDocumentBinaryFileTypeGuid"
+                              :disabled="isSavingAttachment"
+                              :uploadAsTemporary="true"
+                              @update:modelValue="onRequestDocumentAdded" />
+                <div v-if="requestDocuments.length > 0">
+                    <div class="d-flex flex-row flex-wrap">
+                        <div v-for="binaryFileAttachment in requestDocuments">
+                            <div v-if="binaryFileAttachment.isMarkedForDeletion == false" class="fileupload-thumbnail ml-2">
+                                <div class="fileupload-group">
+                                    <div>
+                                        <a :href="`/GetFile.ashx?guid=${binaryFileAttachment.guid}&fileName=${binaryFileAttachment.fileName}`" target="_blank" rel="noopener noreferrer" class="file-link file-exists">{{ binaryFileAttachment.fileName }}</a>
+                                        <div class="fileupload-remove">
+                                            <a :disabled="isSavingAttachment"><i class="ti ti-x remove-file" @click="onRequestDocumentRemoved(binaryFileAttachment)"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </ContentStack>
-        <ContentSection title="Results"
-                        icon="ti ti-flag">
-            <ContentStack>
-                <TextBox v-model="text"
-                         label="Result Summary"
-                         textMode="multiline"
-                         required />
-                <TextBox v-model="text"
-                         label="Next Steps Provided"
-                         textMode="multiline"
-                         required />
-            </ContentStack>
-        </ContentSection>
+    </ContentSection>
+    <br>
+    <ContentSection title="Results"
+                    icon="ti ti-flag">
+        <ContentStack>
+            <TextBox v-model="resultSummary"
+                     label="Result Summary"
+                     textMode="multiline" />
+            <TextBox v-model="providedNextSteps"
+                     label="Next Steps Provided"
+                     textMode="multiline" />
+        </ContentStack>
+    </ContentSection>
+    <ContentSection v-if="hasAttributes" title="Extended Attributes" icon="ti ti-adjustments-plus">
+        <ContentStack>
+            <AttributeValuesContainer v-model="attributeValues" :attributes="attributes" isEditMode :numberOfColumns="2" />
+        </ContentStack>
+    </ContentSection>
 </template>
 
 <script setup lang="ts">
-    import { PropType, ref, watch } from "vue";
-    import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
-    import { setPropertiesBoxValue, watchPropertyChanges } from "@Obsidian/Utility/block";
+    import { PropType, ref, watch, computed } from "vue";
+    import { setPropertiesBoxValue, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
     import { BenevolenceRequestBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestBag";
     import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
+    import { BenevolenceDocumentBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceDocumentBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { AddressControlBag } from "@Obsidian/ViewModels/Controls/addressControlBag";
+    import { PersonBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/personBag";
+    import { CampusBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/campusBag";
+    import { LocationBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/locationBag";
+    import { isNullish, isNotNullish } from "@Obsidian/Utility/util";
+    import { Guid } from "@Obsidian/Types";
+    import { emptyGuid, areEqual } from "@Obsidian/Utility/guid";
+    import ContentStack from "@Obsidian/Controls/contentStack.obs";
+    import ContentSection from "@Obsidian/Controls/contentSection.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import DatePicker from "@Obsidian/Controls/datePicker.obs";
     import PersonPicker from "@Obsidian/Controls/personPicker.obs";
@@ -163,6 +233,9 @@
     import PhoneNumberBox from "@Obsidian/Controls/phoneNumberBox.obs";
     import EmailBox from "@Obsidian/Controls/emailBox.obs";
     import LocationAddressPicker from "@Obsidian/Controls/locationAddressPicker.obs";
+    import FileUploader from "@Obsidian/Controls/fileUploader.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import LoadingIndicator from "@Obsidian/Controls/loadingIndicator.obs";
 
     const props = defineProps({
         modelValue: {
@@ -173,56 +246,532 @@
         options: {
             type: Object as PropType<BenevolenceRequestDetailOptionsBag>,
             required: true
-        }
+        },
     });
 
     const emit = defineEmits<{
         (e: "update:modelValue", value: ValidPropertiesBox<BenevolenceRequestBag>): void,
-        (e: "propertyChanged", value: string): void
+        (e: "propertyChanged", value: string): void,
+        (e: "errorMessage", value: string): void
     }>();
 
     // #region Values
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    const benevolenceRequestTypes = ref(props.options.benevolenceRequestTypes ?? []);
+    const requestStatusValues = ref(props.options.requestStatusValues ?? []);
+    const connectionStatusValues = ref(props.options.connectionStatusValues ?? []);
+
+    const benevolenceTypeId = propertyRef(props.modelValue.bag?.benevolenceTypeId ?? 0, "benevolenceTypeId");
+    const requestStatusValueId = propertyRef(props.modelValue.bag?.requestStatusValueId ?? 0, "requestStatusValueId");
+    const requestDateTime = propertyRef(props.modelValue.bag?.requestDateTime ?? new Date().toISOString(), "requestDateTime");
+    const requester = propertyRef(props.modelValue.bag?.requester ?? {} as PersonBag, "requester");
+    const caseWorker = propertyRef(props.modelValue.bag?.caseWorker ?? {} as PersonBag, "caseWorker");
+    const requestText = propertyRef(props.modelValue.bag?.requestText ?? "", "requestText");
+    const resultSummary = propertyRef(props.modelValue.bag?.resultSummary ?? "", "resultSummary");
+    const providedNextSteps = propertyRef(props.modelValue.bag?.providedNextSteps ?? "", "providedNextSteps");
+    const campus = propertyRef(props.modelValue.bag?.campus ?? {} as CampusBag, "campus");
+    const requestDocuments = propertyRef(props.modelValue.bag?.requestDocuments ?? [] as BenevolenceDocumentBag[], "requestDocuments");
 
     const attributes = ref(props.modelValue.bag?.attributes ?? {});
     const attributeValues = ref(props.modelValue.bag?.attributeValues ?? {});
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
-    const propRefs = [];
+    const propRefs = [
+        benevolenceTypeId, requestStatusValueId, requestDateTime, requester, caseWorker, requestText, resultSummary,
+        providedNextSteps, campus, requestDocuments, attributes, attributeValues
+    ];
+
+    const lastRequesterPersonAliasGuid = ref<Guid>("");
+    const isConnectionStatusDisabled = ref<boolean>(false);
+    const isFirstNameDisabled = ref<boolean>(false);
+    const isLastNameDisabled = ref<boolean>(false);
+    const isHomePhoneDisabled = ref<boolean>(false);
+    const isCellPhoneDisabled = ref<boolean>(false);
+    const isWorkPhoneDisabled = ref<boolean>(false);
+    const isEmailDisabled = ref<boolean>(false);
+    const isAddressFieldDisabled = ref<boolean>(false);
+    const isCreateRecordFromFieldsHidden = ref<boolean>(false);
+
+    const currentAttachment = ref<ListItemBag | null | undefined>(undefined);
+    const isSavingAttachment = ref<boolean>(false);
+    const isSavingPersonRecord = ref<boolean>(false);
+
+    const createRecordError = ref<string>("");
+
+    if (!props.modelValue.bag?.idKey) {
+        // If this is a new request, set the request date to today by default
+        requestDateTime.value = new Date().toISOString();
+    }
 
     // #endregion
 
     // #region Computed Values
 
-    // #endregion
+    const requesterFirstName = computed<string>({
+        get: () => requester.value.firstName ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                firstName: val
+            };
+        }
+    });
+
+    const requesterLastName = computed<string>({
+        get: () => requester.value.lastName ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                lastName: val
+            };
+        }
+    });
+
+    const requesterHomePhoneNumber = computed<string>({
+        get: () => requester.value.homePhoneNumber ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                homePhoneNumber: val
+            };
+        }
+    });
+
+    const requesterCellPhoneNumber = computed<string>({
+        get: () => requester.value.cellPhoneNumber ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                cellPhoneNumber: val
+            };
+        }
+    });
+
+    const requesterWorkPhoneNumber = computed<string>({
+        get: () => requester.value.workPhoneNumber ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                workPhoneNumber: val
+            };
+        }
+    });
+
+    const requesterEmail = computed<string>({
+        get: () => requester.value.email ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                email: val
+            };
+        }
+    });
+
+    const requesterGovernmentId = computed<string>({
+        get: () => requester.value.governmentId ?? "",
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                governmentId: val
+            };
+        }
+    });
+
+    const requesterLocationAddressFields = computed<AddressControlBag>({
+        get: () => requester.value.location?.addressFields ?? {} as AddressControlBag,
+        set: val => {
+            if (!requester.value.location) {
+                requester.value.location = {} as LocationBag;
+            }
+
+            requester.value.location.addressFields = val;
+
+            if (isNullish(val.street1) && isNullish(val.street2) && isNullish(val.city) &&
+                isNullish(val.state) && isNullish(val.postalCode) && isNullish(val.country)) {
+                requester.value.location.id = null;
+                requester.value.location.guid = emptyGuid;
+                requester.value.location.locationTypeValue = null;
+                requester.value.location.name = null;
+            }
+        }
+    });
+
+    const requesterDisplayName = computed(() => {
+        if (!requester.value) return "";
+        return requester.value.nickName
+            ? `${requester.value.nickName} ${requester.value.lastName}`
+            : `${requester.value.firstName ?? ""} ${requester.value.lastName ?? ""}`;
+    });
+
+    const caseWorkerDisplayName = computed(() => {
+        if (!caseWorker.value) return "";
+        return caseWorker.value.nickName
+            ? `${caseWorker.value.nickName} ${caseWorker.value.lastName}`
+            : `${caseWorker.value.firstName ?? ""} ${caseWorker.value.lastName ?? ""}`;
+    });
+
+    const selectedBenevolenceRequester = computed<ListItemBag>({
+        get: () => {
+            return requester.value.personAliasId && requesterDisplayName.value
+                ? { text: requesterDisplayName.value ?? "", value: requester.value.personAliasId?.toString() ?? "" }
+                : { text: "", value: "" };
+        },
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                personAliasGuid: val?.value ?? "",
+            };
+        }
+    });
+
+    const assignedCaseWorker = computed<ListItemBag>({
+        get: () => {
+            return caseWorker.value.personAliasId && caseWorkerDisplayName.value
+                ? { text: caseWorkerDisplayName.value ?? "", value: caseWorker.value.personAliasId?.toString() ?? "" }
+                : { text: "", value: "" };
+        },
+        set: () => {
+            // Handled in onCaseWorkerSelectionChanged
+        }
+    });
+
+    // Computed property for benevolenceTypeId as a string for v-model binding
+    const benevolenceTypeIdString = computed({
+        get() {
+            return isNotNullish(benevolenceTypeId)
+                ? benevolenceTypeId.value.toString()
+                : "";
+        },
+        set(val: string) {
+            benevolenceTypeId.value = val ? parseInt(val) : 0;
+        }
+    });
+
+    // Computed property for requestStatusValueId as a string for v-model binding
+    const requestStatusValueIdString = computed({
+        get() {
+            return isNotNullish(requestStatusValueId)
+                ? requestStatusValueId.value.toString()
+                : "";
+        },
+        set(val: string) {
+            requestStatusValueId.value = val ? parseInt(val) : 0;
+        }
+    });
+
+    // Computed property for connectionStatusValueId as a string for v-model binding
+    const requesterConnectionStatusValueIdString = computed({
+        get() {
+            return isNotNullish(requester.value.connectionStatusValueId)
+                ? requester.value.connectionStatusValueId.toString()
+                : "";
+        },
+        set(val: string) {
+            requester.value.connectionStatusValueId = val ? parseInt(val) : 0;
+        }
+    });
+
+    // Computed property for campus for v-model binding
+    const selectedCampus = computed<ListItemBag>({
+        get() {
+            return (campus.value.id
+                && campus.value.id > 0
+                && !areEqual(campus.value.guid, emptyGuid))
+                ? { text: campus.value.name ?? "", value: campus.value.guid?.toString() }
+                : {} as ListItemBag;
+        },
+        async set(val: ListItemBag | undefined) {
+            campus.value = await getCampusBagFromCampusGuid(val?.value ? val.value : emptyGuid);
+        }
+    });
+
+    const hasAttributes = computed((): boolean => {
+        return Object.keys(attributes.value).length > 0;
+    });
+
+    // #endregion Computed Values
 
     // #region Functions
 
-    // #endregion
+    /**
+     * Get a PersonBag from a PersonAliasGuid
+     * @param guid The PersonAliasGuid
+     * @returns A Promise that resolves to a PersonBag
+     */
+    async function getPersonBagFromPersonAliasGuid(guid: Guid): Promise<PersonBag> {
+        if (!guid || areEqual(guid, emptyGuid)) {
+            return {} as PersonBag;
+        }
+
+        const result = await invokeBlockAction<PersonBag>("GeneratePersonBagFromPersonAliasGuid", { personAliasGuid: guid });
+
+        if (result.isSuccess && result.data) {
+            if (result.statusCode === 200 && typeof result.data === "object") {
+                return result.data;
+            }
+        }
+        else if (result.errorMessage) {
+            emit("errorMessage", result.errorMessage);
+        }
+        else {
+            emit("errorMessage", result.errorMessage ?? "Unknown error while trying to retrieve person.");
+        }
+
+        return {} as PersonBag;
+    }
+
+    /**
+     * Get a CampusBag from a CampusGuid
+     * @param guid The CampusGuid
+     * @returns A Promise that resolves to a CampusBag
+     */
+    async function getCampusBagFromCampusGuid(guid: Guid): Promise<CampusBag> {
+        if (!guid || areEqual(guid, emptyGuid)) {
+            return {} as CampusBag;
+        }
+
+        const result = await invokeBlockAction<CampusBag>("GenerateCampusBagFromCampusGuid", { campusGuid: guid });
+
+        if (result.isSuccess && result.data) {
+            if (result.statusCode === 200 && typeof result.data === "object") {
+                return result.data;
+            }
+        }
+        else if (result.errorMessage) {
+            emit("errorMessage", result.errorMessage);
+        }
+        else {
+            emit("errorMessage", result.errorMessage ?? "Unknown error while trying to retrieve campus.");
+        }
+
+        return {} as CampusBag;
+    }
+
+    /**
+     * Enable/Disable requester fields if they have values.
+     * @param value Whether to disable the fields. Use true to disable, false to enable.
+     */
+    function disableRequesterFields(value: boolean): void {
+        isConnectionStatusDisabled.value = value && !!requester.value.connectionStatusValueId;
+        isFirstNameDisabled.value = value && !!requester.value.firstName;
+        isLastNameDisabled.value = value && !!requester.value.lastName;
+        isHomePhoneDisabled.value = value && !!requester.value.homePhoneNumber;
+        isCellPhoneDisabled.value = value && !!requester.value.cellPhoneNumber;
+        isWorkPhoneDisabled.value = value && !!requester.value.workPhoneNumber;
+        isEmailDisabled.value = value && !!requester.value.email;
+        isAddressFieldDisabled.value = value && !!requester.value.location?.addressFields;
+        isCreateRecordFromFieldsHidden.value = value && selectedBenevolenceRequester.value.value !== "";
+    }
+
+    // #endregion Functions
 
     // #region Event Handlers
 
-    // #endregion
+    /**
+     * Handler for when the requester PersonPicker is changed.
+     * @param person The selected person.
+     * @param personIdKey The selected person's ID key.
+     */
+    async function onRequesterSelectionChanged(person: ListItemBag | null | undefined, personIdKey: string | undefined): Promise<void> {
+        // If a clear action occurred, re-enable the requester fields.
+        if (isNullish(person) && isNullish(personIdKey)) {
+            requester.value.personId = null;
+            requester.value.personAliasId = null;
+            requester.value.personAliasGuid = emptyGuid;
+            lastRequesterPersonAliasGuid.value = "";
+            disableRequesterFields(false);
+            return;
+        }
+
+        // Update the requester and disable used fields if person actually changed.
+        if (person && person.value !== lastRequesterPersonAliasGuid.value) {
+            const governmentId = requester.value.governmentId;
+            const newRequester = await getPersonBagFromPersonAliasGuid(person.value ?? "");
+
+            lastRequesterPersonAliasGuid.value = person.value ?? "";
+
+            newRequester.governmentId = governmentId ?? "";
+            requester.value = newRequester;
+
+            disableRequesterFields(true);
+        }
+    }
+
+    /**
+     * Handler for when the assigned case worker PersonPicker is changed.
+     * @param person The selected person.
+     * @param personIdKey The selected person's ID key.
+     */
+    async function onCaseWorkerSelectionChanged(person: ListItemBag | null | undefined, personIdKey: string | undefined): Promise<void> {
+        // If a clear action occurred, clear the case worker.
+        if (isNullish(person) && isNullish(personIdKey)) {
+            caseWorker.value = {} as PersonBag;
+            return;
+        }
+
+        // Update the case worker if person actually changed.
+        if (person && person.value !== caseWorker.value.personAliasGuid) {
+            caseWorker.value = await getPersonBagFromPersonAliasGuid(person.value ?? "");
+        }
+    }
+
+    /**
+     * Handler for when the request date/time is changed.
+     * @param newDate The new date/time value.
+     */
+    function onRequestDateTimeChanged(newDate: string | null): void {
+        requestDateTime.value = newDate ?? new Date().toISOString();
+    }
+
+    /**
+     * Handler for when a document is added to the benevolence request.
+     * @param requestDocument The document being added.
+     */
+    function onRequestDocumentAdded(requestDocument: ListItemBag | null | undefined): void {
+        if (isNullish(requestDocument) || isSavingAttachment.value) {
+            return;
+        }
+
+        const newRequestDocument: BenevolenceDocumentBag = {
+            guid: requestDocument.value ?? "",
+            fileName: requestDocument.text ?? "",
+            isMarkedForDeletion: false,
+        };
+
+        requestDocuments.value = [
+            ...requestDocuments.value ?? [],
+            newRequestDocument
+        ];
+
+        // Clear the attachment uploader.
+        currentAttachment.value = null;
+    }
+
+    /**
+     * Handler for when a document is removed from the benevolence request.
+     * @param requestDocument The document being removed.
+     */
+    async function onRequestDocumentRemoved(requestDocument: BenevolenceDocumentBag | null | undefined): Promise<void> {
+        if (isNullish(requestDocument) || isSavingAttachment.value) {
+            return;
+        }
+
+        const updatedDocuments = requestDocuments.value?.map(a => {
+            if (a === requestDocument) {
+                return {
+                    ...a,
+                    isMarkedForDeletion: true
+                };
+            }
+            return a;
+        }) ?? [];
+
+        requestDocuments.value = updatedDocuments;
+    }
+
+    /**
+     * Handler for when the "Create Record From Fields" link is clicked.
+     */
+    async function onCreateRecordFromFields(): Promise<void> {
+        if (isNullish(props.modelValue.bag)) {
+            createRecordError.value = "Cannot create a person record without a benevolence request.";
+            return;
+        }
+        if (isNullish(requester.value.connectionStatusValueId) || requester.value.connectionStatusValueId === 0) {
+            createRecordError.value = "A Connection Status is required to create a person record.";
+            return;
+        }
+        if (isNullish(requester.value.firstName) || requester.value.firstName.trim() === "") {
+            createRecordError.value = "First Name is required to create a person record.";
+            return;
+        }
+        if (isNullish(requester.value.lastName) || requester.value.lastName.trim() === "") {
+            createRecordError.value = "Last Name is required to create a person record.";
+            return;
+        }
+        if (isSavingPersonRecord.value) {
+            return;
+        }
+
+        isSavingPersonRecord.value = true;
+
+        const result = await invokeBlockAction<PersonBag>(
+            "AddPersonFromRequesterData",
+            {
+                benevolenceRequestIdKey: props.modelValue.bag.idKey,
+                personBag: requester.value,
+                campusId: campus.value.id
+            }
+        );
+
+        if (result.isSuccess && result.data) {
+            if (result.statusCode === 200 && typeof result.data === "object") {
+                const governmentId = requester.value.governmentId;
+                const newRequesterBag = result.data;
+
+                newRequesterBag.governmentId = governmentId ?? "";
+
+                requester.value = newRequesterBag;
+                disableRequesterFields(true);
+            }
+        }
+        else if (result.errorMessage) {
+            createRecordError.value = result.errorMessage;
+        }
+        else {
+            createRecordError.value = "An unknown error occurred while trying to create the person record.";
+        }
+
+        isSavingPersonRecord.value = false;
+    }
+
+    // #endregion Event Handlers
+
+    // #region Watchers
+
+    // Clear create record error when relevant fields change
+    watch([requesterFirstName, requesterLastName, () => requester.value.connectionStatusValueId], () => {
+        createRecordError.value = "";
+    });
 
     // Watch for parental changes in our model value and update all our values.
     watch(() => props.modelValue, () => {
         updateRefValue(attributes, props.modelValue.bag?.attributes ?? {});
         updateRefValue(attributeValues, props.modelValue.bag?.attributeValues ?? {});
+        updateRefValue(requester, props.modelValue.bag?.requester ?? {} as PersonBag);
+        updateRefValue(caseWorker, props.modelValue.bag?.caseWorker ?? {} as PersonBag);
+        updateRefValue(requestText, props.modelValue.bag?.requestText ?? "");
+        updateRefValue(resultSummary, props.modelValue.bag?.resultSummary ?? "");
+        updateRefValue(providedNextSteps, props.modelValue.bag?.providedNextSteps ?? "");
     });
 
     // Determines which values we want to track changes on (defined in the
     // array) and then emit a new object defined as newValue.
-    watch([attributeValues, ...propRefs], () => {
+    watch([...propRefs], () => {
         const newValue: ValidPropertiesBox<BenevolenceRequestBag> = {
             bag: { ...props.modelValue.bag } as BenevolenceRequestBag
         };
 
+        setPropertiesBoxValue(newValue, "benevolenceTypeId", benevolenceTypeId.value ?? 0);
+        setPropertiesBoxValue(newValue, "requestStatusValueId", requestStatusValueId.value ?? 0);
+        setPropertiesBoxValue(newValue, "requestDateTime", requestDateTime.value ?? new Date().toISOString());
+        setPropertiesBoxValue(newValue, "requester", requester.value);
+        setPropertiesBoxValue(newValue, "caseWorker", caseWorker.value);
+        setPropertiesBoxValue(newValue, "requestText", requestText.value);
+        setPropertiesBoxValue(newValue, "resultSummary", resultSummary.value);
+        setPropertiesBoxValue(newValue, "providedNextSteps", providedNextSteps.value);
+        setPropertiesBoxValue(newValue, "campus", campus.value);
+        setPropertiesBoxValue(newValue, "requestDocuments", requestDocuments.value);
         setPropertiesBoxValue(newValue, "attributeValues", attributeValues.value);
 
         emit("update:modelValue", newValue);
-    });
+    }, { deep: true });
 
-    // Watch for any changes to props that represent properties and then
-    // automatically emit which property changed.
-    watchPropertyChanges(propRefs, emit);
+    // #endregion Watchers
+
+    // Disable requester fields if a person is already selected when page loads
+    disableRequesterFields(!!requester.value.personAliasId);
 </script>

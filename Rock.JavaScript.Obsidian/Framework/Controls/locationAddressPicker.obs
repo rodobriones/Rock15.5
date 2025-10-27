@@ -17,7 +17,8 @@
         </template>
 
         <RockValidation :errors="errors" />
-        <AddressControl v-model="controlValue" rules="required" />
+        <AddressControl v-if="props.isRequired" v-model="controlValue" rules="required" />
+        <AddressControl v-else v-model="controlValue" />
 
         <template #primaryButtonLabel>
             <Loading :isLoading="isLoading">Select</Loading>
@@ -62,6 +63,11 @@
          */
         showPopup: {
             type: Boolean
+        },
+
+        isRequired: {
+            type: Boolean,
+            default: true
         }
     });
 

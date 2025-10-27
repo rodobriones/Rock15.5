@@ -13,18 +13,24 @@
                  :isBadgesVisible="true"
                  :isDeleteVisible="isEditable"
                  :isEditVisible="isEditable"
-                 :isFollowVisible="true"
+                 :isFollowVisible="false"
                  :isSecurityHidden="false"
                  @cancelEdit="onCancelEdit"
                  @delete="onDelete"
                  @edit="onEdit"
                  @save="onSave">
         <template #view>
-            <ViewPanel :modelValue="benevolenceRequestViewBag" :options="options" />
+            <ViewPanel v-model="benevolenceRequestViewBag"
+                       :options="options"
+                       :isEditable="isEditable"
+                       @update:requestResults="onResultsListUpdate" />
         </template>
 
         <template #edit>
-            <EditPanel v-model="benevolenceRequestEditBag" :options="options" @propertyChanged="baseBlock.onPropertyChanged" />
+            <EditPanel v-model="benevolenceRequestEditBag"
+                       :options="options"
+                       @propertyChanged="baseBlock.onPropertyChanged"
+                       @errorMessage="errorMessage = $event" />
         </template>
     </DetailBlock>
 </template>
@@ -33,14 +39,15 @@
     import { computed, ref } from "vue";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import DetailBlock from "@Obsidian/Templates/detailBlock";
-    import { DetailPanelMode } from "@Obsidian/Enums/Controls/detailPanelMode";
-    import { PanelAction } from "@Obsidian/Types/Controls/panelAction";
     import EditPanel from "./BenevolenceRequestDetail/editPanel.partial.obs";
     import ViewPanel from "./BenevolenceRequestDetail/viewPanel.partial.obs";
+    import { DetailPanelMode } from "@Obsidian/Enums/Controls/detailPanelMode";
+    import { PanelAction } from "@Obsidian/Types/Controls/panelAction";
     import { onConfigurationValuesChanged, useConfigurationValues, useEntityDetailBlock, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { NavigationUrlKey } from "./BenevolenceRequestDetail/types.partial";
     import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";
     import { BenevolenceRequestBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestBag";
+    import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
     import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
 
@@ -73,23 +80,32 @@
 
     // #region Computed Values
 
-    /**
-     * The entity name to display in the block panel.
-     */
+    /** The entity name to display in the block panel. */
     const panelName = computed((): string => {
         return "Benevolence Request";
     });
 
-    /**
-     * The identifier key value for this entity.
-     */
+    /** The identifier key value for this entity. */
     const entityKey = computed((): string => {
         return benevolenceRequestViewBag.value?.idKey ?? "";
     });
 
-    /**
-     * Additional labels to display in the block panel.
-     */
+    /** The benevolence type of the request. */
+    const benevolenceType = computed(() => {
+        return benevolenceRequestViewBag.value?.benevolenceTypeId;
+    });
+
+    /** The campus of the request. */
+    const campus = computed(() => {
+        return benevolenceRequestViewBag.value?.campus;
+    });
+
+    /** The status of the request. */
+    const requestStatusValue = computed(() => {
+        return benevolenceRequestViewBag.value?.requestStatusValueId;
+    });
+
+    /** Additional labels to display in the block panel. */
     const blockLabels = computed((): PanelAction[] | undefined => {
         const labels: PanelAction[] = [];
 
@@ -98,64 +114,62 @@
             return undefined;
         }
 
-        // Always show the Essentials Mode menu
-        labels.push({
-            title: "Essentials Mode",
-            iconCssClass: "fa fa-magic",
-            type: "success",
-        });
-
         // Only show the benevolence type and campus when in view mode
         if (panelMode.value === DetailPanelMode.View) {
-            if (config.entity?.benevolenceType?.text) {
+            if (benevolenceType.value) {
                 labels.push({
-                    title: config.entity?.benevolenceType?.text,
+                    title: `${config.options?.benevolenceRequestTypes?.find(t => t.value === benevolenceType.value?.toString())?.text ?? benevolenceType.value?.toString()}`,
                     type: "default",
                 });
             }
-            if (config.entity?.campus?.text) {
+
+            if (campus.value && campus.value.name) {
                 labels.push({
-                    title: config.entity?.campus?.text,
-                    type: "default",
+                    title: `${campus.value.name}`,
+                    type: "link",
                 });
             }
         }
 
         // Always show the status if it is set
-        if (config.entity?.requestStatusValue?.text) {
-            switch (config.entity.requestStatusValue.text) {
-                case "Approved":
-                    labels.push({
-                        title: config.entity?.requestStatusValue?.text,
-                        type: "success",
-                    });
+        if (requestStatusValue.value) {
+            const label = config.options?.requestStatusValues?.find(t => t.value === requestStatusValue.value?.toString())?.text ?? requestStatusValue.value?.toString();
+
+            let labelType;
+            switch (label.toLowerCase()) {
+                case "approved":
+                    labelType = "success";
                     break;
-                case "Denied":
-                    labels.push({
-                        title: config.entity?.requestStatusValue?.text,
-                        type: "danger",
-                    });
+                case "denied":
+                    labelType = "danger";
                     break;
-                case "Pending":
-                    labels.push({
-                        title: config.entity?.requestStatusValue?.text,
-                        type: "warning",
-                    });
+                case "pending":
+                    labelType = "warning";
                     break;
                 default:
+                    labelType = "default";
                     break;
             }
+
+            labels.push({
+                title: label,
+                type: labelType,
+            });
         }
 
         return labels;
     });
 
+    /** Whether or not the current user can edit the benevolence request. */
     const isEditable = computed((): boolean => {
         return config.isEditable === true;
     });
 
+    /** The options bag for the benevolence request detail block. */
     const options = computed((): BenevolenceRequestDetailOptionsBag => {
-        return config.options ?? {};
+        return config.options ?? {
+            benevolenceDocumentBinaryFileTypeGuid: ""
+        };
     });
 
     // #endregion
@@ -165,6 +179,17 @@
     // #endregion
 
     // #region Event Handlers
+
+    /**
+     * Event handler for when the results list is updated in the view panel.
+     *
+     * @param newResults The updated list of benevolence request results.
+     */
+    function onResultsListUpdate(newResults: BenevolenceResultBag[]): void {
+        if (benevolenceRequestViewBag.value) {
+            benevolenceRequestViewBag.value.results = newResults;
+        }
+    }
 
     /**
      * Event handler for the Cancel button being clicked while in Edit mode.
