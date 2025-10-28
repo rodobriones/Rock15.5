@@ -376,22 +376,38 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         {
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
             ContactService contactService = new ContactService( RockContext );
-            var contactRelationshipStrengthChangesService = new ContactRelationshipStrengthChangesService( RockContext );
+            var contactRelationshipChangesService = new ContactRelationshipStrengthChangesService( RockContext );
 
             var touchpoint = contactTouchpointService.Get( bag.IdKey );
             var contact = contactService.Get( touchpoint.ContactId );
 
+
             // If the relationship strength change.
             if ( contact.RelationshipStrength != bag.RelationshipStrength.ToNative() )
             {
-                var newRelationshipStrength = new ContactRelationshipStrengthChanges
-                {
-                    ContactId = contact.Id,
-                    PreviousRelationshipStrength = contact.RelationshipStrength,
-                    NewRelationshipStrength = bag.RelationshipStrength.ToNative(),
-                    //AppInfluencedGrowth =  // PS TODO: Where do we get the value?
-                };
-                contactRelationshipStrengthChangesService.Add( newRelationshipStrength );
+                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                newRelationshipChange.ContactId = contact.Id;
+                newRelationshipChange.PreviousRelationshipStrength = contact.RelationshipStrength; // PS TODO: The PreviousRelationshipStrength should be nullable.
+                newRelationshipChange.NewRelationshipStrength = bag.RelationshipStrength.ToNative(); // PS TODO: The NewRelationshipStrength should be nullable.
+                contactRelationshipChangesService.Add( newRelationshipChange );
+            }
+
+            if ( contact.HasAcceptedJesus != bag.hasAcceptedJesus )
+            {
+                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                newRelationshipChange.ContactId = contact.Id;
+                newRelationshipChange.HasAcceptedJesus = bag.hasAcceptedJesus;
+                newRelationshipChange.WasAcceptanceInfluencedByApp = bag.AppInfluenceSalvation ?? false;
+                contactRelationshipChangesService.Add( newRelationshipChange );
+            }
+
+            if ( contact.HasBeenBaptized != bag.Baptized )
+            {
+                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                newRelationshipChange.ContactId = contact.Id;
+                newRelationshipChange.HasBeenBaptized = bag.Baptized;
+                newRelationshipChange.WasBaptismInfluencedByApp = bag.AppInfluenceBaptism ?? false;
+                contactRelationshipChangesService.Add( newRelationshipChange );
             }
 
             contact.RelationshipStrength = bag.RelationshipStrength.ToNative();
