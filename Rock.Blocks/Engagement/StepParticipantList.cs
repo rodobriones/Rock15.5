@@ -330,7 +330,7 @@ namespace Rock.Blocks.Engagement
                 .AddTextField( "note", a => a.Step.Note )
                 .AddTextField( "signalMarkup", a => Rock.Model.Person.GetSignalMarkup( a.Person.TopSignalColor, a.Person.TopSignalIconCssClass ) )
                 .AddField( "isDeceased", a => a.Person.IsDeceased )
-                .AddField( "isInactive", a => a.Person.RecordStatusValueId == inactiveStatus.Id )
+                .AddField( "isActive", a => a.Person.RecordStatusValueId != inactiveStatus.Id )
                 .AddField( "id", a => a.Step.Id )
                 .AddField( "personId", a => a.Person.Id )
                 .AddField( "stepStatusId", a => a.Step.StepStatusId )

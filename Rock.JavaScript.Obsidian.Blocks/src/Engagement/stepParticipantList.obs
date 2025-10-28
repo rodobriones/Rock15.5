@@ -10,6 +10,7 @@
           :entityTypeGuid="EntityType.Step"
           stickyHeader
           liveUpdates
+          markInactiveRows
           gridSettings
           :gridSettingsActive="hasSettingsFilters"
           @gridSettingsClick="onGridSettingsClick"
