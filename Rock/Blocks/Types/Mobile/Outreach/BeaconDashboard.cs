@@ -25,10 +25,26 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [Description( "Beacon dashboard allows you to view your touchpoint statistic and as well as start connecting with your contact." )]
     [SupportedSiteTypes( SiteType.Mobile )]
 
+    [TextField( "Baptism Info",
+        Description = "URL to navigate to when in the pulse touchpoint baptism questionnaire.",
+        IsRequired = false,
+        DefaultValue = "",
+        Key = AttributeKeys.BaptismInfo,
+        Order = 0 )]
+
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_BEACON_DASHBOARD_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_BEACON_DASHBOARD )]
     public class BeaconDashboard : RockBlockType
     {
+        #region Constants
+
+        private static class AttributeKeys
+        {
+            public const string BaptismInfo = "BaptismInfo";
+        }
+
+        #endregion
+
         #region Methods
 
         /// <summary>
@@ -111,6 +127,28 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                         Title = "Touchpoint",
                         InformationText = $"Connect with {contact.FirstName}.",
                     };
+            }
+        }
+
+        /// <summary>
+        /// Resolves the URL.
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        private string ResolveURL( string url )
+        {
+            if ( url.IsNullOrWhiteSpace() )
+            {
+                return string.Empty;
+            }
+
+            if ( url.StartsWith( "http://" ) || url.StartsWith( "https://" ) )
+            {
+                return url;
+            }
+            else
+            {
+                return "https://" + url;
             }
         }
 
@@ -375,6 +413,15 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
+
+        /// <inheritdoc/>
+        public override object GetMobileConfigurationValues()
+        {
+            return new Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard.Configuration
+            {
+                BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) )
+            };
+        }
     }
 
     public class InitialDataBag
