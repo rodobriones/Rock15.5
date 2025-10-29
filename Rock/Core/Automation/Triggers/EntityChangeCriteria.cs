@@ -60,7 +60,7 @@ namespace Rock.Core.Automation.Triggers
 
         #endregion
 
-        #region Methods
+        #region Constructors
 
         /// <summary>
         /// Creates a new instance of the <see cref="EntityChangeCriteria"/> class.
@@ -98,6 +98,10 @@ namespace Rock.Core.Automation.Triggers
                     .ToList();
             }
         }
+
+        #endregion
+
+        #region Methods
 
         /// <summary>
         /// Determines if the save entry matches the criteria defined in this instance.
