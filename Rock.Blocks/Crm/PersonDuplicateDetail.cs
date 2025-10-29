@@ -76,7 +76,8 @@ namespace Rock.Blocks.Crm
     #endregion Block Attributes
 
     [Rock.SystemGuid.EntityTypeGuid( "B96C02DC-F624-4953-BED3-F7BA52CE854D" )]
-    [Rock.SystemGuid.BlockTypeGuid( "AAA53F35-1891-4236-B9CB-37805B9134DF" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "AAA53F35-1891-4236-B9CB-37805B9134DF" )]
+    [Rock.SystemGuid.BlockTypeGuid( "A65CF2F8-93A4-4AC6-9018-D7C6996D9017" )]
     [CustomizedGrid]
     public class PersonDuplicateDetail : RockListBlockType<PersonDuplicateWrapper>
     {
