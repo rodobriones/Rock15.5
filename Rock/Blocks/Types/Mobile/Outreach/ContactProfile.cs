@@ -1,8 +1,11 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Data.Entity;
+using System.Linq;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Common.Mobile.Enums;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -181,6 +184,52 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk();
         }
 
+        /// <summary>
+        /// Gets the contact touchpoint history.
+        /// </summary>
+        /// <param name="idKey"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult GetContactTouchpointHistory( string idKey )
+        {
+            var person = RequestContext.CurrentPerson;
+            if ( idKey.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( idKey );
+            if ( contact == null )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var touchpointHistoryBag = contactTouchpointService.Queryable()
+                .Where( tp => tp.ContactId == contact.Id )
+                .Where( tp => tp.CompletedDateTime.HasValue )
+                .AsEnumerable()
+                .Select( tp => new TouchpointHistoryBag
+                {
+                    TouchpointType = tp.Type.ToMobile(),
+                    ContactLastName = contact.LastName,
+                    CompletedDateTime = tp.CompletedDateTime.Value,
+                    Note = tp.Note
+                } ).ToList()
+                .OrderByDescending( bag => bag.CompletedDateTime );
+
+            return ActionOk( touchpointHistoryBag );
+        }
+
         #endregion
     }
+}
+
+public class TouchpointHistoryBag
+{
+    public TouchpointType TouchpointType { get; set; }
+    public string ContactLastName { get; set; }
+    public DateTimeOffset CompletedDateTime { get; set; }
+    public string Note { get; set; }
 }
