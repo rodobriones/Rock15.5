@@ -1,11 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
-using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Common.Mobile.Enums;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -13,6 +11,7 @@ using Rock.Utility;
 using Gender = Rock.Model.Gender;
 using RelationshipFocus = Rock.Enums.Outreach.RelationshipFocus;
 using RelationshipStrength = Rock.Enums.Outreach.RelationshipStrength;
+using TouchpointType = Rock.Enums.Outreach.TouchpointType;
 
 namespace Rock.Blocks.Types.Mobile.Outreach
 {
@@ -188,9 +187,10 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// Gets the contact touchpoint history.
         /// </summary>
         /// <param name="idKey"></param>
+        /// <param name="touchpointTypeFilter"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult GetContactTouchpointHistory( string idKey )
+        public BlockActionResult GetContactTouchpointHistory( string idKey, int? touchpointTypeFilter )
         {
             var person = RequestContext.CurrentPerson;
             if ( idKey.IsNullOrWhiteSpace() )
@@ -206,30 +206,31 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             }
 
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
-            var touchpointHistoryBag = contactTouchpointService.Queryable()
+            var qry = contactTouchpointService.Queryable()
                 .Where( tp => tp.ContactId == contact.Id )
-                .Where( tp => tp.CompletedDateTime.HasValue )
+                .Where( tp => tp.CompletedDateTime.HasValue );
+
+            if ( touchpointTypeFilter.HasValue )
+            {
+                qry = qry
+                    .Where( tp => tp.Type == ( TouchpointType ) touchpointTypeFilter.Value );
+            }
+
+            var touchpointHistoryBag = qry
+                .OrderByDescending( bag => bag.CompletedDateTime )
                 .AsEnumerable()
                 .Select( tp => new TouchpointHistoryBag
                 {
                     TouchpointType = tp.Type.ToMobile(),
                     ContactLastName = contact.LastName,
+                    ScheduleDateTime = tp.ScheduledDateTime,
                     CompletedDateTime = tp.CompletedDateTime.Value,
                     Note = tp.Note
-                } ).ToList()
-                .OrderByDescending( bag => bag.CompletedDateTime );
+                } ).ToList();
 
             return ActionOk( touchpointHistoryBag );
         }
 
         #endregion
     }
-}
-
-public class TouchpointHistoryBag
-{
-    public TouchpointType TouchpointType { get; set; }
-    public string ContactLastName { get; set; }
-    public DateTimeOffset CompletedDateTime { get; set; }
-    public string Note { get; set; }
 }
