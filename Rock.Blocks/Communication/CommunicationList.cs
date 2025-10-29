@@ -65,7 +65,6 @@ namespace Rock.Blocks.Communication
 
     [Rock.SystemGuid.EntityTypeGuid( "e4bd5cad-579e-476d-87ec-989de975bb60" )]
     [Rock.SystemGuid.BlockTypeGuid( "c3544f53-8e2d-43d6-b165-8fefc541a4eb" )]
-    [CustomizedGrid]
     public class CommunicationList : RockBlockType
     {
         #region Keys
