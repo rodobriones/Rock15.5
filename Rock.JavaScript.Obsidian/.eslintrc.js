@@ -117,7 +117,7 @@ module.exports = {
     },
     overrides: [
         {
-            "files": ["src/**/*.ts", "src/**/*.vue", "src/**/*.obs"],
+            "files": ["**/*.ts", "**/*.obs"],
             "rules": {
                 // Disable undefined use warnings, TypeScript will tell us.
                 "no-undef": 0

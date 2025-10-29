@@ -1442,7 +1442,7 @@
             return;
         }
 
-        if (pageSize.value && pageSize.value != 50) {
+        if (pageSize.value && pageSize.value !== 50) {
             gridPreferences.setValue(PreferenceKey.PageSize, JSON.stringify(pageSize.value));
         }
         else {
