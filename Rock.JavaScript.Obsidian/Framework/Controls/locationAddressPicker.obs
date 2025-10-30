@@ -64,11 +64,6 @@
         showPopup: {
             type: Boolean
         },
-
-        isRequired: {
-            type: Boolean,
-            default: true
-        }
     });
 
     const emit = defineEmits<{
@@ -80,6 +75,11 @@
 
     // Address Control
     const controlValue = ref({});
+
+    // The underlying picker
+    const isRequired = computed(() => {
+        return containsRequiredRule(props.rules);
+    });
 
     // This Picker
     const pickerValue = ref({});

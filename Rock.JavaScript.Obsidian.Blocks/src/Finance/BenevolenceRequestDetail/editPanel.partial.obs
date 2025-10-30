@@ -125,8 +125,7 @@
                 <div class="col-md-3">
                     <LocationAddressPicker v-model="requesterLocationAddressFields"
                                            label="Location"
-                                           :disabled="isAddressFieldDisabled || isSavingPersonRecord"
-                                           :isRequired="false" />
+                                           :disabled="isAddressFieldDisabled || isSavingPersonRecord" />
                 </div>
             </div>
             <div class="row">
