@@ -29,6 +29,7 @@
 // limitations under the License.
 // </copyright>
 
+using System;
 using System.Collections.Generic;
 
 using Rock.ViewModels.Utility;
@@ -40,6 +41,51 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
     /// </summary>
     public class BenevolenceRequestDetailOptionsBag
     {
+        /// <summary>
+        /// Gets or sets the unique identifier for the case worker role attribute.
+        /// </summary>
+        public Guid CaseWorkerRoleAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the country code attribute should be displayed.
+        /// </summary>
+        public bool DisplayCountryCodeAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the government ID attribute should be displayed.
+        /// </summary>
+        public bool DisplayGovernmentIdAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the middle name attribute should be displayed.
+        /// </summary>
+        public bool DisplayMiddleNameAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the unique identifier for the benevolence request statement page attribute.
+        /// </summary>
+        public Guid BenevolenceRequestStatementPageAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the unique identifier for the workflow detail page attribute.
+        /// </summary>
+        public Guid WorkflowDetailPageAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the unique identifier for the workflow entry page attribute.
+        /// </summary>
+        public Guid WorkflowEntryPageAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the race option attribute value.
+        /// </summary>
+        public string RaceOptionAttribute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the ethnicity option attribute value.
+        /// </summary>
+        public string EthnicityOptionAttribute { get; set; }
+
         /// <summary>
         /// Gets or sets the benevolence type.
         /// </summary>

@@ -50,6 +50,7 @@
     import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
     import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
+    import { emptyGuid } from "@Obsidian/Utility/guid";
 
     const config = useConfigurationValues<DetailBlockBox<BenevolenceRequestBag, BenevolenceRequestDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -168,7 +169,16 @@
     /** The options bag for the benevolence request detail block. */
     const options = computed((): BenevolenceRequestDetailOptionsBag => {
         return config.options ?? {
-            benevolenceDocumentBinaryFileTypeGuid: ""
+            benevolenceDocumentBinaryFileTypeGuid: emptyGuid,
+            benevolenceRequestStatementPageAttribute: emptyGuid,
+            caseWorkerRoleAttribute: emptyGuid,
+            displayCountryCodeAttribute: false,
+            displayGovernmentIdAttribute: true,
+            displayMiddleNameAttribute: false,
+            workflowDetailPageAttribute: emptyGuid,
+            workflowEntryPageAttribute: emptyGuid,
+            benevolenceRequestTypes: [],
+            requestStatusValues: []
         };
     });
 

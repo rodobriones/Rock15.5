@@ -51,6 +51,71 @@ namespace Rock.Blocks.Finance
 
     #region Block Attributes
 
+    [SecurityRoleField( "Case Worker Role",
+        Description = "The security role to draw case workers from",
+        IsRequired = false,
+        Key = AttributeKey.CaseWorkerRole,
+        Order = 1 )]
+
+    [BooleanField(
+        "Display Country Code",
+        Key = AttributeKey.DisplayCountryCode,
+        Description = "When enabled prepends the country code to all phone numbers.",
+        DefaultBooleanValue = false,
+        Order = 2 )]
+
+    [BooleanField( "Display Government Id",
+        Key = AttributeKey.DisplayGovernmentId,
+        Description = "Display the government identifier.",
+        DefaultBooleanValue = true,
+        Order = 3 )]
+
+    [BooleanField( "Display Middle Name",
+        Key = AttributeKey.DisplayMiddleName,
+        Description = "Display the middle name of the person.",
+        DefaultBooleanValue = false,
+        Order = 4 )]
+
+    [LinkedPage( "Benevolence Request Statement Page",
+        Description = "The page which summarizes a benevolence request for printing",
+        IsRequired = true,
+        Key = AttributeKey.BenevolenceRequestStatementPage,
+        Order = 5 )]
+
+    [LinkedPage(
+        "Workflow Detail Page",
+        Description = "Page used to display details about a workflow.",
+        Order = 6,
+        Key = AttributeKey.WorkflowDetailPage,
+        DefaultValue = Rock.SystemGuid.Page.WORKFLOW_DETAIL )]
+
+    [LinkedPage(
+        "Workflow Entry Page",
+        Description = "Page used to launch a new workflow of the selected type.",
+        Order = 7,
+        Key = AttributeKey.WorkflowEntryPage,
+        DefaultValue = Rock.SystemGuid.Page.WORKFLOW_ENTRY )]
+
+    [CustomDropdownListField(
+        "Race",
+        Key = AttributeKey.RaceOption,
+        Description = "Allow race to be optionally selected.",
+        ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
+        IsRequired = false,
+        DefaultValue = "Hide",
+        Category = "Individual",
+        Order = 8 )]
+
+    [CustomDropdownListField(
+        "Ethnicity",
+        Key = AttributeKey.EthnicityOption,
+        Description = "Allow Ethnicity to be optionally selected.",
+        ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
+        IsRequired = false,
+        DefaultValue = "Hide",
+        Category = "Individual",
+        Order = 9 )]
+
     #endregion
 
     [Rock.SystemGuid.EntityTypeGuid( "9B1BE948-F14A-4889-981D-75B86E6D458D" )]
@@ -66,6 +131,29 @@ namespace Rock.Blocks.Finance
         #endregion Fields
 
         #region Keys
+
+        private static class AttributeKey
+        {
+            public const string Badges = "Badges";
+            public const string CaseWorkerRole = "CaseWorkerRole";
+            public const string DisplayCountryCode = "DisplayCountryCode";
+            public const string DisplayMiddleName = "DisplayMiddleName";
+            public const string DisplayGovernmentId = "DisplayGovernmentId";
+            public const string EnableCallOrigination = "EnableCallOrigination";
+            public const string BenevolenceRequestStatementPage = "BenevolenceRequestStatementPage";
+            public const string WorkflowDetailPage = "WorkflowDetailPage";
+            public const string WorkflowEntryPage = "WorkflowEntryPage";
+            public const string RaceOption = "RaceOption";
+            public const string EthnicityOption = "EthnicityOption";
+        }
+
+        #region List Source
+        private static class ListSource
+        {
+            public const string HIDE_OPTIONAL_REQUIRED = "Hide,Optional,Required";
+        }
+
+        #endregion
 
         private static class PageParameterKey
         {
@@ -103,6 +191,16 @@ namespace Rock.Blocks.Finance
         private BenevolenceRequestDetailOptionsBag GetBoxOptions( bool isEditable )
         {
             var options = new BenevolenceRequestDetailOptionsBag();
+
+            options.CaseWorkerRoleAttribute = GetAttributeValue( AttributeKey.CaseWorkerRole ).AsGuid();
+            options.DisplayCountryCodeAttribute = GetAttributeValue( AttributeKey.DisplayCountryCode ).AsBoolean();
+            options.DisplayGovernmentIdAttribute = GetAttributeValue( AttributeKey.DisplayGovernmentId ).AsBoolean();
+            options.DisplayMiddleNameAttribute = GetAttributeValue( AttributeKey.DisplayMiddleName ).AsBoolean();
+            options.BenevolenceRequestStatementPageAttribute = GetAttributeValue( AttributeKey.BenevolenceRequestStatementPage ).AsGuid();
+            options.WorkflowDetailPageAttribute = GetAttributeValue( AttributeKey.WorkflowDetailPage ).AsGuid();
+            options.WorkflowEntryPageAttribute = GetAttributeValue( AttributeKey.WorkflowEntryPage ).AsGuid();
+            options.RaceOptionAttribute = GetAttributeValue( AttributeKey.RaceOption ).ToString();
+            options.EthnicityOptionAttribute = GetAttributeValue( AttributeKey.EthnicityOption ).ToString();
 
             options.BenevolenceRequestTypes = new BenevolenceTypeService( RockContext )
                 .Queryable()

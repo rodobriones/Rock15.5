@@ -29,15 +29,42 @@ export type BenevolenceRequestDetailOptionsBag = {
     /** Gets or sets the unique identifier for the binary file type associated with benevolence documents. */
     benevolenceDocumentBinaryFileTypeGuid: Guid;
 
+    /** Gets or sets the unique identifier for the benevolence request statement page attribute. */
+    benevolenceRequestStatementPageAttribute: Guid;
+
     /** Gets or sets the benevolence type. */
     benevolenceRequestTypes?: ListItemBag[] | null;
 
+    /** Gets or sets the unique identifier for the case worker role attribute. */
+    caseWorkerRoleAttribute: Guid;
+
     /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
     connectionStatusValues?: ListItemBag[] | null;
+
+    /** Gets or sets a value indicating whether the country code attribute should be displayed. */
+    displayCountryCodeAttribute: boolean;
+
+    /** Gets or sets a value indicating whether the government ID attribute should be displayed. */
+    displayGovernmentIdAttribute: boolean;
+
+    /** Gets or sets a value indicating whether the middle name attribute should be displayed. */
+    displayMiddleNameAttribute: boolean;
+
+    /** Gets or sets the ethnicity option attribute value. */
+    ethnicityOptionAttribute?: string | null;
+
+    /** Gets or sets the race option attribute value. */
+    raceOptionAttribute?: string | null;
 
     /** Gets or sets the Rock.Model.DefinedValue representing the Benevolence Request's status. */
     requestStatusValues?: ListItemBag[] | null;
 
     /** Gets or sets the collection of result type values. */
     resultTypeValues?: ListItemBag[] | null;
+
+    /** Gets or sets the unique identifier for the workflow detail page attribute. */
+    workflowDetailPageAttribute: Guid;
+
+    /** Gets or sets the unique identifier for the workflow entry page attribute. */
+    workflowEntryPageAttribute: Guid;
 };
