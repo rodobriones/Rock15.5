@@ -5,6 +5,29 @@ import { parse } from "node-html-parser";
 import Asana from "asana";
 import { env } from "process";
 
+const missing_variables = [];
+
+if (!env.ASANA_ACCESS_TOKEN) {
+    missing_variables.push("ASANA_ACCESS_TOKEN");
+}
+
+if (!env.ASANA_WORKSPACE) {
+    missing_variables.push("ASANA_WORKSPACE");
+}
+
+if (!env.ASANA_PROJECT) {
+    missing_variables.push("ASANA_PROJECT");
+}
+
+if (!env.ASANA_SECTION) {
+    missing_variables.push("ASANA_SECTION");
+}
+
+if (missing_variables.length > 0) {
+    console.error(`Missing one or more environment variables: ${missing_variables.join(", ")}`);
+    process.exit(1);
+}
+
 // Initialize Asana client.
 //
 // You can get the Workspace Gid and Project Gid by inspecting the URL when
@@ -137,9 +160,10 @@ function detectStyleChanges(filePath) {
 async function createAsanaTask(changedFiles) {
     const shortCommitHash = runCommand("git", ["rev-parse", "--short", "HEAD"], repoRoot);
     const longCommitHash = runCommand("git", ["rev-parse", "HEAD"], repoRoot);
+    const commitMessage = runCommand("git", ["log", "-1", "--pretty=%B"], repoRoot);
 
     const tasksApiInstance = new Asana.TasksApi();
-    const message = `Style changes in <a href="https://github.com/SparkDevNetwork/Rock/commit/${longCommitHash}">${shortCommitHash}</a> were detected in the following files:`;
+    const message = `Commit <a href="https://github.com/SparkDevNetwork/Rock/commit/${longCommitHash}">${shortCommitHash}</a> made changes to Obsidian style tags.\n\n<pre>${commitMessage}</pre>`;
     const fileBullets = changedFiles.map(f => `<li>${f}</li>`).join("");
     const body = {
         data: {
@@ -206,10 +230,4 @@ async function main() {
     }
 }
 
-if (asanaWorkspaceGid && token.accessToken && asanaProjectGid && asanaSectionGid) {
-    main();
-}
-else {
-    console.error("Missing one or more environment variables: ASANA_ACCESS_TOKEN, ASANA_WORKSPACE, ASANA_PROJECT, or ASANA_SECTION.");
-    process.exit(1);
-}
+main();
