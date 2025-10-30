@@ -266,8 +266,8 @@
     const benevolenceTypeId = propertyRef(props.modelValue.bag?.benevolenceTypeId ?? 0, "benevolenceTypeId");
     const requestStatusValueId = propertyRef(props.modelValue.bag?.requestStatusValueId ?? 0, "requestStatusValueId");
     const requestDateTime = propertyRef(props.modelValue.bag?.requestDateTime ?? new Date().toISOString(), "requestDateTime");
-    const requester = propertyRef(props.modelValue.bag?.requester ?? {} as PersonBag, "requester");
-    const caseWorker = propertyRef(props.modelValue.bag?.caseWorker ?? {} as PersonBag, "caseWorker");
+    const requester = propertyRef(props.modelValue.bag?.requester ?? getEmptyPersonBag(), "requester");
+    const caseWorker = propertyRef(props.modelValue.bag?.caseWorker ?? getEmptyPersonBag(), "caseWorker");
     const requestText = propertyRef(props.modelValue.bag?.requestText ?? "", "requestText");
     const resultSummary = propertyRef(props.modelValue.bag?.resultSummary ?? "", "resultSummary");
     const providedNextSteps = propertyRef(props.modelValue.bag?.providedNextSteps ?? "", "providedNextSteps");
@@ -497,13 +497,23 @@
     // #region Functions
 
     /**
+     * Get an empty PersonBag
+     * @returns An empty PersonBag
+     */
+    function getEmptyPersonBag(): PersonBag {
+        return {
+            personAliasGuid: emptyGuid
+        };
+    }
+
+    /**
      * Get a PersonBag from a PersonAliasGuid
      * @param guid The PersonAliasGuid
      * @returns A Promise that resolves to a PersonBag
      */
     async function getPersonBagFromPersonAliasGuid(guid: Guid): Promise<PersonBag> {
         if (!guid || areEqual(guid, emptyGuid)) {
-            return {} as PersonBag;
+            return getEmptyPersonBag();
         }
 
         const result = await invokeBlockAction<PersonBag>("GeneratePersonBagFromPersonAliasGuid", { personAliasGuid: guid });
@@ -520,7 +530,7 @@
             emit("errorMessage", result.errorMessage ?? "Unknown error while trying to retrieve person.");
         }
 
-        return {} as PersonBag;
+        return getEmptyPersonBag();
     }
 
     /**
@@ -608,7 +618,7 @@
     async function onCaseWorkerSelectionChanged(person: ListItemBag | null | undefined, personIdKey: string | undefined): Promise<void> {
         // If a clear action occurred, clear the case worker.
         if (isNullish(person) && isNullish(personIdKey)) {
-            caseWorker.value = {} as PersonBag;
+            caseWorker.value = getEmptyPersonBag();
             return;
         }
 
@@ -741,8 +751,8 @@
     watch(() => props.modelValue, () => {
         updateRefValue(attributes, props.modelValue.bag?.attributes ?? {});
         updateRefValue(attributeValues, props.modelValue.bag?.attributeValues ?? {});
-        updateRefValue(requester, props.modelValue.bag?.requester ?? {} as PersonBag);
-        updateRefValue(caseWorker, props.modelValue.bag?.caseWorker ?? {} as PersonBag);
+        updateRefValue(requester, props.modelValue.bag?.requester ?? getEmptyPersonBag());
+        updateRefValue(caseWorker, props.modelValue.bag?.caseWorker ?? getEmptyPersonBag());
         updateRefValue(requestText, props.modelValue.bag?.requestText ?? "");
         updateRefValue(resultSummary, props.modelValue.bag?.resultSummary ?? "");
         updateRefValue(providedNextSteps, props.modelValue.bag?.providedNextSteps ?? "");
