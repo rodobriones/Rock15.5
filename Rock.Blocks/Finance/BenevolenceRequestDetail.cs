@@ -46,7 +46,7 @@ namespace Rock.Blocks.Finance
     [DisplayName( "Benevolence Request Detail" )]
     [Category( "Finance" )]
     [Description( "Displays the details of a particular benevolence request." )]
-    [IconCssClass( "fa fa-question" )]
+    [IconCssClass( "ti ti-question-mark" )]
     [SupportedSiteTypes( SiteType.Web )]
 
     #region Block Attributes
