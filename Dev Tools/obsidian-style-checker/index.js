@@ -6,11 +6,23 @@ import Asana from "asana";
 import { env } from "process";
 
 // Initialize Asana client.
+//
+// You can get the Workspace Gid and Project Gid by inspecting the URL when
+// viewing the project in the browser:
+//
+// https://app.asana.com/1/<workspace_gid>/project/<project_gid>/overview/<some_other_gid>
+//
+// Next you can get the Section Gid by calling this API from the browser while
+// logged in:
+//
+// https://app.asana.com/api/1.0/projects/<project_gid>/sections
+
 const client = Asana.ApiClient.instance;
 const token = client.authentications["token"];
 token.accessToken = env.ASANA_ACCESS_TOKEN;
 const asanaWorkspaceGid = env.ASANA_WORKSPACE;
-const asanaAssignee = env.ASANA_ASSIGNEE || "me";
+const asanaProjectGid = env.ASANA_PROJECT;
+const asanaSectionGid = env.ASANA_SECTION;
 
 const repoRoot = runCommand("git", ["rev-parse", "--show-toplevel"]).trim();
 
@@ -135,8 +147,13 @@ async function createAsanaTask(changedFiles) {
             approval_status: "pending",
             completed: false,
             html_notes: `<body>${message}\n\n<ul>${fileBullets}</ul>\n\n</body>`,
-            assignee: asanaAssignee,
             workspace: asanaWorkspaceGid,
+            memberships: [
+                {
+                    project: asanaProjectGid,
+                    section: asanaSectionGid
+                }
+            ]
         },
     };
     const opts = {};
@@ -168,6 +185,10 @@ async function main() {
         }
     }
 
+    if (process.argv.some(a => a === "--test-asana")) {
+        reportFiles.push("Test file");
+    }
+
     if (reportFiles.length > 0) {
         try {
             await createAsanaTask(reportFiles);
@@ -185,10 +206,10 @@ async function main() {
     }
 }
 
-if (asanaWorkspaceGid && token.accessToken) {
+if (asanaWorkspaceGid && token.accessToken && asanaProjectGid && asanaSectionGid) {
     main();
 }
 else {
-    console.error("Asana workspace or access token not set in environment variables.");
+    console.error("Missing one or more environment variables: ASANA_ACCESS_TOKEN, ASANA_WORKSPACE, ASANA_PROJECT, or ASANA_SECTION.");
     process.exit(1);
 }
