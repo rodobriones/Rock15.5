@@ -283,9 +283,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
-        /// Updates the completed date.
+        /// Completes the touchpoint.
         /// </summary>
-        /// <param name="idKey"></param>
+        /// <param name="bag"></param>
         /// <returns></returns>
         [BlockAction]
         public BlockActionResult CompleteTouchpoint( CompleteTouchpointBag bag )
@@ -303,6 +303,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionNotFound( "Touchpoint not found." );
             }
 
+            touchpoint.CommunicationMedium = bag.CommunicationMedium?.ToNative() ?? TouchpointCommunicationMedium.Call; // PS TODO: After we make the communication medium nullable on the model, we can remove the null-coalescing operator.
             touchpoint.Note = bag.Note;
             touchpoint.CompletedDateTime = bag.CompletedDate.HasValue ? bag.CompletedDate.Value.DateTime : RockDateTime.Now;
             RockContext.SaveChanges();
@@ -426,6 +427,41 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             RockContext.SaveChanges();
 
             return ActionOk();
+        }
+
+        /// <summary>
+        /// Gets the contact touchpoint history.
+        /// </summary>
+        /// <param name="contactId"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult GetContactTouchpointHistory( int contactId )
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( contactId );
+            if ( contact == null )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var qry = contactTouchpointService.Queryable()
+                .Where( tp => tp.ContactId == contact.Id )
+                .Where( tp => tp.CompletedDateTime.HasValue );
+
+            var touchpointHistoryBag = qry
+                .OrderByDescending( bag => bag.CompletedDateTime )
+                .AsEnumerable()
+                .Select( tp => new TouchpointHistoryBag
+                {
+                    TouchpointType = tp.Type.ToMobile(),
+                    ContactLastName = contact.LastName,
+                    ScheduleDateTime = tp.ScheduledDateTime,
+                    CompletedDateTime = tp.CompletedDateTime.Value,
+                    Note = tp.Note
+                } ).ToList();
+
+            return ActionOk( touchpointHistoryBag );
         }
 
         #endregion

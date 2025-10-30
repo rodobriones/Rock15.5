@@ -192,7 +192,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         [BlockAction]
         public BlockActionResult GetContactTouchpointHistory( string idKey, int? touchpointTypeFilter )
         {
-            var person = RequestContext.CurrentPerson;
             if ( idKey.IsNullOrWhiteSpace() )
             {
                 return ActionBadRequest( "Contact not found." );

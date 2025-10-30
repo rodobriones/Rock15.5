@@ -672,4 +672,54 @@ namespace Rock.Mobile
             }
         }
     }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/>.
+    /// </summary>
+    public static class MobileExtensionTouchpointCommuncationMedium
+    {
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/> to a web native <see cref="Enums.Outreach.TouchpointCommunicationMedium"/>.
+        /// </summary>
+        /// <param name="medium"></param>
+        /// <returns></returns>
+        public static Enums.Outreach.TouchpointCommunicationMedium ToNative( this Rock.Common.Mobile.Enums.TouchpointCommunicationMedium medium )
+        {
+            switch ( medium )
+            {
+                case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call:
+                    return Enums.Outreach.TouchpointCommunicationMedium.Call;
+                case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Text:
+                    return Enums.Outreach.TouchpointCommunicationMedium.Text;
+                case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Email:
+                    return Enums.Outreach.TouchpointCommunicationMedium.Email;
+                case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.InPerson:
+                    return Enums.Outreach.TouchpointCommunicationMedium.InPerson;
+                default:
+                    return Enums.Outreach.TouchpointCommunicationMedium.Call;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Outreach.TouchpointCommunicationMedium"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/>.
+        /// </summary>
+        /// <param name="medium"></param>
+        /// <returns></returns>
+        public static Common.Mobile.Enums.TouchpointCommunicationMedium ToMobile( this Enums.Outreach.TouchpointCommunicationMedium medium )
+        {
+            switch ( medium )
+            {
+                case Enums.Outreach.TouchpointCommunicationMedium.Call:
+                    return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call;
+                case Enums.Outreach.TouchpointCommunicationMedium.Text:
+                    return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Text;
+                case Enums.Outreach.TouchpointCommunicationMedium.Email:
+                    return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Email;
+                case Enums.Outreach.TouchpointCommunicationMedium.InPerson:
+                    return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.InPerson;
+                default:
+                    return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call;
+            }
+        }
+    }
 }
