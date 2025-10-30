@@ -6653,7 +6653,7 @@ tr.row-highlight td {
 .grid-columncommand .btn-security:focus,
 .grid-columncommand .btn-security:hover,
 .grid-columncommand .btn-security:active {
-  background-color: var(--color-danger-softer);
+  background-color: var(--color-interface-softer);
 }
 .grid-columncommand .btn-danger {
   color: var(--color-interface-strong);
@@ -6667,7 +6667,7 @@ tr.row-highlight td {
 .grid-columncommand .btn-danger:focus, .grid-columncommand .btn-danger:active .grid-columncommand .btn-danger:active:hover, .grid-columncommand .btn-danger:active:focus {
   color: var(--color-danger-strong);
   background: var(--color-danger-soft);
-  border-color: var(--color-danger-strnog);
+  border-color: var(--color-danger-strong);
 }
 
 .grid-panel .table-responsive[data-pattern=priority-columns],
