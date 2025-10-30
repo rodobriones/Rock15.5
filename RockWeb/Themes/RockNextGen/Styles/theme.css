@@ -19992,7 +19992,7 @@ iframe.file-browser {
   background: var(--color-interface-softest);
 }
 .note-btn:active, .note-btn:active:focus, .note-btn.active, .note-btn.active:focus, .note-btn.active:hover {
-  background: var(--color-info-strong);
+  background: var(--color-info-soft);
 }
 .note-btn.btn-primary {
   background: var(--color-primary);
