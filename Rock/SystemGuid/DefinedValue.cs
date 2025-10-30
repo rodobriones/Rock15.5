@@ -1647,6 +1647,11 @@ namespace Rock.SystemGuid
         /// </summary>
         public const string RECORD_SOURCE_TYPE_ROKU_TV_APP = "1849A5FB-1434-45AA-AD78-D403A3C7685A";
 
+        /// <summary>
+        /// The Serving Connection record source.
+        /// </summary>
+        public const string RECORD_SOURCE_TYPE_SERVING_CONNECTION = "2CF9DE9F-14D5-4036-B329-85B192A63A9B";
+
         #endregion
 
         #region Chat Reaction
