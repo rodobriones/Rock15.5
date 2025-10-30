@@ -455,7 +455,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 .Select( tp => new TouchpointHistoryBag
                 {
                     TouchpointType = tp.Type.ToMobile(),
-                    ContactLastName = contact.LastName,
+                    ContactFirstName = contact.FirstName,
                     ScheduleDateTime = tp.ScheduledDateTime,
                     CompletedDateTime = tp.CompletedDateTime.Value,
                     Note = tp.Note
