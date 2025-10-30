@@ -157,12 +157,14 @@
     import ContentSection from "@Obsidian/Controls/contentSection.obs";
     import PersonAvatar from "@Obsidian/Controls/personAvatar.obs";
     import { BenevolenceRequestBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestBag";
+    import { PersonBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/personBag";
     import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
     import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
     import { ValueDetailListItemBuilder } from "@Obsidian/Core/Controls/valueDetailListItemBuilder";
     import { ValueDetailListItem } from "@Obsidian/Types/Controls/valueDetailListItem";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { isNotNullish } from "@Obsidian/Utility/util";
+    import { emptyGuid } from "@Obsidian/Utility/guid";
 
     const props = defineProps({
         modelValue: {
@@ -188,7 +190,7 @@
 
     // #region Values
 
-    const entity = props.modelValue ?? {} as BenevolenceRequestBag;
+    const entity: BenevolenceRequestBag = props.modelValue ?? getEmptyBenevolenceRequestBag();
 
     /** The requester's photo URL or a default image if none exists. */
     const requesterPhotoUrl = isNotNullish(entity.requester?.photoUrl) && entity.requester?.photoUrl !== ""
@@ -287,6 +289,25 @@
     // #endregion
 
     // #region Functions
+
+    /**
+     * Get an empty PersonBag
+     * @returns An empty PersonBag
+     */
+    function getEmptyPersonBag(): PersonBag {
+        return {
+            personAliasGuid: emptyGuid
+        };
+    }
+
+    function getEmptyBenevolenceRequestBag(): BenevolenceRequestBag {
+        return {
+            benevolenceTypeId: 0,
+            requester: getEmptyPersonBag(),
+            caseWorker: getEmptyPersonBag(),
+            results: [],
+        };
+    }
 
     /**
      * Formats the request date into a local date and includes how many days ago it was.

@@ -230,12 +230,12 @@
 
         const newIdKey = crypto.randomUUID();
 
-        const newBag = {
+        const newBag: BenevolenceResultBag = {
             idKey: newIdKey,
             resultTypeValueId: parseInt(resultType.value),
             amount: parseFloat(resultAmount.value),
             resultSummary: resultDetails.value,
-        } as BenevolenceResultBag;
+        };
 
         const result = await invokeBlockAction<BenevolenceResultBag>(
             "AddBenevolenceRequestResult",
