@@ -77,6 +77,9 @@ namespace Rock.Blocks.Communication
         private static class NavigationUrlKey
         {
             public const string DetailPage = "DetailPage";
+            [RockObsolete( "18.0" )]
+            [Obsolete( "This will be removed in v19.0 when the legacy detail page is removed", error: false )]
+            public const string LegacyDetailPage = "LegacyDetailPage";
         }
 
         private static class PageParameterKey
@@ -264,8 +267,8 @@ SELECT counts.*
         ELSE c.[PushTitle]
       END AS [Name]
     , CASE
-        WHEN c.[CommunicationType] = {CommunicationType.SMS.ConvertToInt()} THEN [SMSMessage]
-        WHEN c.[CommunicationType] = {CommunicationType.PushNotification.ConvertToInt()} THEN [PushMessage]
+        WHEN c.[CommunicationType] = {CommunicationType.SMS.ConvertToInt()} THEN c.[SMSMessage]
+        WHEN c.[CommunicationType] = {CommunicationType.PushNotification.ConvertToInt()} THEN c.[PushMessage]
         ELSE c.[Summary]
       END AS [Summary]
     , c.[Status]
@@ -301,6 +304,7 @@ SELECT counts.*
     , pReviewer.[LastName] AS [ReviewerPersonLastName]
     , pReviewer.[SuffixValueId] AS [ReviewerPersonSuffixValueId]
     , pReviewer.[RecordTypeValueId] AS [ReviewerRecordTypeValueId]
+    , CAST(CASE WHEN (c.[Segments] IS NOT NULL AND RTRIM(c.[Segments]) <> '') OR ct.[Version] = 0 THEN 1 ELSE 0 END AS BIT) AS [IsLegacyCommunication]
 FROM (
     SELECT
         c.[Id] AS [CommunicationId]
@@ -385,6 +389,7 @@ FROM (
         , pSender.[Id]
 ) AS counts
 INNER JOIN [Communication] c ON c.[Id] = counts.[CommunicationId]
+LEFT OUTER JOIN [CommunicationTemplate] ct ON ct.[Id] = c.[CommunicationTemplateId]
 LEFT OUTER JOIN [PersonAlias] paSender ON paSender.[Id] = c.[SenderPersonAliasId]
 LEFT OUTER JOIN [Person] pSender ON pSender.[Id] = paSender.[PersonId]
 LEFT OUTER JOIN [PersonAlias] paReviewer ON paReviewer.[Id] = c.[ReviewerPersonAliasId]
@@ -531,8 +536,34 @@ WHERE (@RecipientCountLower IS NULL OR counts.[RecipientCount] >= @RecipientCoun
         {
             return new Dictionary<string, string>
             {
-                [NavigationUrlKey.DetailPage] = this.GetLinkedPageUrl( AttributeKey.DetailPage, PageParameterKey.Communication, "((Key))" )
+                [NavigationUrlKey.DetailPage] = this.GetLinkedPageUrl( AttributeKey.DetailPage, PageParameterKey.Communication, "((Key))" ),
+                // Remove this in v19.0 when the legacy detail page is removed.
+                [NavigationUrlKey.LegacyDetailPage] = GetLegacyCommunicationUrl( new Dictionary<string, string>()
+                {
+                    [PageParameterKey.Communication] = "((Key))"
+                } )
             };
+        }
+
+        /// <summary>
+        /// Constructs a URL for the legacy communication page using the specified parameters.
+        /// </summary>
+        /// <param name="pageParams">A dictionary of parameters to include in the URL.</param>
+        /// <returns>A string representing the constructed URL if the page ID is valid; otherwise, <see langword="null"/>.</returns>
+        [RockObsolete( "18.0" )]
+        [Obsolete( "This will be removed in v19.0 when the legacy detail page is removed", error: false )]
+        private string GetLegacyCommunicationUrl( IDictionary<string, string> pageParams )
+        {
+            var pageReference = new Rock.Web.PageReference(
+                Rock.SystemGuid.Page.NEW_COMMUNICATION,
+                new Dictionary<string, string>( pageParams ) );
+
+            if ( pageReference.PageId > 0 )
+            {
+                return pageReference.BuildUrl();
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -605,7 +636,8 @@ WHERE (@RecipientCountLower IS NULL OR counts.[RecipientCount] >= @RecipientCoun
                         a.ReviewerPersonRecordTypeValueId
                     );
                 } )
-                .AddField( "isDeleteDisabled", a => a.DeliveredCount > 0 );
+                .AddField( "isDeleteDisabled", a => a.DeliveredCount > 0 )
+                .AddField( "isLegacyCommunication", a => a.IsLegacyCommunication );
         }
 
         #endregion
@@ -745,6 +777,13 @@ WHERE (@RecipientCountLower IS NULL OR counts.[RecipientCount] >= @RecipientCoun
             /// Gets or sets the record type value identifier of the person who reviewed the <see cref="Rock.Model.Communication"/>.
             /// </summary>
             public int? ReviewerPersonRecordTypeValueId { get; set; }
+
+            /// <summary>
+            /// Gets or sets a value indicating whether the communication protocol is considered legacy.
+            /// </summary>
+            [RockObsolete( "18.0" )]
+            [Obsolete( "This will be removed in v19.0 when the legacy detail page is removed", error: false )]
+            public bool IsLegacyCommunication { get; set; }
         }
 
         #endregion Supporting Classes
