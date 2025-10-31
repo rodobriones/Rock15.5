@@ -377,8 +377,14 @@ namespace Rock.CodeGeneration.Pages
                 FilePreviewPath.Text = string.Empty;
             }
         }
+
         #region Check/Uncheck All
 
+        /// <summary>
+        /// Handles the Click event of the CheckAll control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
         private void CheckAll_Click( object sender, RoutedEventArgs e )
         {
             if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
@@ -404,6 +410,11 @@ namespace Rock.CodeGeneration.Pages
             }
         }
 
+        /// <summary>
+        /// Handles the Click event of the UncheckAll control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
         private void UncheckAll_Click( object sender, RoutedEventArgs e )
         {
             if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
@@ -440,12 +451,9 @@ namespace Rock.CodeGeneration.Pages
                 if ( file.IsWriteNeeded )
                     file.IsExporting = export;
             }
-
-            // No need to call group.OnPropertyChanged; ExportFileGroup subscribes
-            // to child PropertyChanged events and updates its IsExporting automatically
         }
 
-        #endregion
+        #endregion Check/Uncheck All
 
 
 
@@ -515,7 +523,7 @@ namespace Rock.CodeGeneration.Pages
     }
 
     #region Support Classes
-    
+
     /// <summary>
     /// Wraps the generated file in a class that can be used in the list box
     /// to display more detailed information about the file.
@@ -611,7 +619,7 @@ namespace Rock.CodeGeneration.Pages
 
         #endregion
     }
-    
+
     /// <summary>
     /// Groups ExportFile instances by their folder path.
     /// </summary>
