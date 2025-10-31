@@ -377,6 +377,77 @@ namespace Rock.CodeGeneration.Pages
                 FilePreviewPath.Text = string.Empty;
             }
         }
+        #region Check/Uncheck All
+
+        private void CheckAll_Click( object sender, RoutedEventArgs e )
+        {
+            if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
+            {
+                // Flat list
+                if ( viewModel.ExportFiles != null )
+                {
+                    foreach ( var file in viewModel.ExportFiles )
+                    {
+                        if ( file.IsWriteNeeded )
+                            file.IsExporting = true;
+                    }
+                }
+
+                // Grouped tree view
+                if ( viewModel.ExportFileGroups != null )
+                {
+                    foreach ( var group in viewModel.ExportFileGroups )
+                    {
+                        SetGroupExporting( group, true );
+                    }
+                }
+            }
+        }
+
+        private void UncheckAll_Click( object sender, RoutedEventArgs e )
+        {
+            if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
+            {
+                // Flat list
+                if ( viewModel.ExportFiles != null )
+                {
+                    foreach ( var file in viewModel.ExportFiles )
+                    {
+                        file.IsExporting = false;
+                    }
+                }
+
+                // Grouped tree view
+                if ( viewModel.ExportFileGroups != null )
+                {
+                    foreach ( var group in viewModel.ExportFileGroups )
+                    {
+                        SetGroupExporting( group, false );
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets all files in the group to exporting or not.
+        /// </summary>
+        private void SetGroupExporting( ExportFileGroup group, bool export )
+        {
+            if ( group.ExportFiles == null ) return;
+
+            foreach ( var file in group.ExportFiles )
+            {
+                if ( file.IsWriteNeeded )
+                    file.IsExporting = export;
+            }
+
+            // No need to call group.OnPropertyChanged; ExportFileGroup subscribes
+            // to child PropertyChanged events and updates its IsExporting automatically
+        }
+
+        #endregion
+
+
 
         #endregion
 

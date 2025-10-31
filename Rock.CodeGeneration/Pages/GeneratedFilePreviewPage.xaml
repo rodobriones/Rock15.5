@@ -19,16 +19,39 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <!-- NEW: Buttons row -->
+            <RowDefinition Height="*" />
+            <!-- Main content area -->
+            <RowDefinition Height="Auto" />
+            <!-- Bottom buttons -->
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" MinWidth="200" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <!-- ========================= -->
+        <!-- NEW: Check All / Uncheck All -->
+        <!-- ========================= -->
+        <StackPanel Grid.Row="0"
+                    Grid.Column="0"
+                    Orientation="Horizontal"
+                    Margin="6,6,6,4">
+            <Button Content="Check All"
+                    Padding="8,3"
+                    Margin="0,0,8,0"
+                    Click="CheckAll_Click" />
+            <Button Content="Uncheck All"
+                    Padding="8,3"
+                    Click="UncheckAll_Click" />
+        </StackPanel>
+
+        <!-- ========================= -->
+        <!-- Existing File List -->
+        <!-- ========================= -->
         <ListBox Name="FileListBox"
-                 Grid.Row="0"
+                 Grid.Row="1"
                  Grid.Column="0"
                  SelectionMode="Single"
                  SelectionChanged="FileListBox_SelectionChanged"
@@ -57,9 +80,9 @@
                                       Margin="0,0,4,0"/>
 
                         <StackPanel Orientation="Horizontal"
-                                            Grid.Row="0"
-                                            Grid.Column="1"
-                                            Margin="4,0,0,0">
+                                    Grid.Row="0"
+                                    Grid.Column="1"
+                                    Margin="4,0,0,0">
                             <TextBlock HorizontalAlignment="Stretch"
                                        IsEnabled="{Binding IsWriteNeeded}"
                                        Text="{Binding File.FileName}" />
@@ -69,8 +92,11 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
+        <!-- ========================= -->
+        <!-- Existing File Tree View -->
+        <!-- ========================= -->
         <TreeView Name="FileTreeView"
-                  Grid.Row="0"
+                  Grid.Row="1"
                   Grid.Column="0"
                   SelectedItemChanged="FileTreeView_SelectedItemChanged"
                   ItemsSource="{Binding ExportFileGroups}"
@@ -80,7 +106,7 @@
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                 </Style>
             </TreeView.ItemContainerStyle>
-            
+
             <TreeView.Resources>
 
                 <!-- ExportFileGroup Hierarchical Template -->
@@ -128,7 +154,10 @@
             </TreeView.Resources>
         </TreeView>
 
-        <Grid Grid.Row="0"
+        <!-- ========================= -->
+        <!-- Right-Side Preview Area -->
+        <!-- ========================= -->
+        <Grid Grid.Row="1"
               Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -144,13 +173,13 @@
             </StackPanel>
 
             <RichTextBox Name="FilePreviewContent"
-                     Grid.Row="1"
-                     Grid.Column="0"
-                     BorderThickness="0"
-                     IsReadOnly="True"
-                     FontFamily="Courier New"
-                     HorizontalScrollBarVisibility="Auto"
-                     VerticalScrollBarVisibility="Visible" />
+                         Grid.Row="1"
+                         Grid.Column="0"
+                         BorderThickness="0"
+                         IsReadOnly="True"
+                         FontFamily="Courier New"
+                         HorizontalScrollBarVisibility="Auto"
+                         VerticalScrollBarVisibility="Visible" />
 
             <dp:DiffViewer Name="FilePreviewDiffView"
                            Grid.Row="1"
@@ -160,7 +189,10 @@
                            NewTextHeader="New Content" />
         </Grid>
 
-        <Border Grid.Row="1"
+        <!-- ========================= -->
+        <!-- Bottom Action Bar -->
+        <!-- ========================= -->
+        <Border Grid.Row="2"
                 Grid.Column="0"
                 Grid.ColumnSpan="2"
                 Padding="8"
@@ -175,13 +207,13 @@
                             Grid.Row="0"
                             Grid.Column="0">
                     <Button Content="Save"
-                        Click="Save_Click"/>
+                            Click="Save_Click"/>
 
                     <ProgressBar x:Name="SaveProgressBar"
-                             Margin="8,0,0,0"
-                             Width="200"
-                             IsIndeterminate="True"
-                             Visibility="Collapsed" />
+                                 Margin="8,0,0,0"
+                                 Width="200"
+                                 IsIndeterminate="True"
+                                 Visibility="Collapsed" />
                 </StackPanel>
 
                 <Border Grid.Row="0"
