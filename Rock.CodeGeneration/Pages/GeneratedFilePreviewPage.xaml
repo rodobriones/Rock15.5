@@ -20,7 +20,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <!-- Check Buttons row -->
+            <!-- Select Buttons row -->
             <RowDefinition Height="*" />
             <!-- Main content area -->
             <RowDefinition Height="Auto" />
@@ -32,19 +32,19 @@
         </Grid.ColumnDefinitions>
 
         <!-- ========================= -->
-        <!-- Check All / Uncheck All -->
+        <!-- Select All / Unselect All -->
         <!-- ========================= -->
         <StackPanel Grid.Row="0"
                     Grid.Column="0"
                     Orientation="Horizontal"
                     Margin="6,6,6,4">
-            <Button Content="Check All"
+            <Button Content="Select All"
                     Padding="8,3"
                     Margin="0,0,8,0"
-                    Click="CheckAll_Click" />
-            <Button Content="Uncheck All"
+                    Click="SelectAll_Click" />
+            <Button Content="Unselect All"
                     Padding="8,3"
-                    Click="UncheckAll_Click" />
+                    Click="UnselectAll_Click" />
         </StackPanel>
 
         <!-- ========================= -->

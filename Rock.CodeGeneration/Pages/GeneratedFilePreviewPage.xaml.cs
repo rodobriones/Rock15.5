@@ -378,14 +378,14 @@ namespace Rock.CodeGeneration.Pages
             }
         }
 
-        #region Check/Uncheck All
+        #region Select/Unselect All
 
         /// <summary>
-        /// Handles the Click event of the CheckAll control.
+        /// Handles the Click event of the SelectAll control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
-        private void CheckAll_Click( object sender, RoutedEventArgs e )
+        private void SelectAll_Click( object sender, RoutedEventArgs e )
         {
             if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
             {
@@ -411,11 +411,11 @@ namespace Rock.CodeGeneration.Pages
         }
 
         /// <summary>
-        /// Handles the Click event of the UncheckAll control.
+        /// Handles the Click event of the UnselectAll control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
-        private void UncheckAll_Click( object sender, RoutedEventArgs e )
+        private void UnselectAll_Click( object sender, RoutedEventArgs e )
         {
             if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
             {
@@ -453,7 +453,7 @@ namespace Rock.CodeGeneration.Pages
             }
         }
 
-        #endregion Check/Uncheck All
+        #endregion Select/Unselect All
 
 
 
