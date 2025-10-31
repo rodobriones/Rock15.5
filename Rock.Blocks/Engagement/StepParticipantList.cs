@@ -155,8 +155,9 @@ namespace Rock.Blocks.Engagement
                 this.PersonPreferences.Save();
             }
 
-            box.IsAddEnabled = GetIsAddEnabled();
-            box.IsDeleteEnabled = true;
+            var canEdit = GetCanEdit();
+            box.IsAddEnabled = canEdit;
+            box.IsDeleteEnabled = canEdit;
             box.ExpectedRowCount = null;
             box.NavigationUrls = GetBoxNavigationUrls();
             box.Options = GetBoxOptions();
@@ -205,10 +206,10 @@ namespace Rock.Blocks.Engagement
         }
 
         /// <summary>
-        /// Determines if the add button should be enabled in the grid.
+        /// Determines if the current person can edit the Steps
         /// <summary>
-        /// <returns>A boolean value that indicates if the add button should be enabled.</returns>
-        private bool GetIsAddEnabled()
+        /// <returns>A boolean value that indicates if the current person can edit.</returns>
+        private bool GetCanEdit()
         {
             var stepType = GetStepType();
             var currentPerson = GetCurrentPerson();
@@ -473,7 +474,7 @@ namespace Rock.Blocks.Engagement
                     return ActionBadRequest( $"{Step.FriendlyTypeName} not found." );
                 }
 
-                if ( !entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
+                if ( !entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) && !entity.IsAuthorized( Authorization.MANAGE_STEPS, RequestContext.CurrentPerson ) )
                 {
                     return ActionBadRequest( $"Not authorized to delete {Step.FriendlyTypeName}." );
                 }
