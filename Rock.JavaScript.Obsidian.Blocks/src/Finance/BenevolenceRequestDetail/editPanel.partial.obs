@@ -423,6 +423,12 @@
             : `${caseWorker.value.firstName ?? ""} ${caseWorker.value.lastName ?? ""}`;
     });
 
+    /**
+    * Computed property for the selected benevolence requester
+     *
+     * Gets: A ListItemBag representing the selected requester.
+     * Sets: The requester PersonBag based on the selected ListItemBag.
+     */
     const selectedBenevolenceRequester = computed<ListItemBag>({
         get: () => {
             return requester.value.personAliasId && requesterDisplayName.value
@@ -503,7 +509,12 @@
         }
     });
 
-    // Computed property for benevolenceTypeId as a string for v-model binding
+    /**
+     * Computed property for benevolenceTypeId as a string for v-model binding
+     *
+     * Gets: The benevolenceTypeId as a string.
+     * Sets: The benevolenceTypeId to an integer from a string.
+     */
     const benevolenceTypeIdString = computed({
         get() {
             return isNotNullish(benevolenceTypeId)
@@ -515,7 +526,12 @@
         }
     });
 
-    // Computed property for requestStatusValueId as a string for v-model binding
+    /**
+     * Computed property for requestStatusValueId as a string for v-model binding
+     *
+     * Gets: The requestStatusValueId as a string.
+     * Sets: The requestStatusValueId to an integer from a string.
+     */
     const requestStatusValueIdString = computed({
         get() {
             return isNotNullish(requestStatusValueId)
@@ -527,7 +543,12 @@
         }
     });
 
-    // Computed property for connectionStatusValueId as a string for v-model binding
+    /**
+     * Computed property for requester connectionStatusValueId as a string for v-model binding
+     *
+     * Gets: The requester connectionStatusValueId as a string.
+     * Sets: The requester connectionStatusValueId to an integer from a string.
+     */
     const requesterConnectionStatusValueIdString = computed({
         get() {
             return isNotNullish(requester.value.connectionStatusValueId)
@@ -539,7 +560,12 @@
         }
     });
 
-    // Computed property for campus for v-model binding
+    /**
+     * Computed property for the selected campus
+     *
+     * Gets: A ListItemBag representing the selected campus.
+     * Sets: The campus CampusBag based on the selected ListItemBag.
+     */
     const selectedCampus = computed<ListItemBag>({
         get() {
             return (campus.value.id
