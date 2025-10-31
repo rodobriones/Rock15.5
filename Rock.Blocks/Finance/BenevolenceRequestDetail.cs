@@ -18,10 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
-
-using DocumentFormat.OpenXml.Drawing.Diagrams;
-using DocumentFormat.OpenXml.Office.CoverPageProps;
 
 using Rock.Attribute;
 using Rock.Constants;
@@ -34,8 +32,6 @@ using Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail;
 using Rock.ViewModels.Controls;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-
-using SixLabors.ImageSharp.Metadata.Profiles.Icc;
 
 namespace Rock.Blocks.Finance
 {
@@ -192,7 +188,27 @@ namespace Rock.Blocks.Finance
         {
             var options = new BenevolenceRequestDetailOptionsBag();
 
-            options.CaseWorkerRoleAttribute = GetAttributeValue( AttributeKey.CaseWorkerRole ).AsGuid();
+            #region Attribute Options
+
+            var caseWorkerRoleGuid = GetAttributeValue( AttributeKey.CaseWorkerRole ).AsGuid();
+            options.CaseWorkersByRoleAttribute = new GroupMemberService( RockContext )
+                .Queryable( "Person, Group" )
+                .AsNoTracking()
+                .Where( gm => gm.Group.Guid == caseWorkerRoleGuid )
+                .Select(gm => new
+                {
+                    FirstOrNickName = gm.Person.NickName,
+                    LastName = gm.Person.LastName,
+                    PersonAliasGuid = gm.Person.PrimaryAliasGuid.ToString(),
+                } )
+                .ToList() // Materialize to memory then format to avoid SQL issues
+                .Select( a => new ListItemBag
+                {
+                    Value = a.PersonAliasGuid,
+                    Text = $"{a.FirstOrNickName} {a.LastName}",
+                } )
+                .ToList();
+
             options.DisplayCountryCodeAttribute = GetAttributeValue( AttributeKey.DisplayCountryCode ).AsBoolean();
             options.DisplayGovernmentIdAttribute = GetAttributeValue( AttributeKey.DisplayGovernmentId ).AsBoolean();
             options.DisplayMiddleNameAttribute = GetAttributeValue( AttributeKey.DisplayMiddleName ).AsBoolean();
@@ -201,6 +217,8 @@ namespace Rock.Blocks.Finance
             options.WorkflowEntryPageAttribute = GetAttributeValue( AttributeKey.WorkflowEntryPage ).AsGuid();
             options.RaceOptionAttribute = GetAttributeValue( AttributeKey.RaceOption ).ToString();
             options.EthnicityOptionAttribute = GetAttributeValue( AttributeKey.EthnicityOption ).ToString();
+
+            #endregion Attribute Options
 
             options.BenevolenceRequestTypes = new BenevolenceTypeService( RockContext )
                 .Queryable()

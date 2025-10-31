@@ -43,7 +43,16 @@
             </div>
             <div class="row">
                 <div class="col-md-3">
-                    <PersonPicker v-model="assignedCaseWorker"
+                    <DropDownList v-if="caseWorkersByRoleCount > 0"
+                                  v-model="dropDownAssignedCaseWorker"
+                                  label="Assigned To"
+                                  :items="caseWorkersByRoleAttribute"
+                                  :isClearable="true"
+                                  :enhanceForLongLists="true"
+                                  :grouped="false"
+                                  :multiple="false" />
+                    <PersonPicker v-else
+                                  v-model="personPickerAssignedCaseWorker"
                                   label="Assigned To"
                                   :isClearable="true"
                                   @update:selectedPersonChanged="onCaseWorkerSelectionChanged"
@@ -260,6 +269,7 @@
     const invokeBlockAction = useInvokeBlockAction();
 
     const benevolenceRequestTypes = ref(props.options.benevolenceRequestTypes ?? []);
+    const caseWorkersByRoleCount = ref(props.options.caseWorkersByRoleAttribute?.length ?? 0);
     const requestStatusValues = ref(props.options.requestStatusValues ?? []);
     const connectionStatusValues = ref(props.options.connectionStatusValues ?? []);
 
@@ -427,7 +437,62 @@
         }
     });
 
-    const assignedCaseWorker = computed<ListItemBag>({
+    /**
+     * Computed property for the case workers by role attribute
+     *
+     * Gets: The list of case workers ensuring the currently assigned case worker is included.
+     * This ensures that if a case worker is assigned but no longer in the role, or a role is
+     * selected/changed in the block properties, they still appear in the list.
+     */
+    const caseWorkersByRoleAttribute = computed<ListItemBag[]>(() => {
+        if (caseWorkersByRoleCount.value > 0 && caseWorker.value.personAliasGuid !== emptyGuid) {
+            // Ensure that the currently assigned case worker is always in the list
+            const exists = props.options.caseWorkersByRoleAttribute?.some(cw => areEqual(cw.value, caseWorker.value.personAliasGuid));
+            if (!exists) {
+                return [
+                    {
+                        text: caseWorkerDisplayName.value ?? "",
+                        value: caseWorker.value.personAliasGuid?.toString() ?? ""
+                    },
+                    ...props.options.caseWorkersByRoleAttribute ?? [],
+                ];
+            }
+        }
+        return props.options.caseWorkersByRoleAttribute ?? [];
+    });
+
+    /**
+     * Computed property for the assigned case worker DropDownList
+     *
+     * Gets: The PersonAliasGuid of the assigned case worker as a string.
+     * Sets: The case worker PersonBag based on the selected PersonAliasGuid.
+     */
+    const dropDownAssignedCaseWorker = computed<string>({
+        get: () => {
+            return caseWorker.value.personAliasGuid
+                ? caseWorker.value.personAliasGuid.toString()
+                : "";
+        },
+        async set(personAliasGuid) {
+            // If a clear action occurred, clear the case worker.
+            if (isNullish(personAliasGuid) || personAliasGuid === undefined || areEqual(personAliasGuid, emptyGuid)) {
+                caseWorker.value = getEmptyPersonBag();
+                return;
+            }
+
+            // Update the case worker if person actually changed.
+            if (personAliasGuid && personAliasGuid !== caseWorker.value.personAliasGuid) {
+                caseWorker.value = await getPersonBagFromPersonAliasGuid(personAliasGuid);
+            }
+        }
+    });
+
+    /**
+     * Computed property for the assigned case worker PersonPicker
+     *
+     * Gets: A ListItemBag representing the selected case worker.
+     */
+    const personPickerAssignedCaseWorker = computed<ListItemBag>({
         get: () => {
             return caseWorker.value.personAliasId && caseWorkerDisplayName.value
                 ? { text: caseWorkerDisplayName.value ?? "", value: caseWorker.value.personAliasId?.toString() ?? "" }

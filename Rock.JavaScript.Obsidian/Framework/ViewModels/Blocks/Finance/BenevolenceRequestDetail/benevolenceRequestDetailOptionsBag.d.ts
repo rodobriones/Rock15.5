@@ -36,7 +36,7 @@ export type BenevolenceRequestDetailOptionsBag = {
     benevolenceRequestTypes?: ListItemBag[] | null;
 
     /** Gets or sets the unique identifier for the case worker role attribute. */
-    caseWorkerRoleAttribute: Guid;
+    caseWorkersByRoleAttribute?: ListItemBag[] | null;
 
     /** Gets or sets the Rock.Model.DefinedValue representing the Requester's connection status. */
     connectionStatusValues?: ListItemBag[] | null;
