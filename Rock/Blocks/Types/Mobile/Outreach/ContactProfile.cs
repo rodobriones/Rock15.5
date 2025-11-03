@@ -74,7 +74,11 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BaptismMonth = contact.BaptismMonth,
                 BaptismYear = contact.BaptismYear,
                 InstagramProfileUrl = contact.InstagramProfileUrl,
-                XProfileUrl = contact.XProfileUrl
+                XProfileUrl = contact.XProfileUrl,
+                PrayerCadence = contact.PrayerCadence.ToMobile(),
+                ConnectionCadence = contact.ConnectionCadence.ToMobile(),
+                PrayerNote = contact.PrayerNote,
+                ConnectionNote = contact.ConnectionNote,
             };
 
             return ActionOk( contactProfile );
