@@ -94,7 +94,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// <value>
         /// A <see cref="System.Int32"/> representing the Home Phone Number of the person who requested benevolence.
         /// </value>
-        public string HomePhoneNumber { get; set; }
+        public PhoneNumberBag HomePhoneNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the Cell Phone Number of the person who requested benevolence.
@@ -102,7 +102,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// <value>
         /// A <see cref="System.Int32"/> representing the Cell Phone Number of the person who requested benevolence.
         /// </value>
-        public string CellPhoneNumber { get; set; }
+        public PhoneNumberBag CellPhoneNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the Work Phone Number of the person who requested benevolence.
@@ -110,7 +110,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// <value>
         /// A <see cref="System.Int32"/> representing the Work Phone Number of the person who requested benevolence.
         /// </value>
-        public string WorkPhoneNumber { get; set; }
+        public PhoneNumberBag WorkPhoneNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the email address of the person requesting benevolence.

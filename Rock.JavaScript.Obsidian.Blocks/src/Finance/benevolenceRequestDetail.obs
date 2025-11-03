@@ -172,13 +172,14 @@
             benevolenceDocumentBinaryFileTypeGuid: emptyGuid,
             benevolenceRequestStatementPageAttribute: emptyGuid,
             caseWorkersByRoleAttribute: [],
-            displayCountryCodeAttribute: false,
             displayGovernmentIdAttribute: true,
             displayMiddleNameAttribute: false,
             workflowDetailPageAttribute: emptyGuid,
             workflowEntryPageAttribute: emptyGuid,
             benevolenceRequestTypes: [],
-            requestStatusValues: []
+            requestStatusValues: [],
+            countryCodesEnabled: false,
+            displayCountryCodeAttribute: false
         };
     });
 

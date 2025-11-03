@@ -23,6 +23,7 @@
 
 import { Guid } from "@Obsidian/Types";
 import { LocationBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/locationBag";
+import { PhoneNumberBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/phoneNumberBag";
 
 /**
  * Represents a collection of personal information for an individual, including identifiers, contact details, and
@@ -30,7 +31,7 @@ import { LocationBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequ
  */
 export type PersonBag = {
     /** Gets or sets the Cell Phone Number of the person who requested benevolence. */
-    cellPhoneNumber?: string | null;
+    cellPhoneNumber?: PhoneNumberBag | null;
 
     /** Gets or sets the Id representing the Person's connection status */
     connectionStatusValueId?: number | null;
@@ -45,7 +46,7 @@ export type PersonBag = {
     governmentId?: string | null;
 
     /** Gets or sets the Home Phone Number of the person who requested benevolence. */
-    homePhoneNumber?: string | null;
+    homePhoneNumber?: PhoneNumberBag | null;
 
     /** Gets or sets the last name (Sir Name) of the Person. */
     lastName?: string | null;
@@ -69,5 +70,5 @@ export type PersonBag = {
     photoUrl?: string | null;
 
     /** Gets or sets the Work Phone Number of the person who requested benevolence. */
-    workPhoneNumber?: string | null;
+    workPhoneNumber?: PhoneNumberBag | null;
 };

@@ -53,64 +53,51 @@ namespace Rock.Blocks.Finance
         Key = AttributeKey.CaseWorkerRole,
         Order = 1 )]
 
-    [BooleanField(
-        "Display Country Code",
-        Key = AttributeKey.DisplayCountryCode,
-        Description = "When enabled prepends the country code to all phone numbers.",
-        DefaultBooleanValue = false,
-        Order = 2 )]
-
     [BooleanField( "Display Government Id",
         Key = AttributeKey.DisplayGovernmentId,
         Description = "Display the government identifier.",
         DefaultBooleanValue = true,
-        Order = 3 )]
-
-    [BooleanField( "Display Middle Name",
-        Key = AttributeKey.DisplayMiddleName,
-        Description = "Display the middle name of the person.",
-        DefaultBooleanValue = false,
-        Order = 4 )]
+        Order = 2 )]
 
     [LinkedPage( "Benevolence Request Statement Page",
         Description = "The page which summarizes a benevolence request for printing",
         IsRequired = true,
         Key = AttributeKey.BenevolenceRequestStatementPage,
-        Order = 5 )]
+        Order = 3 )]
 
     [LinkedPage(
         "Workflow Detail Page",
         Description = "Page used to display details about a workflow.",
-        Order = 6,
+        Order = 4,
         Key = AttributeKey.WorkflowDetailPage,
         DefaultValue = Rock.SystemGuid.Page.WORKFLOW_DETAIL )]
 
     [LinkedPage(
         "Workflow Entry Page",
         Description = "Page used to launch a new workflow of the selected type.",
-        Order = 7,
+        Order = 5,
         Key = AttributeKey.WorkflowEntryPage,
         DefaultValue = Rock.SystemGuid.Page.WORKFLOW_ENTRY )]
 
     [CustomDropdownListField(
         "Race",
         Key = AttributeKey.RaceOption,
-        Description = "Allow race to be optionally selected.",
+        Description = "Allow race to be optionally selected. This field will not be saved unless a person record is created before saving the request.",
         ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
         IsRequired = false,
         DefaultValue = "Hide",
         Category = "Individual",
-        Order = 8 )]
+        Order = 6 )]
 
     [CustomDropdownListField(
         "Ethnicity",
         Key = AttributeKey.EthnicityOption,
-        Description = "Allow Ethnicity to be optionally selected.",
+        Description = "Allow Ethnicity to be optionally selected. This field will not be saved unless a person record is created before saving the request.",
         ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
         IsRequired = false,
         DefaultValue = "Hide",
         Category = "Individual",
-        Order = 9 )]
+        Order = 7 )]
 
     #endregion
 
@@ -119,6 +106,8 @@ namespace Rock.Blocks.Finance
     public class BenevolenceRequestDetail : RockEntityDetailBlockType<BenevolenceRequest, BenevolenceRequestBag>
     {
         #region Fields
+
+        Guid _countryCodeTypeGuid = Rock.SystemGuid.DefinedType.COMMUNICATION_PHONE_COUNTRY_CODE.AsGuid();
 
         Guid _homePhoneGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME.AsGuid();
         Guid _cellPhoneGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid();
@@ -130,12 +119,8 @@ namespace Rock.Blocks.Finance
 
         private static class AttributeKey
         {
-            public const string Badges = "Badges";
             public const string CaseWorkerRole = "CaseWorkerRole";
-            public const string DisplayCountryCode = "DisplayCountryCode";
-            public const string DisplayMiddleName = "DisplayMiddleName";
             public const string DisplayGovernmentId = "DisplayGovernmentId";
-            public const string EnableCallOrigination = "EnableCallOrigination";
             public const string BenevolenceRequestStatementPage = "BenevolenceRequestStatementPage";
             public const string WorkflowDetailPage = "WorkflowDetailPage";
             public const string WorkflowEntryPage = "WorkflowEntryPage";
@@ -195,7 +180,7 @@ namespace Rock.Blocks.Finance
                 .Queryable( "Person, Group" )
                 .AsNoTracking()
                 .Where( gm => gm.Group.Guid == caseWorkerRoleGuid )
-                .Select(gm => new
+                .Select( gm => new
                 {
                     FirstOrNickName = gm.Person.NickName,
                     LastName = gm.Person.LastName,
@@ -209,9 +194,7 @@ namespace Rock.Blocks.Finance
                 } )
                 .ToList();
 
-            options.DisplayCountryCodeAttribute = GetAttributeValue( AttributeKey.DisplayCountryCode ).AsBoolean();
             options.DisplayGovernmentIdAttribute = GetAttributeValue( AttributeKey.DisplayGovernmentId ).AsBoolean();
-            options.DisplayMiddleNameAttribute = GetAttributeValue( AttributeKey.DisplayMiddleName ).AsBoolean();
             options.BenevolenceRequestStatementPageAttribute = GetAttributeValue( AttributeKey.BenevolenceRequestStatementPage ).AsGuid();
             options.WorkflowDetailPageAttribute = GetAttributeValue( AttributeKey.WorkflowDetailPage ).AsGuid();
             options.WorkflowEntryPageAttribute = GetAttributeValue( AttributeKey.WorkflowEntryPage ).AsGuid();
@@ -219,6 +202,13 @@ namespace Rock.Blocks.Finance
             options.EthnicityOptionAttribute = GetAttributeValue( AttributeKey.EthnicityOption ).ToString();
 
             #endregion Attribute Options
+
+            options.CountryCodesEnabled = new DefinedValueService( RockContext )
+                .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
+                .Where( dv => dv.IsActive )
+                .Select( dv => dv.Value )
+                .Distinct()
+                .Count() > 1;
 
             options.BenevolenceRequestTypes = new BenevolenceTypeService( RockContext )
                 .Queryable()
@@ -443,6 +433,13 @@ namespace Rock.Blocks.Finance
             var campusService = new CampusService( RockContext );
             var benevolenceTypeService = new BenevolenceTypeService( RockContext );
 
+            var activeCountryCodes = new DefinedValueService( RockContext )
+                .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
+                .Where( dv => dv.IsActive )
+                .Select( dv => dv.Value )
+                .Distinct()
+                .ToList();
+
             box.IfValidProperty( nameof( box.Bag.Requester ),
                 () =>
                 {
@@ -455,9 +452,29 @@ namespace Rock.Blocks.Finance
                                                           && box.Bag.Requester.PersonAliasId != 0
                                                           ? box.Bag.Requester.PersonAliasId
                                                           : null;
-                        entity.HomePhoneNumber = box.Bag.Requester.HomePhoneNumber;
-                        entity.CellPhoneNumber = box.Bag.Requester.CellPhoneNumber;
-                        entity.WorkPhoneNumber = box.Bag.Requester.WorkPhoneNumber;
+                        entity.HomePhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.NumberFormatted )
+                            ? (
+                                !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
+                                ? $"{box.Bag.Requester.HomePhoneNumber.CountryCode} {box.Bag.Requester.HomePhoneNumber.NumberFormatted}"
+                                : box.Bag.Requester.HomePhoneNumber.NumberFormatted
+                            )
+                            : string.Empty;
+
+                        entity.CellPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.NumberFormatted )
+                            ? (
+                                !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
+                                ? $"{box.Bag.Requester.CellPhoneNumber.CountryCode} {box.Bag.Requester.CellPhoneNumber.NumberFormatted}"
+                                : box.Bag.Requester.CellPhoneNumber.NumberFormatted
+                            )
+                            : string.Empty;
+
+                        entity.WorkPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.NumberFormatted )
+                            ? (
+                                !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
+                                ? $"{box.Bag.Requester.WorkPhoneNumber.CountryCode} {box.Bag.Requester.WorkPhoneNumber.NumberFormatted}"
+                                : box.Bag.Requester.WorkPhoneNumber.NumberFormatted
+                            )
+                            : string.Empty;
                         entity.GovernmentId = box.Bag.Requester.GovernmentId;
                         entity.ConnectionStatusValueId = box.Bag.Requester.ConnectionStatusValueId;
 
@@ -488,7 +505,7 @@ namespace Rock.Blocks.Finance
                                     }
                                 );
 
-                                entity.LocationId = location.Id;
+                                entity.LocationId = location?.Id ?? ( int? ) null;
                             }
                         }
                     }
@@ -651,311 +668,159 @@ namespace Rock.Blocks.Finance
         }
 
         /// <summary>
-        /// Builds a <see cref="PersonBag"/> object containing personal and contact information based on the provided
-        /// <see cref="BenevolenceRequest"/> entity and person alias details.
+        /// Builds a <see cref="PersonBag"/> object containing detailed information about a person, including their
+        /// contact details, location, and other attributes.
         /// </summary>
-        /// <remarks>If the person is known and their details are available, the method populates the <see
-        /// cref="PersonBag"/> with data from the person's record. Otherwise, it defaults to using the information from
-        /// the <paramref name="entity"/>.</remarks>
-        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity containing initial data for the person.</param>
-        /// <param name="personAliasId">The identifier of the person alias used to retrieve detailed person information.</param>
-        /// <param name="governmentId">The government identification number associated with the person.</param>
-        /// <returns>A <see cref="PersonBag"/> object populated with the person's details, including name, contact information,
-        /// and location.</returns>
+        /// <remarks>
+        /// This method retrieves person-specific data if a valid <paramref name="personAliasId"/> is provided.
+        /// If the person cannot be found, or if <paramref name="personAliasId"/> is not greater than 0,
+        /// the method constructs the <see cref="PersonBag"/> using fallback data from the <paramref name="entity"/>.
+        /// The <paramref name="isRequester"/> parameter determines whether requester-specific or case worker-specific
+        /// data is used when building the object.
+        /// </remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity containing fallback data for the person.</param>
+        /// <param name="personAliasId">The identifier of the person's alias. Must be greater than 0 to retrieve person-specific data.</param>
+        /// <param name="governmentId">The government-issued identifier for the person. Can be null or empty.</param>
+        /// <param name="isRequester">A value indicating whether the person being built is the requester.</param>
+        /// <returns>
+        /// A <see cref="PersonBag"/> object populated with the person's details. If <paramref name="personAliasId"/> is
+        /// greater than 0 and the person exists, the returned object contains data specific to that person. Otherwise,
+        /// it is built using fallback data from the <paramref name="entity"/>.
+        /// </returns>
         private PersonBag BuildPersonBag( BenevolenceRequest entity, int personAliasId, string governmentId, bool isRequester = true )
         {
-            var personService = new PersonService( RockContext );
+            if ( entity == null )
+            {
+                throw new ArgumentNullException( nameof( entity ) );
+            }
+
             var personAliasService = new PersonAliasService( RockContext );
             var locationService = new LocationService( RockContext );
 
-            // If the requester is a known person, load their details.
+            var homePhoneTypeId = DefinedValueCache.Get( _homePhoneGuid ).Id;
+            var cellPhoneTypeId = DefinedValueCache.Get( _cellPhoneGuid ).Id;
+            var workPhoneTypeId = DefinedValueCache.Get( _workPhoneGuid ).Id;
+
             if ( personAliasId > 0 )
             {
                 var person = personAliasService.GetPerson( personAliasId );
                 var personAlias = personAliasService.Get( personAliasId );
 
-                // If the requester's person record was found
                 if ( person != null )
                 {
+                    var phoneNumbers = person.PhoneNumbers.ToList();
                     var personLocation = person.GetHomeLocation( RockContext );
 
-                    // Map the person details to the bag.
+                    var fallbackAddress = GetFallbackAddressControlBag( entity );
+
                     return new PersonBag
                     {
                         PersonId = person.Id,
                         PersonAliasId = personAlias.Id,
                         PersonAliasGuid = personAlias.Guid,
-                        ConnectionStatusValueId = person.ConnectionStatusValueId.HasValue
-                                                  ? person.ConnectionStatusValueId.Value
-                                                  : ( entity.ConnectionStatusValueId.HasValue && isRequester )
-                                                    ? entity.ConnectionStatusValueId.Value
-                                                    : ( int? ) null,
+                        ConnectionStatusValueId = person.ConnectionStatusValueId
+                            ?? ( entity.ConnectionStatusValueId.HasValue && isRequester ? entity.ConnectionStatusValueId.Value : ( int? ) null ),
                         PhotoUrl = person.PhotoUrl ?? "",
                         NickName = person.NickName ?? "",
-                        FirstName = !string.IsNullOrEmpty( person.FirstName )
-                                    ? person.FirstName
-                                    : ( !string.IsNullOrEmpty( entity.FirstName ) && isRequester )
-                                    ? entity.FirstName
-                                    : "",
-                        LastName = !string.IsNullOrEmpty( person.LastName )
-                                    ? person.LastName
-                                    : ( !string.IsNullOrEmpty( entity.LastName ) && isRequester )
-                                    ? entity.LastName
-                                    : "",
-                        Location = personLocation != null
-                                   ? new LocationBag
-                                   {
-                                       Id = personLocation.Id > 0
-                                           ? personLocation.Id
-                                           : ( entity.LocationId.HasValue && isRequester )
-                                             ? entity.LocationId.Value
-                                             : ( int? ) null,
-                                       Guid = !personLocation.Guid.IsEmpty()
-                                           ? personLocation.Guid
-                                           : Guid.Empty,
-                                       AddressFields = new AddressControlBag
-                                       {
-                                           Street1 = !string.IsNullOrEmpty( personLocation.Street1 )
-                                               ? personLocation.Street1
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.Street1 ) && isRequester )
-                                               ? entity.Location.Street1
-                                               : "",
-                                           Street2 = !string.IsNullOrEmpty( personLocation.Street2 )
-                                               ? personLocation.Street2
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.Street2 ) && isRequester )
-                                               ? entity.Location.Street2
-                                               : "",
-                                           City = !string.IsNullOrEmpty( personLocation.City )
-                                               ? personLocation.City
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.City ) && isRequester )
-                                               ? entity.Location.City
-                                               : "",
-                                           State = !string.IsNullOrEmpty( personLocation.State )
-                                               ? personLocation.State
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.State ) && isRequester )
-                                               ? entity.Location.State
-                                               : "",
-                                           PostalCode = !string.IsNullOrEmpty( personLocation.PostalCode )
-                                               ? personLocation.PostalCode
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.PostalCode ) && isRequester )
-                                               ? entity.Location.PostalCode
-                                               : "",
-                                           Country = !string.IsNullOrEmpty( personLocation.Country )
-                                               ? personLocation.Country
-                                               : ( entity.Location != null && !string.IsNullOrEmpty( entity.Location.Country ) && isRequester )
-                                               ? entity.Location.Country
-                                               : "",
-                                       },
-                                   }
-                                   : new LocationBag(),
-                        HomePhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .Where( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _homePhoneGuid ).Id
-                              )
-                              .Count() > 0
-                              ? person
-                                .PhoneNumbers
-                                .FirstOrDefault( n =>
-                                  n.NumberTypeValueId == DefinedValueCache.Get( _homePhoneGuid ).Id
-                                )
-                                .NumberFormatted
-                              : ( string.IsNullOrEmpty( entity.HomePhoneNumber ) && isRequester )
-                                ? entity.HomePhoneNumber
-                                : ""
-                            : ( string.IsNullOrEmpty( entity.HomePhoneNumber ) && isRequester )
-                              ? entity.HomePhoneNumber
-                              : "",
-                        CellPhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .Where( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _cellPhoneGuid ).Id
-                              )
-                              .Count() > 0
-                              ? person
-                                .PhoneNumbers
-                                .FirstOrDefault( n =>
-                                  n.NumberTypeValueId == DefinedValueCache.Get( _cellPhoneGuid ).Id
-                                )
-                                .NumberFormatted
-                              : ( string.IsNullOrEmpty( entity.CellPhoneNumber ) && isRequester )
-                                ? entity.CellPhoneNumber
-                                : ""
-                            : ( string.IsNullOrEmpty( entity.CellPhoneNumber ) && isRequester )
-                              ? entity.CellPhoneNumber
-                              : "",
-                        WorkPhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .Where( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _workPhoneGuid ).Id
-                              )
-                              .Count() > 0
-                              ? person
-                                .PhoneNumbers
-                                .FirstOrDefault( n =>
-                                  n.NumberTypeValueId == DefinedValueCache.Get( _workPhoneGuid ).Id
-                                )
-                                .NumberFormatted
-                              : ( string.IsNullOrEmpty( entity.WorkPhoneNumber ) && isRequester )
-                                ? entity.WorkPhoneNumber
-                                : ""
-                            : ( string.IsNullOrEmpty( entity.WorkPhoneNumber ) && isRequester )
-                              ? entity.WorkPhoneNumber
-                              : "",
-                        Email = !string.IsNullOrEmpty( person.Email )
-                                    ? person.Email
-                                    : ( !string.IsNullOrEmpty( entity.Email ) && isRequester )
-                                    ? entity.Email
-                                    : "",
-                        GovernmentId = governmentId ?? "",
+                        FirstName = !string.IsNullOrEmpty( person.FirstName ) ? person.FirstName : ( isRequester ? entity.FirstName ?? "" : "" ),
+                        LastName = !string.IsNullOrEmpty( person.LastName ) ? person.LastName : ( isRequester ? entity.LastName ?? "" : "" ),
+                        Location = GetLocationBag( personLocation, entity.LocationId, entity.Location?.Guid, fallbackAddress ),
+                        HomePhoneNumber = GetPhoneNumberBag( phoneNumbers, homePhoneTypeId, isRequester ? entity.HomePhoneNumber : "" ),
+                        CellPhoneNumber = GetPhoneNumberBag( phoneNumbers, cellPhoneTypeId, isRequester ? entity.CellPhoneNumber : "" ),
+                        WorkPhoneNumber = GetPhoneNumberBag( phoneNumbers, workPhoneTypeId, isRequester ? entity.WorkPhoneNumber : "" ),
+                        Email = !string.IsNullOrEmpty( person.Email ) ? person.Email : ( isRequester ? entity.Email ?? "" : "" ),
+                        GovernmentId = governmentId ?? ""
                     };
                 }
             }
 
-            // Person Alias ID had not value or we did not find a
-            // person record for the requester; default to entity.
+            // Fallback: Build from entity
+            var fallbackLocationBag = GetFallbackLocationBag( entity, locationService );
+
             var requesterBagBuiltFromEntity = new PersonBag
             {
-                PersonAliasId = entity.RequestedByPersonAliasId.HasValue
-                                ? entity.RequestedByPersonAliasId.Value
-                                : ( int? ) null,
-                ConnectionStatusValueId = entity.ConnectionStatusValueId.HasValue
-                                ? entity.ConnectionStatusValueId.Value
-                                : ( int? ) null,
+                PersonAliasId = entity.RequestedByPersonAliasId,
+                ConnectionStatusValueId = entity.ConnectionStatusValueId,
                 PhotoUrl = "",
                 NickName = "",
                 FirstName = entity.FirstName ?? "",
                 LastName = entity.LastName ?? "",
-                Location = new LocationBag
-                {
-                    Id = entity.LocationId.HasValue
-                         ? entity.LocationId.Value
-                         : ( int? ) null,
-                    Guid = entity.LocationId.HasValue
-                           ? locationService.GetGuid( entity.LocationId.Value ).Value
-                           : Guid.Empty,
-                    AddressFields = entity.LocationId.HasValue
-                                    ? new AddressControlBag
-                                    {
-                                        Street1 = entity.Location.Street1 ?? "",
-                                        Street2 = entity.Location.Street2 ?? "",
-                                        City = entity.Location.City ?? "",
-                                        State = entity.Location.State ?? "",
-                                        PostalCode = entity.Location.PostalCode ?? "",
-                                        Country = entity.Location.Country ?? "",
-                                    }
-                                    : new AddressControlBag(),
-                },
-                HomePhoneNumber = entity.HomePhoneNumber ?? "",
-                CellPhoneNumber = entity.CellPhoneNumber ?? "",
-                WorkPhoneNumber = entity.WorkPhoneNumber ?? "",
+                Location = fallbackLocationBag,
+                HomePhoneNumber = GetPhoneNumberBag( new List<PhoneNumber>(), 0, entity.HomePhoneNumber ),
+                CellPhoneNumber = GetPhoneNumberBag( new List<PhoneNumber>(), 0, entity.CellPhoneNumber ),
+                WorkPhoneNumber = GetPhoneNumberBag( new List<PhoneNumber>(), 0, entity.WorkPhoneNumber ),
                 Email = entity.Email ?? "",
-                GovernmentId = entity.GovernmentId ?? "",
+                GovernmentId = entity.GovernmentId ?? ""
             };
 
             var caseWorkerBagBuiltFromEntity = new PersonBag
             {
-                PersonAliasId = entity.CaseWorkerPersonAliasId.HasValue
-                                ? entity.CaseWorkerPersonAliasId.Value
-                                : ( int? ) null
+                PersonAliasId = entity.CaseWorkerPersonAliasId
             };
 
-            return isRequester ? requesterBagBuiltFromEntity : new PersonBag();
+            return isRequester ? requesterBagBuiltFromEntity : caseWorkerBagBuiltFromEntity;
         }
 
         /// <summary>
-        /// Builds a <see cref="PersonBag"/> object containing personal and contact information based on the provided
-        /// <see cref="BenevolenceRequest"/> entity and person alias details.
+        /// Builds a <see cref="PersonBag"/> object containing detailed information about a person based on the
+        /// specified person alias GUID.
         /// </summary>
-        /// <remarks>If the person is known and their details are available, the method populates the <see
-        /// cref="PersonBag"/> with data from the person's record. Otherwise, it defaults to using the information from
-        /// the <paramref name="entity"/>.</remarks>
-        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity containing initial data for the person.</param>
-        /// <param name="personAliasId">The identifier of the person alias used to retrieve detailed person information.</param>
-        /// <param name="governmentId">The government identification number associated with the person.</param>
-        /// <returns>A <see cref="PersonBag"/> object populated with the person's details, including name, contact information,
-        /// and location.</returns>
+        /// <remarks>This method attempts to retrieve a person's details using the provided person alias
+        /// GUID. If the GUID is empty or does not correspond to a valid person, the method returns <see
+        /// langword="false"/> and outputs an empty <see cref="PersonBag"/>. The generated <see cref="PersonBag"/>
+        /// includes information such as the person's name, contact details, location, and other relevant
+        /// attributes.</remarks>
+        /// <param name="personAliasGuid">The unique identifier of the person alias used to retrieve the person's information.</param>
+        /// <param name="generatedPersonBag">When this method returns, contains the generated <see cref="PersonBag"/> object with the person's details if
+        /// the operation is successful; otherwise, contains an empty <see cref="PersonBag"/>.</param>
+        /// <returns><see langword="true"/> if the <see cref="PersonBag"/> was successfully generated; otherwise, <see
+        /// langword="false"/>.</returns>
         private bool BuildPersonBag( Guid personAliasGuid, out PersonBag generatedPersonBag )
         {
-            var personService = new PersonService( RockContext );
             var personAliasService = new PersonAliasService( RockContext );
-            var locationService = new LocationService( RockContext );
 
-            // If the requester is a known person, load their details.
-            if ( !personAliasGuid.IsEmpty() )
+            // Early out if GUID is empty.
+            if ( personAliasGuid.IsEmpty() )
             {
-                var person = personAliasService.GetPerson( personAliasGuid );
-                var personAlias = personAliasService.Get( personAliasGuid );
-
-                // If the requester's person record was found
-                if ( person != null )
-                {
-                    var personLocation = person.GetHomeLocation( RockContext );
-
-                    // Map the person details to the bag.
-                    generatedPersonBag = new PersonBag
-                    {
-                        PersonId = person.Id,
-                        PersonAliasId = personAlias.Id,
-                        PersonAliasGuid = personAlias.Guid != null ? personAlias.Guid : Guid.Empty,
-                        ConnectionStatusValueId = person.ConnectionStatusValueId,
-                        PhotoUrl = person.PhotoUrl ?? "",
-                        NickName = person.NickName ?? "",
-                        FirstName = person.FirstName ?? "",
-                        LastName = person.LastName ?? "",
-                        Location = personLocation != null
-                            ? new LocationBag
-                            {
-                                Id = personLocation.Id,
-                                Guid = personLocation.Guid != null ? personLocation.Guid : Guid.Empty,
-                                AddressFields = new AddressControlBag
-                                {
-                                    Street1 = personLocation.Street1 ?? "",
-                                    Street2 = personLocation.Street2 ?? "",
-                                    City = personLocation.City ?? "",
-                                    State = personLocation.State ?? "",
-                                    PostalCode = personLocation.PostalCode ?? "",
-                                    Country = personLocation.Country ?? "",
-                                },
-                            }
-                            : new LocationBag(),
-                        HomePhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .FirstOrDefault( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _homePhoneGuid ).Id
-                              )
-                              ?.NumberFormatted ?? ""
-                            : "",
-                        CellPhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .FirstOrDefault( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _cellPhoneGuid ).Id
-                              )
-                              ?.NumberFormatted ?? ""
-                            : "",
-                        WorkPhoneNumber = person.PhoneNumbers.Count > 0
-                            ? person
-                              .PhoneNumbers
-                              .FirstOrDefault( n =>
-                                n.NumberTypeValueId == DefinedValueCache.Get( _workPhoneGuid ).Id
-                              )
-                              ?.NumberFormatted ?? ""
-                            : "",
-                        Email = person.Email ?? "",
-                        GovernmentId = "",
-                    };
-
-                    return true;
-                }
+                generatedPersonBag = new PersonBag();
+                return false;
             }
 
-            generatedPersonBag = new PersonBag();
-            return false;
+            var person = personAliasService.GetPerson( personAliasGuid );
+            var personAlias = personAliasService.Get( personAliasGuid );
+
+            if ( person == null || personAlias == null )
+            {
+                generatedPersonBag = new PersonBag();
+                return false;
+            }
+
+            var homePhoneTypeId = DefinedValueCache.Get( _homePhoneGuid ).Id;
+            var cellPhoneTypeId = DefinedValueCache.Get( _cellPhoneGuid ).Id;
+            var workPhoneTypeId = DefinedValueCache.Get( _workPhoneGuid ).Id;
+
+            var phoneNumbers = person.PhoneNumbers.ToList();
+            var personLocation = person.GetHomeLocation( RockContext );
+
+            generatedPersonBag = new PersonBag
+            {
+                PersonId = person.Id,
+                PersonAliasId = personAlias.Id,
+                PersonAliasGuid = personAlias.Guid != null ? personAlias.Guid : Guid.Empty,
+                ConnectionStatusValueId = person.ConnectionStatusValueId,
+                PhotoUrl = person.PhotoUrl ?? "",
+                NickName = person.NickName ?? "",
+                FirstName = person.FirstName ?? "",
+                LastName = person.LastName ?? "",
+                Location = GetLocationBag( personLocation ),
+                HomePhoneNumber = GetPhoneNumberBag( phoneNumbers, homePhoneTypeId ),
+                CellPhoneNumber = GetPhoneNumberBag( phoneNumbers, cellPhoneTypeId ),
+                WorkPhoneNumber = GetPhoneNumberBag( phoneNumbers, workPhoneTypeId ),
+                Email = person.Email ?? "",
+                GovernmentId = ""
+            };
+
+            return true;
         }
 
         /// <summary>
@@ -1008,7 +873,227 @@ namespace Rock.Blocks.Finance
             return false;
         }
 
-        #endregion
+        #region Helper Methods
+
+        /// <summary>
+        /// Creates a <see cref="PhoneNumberBag"/> object based on the specified phone number type ID.
+        /// </summary>
+        /// <remarks>If no phone number in the <paramref name="phoneNumbers"/> list matches the specified
+        /// <paramref name="typeId"/>, the fallback value is used to populate the <see cref="PhoneNumberBag"/>. The
+        /// country code will be empty in this case.</remarks>
+        /// <param name="phoneNumbers">A list of <see cref="PhoneNumber"/> objects to search for the specified type ID.</param>
+        /// <param name="typeId">The identifier for the phone number type to match.</param>
+        /// <param name="fallback">A fallback phone number to use if no matching phone number is found in the <paramref name="phoneNumbers"/>
+        /// list.</param>
+        /// <returns>A <see cref="PhoneNumberBag"/> containing the phone number, formatted number, and country code for the
+        /// matching phone number, or the fallback value
+        private PhoneNumberBag GetPhoneNumberBag( List<PhoneNumber> phoneNumbers, int typeId, string fallback )
+        {
+            var phone = phoneNumbers.FirstOrDefault( n => n.NumberTypeValueId == typeId );
+            if ( phone != null )
+            {
+                return new PhoneNumberBag
+                {
+                    Number = phone.Number,
+                    NumberFormatted = phone.NumberFormatted,
+                    CountryCode = phone.CountryCode
+                };
+            }
+
+            // Fallback logic: If there are multiple defined country codes, split fallback at first space.
+
+            var activeCountryCodes = new DefinedValueService( RockContext )
+                .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
+                .Where( dv => dv.IsActive )
+                .Select( dv => dv.Value )
+                .Distinct()
+                .ToList();
+
+            string countryCode = "";
+            string number = fallback ?? "";
+            string numberFormatted = fallback ?? "";
+
+            if ( activeCountryCodes.Count > 1 && !string.IsNullOrWhiteSpace( fallback ) )
+            {
+                var firstSpaceIndex = fallback.IndexOf( ' ' );
+                if ( firstSpaceIndex > 0 )
+                {
+                    countryCode = fallback.Substring( 0, firstSpaceIndex );
+                    number = fallback.Substring( firstSpaceIndex + 1 );
+                    numberFormatted = number;
+                }
+            }
+
+            return new PhoneNumberBag
+            {
+                Number = number.Trim(),
+                NumberFormatted = numberFormatted.Trim(),
+                CountryCode = countryCode.Trim()
+            };
+        }
+
+        /// <summary>
+        /// Creates a fallback <see cref="AddressControlBag"/> based on the location information  in the specified <see
+        /// cref="BenevolenceRequest"/> entity.
+        /// </summary>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> containing the location data  to populate the <see
+        /// cref="AddressControlBag"/>. If the location is <c>null</c>, an empty  <see cref="AddressControlBag"/> is
+        /// returned.</param>
+        /// <returns>An <see cref="AddressControlBag"/> populated with the location details from the  <paramref name="entity"/>.
+        /// If the location is <c>null</c>, returns an empty  <see cref="AddressControlBag"/>.</returns>
+        private AddressControlBag GetFallbackAddressControlBag( BenevolenceRequest entity )
+        {
+            return entity.Location != null
+                ? new AddressControlBag
+                {
+                    Street1 = entity.Location.Street1,
+                    Street2 = entity.Location.Street2,
+                    City = entity.Location.City,
+                    State = entity.Location.State,
+                    PostalCode = entity.Location.PostalCode,
+                    Country = entity.Location.Country
+                }
+                : new AddressControlBag();
+        }
+
+        /// <summary>
+        /// Creates a <see cref="LocationBag"/> object based on the provided <paramref name="location"/> and optional
+        /// fallback values.
+        /// </summary>
+        /// <param name="location">The primary <see cref="Location"/> object used to populate the <see cref="LocationBag"/>. If null, the
+        /// fallback values are used.</param>
+        /// <param name="fallbackId">An optional fallback identifier to use if <paramref name="location"/> does not have a valid ID.</param>
+        /// <param name="fallbackGuid">An optional fallback GUID to use if <paramref name="location"/> does not have a valid GUID.</param>
+        /// <param name="fallbackAddress">An optional fallback <see cref="AddressControlBag"/> to use if <paramref name="location"/> does not have
+        /// address information.</param>
+        /// <returns>A <see cref="LocationBag"/> object populated with data from <paramref name="location"/> if it is not null;
+        /// otherwise, a <see cref="LocationBag"/> populated with the provided fallback values.</returns>
+        private LocationBag GetLocationBag( Location location, int? fallbackId, Guid? fallbackGuid, AddressControlBag fallbackAddress )
+        {
+            if ( location == null )
+                return new LocationBag { AddressFields = fallbackAddress ?? new AddressControlBag() };
+
+            return new LocationBag
+            {
+                Id = location.Id > 0 ? location.Id : fallbackId,
+                Guid = !location.Guid.IsEmpty() ? location.Guid : fallbackGuid ?? Guid.Empty,
+                AddressFields = GetAddressControlBag( location, fallbackAddress )
+            };
+        }
+
+        /// <summary>
+        /// Creates an <see cref="AddressControlBag"/> instance based on the specified <paramref name="location"/>.
+        /// </summary>
+        /// <param name="location">The <see cref="Location"/> object containing address details. If <c>null</c>, the <paramref
+        /// name="fallback"/> is used.</param>
+        /// <param name="fallback">An optional <see cref="AddressControlBag"/> to provide default values if <paramref name="location"/> or its
+        /// properties are <c>null</c>.</param>
+        /// <returns>An <see cref="AddressControlBag"/> populated with address details from <paramref name="location"/>. If
+        /// <paramref name="location"/> is <c>null</c>, the <paramref name="fallback"/> is returned, or a new, empty
+        /// <see cref="AddressControlBag"/> if <paramref name="fallback"/> is also <c>null</c>.</returns>
+        private AddressControlBag GetAddressControlBag( Location location, AddressControlBag fallback )
+        {
+            if ( location == null )
+                return fallback ?? new AddressControlBag();
+
+            return new AddressControlBag
+            {
+                Street1 = location.Street1 ?? fallback?.Street1 ?? "",
+                Street2 = location.Street2 ?? fallback?.Street2 ?? "",
+                City = location.City ?? fallback?.City ?? "",
+                State = location.State ?? fallback?.State ?? "",
+                PostalCode = location.PostalCode ?? fallback?.PostalCode ?? "",
+                Country = location.Country ?? fallback?.Country ?? ""
+            };
+        }
+
+        /// <summary>
+        /// Creates a fallback <see cref="LocationBag"/> based on the specified <see cref="BenevolenceRequest"/> entity.
+        /// </summary>
+        /// <remarks>If the <paramref name="entity"/> contains a valid <c>LocationId</c> and
+        /// <c>Location</c>, the returned <see cref="LocationBag"/> will include the corresponding GUID and address
+        /// fields. If these values are not available, the method returns a <see cref="LocationBag"/> with empty address
+        /// fields.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> containing location information. This parameter cannot be null.</param>
+        /// <param name="locationService">The <see cref="LocationService"/> used to retrieve the GUID for the location. This parameter cannot be null.</param>
+        /// <returns>A <see cref="LocationBag"/> populated with location details from the <paramref name="entity"/> if available;
+        /// otherwise, an empty <see cref="LocationBag"/> with default address fields.</returns>
+        private LocationBag GetFallbackLocationBag( BenevolenceRequest entity, LocationService locationService )
+        {
+            return entity.LocationId.HasValue && entity.Location != null
+                ? new LocationBag
+                {
+                    Id = entity.LocationId.Value,
+                    Guid = locationService.GetGuid( entity.LocationId.Value ) ?? Guid.Empty,
+                    AddressFields = new AddressControlBag
+                    {
+                        Street1 = entity.Location?.Street1 ?? "",
+                        Street2 = entity.Location?.Street2 ?? "",
+                        City = entity.Location?.City ?? "",
+                        State = entity.Location?.State ?? "",
+                        PostalCode = entity.Location?.PostalCode ?? "",
+                        Country = entity.Location?.Country ?? ""
+                    }
+                }
+                : new LocationBag { AddressFields = new AddressControlBag() };
+        }
+
+        /// <summary>
+        /// Creates a <see cref="PhoneNumberBag"/> instance based on the first phone number in the provided list  that
+        /// matches the specified type identifier.
+        /// </summary>
+        /// <param name="phoneNumbers">A list of <see cref="PhoneNumber"/> objects to search through. Cannot be null.</param>
+        /// <param name="typeId">The identifier of the phone number type to match.</param>
+        /// <returns>A <see cref="PhoneNumberBag"/> containing the number and country code of the first matching phone number, 
+        /// or an empty <see cref="PhoneNumberBag"/> if no match is found.</returns>
+        private PhoneNumberBag GetPhoneNumberBag( List<PhoneNumber> phoneNumbers, int typeId )
+        {
+            var phone = phoneNumbers.FirstOrDefault( n => n.NumberTypeValueId == typeId );
+            return phone != null
+                ? new PhoneNumberBag
+                {
+                    Number = phone.Number,
+                    CountryCode = phone.CountryCode
+                }
+                : new PhoneNumberBag();
+        }
+
+        /// <summary>
+        /// Creates a <see cref="LocationBag"/> object based on the specified <paramref name="location"/>.
+        /// </summary>
+        /// <param name="location">The <see cref="Location"/> object to convert. If <paramref name="location"/> is <see langword="null"/>, a
+        /// default <see cref="LocationBag"/> with empty address fields is returned.</param>
+        /// <returns>A <see cref="LocationBag"/> containing the data from the specified <paramref name="location"/>, or a default
+        /// <see cref="LocationBag"/> if <paramref name="location"/> is <see langword="null"/>.</returns>
+        private LocationBag GetLocationBag( Location location )
+        {
+            if ( location == null )
+            {
+                return new LocationBag
+                {
+                    AddressFields = new AddressControlBag()
+                };
+            }
+
+            return new LocationBag
+            {
+                Id = location.Id,
+                Guid = location.Guid != null ? location.Guid : Guid.Empty,
+                AddressFields = new AddressControlBag
+                {
+                    Street1 = location.Street1 ?? "",
+                    Street2 = location.Street2 ?? "",
+                    City = location.City ?? "",
+                    State = location.State ?? "",
+                    PostalCode = location.PostalCode ?? "",
+                    Country = location.Country ?? ""
+                }
+            };
+        }
+
+        #endregion Helper Methods
+
+        #endregion Methods
 
         #region Block Actions
 
@@ -1034,6 +1119,9 @@ namespace Rock.Blocks.Finance
                 return actionError;
             }
 
+            // Detach the entity to prevent saving
+            RockContext.Entry( entity ).State = System.Data.Entity.EntityState.Detached;
+
             if ( personBag == null )
             {
                 return ActionBadRequest( "PersonBag is required." );
@@ -1041,14 +1129,16 @@ namespace Rock.Blocks.Finance
 
             var firstName = personBag.FirstName.Trim();
             var lastName = personBag.LastName.Trim();
-            var emailAddress = personBag.Email.Trim() ?? "";
-
-            var homePhoneNumber = personBag.HomePhoneNumber.Trim() ?? "";
-            var cellPhoneNumber = personBag.CellPhoneNumber.Trim() ?? "";
-            var workPhoneNumber = personBag.WorkPhoneNumber.Trim() ?? "";
+            var emailAddress = ( personBag.Email ?? "" ).Trim();
 
             // Make sure the person doesn't already exist.
-            var personQuery = new PersonService.PersonMatchQuery( firstName, lastName, emailAddress, cellPhoneNumber );
+            var personQuery = new PersonService.PersonMatchQuery(
+                firstName,
+                lastName,
+                emailAddress,
+                personBag.CellPhoneNumber.Number
+            );
+
             var personService = new PersonService( RockContext );
 
             var persons = personService.FindPersons( personQuery, true );
@@ -1082,10 +1172,22 @@ namespace Rock.Blocks.Finance
                 var phoneNumberService = new PhoneNumberService( RockContext );
                 var phoneTypes = new[]
                 {
-                        new { TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid(), Number = PhoneNumber.CleanNumber(cellPhoneNumber) },
-                        new { TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME.AsGuid(), Number = PhoneNumber.CleanNumber(homePhoneNumber) },
-                        new { TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK.AsGuid(), Number = PhoneNumber.CleanNumber(workPhoneNumber) }
-                    };
+                        new {
+                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME.AsGuid(),
+                            Number = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.Number),
+                            CountryCode = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.CountryCode),
+                        },
+                        new {
+                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid(),
+                            Number = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.Number),
+                            CountryCode = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.CountryCode),
+                        },
+                        new {
+                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK.AsGuid(),
+                            Number = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.Number),
+                            CountryCode = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.CountryCode),
+                        }
+                };
 
                 var phoneNumbersToSave = false;
                 foreach ( var phoneTypeInfo in phoneTypes )
@@ -1108,6 +1210,7 @@ namespace Rock.Blocks.Finance
                             phoneNumber.PersonId = person.Id;
                             phoneNumber.NumberTypeValueId = typeValue.Id;
                             phoneNumber.Number = phoneTypeInfo.Number;
+                            phoneNumber.CountryCode = phoneTypeInfo.CountryCode;
 
                             phoneNumbersToSave = true;
                         }
@@ -1120,7 +1223,12 @@ namespace Rock.Blocks.Finance
                 }
 
                 // Save the family address
-                if ( group != null && personBag.Location != null )
+                if ( group != null
+                    && personBag.Location != null
+                    && personBag.Location.AddressFields != null
+                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.Street1 )
+                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.City )
+                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.State ) )
                 {
                     var address = personBag.Location.AddressFields;
                     var locationService = new LocationService( RockContext );

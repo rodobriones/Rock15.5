@@ -110,19 +110,22 @@
             </div>
             <div class="row">
                 <div class="col-md-3">
-                    <PhoneNumberBox v-model="requesterHomePhoneNumber"
-                                    label="Home Phone"
-                                    :disabled="isHomePhoneDisabled || isSavingPersonRecord" />
+                    <PhoneNumberBoxWithSms v-model="requesterHomePhoneNumber"
+                                           label="Home Phone"
+                                           :hideSms="true"
+                                           :disabled="isHomePhoneDisabled || isSavingPersonRecord" />
                 </div>
                 <div class="col-md-3">
-                    <PhoneNumberBox v-model="requesterCellPhoneNumber"
-                                    label="Cell Phone"
-                                    :disabled="isCellPhoneDisabled || isSavingPersonRecord" />
+                    <PhoneNumberBoxWithSms v-model="requesterCellPhoneNumber"
+                                           label="Cell Phone"
+                                           :hideSms="true"
+                                           :disabled="isCellPhoneDisabled || isSavingPersonRecord" />
                 </div>
                 <div class="col-md-3">
-                    <PhoneNumberBox v-model="requesterWorkPhoneNumber"
-                                    label="Work Phone"
-                                    :disabled="isWorkPhoneDisabled || isSavingPersonRecord" />
+                    <PhoneNumberBoxWithSms v-model="requesterWorkPhoneNumber"
+                                           label="Work Phone"
+                                           :hideSms="true"
+                                           :disabled="isWorkPhoneDisabled || isSavingPersonRecord" />
                 </div>
             </div>
             <div class="row">
@@ -239,7 +242,7 @@
     import PersonPicker from "@Obsidian/Controls/personPicker.obs";
     import CampusPicker from "@Obsidian/Controls/campusPicker.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
-    import PhoneNumberBox from "@Obsidian/Controls/phoneNumberBox.obs";
+    import PhoneNumberBoxWithSms from "@Obsidian/Controls/phoneNumberBoxWithSms.obs";
     import EmailBox from "@Obsidian/Controls/emailBox.obs";
     import LocationAddressPicker from "@Obsidian/Controls/locationAddressPicker.obs";
     import FileUploader from "@Obsidian/Controls/fileUploader.obs";
@@ -340,32 +343,68 @@
         }
     });
 
-    const requesterHomePhoneNumber = computed<string>({
-        get: () => requester.value.homePhoneNumber ?? "",
-        set: val => {
+    const requesterHomePhoneNumber = computed({
+        get() {
+            return requester.value.homePhoneNumber
+                ? {
+                    number: requester.value.homePhoneNumber.number ?? undefined,
+                    countryCode: requester.value.homePhoneNumber.countryCode ?? undefined,
+                    isMessagingEnabled: false,
+                }
+                : { number: undefined, countryCode: undefined, isMessagingEnabled: false };
+        },
+        set(val) {
             requester.value = {
                 ...requester.value,
-                homePhoneNumber: val
+                homePhoneNumber: {
+                    number: val.number,
+                    numberFormatted: val.number,
+                    countryCode: val.countryCode ?? ""
+                }
             };
         }
     });
 
-    const requesterCellPhoneNumber = computed<string>({
-        get: () => requester.value.cellPhoneNumber ?? "",
-        set: val => {
+    const requesterCellPhoneNumber = computed({
+        get() {
+            return requester.value.cellPhoneNumber
+                ? {
+                    number: requester.value.cellPhoneNumber.number ?? undefined,
+                    countryCode: requester.value.cellPhoneNumber.countryCode ?? undefined,
+                    isMessagingEnabled: false,
+                }
+                : { number: undefined, countryCode: undefined, isMessagingEnabled: false };
+        },
+        set(val) {
             requester.value = {
                 ...requester.value,
-                cellPhoneNumber: val
+                cellPhoneNumber: {
+                    number: val.number,
+                    numberFormatted: val.number,
+                    countryCode: val.countryCode ?? ""
+                }
             };
         }
     });
 
-    const requesterWorkPhoneNumber = computed<string>({
-        get: () => requester.value.workPhoneNumber ?? "",
-        set: val => {
+    const requesterWorkPhoneNumber = computed({
+        get() {
+            return requester.value.workPhoneNumber
+                ? {
+                    number: requester.value.workPhoneNumber.number ?? undefined,
+                    countryCode: requester.value.workPhoneNumber.countryCode ?? undefined,
+                    isMessagingEnabled: false,
+                }
+                : { number: undefined, countryCode: undefined, isMessagingEnabled: false };
+        },
+        set(val) {
             requester.value = {
                 ...requester.value,
-                workPhoneNumber: val
+                workPhoneNumber: {
+                    number: val.number,
+                    numberFormatted: val.number,
+                    countryCode: val.countryCode ?? ""
+                }
             };
         }
     });

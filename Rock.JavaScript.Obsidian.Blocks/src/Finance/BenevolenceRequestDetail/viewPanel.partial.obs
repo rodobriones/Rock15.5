@@ -67,17 +67,17 @@
                              style="overflow-wrap: anywhere; word-break: break-all;">
                             <p style="white-space: normal;"><i class="ti ti-mail"></i> {{ entity.requester?.email }}</p>
                         </div>
-                        <div v-if="entity.requester?.homePhoneNumber"
+                        <div v-if="requesterHomePhoneNumber !== ''"
                              class="control-wrapper mb-1">
-                            <p><i class="ti ti-home"></i> {{ entity.requester?.homePhoneNumber }}</p>
+                            <p><i class="ti ti-home"></i> {{ requesterHomePhoneNumber }}</p>
                         </div>
-                        <div v-if="entity.requester?.cellPhoneNumber"
+                        <div v-if="requesterCellPhoneNumber !== ''"
                              class="control-wrapper mb-1">
-                            <p><i class="ti ti-device-mobile"></i> {{ entity.requester?.cellPhoneNumber }}</p>
+                            <p><i class="ti ti-device-mobile"></i> {{ requesterCellPhoneNumber }}</p>
                         </div>
-                        <div v-if="entity.requester?.workPhoneNumber"
+                        <div v-if="requesterWorkPhoneNumber !== ''"
                              class="control-wrapper mb-1">
-                            <p><i class="ti ti-building-estate"></i> {{ entity.requester?.workPhoneNumber }}</p>
+                            <p><i class="ti ti-building-estate"></i> {{ requesterWorkPhoneNumber }}</p>
                         </div>
                     </div>
                 </div>
@@ -212,6 +212,33 @@
         `${entity.caseWorker?.nickName} ${entity.caseWorker?.lastName}` :
         `${entity.caseWorker?.firstName} ${entity.caseWorker?.lastName}`;
 
+    const requesterHomePhoneNumber = entity.requester?.homePhoneNumber
+        ? entity.requester?.homePhoneNumber.countryCode !== null
+            && entity.requester?.homePhoneNumber.countryCode !== undefined
+            && entity.requester?.homePhoneNumber.countryCode !== ""
+            && props.options.countryCodesEnabled
+            ? `+${entity.requester?.homePhoneNumber?.countryCode} ${entity.requester?.homePhoneNumber?.numberFormatted}`
+            : `${entity.requester?.homePhoneNumber?.numberFormatted}`
+        : "";
+
+    const requesterCellPhoneNumber = entity.requester?.cellPhoneNumber
+        ? entity.requester?.cellPhoneNumber.countryCode !== null
+            && entity.requester?.cellPhoneNumber.countryCode !== undefined
+            && entity.requester?.cellPhoneNumber.countryCode !== ""
+            && props.options.countryCodesEnabled
+            ? `+${entity.requester?.cellPhoneNumber?.countryCode} ${entity.requester?.cellPhoneNumber?.numberFormatted}`
+            : `${entity.requester?.cellPhoneNumber?.numberFormatted}`
+        : "";
+
+    const requesterWorkPhoneNumber = entity.requester?.workPhoneNumber
+        ? entity.requester?.workPhoneNumber.countryCode !== null
+            && entity.requester?.workPhoneNumber.countryCode !== undefined
+            && entity.requester?.workPhoneNumber.countryCode !== ""
+            && props.options.countryCodesEnabled
+            ? `+${entity.requester?.workPhoneNumber?.countryCode} ${entity.requester?.workPhoneNumber?.numberFormatted}`
+            : `${entity.requester?.workPhoneNumber?.numberFormatted}`
+        : "";
+
     /** The request date string formatted to display date and days ago. */
     const formattedRequestDate = formatRequestDate(entity.requestDateTime ?? "");
 
@@ -224,23 +251,25 @@
 
     /** Whether or not the requester has at least one email or phone number. */
     const hasEmailOrPhone = computed((): boolean => {
-        return isNotNullish(entity.requester?.email)
-            || isNotNullish(entity.requester?.homePhoneNumber)
-            || isNotNullish(entity.requester?.cellPhoneNumber)
-            || isNotNullish(entity.requester?.workPhoneNumber);
+        if (entity.requester == null || entity.requester === undefined) {
+            return false;
+        }
+
+        return (isNotNullish(entity.requester.email) && entity.requester.email !== "")
+            || (isNotNullish(entity.requester.homePhoneNumber) && entity.requester.homePhoneNumber.number !== "")
+            || (isNotNullish(entity.requester.cellPhoneNumber) && entity.requester.cellPhoneNumber.number !== "")
+            || (isNotNullish(entity.requester.workPhoneNumber) && entity.requester.workPhoneNumber.number !== "");
     });
 
     /** Whether or not the requester has the required address fields for a valid address. */
-    const hasRequiredAddressValues = computed((): boolean => {
-        return !isNullOrEmpty(entity.requester?.location?.addressFields?.street1 ?? "")
-            && !isNullOrEmpty(entity.requester?.location?.addressFields?.city ?? "")
-            && !isNullOrEmpty(entity.requester?.location?.addressFields?.state ?? "");
-    });
-
-    /** Whether or not the requester has a valid address. */
     const hasAddress = computed((): boolean => {
-        return isNotNullish(entity.requester?.location?.addressFields)
-            && hasRequiredAddressValues.value;
+        if (entity.requester?.location?.addressFields == null || entity.requester?.location?.addressFields === undefined) {
+            return false;
+        }
+
+        return !isNullOrEmpty(entity.requester.location.addressFields.street1 ?? "")
+            && !isNullOrEmpty(entity.requester.location.addressFields.city ?? "")
+            && !isNullOrEmpty(entity.requester.location.addressFields.state ?? "");
     });
 
     /** Whether or not the requester has no contact information. */
