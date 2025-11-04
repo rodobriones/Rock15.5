@@ -44,7 +44,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// <summary>
         /// Gets or sets the unique identifier for the case worker role attribute.
         /// </summary>
-        public List<ListItemBag> CaseWorkersByRoleAttribute { get; set; }
+        public List<ListItemBag> CaseWorkersByRole { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the country code attribute should be displayed.

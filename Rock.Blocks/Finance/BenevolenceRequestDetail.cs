@@ -191,10 +191,20 @@ namespace Rock.Blocks.Finance
         {
             var options = new BenevolenceRequestDetailOptionsBag();
 
+            var caseWorkerRoleGuid = GetAttributeValue( AttributeKey.CaseWorkerRole ).AsGuid();
+
             #region Attribute Options
 
-            var caseWorkerRoleGuid = GetAttributeValue( AttributeKey.CaseWorkerRole ).AsGuid();
-            options.CaseWorkersByRoleAttribute = new GroupMemberService( RockContext )
+            options.DisplayGovernmentIdAttribute = GetAttributeValue( AttributeKey.DisplayGovernmentId ).AsBoolean();
+            options.BenevolenceRequestStatementPageAttribute = GetAttributeValue( AttributeKey.BenevolenceRequestStatementPage ).AsGuid();
+            options.WorkflowDetailPageAttribute = GetAttributeValue( AttributeKey.WorkflowDetailPage ).AsGuid();
+            options.WorkflowEntryPageAttribute = GetAttributeValue( AttributeKey.WorkflowEntryPage ).AsGuid();
+            options.RaceOptionAttribute = GetAttributeValue( AttributeKey.RaceOption ).ToString();
+            options.EthnicityOptionAttribute = GetAttributeValue( AttributeKey.EthnicityOption ).ToString();
+
+            #endregion Attribute Options
+
+            options.CaseWorkersByRole = new GroupMemberService( RockContext )
                 .Queryable( "Person, Group" )
                 .AsNoTracking()
                 .Where( gm => gm.Group.Guid == caseWorkerRoleGuid )
@@ -211,15 +221,6 @@ namespace Rock.Blocks.Finance
                     Text = $"{a.FirstOrNickName} {a.LastName}",
                 } )
                 .ToList();
-
-            options.DisplayGovernmentIdAttribute = GetAttributeValue( AttributeKey.DisplayGovernmentId ).AsBoolean();
-            options.BenevolenceRequestStatementPageAttribute = GetAttributeValue( AttributeKey.BenevolenceRequestStatementPage ).AsGuid();
-            options.WorkflowDetailPageAttribute = GetAttributeValue( AttributeKey.WorkflowDetailPage ).AsGuid();
-            options.WorkflowEntryPageAttribute = GetAttributeValue( AttributeKey.WorkflowEntryPage ).AsGuid();
-            options.RaceOptionAttribute = GetAttributeValue( AttributeKey.RaceOption ).ToString();
-            options.EthnicityOptionAttribute = GetAttributeValue( AttributeKey.EthnicityOption ).ToString();
-
-            #endregion Attribute Options
 
             options.CountryCodesEnabled = DefinedValueService
                 .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )

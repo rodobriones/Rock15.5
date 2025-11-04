@@ -310,7 +310,7 @@
         : "";
 
     const benevolenceRequestTypes = ref(props.options.benevolenceRequestTypes ?? []);
-    const caseWorkersByRoleCount = ref(props.options.caseWorkersByRoleAttribute?.length ?? 0);
+    const caseWorkersByRoleCount = ref(props.options.caseWorkersByRole?.length ?? 0);
     const requestStatusValues = ref(props.options.requestStatusValues ?? []);
     const connectionStatusValues = ref(props.options.connectionStatusValues ?? []);
 
@@ -569,18 +569,18 @@
     const caseWorkersByRoleAttribute = computed<ListItemBag[]>(() => {
         if (caseWorkersByRoleCount.value > 0 && caseWorker.value.personAliasGuid !== emptyGuid) {
             // Ensure that the currently assigned case worker is always in the list
-            const exists = props.options.caseWorkersByRoleAttribute?.some(cw => areEqual(cw.value, caseWorker.value.personAliasGuid));
+            const exists = props.options.caseWorkersByRole?.some(cw => areEqual(cw.value, caseWorker.value.personAliasGuid));
             if (!exists) {
                 return [
                     {
                         text: caseWorkerDisplayName.value ?? "",
                         value: caseWorker.value.personAliasGuid?.toString() ?? ""
                     },
-                    ...props.options.caseWorkersByRoleAttribute ?? [],
+                    ...props.options.caseWorkersByRole ?? [],
                 ];
             }
         }
-        return props.options.caseWorkersByRoleAttribute ?? [];
+        return props.options.caseWorkersByRole ?? [];
     });
 
     /**
