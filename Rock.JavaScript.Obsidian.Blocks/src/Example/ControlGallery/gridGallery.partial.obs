@@ -10,7 +10,8 @@
               :markInactiveRows="markInactiveRows"
               itemTerm="Widget"
               @addItem="onAddItem"
-              :showExport="showExport">
+              :showExport="showExport"
+              :manualSort="onManualSort">
             <ReorderColumn v-if="showReorder" />
 
             <TextColumn name="name"
@@ -49,6 +50,7 @@
                 <CheckBox label="Show Export" v-model="showExport" />
                 <CheckBox label="Mark Inactive Rows" v-model="markInactiveRows" />
                 <CheckBox label="Use Column Titles" v-model="useColumnTitles" />
+                <CheckBox label="Manual Sorting" v-model="manualSort" />
             </div>
         </template>
     </GalleryAndResult>
@@ -71,6 +73,7 @@
     const showExport = ref(false);
     const markInactiveRows = ref(false);
     const useColumnTitles = ref(true);
+    const manualSort = ref(false);
 
     const gridData: GridDataBag = reactive<GridDataBag>({
         rows: [1, 2, 3, 4, 5].map(idx => generateItem(idx))
@@ -80,6 +83,10 @@
     const dateTitle = computed(() => useColumnTitles.value ? "Date" : "");
     const numberTitle = computed(() => useColumnTitles.value ? "Number" : "");
     const activeTitle = computed(() => useColumnTitles.value ? "Active" : "");
+
+    const onManualSort = computed<((column: string, grid: IGridState) => void) | undefined>(() => {
+        return manualSort.value ? onManualSortCallback : undefined;
+    });
 
     const importCode = getControlImportPath("grid");
 
@@ -153,6 +160,10 @@
             index: Math.floor(Math.random() * 1000),
             isActive: (index % 3) !== 0
         };
+    }
+
+    function onManualSortCallback(column: string, grid: IGridState): void {
+        gridData.rows?.splice(0, gridData.rows.length, ...grid.sortRows(gridData.rows ?? [], { column, isDescending: false }));
     }
 
     function onAddItem(): void {
