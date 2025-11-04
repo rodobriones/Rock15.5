@@ -27,12 +27,13 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
     public class BenevolenceRequestBag : EntityBagBase
     {
         /// <summary>
-        /// Gets or sets the unique identifier key for the entity.
+        /// Gets or sets the person who initiated the request.
         /// </summary>
-        public string IdKey { get; set; }
-
         public PersonBag Requester { get; set; }
 
+        /// <summary>
+        /// Gets or sets the caseworker assigned to the current case.
+        /// </summary>
         public PersonBag CaseWorker { get; set; }
 
         /// <summary>
@@ -44,7 +45,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         public int BenevolenceTypeId { get; set; }
 
         /// <summary>
-        /// Gets or sets the Id of the Defined Value <see cref="Rock.Model.DefinedValue"/> representing the status of the Benevolence Request.
+        /// Gets or sets the Id of the Defined Value representing the status of the Benevolence Request.
         /// </summary>
         /// <value>
         /// A <see cref="System.Int32"/> representing the status of the Benevolence Request.

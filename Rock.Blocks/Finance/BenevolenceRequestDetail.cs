@@ -27,7 +27,6 @@ using Rock.Constants;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
-using Rock.SystemGuid;
 using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail;
 using Rock.ViewModels.Controls;
@@ -37,8 +36,15 @@ using Rock.Web.Cache;
 namespace Rock.Blocks.Finance
 {
     /// <summary>
-    /// Displays the details of a particular benevolence request.
+    /// Represents a block that displays and manages the details of a specific benevolence request.
     /// </summary>
+    /// <remarks>This block is used to view, edit, and manage the details of a benevolence request, including
+    /// associated case workers, request documents, and request results. It provides functionality for creating new
+    /// requests, updating existing ones, and managing related data such as requesters, campuses, and workflows. <para>
+    /// The block includes support for displaying government identifiers, managing workflows, and handling race and
+    /// ethnicity options for individuals associated with the request. </para> <para> This block is primarily used in
+    /// the context of financial assistance workflows and is designed to integrate with other components in the system,
+    /// such as linked pages for workflow details and benevolence request statements. </para></remarks>
 
     [DisplayName( "Benevolence Request Detail" )]
     [Category( "Finance" )]
@@ -118,7 +124,7 @@ namespace Rock.Blocks.Finance
 
         #region Properties
 
-        #region Service Properties
+        #region Properties - Services
 
         private PersonAliasService PersonAliasService => new PersonAliasService( RockContext );
         private LocationService LocationService => new LocationService( RockContext );
@@ -128,12 +134,18 @@ namespace Rock.Blocks.Finance
         private BinaryFileService BinaryFileService => new BinaryFileService( RockContext );
         private BenevolenceRequestDocumentService BenevolenceRequestDocumentService => new BenevolenceRequestDocumentService( RockContext );
 
-        #endregion Service Properties
+        #endregion Properties - Services
 
         #endregion Properties
 
         #region Keys
 
+        /// <summary>
+        /// Provides a collection of constant string keys used to identify specific attributes within the application.
+        /// </summary>
+        /// <remarks>The <see cref="AttributeKey"/> class contains predefined string constants that
+        /// represent attribute keys. These keys are used to reference specific attributes in a consistent and
+        /// centralized manner, reducing the likelihood of errors.</remarks>
         private static class AttributeKey
         {
             public const string CaseWorkerRole = "CaseWorkerRole";
@@ -146,6 +158,12 @@ namespace Rock.Blocks.Finance
         }
 
         #region List Source
+
+        /// <summary>
+        /// Provides a source of predefined list values used for configuration or validation purposes.
+        /// </summary>
+        /// <remarks>This class contains constants that represent commonly used list values.  These values
+        /// can be used to standardize input or enforce specific options in application logic.</remarks>
         private static class ListSource
         {
             public const string HIDE_OPTIONAL_REQUIRED = "Hide,Optional,Required";
@@ -153,11 +171,22 @@ namespace Rock.Blocks.Finance
 
         #endregion
 
+        /// <summary>
+        /// Provides a collection of constant keys used for identifying page parameters.
+        /// </summary>
+        /// <remarks>This class contains string constants that represent specific parameter keys used in
+        /// page navigation or data exchange. These keys are intended to be used as identifiers for passing or
+        /// retrieving values in a consistent manner.</remarks>
         private static class PageParameterKey
         {
             public const string BenevolenceRequestId = "BenevolenceRequestId";
         }
 
+        /// <summary>
+        /// Provides constant keys used for navigation URLs within the application.
+        /// </summary>
+        /// <remarks>This class contains string constants that represent specific navigation targets.
+        /// These keys are typically used to identify pages or routes in the application's navigation system.</remarks>
         private static class NavigationUrlKey
         {
             public const string ParentPage = "ParentPage";
@@ -340,102 +369,6 @@ namespace Rock.Blocks.Finance
             PrepareDetailBox( box, entity );
         }
 
-        /// <summary>
-        /// Gets the entity bag that is common between both view and edit modes.
-        /// </summary>
-        /// <param name="entity">The entity to be represented as a bag.</param>
-        /// <returns>A <see cref="BenevolenceRequestBag"/> that represents the entity.</returns>
-        private BenevolenceRequestBag GetCommonEntityBag( BenevolenceRequest entity )
-        {
-            if ( entity == null )
-            {
-                return null;
-            }
-
-            if ( entity.Id != 0 )
-            {
-                var requesterPersonBag = BuildPersonBag( entity, entity.RequestedByPersonAliasId ?? 0, entity.GovernmentId );
-                var caseWorkerPersonBag = BuildPersonBag( entity, entity.CaseWorkerPersonAliasId ?? 0, "", isRequester: false );
-                var campus = BuildCampusBag( entity.CampusId ?? 0 );
-
-                return new BenevolenceRequestBag
-                {
-                    IdKey = entity.IdKey,
-                    Requester = requesterPersonBag,
-                    CaseWorker = caseWorkerPersonBag,
-                    BenevolenceTypeId = entity.BenevolenceTypeId,
-                    RequestStatusValueId = entity.RequestStatusValueId,
-                    RequestDateTime = entity.RequestDateTime,
-                    RequestText = entity.RequestText,
-                    ResultSummary = entity.ResultSummary,
-                    ProvidedNextSteps = entity.ProvidedNextSteps,
-                    Campus = campus,
-                    Results = entity.BenevolenceResults
-                        .Select( result => new BenevolenceResultBag
-                        {
-                            IdKey = result.IdKey,
-                            ResultTypeValueId = result.ResultTypeValueId,
-                            Amount = result.Amount,
-                            ResultSummary = result.ResultSummary,
-                        } )
-                        .ToList(),
-                    RequestDocuments = entity.Documents
-                        .OrderBy( document => document.Order )
-                        .ThenBy( document => document.Id )
-                        .Select( document => new BenevolenceDocumentBag
-                        {
-                            IdKey = document.IdKey,
-                            Guid = BinaryFileService.Get( document.BinaryFileId ).Guid,
-                            FileName = document.BinaryFile.FileName,
-                            IsMarkedForDeletion = false
-                        } )
-                        .ToList()
-                };
-            }
-
-            return new BenevolenceRequestBag();
-        }
-
-        /// <inheritdoc/>
-        protected override BenevolenceRequestBag GetEntityBagForView( BenevolenceRequest entity )
-        {
-            if ( entity == null )
-            {
-                return null;
-            }
-
-            var bag = GetCommonEntityBag( entity );
-
-            if ( entity.Attributes == null )
-            {
-                entity.LoadAttributes( RockContext );
-            }
-
-            bag.LoadAttributesAndValuesForPublicView( entity, RequestContext.CurrentPerson, enforceSecurity: true );
-
-            return bag;
-        }
-
-        /// <inheritdoc/>
-        protected override BenevolenceRequestBag GetEntityBagForEdit( BenevolenceRequest entity )
-        {
-            if ( entity == null )
-            {
-                return null;
-            }
-
-            var bag = GetCommonEntityBag( entity );
-
-            if ( entity.Attributes == null )
-            {
-                entity.LoadAttributes( RockContext );
-            }
-
-            bag.LoadAttributesAndValuesForPublicEdit( entity, RequestContext.CurrentPerson, enforceSecurity: true );
-
-            return bag;
-        }
-
         /// <inheritdoc/>
         protected override bool UpdateEntityFromBox( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
         {
@@ -460,6 +393,69 @@ namespace Rock.Blocks.Finance
 
             return true;
         }
+
+        /// <inheritdoc/>
+        protected override BenevolenceRequest GetInitialEntity()
+        {
+            return GetInitialEntity<BenevolenceRequest, BenevolenceRequestService>( RockContext, PageParameterKey.BenevolenceRequestId );
+        }
+
+        /// <summary>
+        /// Gets the box navigation URLs required for the page to operate.
+        /// </summary>
+        /// <returns>A dictionary of key names and URL values.</returns>
+        private Dictionary<string, string> GetBoxNavigationUrls()
+        {
+            return new Dictionary<string, string>
+            {
+                [NavigationUrlKey.ParentPage] = this.GetParentPageUrl(),
+                [NavigationUrlKey.BenevolenceRequestStatementPage] = this.GetLinkedPageUrl(
+                    AttributeKey.BenevolenceRequestStatementPage,
+                    "BenevolenceRequestId",
+                    "((Value))"
+                ),
+
+            };
+        }
+
+        /// <inheritdoc/>
+        protected override bool TryGetEntityForEditAction( string idKey, out BenevolenceRequest entity, out BlockActionResult error )
+        {
+            var entityService = new BenevolenceRequestService( RockContext );
+            error = null;
+
+            // Determine if we are editing an existing entity or creating a new one.
+            if ( idKey.IsNotNullOrWhiteSpace() )
+            {
+                // If editing an existing entity then load it and make sure it
+                // was found and can still be edited.
+                entity = entityService.Get( idKey, !PageCache.Layout.Site.DisablePredictableIds );
+            }
+            else
+            {
+                // Create a new entity.
+                entity = new BenevolenceRequest();
+                entityService.Add( entity );
+            }
+
+            if ( entity == null )
+            {
+                error = ActionBadRequest( $"{BenevolenceRequest.FriendlyTypeName} not found." );
+                return false;
+            }
+
+            if ( !entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
+            {
+                error = ActionBadRequest( $"Not authorized to edit ${BenevolenceRequest.FriendlyTypeName}." );
+                return false;
+            }
+
+            return true;
+        }
+
+        #region Helper Methods
+
+        #region Helper Methods - Entity Update
 
         /// <summary>
         /// Updates the properties of the requester in the specified <see cref="BenevolenceRequest"/> entity based on
@@ -674,63 +670,104 @@ namespace Rock.Blocks.Finance
             box.IfValidProperty( nameof( box.Bag.ProvidedNextSteps ), () => entity.ProvidedNextSteps = box.Bag.ProvidedNextSteps );
         }
 
-        /// <inheritdoc/>
-        protected override BenevolenceRequest GetInitialEntity()
-        {
-            return GetInitialEntity<BenevolenceRequest, BenevolenceRequestService>( RockContext, PageParameterKey.BenevolenceRequestId );
-        }
+        #endregion Helper Methods - Entity Update
+
+        #region Helper Methods - Bag Construction
 
         /// <summary>
-        /// Gets the box navigation URLs required for the page to operate.
+        /// Gets the entity bag that is common between both view and edit modes.
         /// </summary>
-        /// <returns>A dictionary of key names and URL values.</returns>
-        private Dictionary<string, string> GetBoxNavigationUrls()
+        /// <param name="entity">The entity to be represented as a bag.</param>
+        /// <returns>A <see cref="BenevolenceRequestBag"/> that represents the entity.</returns>
+        private BenevolenceRequestBag GetCommonEntityBag( BenevolenceRequest entity )
         {
-            return new Dictionary<string, string>
+            if ( entity == null )
             {
-                [NavigationUrlKey.ParentPage] = this.GetParentPageUrl(),
-                [NavigationUrlKey.BenevolenceRequestStatementPage] = this.GetLinkedPageUrl(
-                    AttributeKey.BenevolenceRequestStatementPage,
-                    "BenevolenceRequestId",
-                    "((Value))"
-                ),
+                return null;
+            }
 
-            };
+            if ( entity.Id != 0 )
+            {
+                var requesterPersonBag = BuildPersonBag( entity, entity.RequestedByPersonAliasId ?? 0, entity.GovernmentId );
+                var caseWorkerPersonBag = BuildPersonBag( entity, entity.CaseWorkerPersonAliasId ?? 0, "", isRequester: false );
+                var campus = BuildCampusBag( entity.CampusId ?? 0 );
+
+                return new BenevolenceRequestBag
+                {
+                    IdKey = entity.IdKey,
+                    Requester = requesterPersonBag,
+                    CaseWorker = caseWorkerPersonBag,
+                    BenevolenceTypeId = entity.BenevolenceTypeId,
+                    RequestStatusValueId = entity.RequestStatusValueId,
+                    RequestDateTime = entity.RequestDateTime,
+                    RequestText = entity.RequestText,
+                    ResultSummary = entity.ResultSummary,
+                    ProvidedNextSteps = entity.ProvidedNextSteps,
+                    Campus = campus,
+                    Results = entity.BenevolenceResults
+                        .Select( result => new BenevolenceResultBag
+                        {
+                            IdKey = result.IdKey,
+                            ResultTypeValueId = result.ResultTypeValueId,
+                            Amount = result.Amount,
+                            ResultSummary = result.ResultSummary,
+                        } )
+                        .ToList(),
+                    RequestDocuments = entity.Documents
+                        .OrderBy( document => document.Order )
+                        .ThenBy( document => document.Id )
+                        .Select( document => new BenevolenceDocumentBag
+                        {
+                            IdKey = document.IdKey,
+                            Guid = BinaryFileService.Get( document.BinaryFileId ).Guid,
+                            FileName = document.BinaryFile.FileName,
+                            IsMarkedForDeletion = false
+                        } )
+                        .ToList()
+                };
+            }
+
+            return new BenevolenceRequestBag();
         }
 
         /// <inheritdoc/>
-        protected override bool TryGetEntityForEditAction( string idKey, out BenevolenceRequest entity, out BlockActionResult error )
+        protected override BenevolenceRequestBag GetEntityBagForView( BenevolenceRequest entity )
         {
-            var entityService = new BenevolenceRequestService( RockContext );
-            error = null;
-
-            // Determine if we are editing an existing entity or creating a new one.
-            if ( idKey.IsNotNullOrWhiteSpace() )
-            {
-                // If editing an existing entity then load it and make sure it
-                // was found and can still be edited.
-                entity = entityService.Get( idKey, !PageCache.Layout.Site.DisablePredictableIds );
-            }
-            else
-            {
-                // Create a new entity.
-                entity = new BenevolenceRequest();
-                entityService.Add( entity );
-            }
-
             if ( entity == null )
             {
-                error = ActionBadRequest( $"{BenevolenceRequest.FriendlyTypeName} not found." );
-                return false;
+                return null;
             }
 
-            if ( !entity.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
+            var bag = GetCommonEntityBag( entity );
+
+            if ( entity.Attributes == null )
             {
-                error = ActionBadRequest( $"Not authorized to edit ${BenevolenceRequest.FriendlyTypeName}." );
-                return false;
+                entity.LoadAttributes( RockContext );
             }
 
-            return true;
+            bag.LoadAttributesAndValuesForPublicView( entity, RequestContext.CurrentPerson, enforceSecurity: true );
+
+            return bag;
+        }
+
+        /// <inheritdoc/>
+        protected override BenevolenceRequestBag GetEntityBagForEdit( BenevolenceRequest entity )
+        {
+            if ( entity == null )
+            {
+                return null;
+            }
+
+            var bag = GetCommonEntityBag( entity );
+
+            if ( entity.Attributes == null )
+            {
+                entity.LoadAttributes( RockContext );
+            }
+
+            bag.LoadAttributesAndValuesForPublicEdit( entity, RequestContext.CurrentPerson, enforceSecurity: true );
+
+            return bag;
         }
 
         /// <summary>
@@ -936,8 +973,6 @@ namespace Rock.Blocks.Finance
             campusBag = new CampusBag();
             return false;
         }
-
-        #region Helper Methods
 
         /// <summary>
         /// Creates a <see cref="PhoneNumberBag"/> object based on the specified phone number type ID.
@@ -1155,47 +1190,31 @@ namespace Rock.Blocks.Finance
             };
         }
 
-        #endregion Helper Methods
+        #endregion Helper Methods - Bag Construction
 
-        #endregion Methods
-
-        #region Block Actions
+        #region Helper Methods - Person Creation
 
         /// <summary>
-        /// Adds a person to the system using the provided requester data.
+        /// Finds an existing person based on the provided information or creates a new person record if no match is
+        /// found.
         /// </summary>
-        /// <remarks>This method checks if a person with the provided details already exists. If not, it
-        /// creates a new person record, sets their connection and record status, and saves their phone numbers and
-        /// address if provided. The method requires the user to have edit permissions for the specified benevolence
-        /// request.</remarks>
-        /// <param name="benevolenceRequestIdKey">The unique identifier key for the benevolence request. This is used to verify edit permissions.</param>
-        /// <param name="personBag">The data container holding the person's information, such as name, email, and phone numbers. Cannot be null.</param>
-        /// <param name="campusId">The optional identifier for the campus to associate with the new person. If provided, it sets the person's
-        /// primary campus.</param>
-        /// <returns>A <see cref="BlockActionResult"/> containing the <see cref="PersonBag"/> of the existing or newly created
-        /// person.</returns>
-        [BlockAction]
-        public BlockActionResult AddPersonFromRequesterData( string benevolenceRequestIdKey, PersonBag personBag, int? campusId )
+        /// <remarks>This method attempts to find a person using the provided details in <paramref
+        /// name="personBag"/>. If no match is found, a new person record is created with the provided details. The
+        /// method updates the <paramref name="createRecordNotes"/> to indicate the outcome of the operation.</remarks>
+        /// <param name="personBag">An object containing the personal details used to find or create the person, such as name, email, and phone
+        /// number.</param>
+        /// <param name="campusId">The optional campus identifier to associate with the person if a new record is created. Can be <see
+        /// langword="null"/>.</param>
+        /// <param name="createRecordNotes">A <see cref="StringBuilder"/> to which notes about the operation are appended, indicating whether a new
+        /// person was created or an existing one was found.</param>
+        /// <returns>The <see cref="Person"/> object representing the existing person if found, or the newly created person if no
+        /// match was found.</returns>
+        private Person FindOrCreatePerson( PersonBag personBag, int? campusId, StringBuilder createRecordNotes )
         {
-            // Is the user authorized to edit this benevolence request?
-            if ( !TryGetEntityForEditAction( benevolenceRequestIdKey, out var entity, out var actionError ) )
-            {
-                return actionError;
-            }
-
-            // Detach the entity to prevent saving
-            RockContext.Entry( entity ).State = System.Data.Entity.EntityState.Detached;
-
-            if ( personBag == null )
-            {
-                return ActionBadRequest( "PersonBag is required." );
-            }
-
             var firstName = personBag.FirstName.Trim();
             var lastName = personBag.LastName.Trim();
             var emailAddress = ( personBag.Email ?? "" ).Trim();
 
-            // Make sure the person doesn't already exist.
             var personQuery = new PersonService.PersonMatchQuery(
                 firstName,
                 lastName,
@@ -1204,23 +1223,19 @@ namespace Rock.Blocks.Finance
             );
 
             var personService = new PersonService( RockContext );
-
             var persons = personService.FindPersons( personQuery, true );
-
-            var createRecordNotes = new StringBuilder();
             var person = persons?.FirstOrDefault();
+
             if ( person == null )
             {
-                person = new Rock.Model.Person { FirstName = firstName, LastName = lastName, Email = emailAddress };
+                person = new Person { FirstName = firstName, LastName = lastName, Email = emailAddress };
 
-                // set the person's connection status using the form fields
-                if ( person.ConnectionStatusValueId == null || !person.ConnectionStatusValueId.HasValue )
+                if ( !person.ConnectionStatusValueId.HasValue )
                 {
                     person.ConnectionStatusValueId = personBag.ConnectionStatusValueId.Value;
                 }
 
-                // set the person's record status to active.
-                if ( person.RecordStatusValueId == null || !person.RecordStatusValueId.HasValue )
+                if ( !person.RecordStatusValueId.HasValue )
                 {
                     var activePersonStatus = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE );
                     if ( activePersonStatus != null )
@@ -1234,124 +1249,188 @@ namespace Rock.Blocks.Finance
                     person.RaceValueId = DefinedValueCache.Get( personBag.RaceGuid ).Id;
                 }
 
-                if ( personBag.RaceGuid != null && !personBag.EthnicityGuid.IsEmpty() )
+                if ( personBag.EthnicityGuid != null && !personBag.EthnicityGuid.IsEmpty() )
                 {
                     person.EthnicityValueId = DefinedValueCache.Get( personBag.EthnicityGuid ).Id;
                 }
 
-                // If the campus picker has a value, use it and make that the new person's primary campus.
                 var group = PersonService.SaveNewPerson( person, RockContext, campusId );
                 createRecordNotes.Append( "Created new person record." );
-
-                // Save the phone numbers
-                var phoneNumberService = new PhoneNumberService( RockContext );
-                var phoneTypes = new[]
-                {
-                        new {
-                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME.AsGuid(),
-                            Number = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.Number),
-                            CountryCode = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.CountryCode),
-                        },
-                        new {
-                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid(),
-                            Number = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.Number),
-                            CountryCode = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.CountryCode),
-                        },
-                        new {
-                            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK.AsGuid(),
-                            Number = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.Number),
-                            CountryCode = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.CountryCode),
-                        }
-                };
-
-                var phoneNumbersToSave = false;
-                foreach ( var phoneTypeInfo in phoneTypes )
-                {
-                    var typeValue = DefinedValueCache.Get( phoneTypeInfo.TypeGuid );
-                    if ( typeValue != null )
-                    {
-                        var phoneNumber = phoneNumberService.Queryable()
-                            .Where( n =>
-                                n.PersonId == person.Id &&
-                                n.NumberTypeValueId.HasValue &&
-                                n.NumberTypeValueId.Value == typeValue.Id )
-                            .FirstOrDefault();
-
-                        if ( phoneNumber == null && phoneTypeInfo.Number.IsNotNullOrWhiteSpace() )
-                        {
-                            phoneNumber = new PhoneNumber();
-                            phoneNumberService.Add( phoneNumber );
-
-                            phoneNumber.PersonId = person.Id;
-                            phoneNumber.NumberTypeValueId = typeValue.Id;
-                            phoneNumber.Number = phoneTypeInfo.Number;
-                            phoneNumber.CountryCode = phoneTypeInfo.CountryCode;
-
-                            phoneNumbersToSave = true;
-                        }
-                    }
-                }
-
-                if ( phoneNumbersToSave )
-                {
-                    RockContext.SaveChanges();
-                }
-
-                // Save the family address
-                if ( group != null
-                    && personBag.Location != null
-                    && personBag.Location.AddressFields != null
-                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.Street1 )
-                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.City )
-                    && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.State ) )
-                {
-                    var address = personBag.Location.AddressFields;
-
-                    var homeLocationType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() );
-                    if ( homeLocationType != null )
-                    {
-                        var homeLocation = LocationService.Get(
-                                address.Street1,
-                                address.Street2,
-                                address.City,
-                                address.State,
-                                address.Locality,
-                                address.PostalCode,
-                                address.Country,
-                                new GetLocationArgs
-                                {
-                                    ValidateLocation = false,
-                                    VerifyLocation = false,
-                                    CreateNewLocation = false,
-                                    Group = group,
-                                }
-                        );
-
-                        // Check to see if family has an existing home address
-                        var groupLocation = group.GroupLocations
-                            .FirstOrDefault( l =>
-                                l.GroupLocationTypeValueId.HasValue &&
-                                l.GroupLocationTypeValueId.Value == homeLocationType.Id );
-
-                        if ( homeLocation != null )
-                        {
-                            if ( groupLocation == null || groupLocation.LocationId != homeLocation.Id )
-                            {
-                                // If family does not currently have a home address or it is different than the one entered, add a new address (move old address to prev)
-                                GroupService.AddNewGroupAddress( RockContext, group, homeLocationType.Guid.ToString(), homeLocation, true, string.Empty, true, true );
-
-                                RockContext.SaveChanges();
-                            }
-                        }
-                    }
-                }
+                person.PrimaryFamily = group;
             }
             else
             {
                 createRecordNotes.Append( "Person already exists. Pulled record instead. To update contact information, please update the Person." );
             }
 
-            // Returns either the existing or newly created person's PersonBag
+            return person;
+        }
+
+        /// <summary>
+        /// Saves the phone numbers for the specified person based on the provided person bag.
+        /// </summary>
+        /// <remarks>This method updates the person's phone numbers in the database. If a phone number of
+        /// a specific type (e.g., home, mobile, or work) does not already exist for the person, it will be added. If
+        /// the phone number is empty or null, no changes will be made for that type.</remarks>
+        /// <param name="person">The person whose phone numbers are being updated. This parameter cannot be null.</param>
+        /// <param name="personBag">The bag containing the phone number details to be saved. This includes home, mobile, and work phone numbers.</param>
+        private void SavePhoneNumbers( Person person, PersonBag personBag )
+        {
+            var phoneNumberService = new PhoneNumberService( RockContext );
+            var phoneTypes = new[]
+            {
+        new {
+            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME.AsGuid(),
+            Number = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.Number),
+            CountryCode = PhoneNumber.CleanNumber(personBag.HomePhoneNumber.CountryCode),
+        },
+        new {
+            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid(),
+            Number = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.Number),
+            CountryCode = PhoneNumber.CleanNumber(personBag.CellPhoneNumber.CountryCode),
+        },
+        new {
+            TypeGuid = Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK.AsGuid(),
+            Number = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.Number),
+            CountryCode = PhoneNumber.CleanNumber(personBag.WorkPhoneNumber.CountryCode),
+        }
+    };
+
+            var phoneNumbersToSave = false;
+            foreach ( var phoneTypeInfo in phoneTypes )
+            {
+                var typeValue = DefinedValueCache.Get( phoneTypeInfo.TypeGuid );
+                if ( typeValue != null )
+                {
+                    var phoneNumber = phoneNumberService.Queryable()
+                        .Where( n =>
+                            n.PersonId == person.Id &&
+                            n.NumberTypeValueId.HasValue &&
+                            n.NumberTypeValueId.Value == typeValue.Id )
+                        .FirstOrDefault();
+
+                    if ( phoneNumber == null && phoneTypeInfo.Number.IsNotNullOrWhiteSpace() )
+                    {
+                        phoneNumber = new PhoneNumber();
+                        phoneNumberService.Add( phoneNumber );
+
+                        phoneNumber.PersonId = person.Id;
+                        phoneNumber.NumberTypeValueId = typeValue.Id;
+                        phoneNumber.Number = phoneTypeInfo.Number;
+                        phoneNumber.CountryCode = phoneTypeInfo.CountryCode;
+
+                        phoneNumbersToSave = true;
+                    }
+                }
+            }
+
+            if ( phoneNumbersToSave )
+            {
+                RockContext.SaveChanges();
+            }
+        }
+
+        /// <summary>
+        /// Updates the primary family address of the specified person based on the provided address information.
+        /// </summary>
+        /// <remarks>This method updates the home address of the person's primary family if the provided
+        /// address information is valid and complete. If the address already exists for the family, no changes are
+        /// made. If the address is new, it is added as the family's home address.</remarks>
+        /// <param name="person">The person whose primary family address will be updated. Must not be null.</param>
+        /// <param name="personBag">The data bag containing the address information to be saved. Must not be null and must include valid address
+        /// fields.</param>
+        /// <param name="campusId">The campus identifier associated with the address, or <see langword="null"/> if no campus is specified.</param>
+        private void SaveFamilyAddress( Person person, PersonBag personBag, int? campusId )
+        {
+            var group = person.PrimaryFamily;
+            if ( group != null
+                && personBag.Location != null
+                && personBag.Location.AddressFields != null
+                && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.Street1 )
+                && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.City )
+                && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.State ) )
+            {
+                var address = personBag.Location.AddressFields;
+                var homeLocationType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() );
+                if ( homeLocationType != null )
+                {
+                    var homeLocation = LocationService.Get(
+                        address.Street1,
+                        address.Street2,
+                        address.City,
+                        address.State,
+                        address.Locality,
+                        address.PostalCode,
+                        address.Country,
+                        new GetLocationArgs
+                        {
+                            ValidateLocation = false,
+                            VerifyLocation = false,
+                            CreateNewLocation = false,
+                            Group = group,
+                        }
+                    );
+
+                    var groupLocation = group.GroupLocations
+                        .FirstOrDefault( l =>
+                            l.GroupLocationTypeValueId.HasValue &&
+                            l.GroupLocationTypeValueId.Value == homeLocationType.Id );
+
+                    if ( homeLocation != null )
+                    {
+                        if ( groupLocation == null || groupLocation.LocationId != homeLocation.Id )
+                        {
+                            GroupService.AddNewGroupAddress( RockContext, group, homeLocationType.Guid.ToString(), homeLocation, true, string.Empty, true, true );
+                            RockContext.SaveChanges();
+                        }
+                    }
+                }
+            }
+        }
+
+        #endregion Helper Methods - Person Creation
+
+        #endregion Helper Methods
+
+        #endregion Methods
+
+        #region Block Actions
+
+        /// <summary>
+        /// Adds a person to the system based on the provided requester data.
+        /// </summary>
+        /// <remarks>This method attempts to find an existing person matching the provided data or creates
+        /// a new person if no match is found.  It also saves phone numbers and family address information for the
+        /// person. The method ensures that the associated entity  for the benevolence request is valid before
+        /// proceeding.</remarks>
+        /// <param name="benevolenceRequestIdKey">The unique identifier key for the benevolence request. This is used to retrieve the associated entity for
+        /// the action.</param>
+        /// <param name="personBag">The data bag containing information about the person to be added. This parameter is required.</param>
+        /// <param name="campusId">The optional identifier of the campus to associate with the person. If not provided, no campus association
+        /// will be made.</param>
+        /// <returns>A <see cref="BlockActionResult"/> containing the result of the operation. If successful, the result includes
+        /// the created or updated person data and any notes about the record creation.</returns>
+        [BlockAction]
+        public BlockActionResult AddPersonFromRequesterData( string benevolenceRequestIdKey, PersonBag personBag, int? campusId )
+        {
+            if ( !TryGetEntityForEditAction( benevolenceRequestIdKey, out var entity, out var actionError ) )
+            {
+                return actionError;
+            }
+
+            RockContext.Entry( entity ).State = System.Data.Entity.EntityState.Detached;
+
+            if ( personBag == null )
+            {
+                return ActionBadRequest( "PersonBag is required." );
+            }
+
+            var createRecordNotes = new StringBuilder();
+            var person = FindOrCreatePerson( personBag, campusId, createRecordNotes );
+
+            SavePhoneNumbers( person, personBag );
+            SaveFamilyAddress( person, personBag, campusId );
+
             BuildPersonBag( person.PrimaryAlias.Guid, out var returnPersonBag );
             return ActionOk( new { Person = returnPersonBag, CreateRecordNotes = createRecordNotes.ToString() } );
         }

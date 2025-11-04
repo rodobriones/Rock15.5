@@ -13,15 +13,13 @@
               :onAddItem="onAddResult"
               :expectedRowCount=2
               light>
-            <TextColumn
-                        name="resultTypeValueId"
+            <TextColumn name="resultTypeValueId"
                         title="Result Type"
                         field="resultTypeValueId"
                         visiblePriority="xs"
                         width="30%" />
 
-            <CurrencyColumn
-                            name="amount"
+            <CurrencyColumn name="amount"
                             title="Amount"
                             field="amount"
                             headerClass="title-right"
@@ -29,8 +27,7 @@
                             visiblePriority="xs"
                             width="10%" />
 
-            <TextColumn
-                        name="resultSummary"
+            <TextColumn name="resultSummary"
                         title="Details"
                         field="resultSummary"
                         visiblePriority="xs"

@@ -24,7 +24,6 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
     /// <summary>
     /// Contains details of the location <u>that are relevevant in the context of a benevolence request.</u>
     /// </summary>
-    /// <seealso cref="Rock.ViewModels.Utility.EntityBagBase" />
     public class LocationBag
     {
         /// <summary>

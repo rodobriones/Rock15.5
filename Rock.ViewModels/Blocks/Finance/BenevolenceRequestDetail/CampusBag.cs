@@ -15,7 +15,6 @@
 // </copyright>
 
 using System;
-using System.Runtime.Serialization;
 
 namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
 {
@@ -37,6 +36,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// Gets or sets the unique identifier for the entity.
         /// </summary>
         public Guid? Guid { get; set; }
+
         /// <summary>
         /// Gets or sets the name of the Campus. This property is required.
         /// </summary>

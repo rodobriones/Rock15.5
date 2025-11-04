@@ -43,6 +43,6 @@ export type BenevolenceResultBag = {
     /** Gets or sets the text of the result details. */
     resultSummary?: string | null;
 
-    /** Gets or sets the Id of the Defined Value Rock.Model.DefinedValue representing the type of Benevolence Result. */
+    /** Gets or sets the Id of the Defined Value representing the type of Benevolence Result. */
     resultTypeValueId: number;
 };

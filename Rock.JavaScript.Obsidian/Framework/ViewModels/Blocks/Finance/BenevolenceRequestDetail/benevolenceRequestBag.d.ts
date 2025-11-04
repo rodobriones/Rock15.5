@@ -41,9 +41,10 @@ export type BenevolenceRequestBag = {
     /** Gets or sets the campus. */
     campus?: CampusBag | null;
 
+    /** Gets or sets the caseworker assigned to the current case. */
     caseWorker?: PersonBag | null;
 
-    /** Gets or sets the unique identifier key for the entity. */
+    /** Gets or sets the identifier key of this entity. */
     idKey?: string | null;
 
     /** Gets or sets the provided next steps. */
@@ -58,9 +59,10 @@ export type BenevolenceRequestBag = {
      */
     requestDocuments?: BenevolenceDocumentBag[] | null;
 
+    /** Gets or sets the person who initiated the request. */
     requester?: PersonBag | null;
 
-    /** Gets or sets the Id of the Defined Value Rock.Model.DefinedValue representing the status of the Benevolence Request. */
+    /** Gets or sets the Id of the Defined Value representing the status of the Benevolence Request. */
     requestStatusValueId?: number | null;
 
     /** Gets or sets the text/content of the request. */

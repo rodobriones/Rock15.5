@@ -16,8 +16,6 @@
 
 using System;
 
-using Rock.ViewModels.Controls;
-
 namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
 {
     /// <summary>

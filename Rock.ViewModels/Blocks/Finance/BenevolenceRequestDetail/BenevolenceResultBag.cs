@@ -27,7 +27,7 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
     public class BenevolenceResultBag : EntityBagBase
     {
         /// <summary>
-        /// Gets or sets the Id of the Defined Value <see cref="Rock.Model.DefinedValue"/> representing the type of Benevolence Result.
+        /// Gets or sets the Id of the Defined Value representing the type of Benevolence Result.
         /// </summary>
         /// <value>
         /// A <see cref="System.Int32"/> representing the type of Benevolence Result.
