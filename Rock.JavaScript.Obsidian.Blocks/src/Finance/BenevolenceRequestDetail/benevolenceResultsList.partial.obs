@@ -47,25 +47,28 @@
             <LoadingIndicator v-if="isSaving" class="text-body pull-right p-2" isSmall />
         </template>
         <div class="row">
-            <DropDownList v-model="resultType"
-                          label="Result Type"
-                          :items="resultTypeListBags"
-                          rules="required" />
-            <NotificationBox v-if="currencyError" alertType="danger">
-                <strong><i class="ti ti-exclamation-circle"></i> Currency Error </strong>
-                <span>{{ currencyError }}</span>
-            </NotificationBox>
-            <TextBox label="Amount"
-                     v-model="resultAmount">
-                <template #inputGroupPrepend>
-                    <span class="input-group-addon">$</span>
-                </template>
-            </TextBox>
+            <div class="col-md-6">
+                <DropDownList v-model="resultType"
+                              label="Result Type"
+                              :items="resultTypeListBags"
+                              rules="required" />
+            </div>
+            <div class="col-md-6">
+                <TextBox label="Amount"
+                         v-model="resultAmount"
+                         rules="decimal">
+                    <template #inputGroupPrepend>
+                        <span class="input-group-addon">$</span>
+                    </template>
+                </TextBox>
+            </div>
         </div>
         <div class="row">
-            <TextBox v-model="resultDetails"
-                     label="Details"
-                     textMode="multiline" />
+            <div class="col-md-12">
+                <TextBox v-model="resultDetails"
+                         label="Details"
+                         textMode="multiline" />
+            </div>
         </div>
     </Modal>
 </template>
@@ -114,7 +117,6 @@
 
     const addResultError = ref("");
     const deleteResultError = ref("");
-    const currencyError = ref("");
 
     const resultType = ref("");
     const resultTypeListBags = ref<ListItemBag[]>(props.options.resultTypeValues ?? []);
@@ -218,13 +220,6 @@
 
         isSaving.value = true;
 
-        currencyError.value = "";
-        if (resultAmount.value !== "" && !isProperCurrencyEntry(resultAmount.value)) {
-            currencyError.value = "Must be a valid currency amount ending with two decimal places.";
-            isSaving.value = false;
-            return;
-        }
-
         const newIdKey = crypto.randomUUID();
 
         const newBag: BenevolenceResultBag = {
@@ -255,11 +250,6 @@
     // #endregion Event Handlers
 
     // #region Watchers
-
-    /** Clear currency error when amount changes in Add Result Modal */
-    watch(resultAmount, () => {
-        currencyError.value = "";
-    });
 
     /** Watch for parental changes in our requestResults and update them. */
     watch(() => props.modelValue.results, () => {
