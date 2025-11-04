@@ -141,26 +141,48 @@
                 </div>
             </div>
             <div class="row">
+                <div class="col-md-3" v-if="isRaceEnabled">
+                    <RacePicker v-model="requesterRace"
+                                label="Race"
+                                :disabled="isRaceDisabled || isSavingPersonRecord"
+                                :showBlankItem="true"
+                                :help="raceAttributeWarning" />
+                </div>
+                <div class="col-md-3" v-if="isEthnicityEnabled">
+                    <EthnicityPicker v-model="requesterEthnicity"
+                                     label="Ethnicity"
+                                     :disabled="isEthnicityDisabled || isSavingPersonRecord"
+                                     :showBlankItem="true"
+                                     :help="ethnicityAttributeWarning" />
+                </div>
                 <div class="col-md-3">
                     <TextBox v-if="props.options.displayGovernmentIdAttribute"
                              v-model="requesterGovernmentId"
                              label="Government ID"
                              :disabled="isSavingPersonRecord" />
-                    <div class="d-flex flex-row" v-if="!isCreateRecordFromFieldsHidden">
-                        <div class="d-flex flex-col">
-                            <a class="btn btn-link" @click.prevent="onCreateRecordFromFields">Create Record From Fields</a>
-                        </div>
-                        <div class="d-flex flex-col">
-                            <LoadingIndicator v-if="isSavingPersonRecord" class="text-body pull-right p-2" isSmall />
-                        </div>
-                    </div>
+                </div>
+            </div>
+            <div class="row" v-if="!isCreateRecordFromFieldsHidden">
+                <div class="col-md-2">
+                    <a class="btn btn-link" @click.prevent="onCreateRecordFromFields">Create Record From Fields</a>
+                </div>
+                <div class="col-md-1">
+                    <LoadingIndicator v-if="isSavingPersonRecord" class="text-body pull-right p-2" isSmall />
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-3">
-                    <NotificationBox v-if="createRecordError" alertType="danger" class="mt-2">
+                <div class="col-md-6" v-if="createRecordError">
+                    <NotificationBox alertType="danger" class="mt-2">
                         <strong><i class="ti ti-exclamation-circle"></i> Error </strong>
                         <span>{{ createRecordError }}</span>
+                    </NotificationBox>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6" v-if="createRecordNotes">
+                    <NotificationBox alertType="info" class="mt-2">
+                        <strong><i class="ti ti-info-circle"></i> Note </strong>
+                        <span>{{ createRecordNotes }}</span>
                     </NotificationBox>
                 </div>
             </div>
@@ -240,6 +262,8 @@
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import DatePicker from "@Obsidian/Controls/datePicker.obs";
     import PersonPicker from "@Obsidian/Controls/personPicker.obs";
+    import RacePicker from "@Obsidian/Controls/racePicker.obs";
+    import EthnicityPicker from "@Obsidian/Controls/ethnicityPicker.obs";
     import CampusPicker from "@Obsidian/Controls/campusPicker.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
     import PhoneNumberBoxWithSms from "@Obsidian/Controls/phoneNumberBoxWithSms.obs";
@@ -270,6 +294,20 @@
     // #region Values
 
     const invokeBlockAction = useInvokeBlockAction();
+
+    const raceAndEthnicityWarning =
+        "This field will not be saved unless a person record is created " +
+        "before saving this benevolence request. ";
+
+    const raceAttributeWarning = raceAndEthnicityWarning +
+        props.options.raceOptionAttribute === "Required"
+        ? "This will only be enforced when creating a new person record, not when saving the benevolence request."
+        : "";
+
+    const ethnicityAttributeWarning = raceAndEthnicityWarning +
+        props.options.ethnicityOptionAttribute === "Required"
+        ? "This will only be enforced when creating a new person record, not when saving the benevolence request."
+        : "";
 
     const benevolenceRequestTypes = ref(props.options.benevolenceRequestTypes ?? []);
     const caseWorkersByRoleCount = ref(props.options.caseWorkersByRoleAttribute?.length ?? 0);
@@ -306,6 +344,8 @@
     const isWorkPhoneDisabled = ref<boolean>(false);
     const isEmailDisabled = ref<boolean>(false);
     const isAddressFieldDisabled = ref<boolean>(false);
+    const isRaceDisabled = ref<boolean>(false);
+    const isEthnicityDisabled = ref<boolean>(false);
     const isCreateRecordFromFieldsHidden = ref<boolean>(false);
 
     const currentAttachment = ref<ListItemBag | null | undefined>(undefined);
@@ -313,6 +353,7 @@
     const isSavingPersonRecord = ref<boolean>(false);
 
     const createRecordError = ref<string>("");
+    const createRecordNotes = ref<string>("");
 
     if (!props.modelValue.bag?.idKey) {
         // If this is a new request, set the request date to today by default
@@ -322,6 +363,16 @@
     // #endregion
 
     // #region Computed Values
+
+    /** Whether the race attribute is enabled in the block properties. */
+    const isRaceEnabled = computed(() => {
+        return props.options.raceOptionAttribute !== "Hide";
+    });
+
+    /** Whether the ethnicity attribute is enabled in the block properties. */
+    const isEthnicityEnabled = computed(() => {
+        return props.options.ethnicityOptionAttribute !== "Hide";
+    });
 
     const requesterFirstName = computed<string>({
         get: () => requester.value.firstName ?? "",
@@ -445,6 +496,32 @@
                 requester.value.location.locationTypeValue = null;
                 requester.value.location.name = null;
             }
+        }
+    });
+
+    const requesterRace = computed<ListItemBag>({
+        get: () => ({
+            value: requester.value.raceGuid ?? emptyGuid,
+            text: ""
+        }),
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                raceGuid: val?.value ?? emptyGuid
+            };
+        }
+    });
+
+    const requesterEthnicity = computed<ListItemBag>({
+        get: () => ({
+            value: requester.value.ethnicityGuid ?? emptyGuid,
+            text: ""
+        }),
+        set: val => {
+            requester.value = {
+                ...requester.value,
+                ethnicityGuid: val?.value ?? emptyGuid
+            };
         }
     });
 
@@ -632,7 +709,9 @@
      */
     function getEmptyPersonBag(): PersonBag {
         return {
-            personAliasGuid: emptyGuid
+            personAliasGuid: emptyGuid,
+            raceGuid: emptyGuid,
+            ethnicityGuid: emptyGuid,
         };
     }
 
@@ -704,6 +783,11 @@
         isEmailDisabled.value = value && !!requester.value.email;
         isAddressFieldDisabled.value = value && !!requester.value.location?.addressFields;
         isCreateRecordFromFieldsHidden.value = value && selectedBenevolenceRequester.value.value !== "";
+
+        // We always want to set the race and ethnicity disables to prevent confusion,
+        // since they won't be saved unless a person record is created.
+        isRaceDisabled.value = value;
+        isEthnicityDisabled.value = value;
     }
 
     // #endregion Functions
@@ -722,6 +806,8 @@
             requester.value.personAliasId = null;
             requester.value.personAliasGuid = emptyGuid;
             lastRequesterPersonAliasGuid.value = "";
+            requesterRace.value = { value: "", text: "" };
+            requesterEthnicity.value = { value: "", text: "" };
             disableRequesterFields(false);
             return;
         }
@@ -832,13 +918,38 @@
             createRecordError.value = "Last Name is required to create a person record.";
             return;
         }
+        if (isNullish(campus.value.id) || campus.value.id <= 0) {
+            createRecordError.value = "A Campus selection is required to create a person record.";
+            return;
+        }
+        if (props.options.raceOptionAttribute === "Required" &&
+            (isNullish(requester.value.raceGuid) || requester.value.raceGuid === emptyGuid)
+        ) {
+            createRecordError.value = "Race is required to create a person record.";
+            return;
+        }
+        if (props.options.ethnicityOptionAttribute === "Required" &&
+            (isNullish(requester.value.ethnicityGuid) || requester.value.ethnicityGuid === emptyGuid)
+        ) {
+            createRecordError.value = "Ethnicity is required to create a person record.";
+            return;
+        }
+
         if (isSavingPersonRecord.value) {
             return;
         }
 
         isSavingPersonRecord.value = true;
 
-        const result = await invokeBlockAction<PersonBag>(
+        // Populate values that might be hidden
+        if (props.options.raceOptionAttribute === "Hide") {
+            requester.value.raceGuid = emptyGuid;
+        }
+        if (props.options.ethnicityOptionAttribute === "Hide") {
+            requester.value.ethnicityGuid = emptyGuid;
+        }
+
+        const result = await invokeBlockAction<{ person: PersonBag, createRecordNotes: string }>(
             "AddPersonFromRequesterData",
             {
                 benevolenceRequestIdKey: props.modelValue.bag.idKey,
@@ -850,12 +961,14 @@
         if (result.isSuccess && result.data) {
             if (result.statusCode === 200 && typeof result.data === "object") {
                 const governmentId = requester.value.governmentId;
-                const newRequesterBag = result.data;
+                const newRequesterBag = result.data.person;
 
                 newRequesterBag.governmentId = governmentId ?? "";
 
                 requester.value = newRequesterBag;
                 disableRequesterFields(true);
+
+                createRecordNotes.value = result.data.createRecordNotes ?? "";
             }
         }
         else if (result.errorMessage) {
@@ -873,7 +986,15 @@
     // #region Watchers
 
     // Clear create record error when relevant fields change
-    watch([requesterFirstName, requesterLastName, () => requester.value.connectionStatusValueId], () => {
+    const fields = [
+        requesterConnectionStatusValueIdString,
+        requesterFirstName,
+        requesterLastName,
+        campus,
+        requesterRace,
+        requesterEthnicity,
+    ];
+    watch(fields, () => {
         createRecordError.value = "";
     });
 

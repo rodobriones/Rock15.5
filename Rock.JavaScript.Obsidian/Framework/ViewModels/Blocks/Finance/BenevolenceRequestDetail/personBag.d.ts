@@ -39,6 +39,9 @@ export type PersonBag = {
     /** Gets or sets the email address of the person requesting benevolence. */
     email?: string | null;
 
+    /** Gets or sets the unique identifier for the ethnicity. */
+    ethnicityGuid: Guid;
+
     /** Gets or sets the first name of the Person. */
     firstName?: string | null;
 
@@ -68,6 +71,9 @@ export type PersonBag = {
 
     /** Gets or sets the URL of the photo associated with the entity. */
     photoUrl?: string | null;
+
+    /** Gets or sets the unique identifier for the race. */
+    raceGuid: Guid;
 
     /** Gets or sets the Work Phone Number of the person who requested benevolence. */
     workPhoneNumber?: PhoneNumberBag | null;

@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+using System.Text;
 
 using Rock.Attribute;
 using Rock.Constants;
@@ -82,7 +83,7 @@ namespace Rock.Blocks.Finance
     [CustomDropdownListField(
         "Race",
         Key = AttributeKey.RaceOption,
-        Description = "Allow race to be optionally selected. This field will not be saved unless a person record is created before saving the request.",
+        Description = "Allow or require race to be selected. This field will not be saved unless a person record is created before saving the request.",
         ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
         IsRequired = false,
         DefaultValue = "Hide",
@@ -92,7 +93,7 @@ namespace Rock.Blocks.Finance
     [CustomDropdownListField(
         "Ethnicity",
         Key = AttributeKey.EthnicityOption,
-        Description = "Allow Ethnicity to be optionally selected. This field will not be saved unless a person record is created before saving the request.",
+        Description = "Allow or require Ethnicity to be selected. This field will not be saved unless a person record is created before saving the request.",
         ListSource = ListSource.HIDE_OPTIONAL_REQUIRED,
         IsRequired = false,
         DefaultValue = "Hide",
@@ -729,7 +730,9 @@ namespace Rock.Blocks.Finance
                         CellPhoneNumber = GetPhoneNumberBag( phoneNumbers, cellPhoneTypeId, isRequester ? entity.CellPhoneNumber : "" ),
                         WorkPhoneNumber = GetPhoneNumberBag( phoneNumbers, workPhoneTypeId, isRequester ? entity.WorkPhoneNumber : "" ),
                         Email = !string.IsNullOrEmpty( person.Email ) ? person.Email : ( isRequester ? entity.Email ?? "" : "" ),
-                        GovernmentId = governmentId ?? ""
+                        GovernmentId = governmentId ?? "",
+                        RaceGuid = person.RaceValue?.Guid ?? Guid.Empty,
+                        EthnicityGuid = person.EthnicityValue?.Guid ?? Guid.Empty,
                     };
                 }
             }
@@ -750,7 +753,9 @@ namespace Rock.Blocks.Finance
                 CellPhoneNumber = GetPhoneNumberBag( new List<PhoneNumber>(), 0, entity.CellPhoneNumber ),
                 WorkPhoneNumber = GetPhoneNumberBag( new List<PhoneNumber>(), 0, entity.WorkPhoneNumber ),
                 Email = entity.Email ?? "",
-                GovernmentId = entity.GovernmentId ?? ""
+                GovernmentId = entity.GovernmentId ?? "",
+                RaceGuid = Guid.Empty,
+                EthnicityGuid = Guid.Empty,
             };
 
             var caseWorkerBagBuiltFromEntity = new PersonBag
@@ -817,7 +822,9 @@ namespace Rock.Blocks.Finance
                 CellPhoneNumber = GetPhoneNumberBag( phoneNumbers, cellPhoneTypeId ),
                 WorkPhoneNumber = GetPhoneNumberBag( phoneNumbers, workPhoneTypeId ),
                 Email = person.Email ?? "",
-                GovernmentId = ""
+                GovernmentId = "",
+                RaceGuid = person.RaceValue?.Guid ?? Guid.Empty,
+                EthnicityGuid = person.EthnicityValue?.Guid ?? Guid.Empty,
             };
 
             return true;
@@ -1143,6 +1150,7 @@ namespace Rock.Blocks.Finance
 
             var persons = personService.FindPersons( personQuery, true );
 
+            var createRecordNotes = new StringBuilder();
             var person = persons?.FirstOrDefault();
             if ( person == null )
             {
@@ -1164,9 +1172,19 @@ namespace Rock.Blocks.Finance
                     }
                 }
 
+                if ( personBag.RaceGuid != null && !personBag.RaceGuid.IsEmpty() )
+                {
+                    person.RaceValueId = DefinedValueCache.Get( personBag.RaceGuid ).Id;
+                }
+
+                if ( personBag.RaceGuid != null && !personBag.EthnicityGuid.IsEmpty() )
+                {
+                    person.EthnicityValueId = DefinedValueCache.Get( personBag.EthnicityGuid ).Id;
+                }
+
                 // If the campus picker has a value, use it and make that the new person's primary campus.
                 var group = PersonService.SaveNewPerson( person, RockContext, campusId );
-
+                createRecordNotes.Append( "Created new person record." );
 
                 // Save the phone numbers
                 var phoneNumberService = new PhoneNumberService( RockContext );
@@ -1272,10 +1290,14 @@ namespace Rock.Blocks.Finance
                     }
                 }
             }
+            else
+            {
+                createRecordNotes.Append( "Person already exists. Pulled record instead. To update contact information, please update the Person." );
+            }
 
             // Returns either the existing or newly created person's PersonBag
             BuildPersonBag( person.PrimaryAlias.Guid, out var returnPersonBag );
-            return ActionOk( returnPersonBag );
+            return ActionOk( new { Person = returnPersonBag, CreateRecordNotes = createRecordNotes.ToString() } );
         }
 
         /// <summary>

@@ -127,5 +127,15 @@ namespace Rock.ViewModels.Blocks.Finance.BenevolenceRequestDetail
         /// A string representing the GovernmentId of the person who requested benevolence.
         /// </value>
         public string GovernmentId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the unique identifier for the race.
+        /// </summary>
+        public Guid RaceGuid { get; set; }
+
+        /// <summary>
+        /// Gets or sets the unique identifier for the ethnicity.
+        /// </summary>
+        public Guid EthnicityGuid { get; set; }
     }
 }
