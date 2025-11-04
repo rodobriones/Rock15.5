@@ -416,7 +416,7 @@ namespace Rock.Blocks.Finance
             return bag;
         }
 
-        //// <inheritdoc/>
+        /// <inheritdoc/>
         protected override BenevolenceRequestBag GetEntityBagForEdit( BenevolenceRequest entity )
         {
             if ( entity == null )
@@ -444,7 +444,6 @@ namespace Rock.Blocks.Finance
                 return false;
             }
 
-
             var activeCountryCodes = DefinedValueService
                 .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
                 .Where( dv => dv.IsActive )
@@ -452,175 +451,227 @@ namespace Rock.Blocks.Finance
                 .Distinct()
                 .ToList();
 
-            box.IfValidProperty( nameof( box.Bag.Requester ),
-                () =>
-                {
-                    if ( box.Bag.Requester != null )
-                    {
-                        entity.FirstName = box.Bag.Requester.FirstName;
-                        entity.LastName = box.Bag.Requester.LastName;
-                        entity.Email = box.Bag.Requester.Email;
-                        entity.RequestedByPersonAliasId = box.Bag.Requester.PersonAliasId.HasValue
-                                                          && box.Bag.Requester.PersonAliasId != 0
-                                                          ? box.Bag.Requester.PersonAliasId
-                                                          : null;
-                        entity.HomePhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.NumberFormatted )
-                            ? (
-                                !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
-                                ? $"{box.Bag.Requester.HomePhoneNumber.CountryCode} {box.Bag.Requester.HomePhoneNumber.NumberFormatted}"
-                                : box.Bag.Requester.HomePhoneNumber.NumberFormatted
-                            )
-                            : string.Empty;
-
-                        entity.CellPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.NumberFormatted )
-                            ? (
-                                !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
-                                ? $"{box.Bag.Requester.CellPhoneNumber.CountryCode} {box.Bag.Requester.CellPhoneNumber.NumberFormatted}"
-                                : box.Bag.Requester.CellPhoneNumber.NumberFormatted
-                            )
-                            : string.Empty;
-
-                        entity.WorkPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.NumberFormatted )
-                            ? (
-                                !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.CountryCode ) && activeCountryCodes.Count() > 1
-                                ? $"{box.Bag.Requester.WorkPhoneNumber.CountryCode} {box.Bag.Requester.WorkPhoneNumber.NumberFormatted}"
-                                : box.Bag.Requester.WorkPhoneNumber.NumberFormatted
-                            )
-                            : string.Empty;
-                        entity.GovernmentId = box.Bag.Requester.GovernmentId;
-                        entity.ConnectionStatusValueId = box.Bag.Requester.ConnectionStatusValueId;
-
-                        entity.LocationId = null;
-                        if ( box.Bag.Requester.Location != null && box.Bag.Requester.Location.AddressFields != null )
-                        {
-                            var addressFields = box.Bag.Requester.Location.AddressFields;
-
-                            if (
-                                addressFields.Street1 != null
-                                && addressFields.City != null
-                                && addressFields.State != null
-                            )
-                            {
-                                var location = LocationService.Get(
-                                    addressFields.Street1,
-                                    addressFields.Street2,
-                                    addressFields.City,
-                                    addressFields.State,
-                                    addressFields.PostalCode,
-                                    addressFields.Country,
-                                    new GetLocationArgs
-                                    {
-                                        Group = null,
-                                        ValidateLocation = false,
-                                        VerifyLocation = false,
-                                        CreateNewLocation = false,
-                                    }
-                                );
-
-                                entity.LocationId = location?.Id ?? ( int? ) null;
-                            }
-                        }
-                    }
-                } );
-
-            box.IfValidProperty( nameof( box.Bag.CaseWorker ),
-                () =>
-                {
-                    if ( box.Bag.CaseWorker != null )
-                    {
-                        entity.CaseWorkerPersonAliasId = box.Bag.CaseWorker.PersonAliasId.HasValue
-                                                          && box.Bag.CaseWorker.PersonAliasId != 0
-                                                          ? box.Bag.CaseWorker.PersonAliasId
-                                                          : null;
-                    }
-                } );
-
-            box.IfValidProperty( nameof( box.Bag.BenevolenceTypeId ),
-                () => entity.BenevolenceTypeId = box.Bag.BenevolenceTypeId );
-
-            box.IfValidProperty( nameof( box.Bag.RequestStatusValueId ),
-                () => entity.RequestStatusValueId = box.Bag.RequestStatusValueId );
-
-            box.IfValidProperty( nameof( box.Bag.RequestDateTime ),
-                () => entity.RequestDateTime = box.Bag.RequestDateTime );
-
-            box.IfValidProperty( nameof( box.Bag.RequestText ),
-                () => entity.RequestText = box.Bag.RequestText );
-
-            box.IfValidProperty( nameof( box.Bag.ResultSummary ),
-                () => entity.ResultSummary = box.Bag.ResultSummary );
-
-            box.IfValidProperty( nameof( box.Bag.ProvidedNextSteps ),
-                () => entity.ProvidedNextSteps = box.Bag.ProvidedNextSteps );
-
-            box.IfValidProperty( nameof( box.Bag.Campus ),
-                () =>
-                {
-                    if ( box.Bag.Campus != null )
-                    {
-                        entity.CampusId = box.Bag.Campus.Id;
-                    }
-                    else
-                    {
-                        entity.CampusId = null;
-                    }
-                } );
-
-            box.IfValidProperty( nameof( box.Bag.RequestDocuments ),
-                () =>
-                {
-                    var existingDocumentIds = entity.Documents.Select( document => document.BinaryFileId ).ToList();
-
-                    foreach ( var documentBag in box.Bag.RequestDocuments )
-                    {
-                        var isValidGuid = Guid.TryParse( documentBag.Guid.ToString(), out Guid fileGuid );
-                        if ( isValidGuid && fileGuid != Guid.Empty )
-                        {
-                            var binaryFile = BinaryFileService.Get( fileGuid );
-
-                            if ( binaryFile != null )
-                            {
-                                // Add the BenevolenceRequestDocument if it doesn't exist and is not marked for deletion
-                                if ( !existingDocumentIds.Contains( binaryFile.Id ) && !documentBag.IsMarkedForDeletion )
-                                {
-                                    var currentPersonAlias = RequestContext.CurrentPerson.PrimaryAlias;
-                                    var benevolenceDocument = new BenevolenceRequestDocument
-                                    {
-                                        BenevolenceRequestId = entity.Id,
-                                        BinaryFileId = binaryFile.Id,
-                                        Guid = Guid.NewGuid(),
-                                        CreatedByPersonAlias = currentPersonAlias,
-                                        ModifiedByPersonAlias = currentPersonAlias,
-                                    };
-
-                                    binaryFile.IsTemporary = false;
-                                    entity.Documents.Add( benevolenceDocument );
-                                }
-
-                                // Remove the BenevolenceRequestDocument if it exists is marked for deletion
-                                if ( existingDocumentIds.Contains( binaryFile.Id ) && documentBag.IsMarkedForDeletion )
-                                {
-                                    var benevolenceDocumentToRemove = entity.Documents.FirstOrDefault( d => d.BinaryFileId == binaryFile.Id );
-                                    if ( benevolenceDocumentToRemove != null )
-                                    {
-                                        BenevolenceRequestDocumentService.Delete( benevolenceDocumentToRemove );
-                                        binaryFile.IsTemporary = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } );
-
-            box.IfValidProperty( nameof( box.Bag.AttributeValues ),
-                () =>
-                {
-                    entity.LoadAttributes( RockContext );
-
-                    entity.SetPublicAttributeValues( box.Bag.AttributeValues, RequestContext.CurrentPerson, enforceSecurity: true );
-                } );
+            UpdateRequesterProperties( entity, box, activeCountryCodes );
+            UpdateCaseWorkerProperties( entity, box );
+            UpdateCampusProperties( entity, box );
+            UpdateRequestDocuments( entity, box );
+            UpdateAttributeValues( entity, box );
+            UpdateDetailProperties( entity, box );
 
             return true;
+        }
+
+        /// <summary>
+        /// Updates the properties of the requester in the specified <see cref="BenevolenceRequest"/> entity based on
+        /// the provided <see cref="ValidPropertiesBox{T}"/> and a list of active country codes.
+        /// </summary>
+        /// <remarks>This method updates various properties of the <paramref name="entity"/> based on the
+        /// values in the <paramref name="box"/>. If the requester information is valid, it updates fields such as the
+        /// requester's name, email, phone numbers, government ID, connection status, and location. Phone numbers are
+        /// formatted based on the presence of country codes and the number of active country codes. If location
+        /// information is provided and valid, the location ID is resolved using the <see
+        /// cref="LocationService"/>.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity to update with requester information.</param>
+        /// <param name="box">A <see cref="ValidPropertiesBox{T}"/> containing the <see cref="BenevolenceRequestBag"/> with the requester
+        /// details to be applied to the entity.</param>
+        /// <param name="activeCountryCodes">A list of active country codes used to determine the formatting of phone numbers.</param>
+        private void UpdateRequesterProperties( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box, List<string> activeCountryCodes )
+        {
+            box.IfValidProperty( nameof( box.Bag.Requester ), () =>
+            {
+                if ( box.Bag.Requester != null )
+                {
+                    entity.FirstName = box.Bag.Requester.FirstName;
+                    entity.LastName = box.Bag.Requester.LastName;
+                    entity.Email = box.Bag.Requester.Email;
+                    entity.RequestedByPersonAliasId = box.Bag.Requester.PersonAliasId.HasValue && box.Bag.Requester.PersonAliasId != 0
+                        ? box.Bag.Requester.PersonAliasId
+                        : null;
+                    entity.HomePhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.NumberFormatted )
+                        ? ( !string.IsNullOrWhiteSpace( box.Bag.Requester.HomePhoneNumber.CountryCode ) && activeCountryCodes.Count > 1
+                            ? $"{box.Bag.Requester.HomePhoneNumber.CountryCode} {box.Bag.Requester.HomePhoneNumber.NumberFormatted}"
+                            : box.Bag.Requester.HomePhoneNumber.NumberFormatted )
+                        : string.Empty;
+                    entity.CellPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.NumberFormatted )
+                        ? ( !string.IsNullOrWhiteSpace( box.Bag.Requester.CellPhoneNumber.CountryCode ) && activeCountryCodes.Count > 1
+                            ? $"{box.Bag.Requester.CellPhoneNumber.CountryCode} {box.Bag.Requester.CellPhoneNumber.NumberFormatted}"
+                            : box.Bag.Requester.CellPhoneNumber.NumberFormatted )
+                        : string.Empty;
+                    entity.WorkPhoneNumber = !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.NumberFormatted )
+                        ? ( !string.IsNullOrWhiteSpace( box.Bag.Requester.WorkPhoneNumber.CountryCode ) && activeCountryCodes.Count > 1
+                            ? $"{box.Bag.Requester.WorkPhoneNumber.CountryCode} {box.Bag.Requester.WorkPhoneNumber.NumberFormatted}"
+                            : box.Bag.Requester.WorkPhoneNumber.NumberFormatted )
+                        : string.Empty;
+                    entity.GovernmentId = box.Bag.Requester.GovernmentId;
+                    entity.ConnectionStatusValueId = box.Bag.Requester.ConnectionStatusValueId;
+
+                    entity.LocationId = null;
+                    if ( box.Bag.Requester.Location != null && box.Bag.Requester.Location.AddressFields != null )
+                    {
+                        var addressFields = box.Bag.Requester.Location.AddressFields;
+                        if ( addressFields.Street1 != null && addressFields.City != null && addressFields.State != null )
+                        {
+                            var location = LocationService.Get(
+                                addressFields.Street1,
+                                addressFields.Street2,
+                                addressFields.City,
+                                addressFields.State,
+                                addressFields.PostalCode,
+                                addressFields.Country,
+                                new GetLocationArgs
+                                {
+                                    Group = null,
+                                    ValidateLocation = false,
+                                    VerifyLocation = false,
+                                    CreateNewLocation = false,
+                                }
+                            );
+                            entity.LocationId = location?.Id ?? ( int? ) null;
+                        }
+                    }
+                }
+            } );
+        }
+
+        /// <summary>
+        /// Updates the case worker properties of the specified <see cref="BenevolenceRequest"/> entity  based on the
+        /// valid properties provided in the <see cref="ValidPropertiesBox{T}"/>.
+        /// </summary>
+        /// <remarks>This method checks if the <c>CaseWorker</c> property in the provided <paramref
+        /// name="box"/>  is valid. If valid, it updates the <c>CaseWorkerPersonAliasId</c> of the <paramref
+        /// name="entity"/>  with the <c>PersonAliasId</c> of the case worker, or sets it to <c>null</c> if the ID is
+        /// not valid.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity to update.</param>
+        /// <param name="box">A <see cref="ValidPropertiesBox{T}"/> containing the properties to validate and apply.  The
+        /// <c>CaseWorker</c> property of the box is used to update the <c>CaseWorkerPersonAliasId</c>  of the entity if
+        /// it is valid.</param>
+        private void UpdateCaseWorkerProperties( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
+        {
+            box.IfValidProperty( nameof( box.Bag.CaseWorker ), () =>
+            {
+                if ( box.Bag.CaseWorker != null )
+                {
+                    entity.CaseWorkerPersonAliasId = box.Bag.CaseWorker.PersonAliasId.HasValue && box.Bag.CaseWorker.PersonAliasId != 0
+                        ? box.Bag.CaseWorker.PersonAliasId
+                        : null;
+                }
+            } );
+        }
+
+        /// <summary>
+        /// Updates the campus-related properties of the specified <see cref="BenevolenceRequest"/> entity  based on the
+        /// valid properties provided in the <see cref="ValidPropertiesBox{T}"/>.
+        /// </summary>
+        /// <remarks>This method updates the <c>CampusId</c> of the <paramref name="entity"/> if the
+        /// <c>Campus</c>  property in the <paramref name="box"/> is valid and contains a non-null, positive
+        /// ID.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity to update.</param>
+        /// <param name="box">A <see cref="ValidPropertiesBox{T}"/> containing the valid properties to apply to the entity.  The
+        /// <c>Campus</c> property of the box is used to determine the campus ID to assign.</param>
+        private void UpdateCampusProperties( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
+        {
+            box.IfValidProperty( nameof( box.Bag.Campus ), () =>
+            {
+                entity.CampusId = box.Bag.Campus != null && box.Bag.Campus.Id.HasValue && box.Bag.Campus.Id > 0
+                    ? box.Bag.Campus.Id
+                    : null;
+            } );
+        }
+
+        /// <summary>
+        /// Updates the collection of documents associated with the specified benevolence request based on the provided
+        /// request document data.
+        /// </summary>
+        /// <remarks>This method ensures that the documents associated with the benevolence request are
+        /// synchronized with the provided data. It performs the following operations: <list type="bullet">
+        /// <item><description>Adds new documents to the request if they are not already
+        /// associated.</description></item> <item><description>Removes documents from the request if they are marked
+        /// for deletion.</description></item> </list> Documents are identified by their unique GUIDs, and only valid
+        /// GUIDs are processed. Temporary files are marked as non-temporary when added, and reverted to temporary
+        /// status when removed.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity whose documents are being updated.</param>
+        /// <param name="box">A <see cref="ValidPropertiesBox{T}"/> containing the updated document data for the request. The <see
+        /// cref="ValidPropertiesBox{T}.Bag"/> property must include the updated list of request documents.</param>
+        private void UpdateRequestDocuments( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
+        {
+            box.IfValidProperty( nameof( box.Bag.RequestDocuments ), () =>
+            {
+                var existingDocumentIds = entity.Documents.Select( document => document.BinaryFileId ).ToList();
+                foreach ( var documentBag in box.Bag.RequestDocuments )
+                {
+                    var isValidGuid = Guid.TryParse( documentBag.Guid.ToString(), out Guid fileGuid );
+                    if ( isValidGuid && fileGuid != Guid.Empty )
+                    {
+                        var binaryFile = BinaryFileService.Get( fileGuid );
+                        if ( binaryFile != null )
+                        {
+                            if ( !existingDocumentIds.Contains( binaryFile.Id ) && !documentBag.IsMarkedForDeletion )
+                            {
+                                var currentPersonAlias = RequestContext.CurrentPerson.PrimaryAlias;
+                                var benevolenceDocument = new BenevolenceRequestDocument
+                                {
+                                    BenevolenceRequestId = entity.Id,
+                                    BinaryFileId = binaryFile.Id,
+                                    Guid = Guid.NewGuid(),
+                                    CreatedByPersonAlias = currentPersonAlias,
+                                    ModifiedByPersonAlias = currentPersonAlias,
+                                };
+                                binaryFile.IsTemporary = false;
+                                entity.Documents.Add( benevolenceDocument );
+                            }
+                            if ( existingDocumentIds.Contains( binaryFile.Id ) && documentBag.IsMarkedForDeletion )
+                            {
+                                var benevolenceDocumentToRemove = entity.Documents.FirstOrDefault( d => d.BinaryFileId == binaryFile.Id );
+                                if ( benevolenceDocumentToRemove != null )
+                                {
+                                    BenevolenceRequestDocumentService.Delete( benevolenceDocumentToRemove );
+                                    binaryFile.IsTemporary = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            } );
+        }
+
+        /// <summary>
+        /// Updates the attribute values of the specified <see cref="BenevolenceRequest"/> entity  based on the provided
+        /// valid properties.
+        /// </summary>
+        /// <remarks>This method ensures that the entity's attributes are loaded and updated securely,
+        /// enforcing  attribute-level security rules based on the current user's permissions.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity whose attribute values will be updated.</param>
+        /// <param name="box">A container specifying the valid properties and their corresponding values to be applied  to the entity. The
+        /// <see cref="ValidPropertiesBox{T}"/> must include the attribute values  to update.</param>
+        private void UpdateAttributeValues( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
+        {
+            box.IfValidProperty( nameof( box.Bag.AttributeValues ), () =>
+            {
+                entity.LoadAttributes( RockContext );
+                entity.SetPublicAttributeValues( box.Bag.AttributeValues, RequestContext.CurrentPerson, enforceSecurity: true );
+            } );
+        }
+
+        /// <summary>
+        /// Updates the properties of the specified <see cref="BenevolenceRequest"/> entity  based on the valid
+        /// properties provided in the <see cref="ValidPropertiesBox{T}"/>.
+        /// </summary>
+        /// <remarks>This method ensures that only properties explicitly marked as valid in the  <paramref
+        /// name="box"/> are updated on the <paramref name="entity"/>. Properties not marked  as valid are ignored,
+        /// leaving their existing values unchanged.</remarks>
+        /// <param name="entity">The <see cref="BenevolenceRequest"/> entity to be updated. This object will have its properties  modified
+        /// based on the valid values in the <paramref name="box"/>.</param>
+        /// <param name="box">A <see cref="ValidPropertiesBox{T}"/> containing the <see cref="BenevolenceRequestBag"/>  with potential
+        /// property values. Only properties marked as valid in the box will be applied  to the <paramref
+        /// name="entity"/>.</param>
+        private void UpdateDetailProperties( BenevolenceRequest entity, ValidPropertiesBox<BenevolenceRequestBag> box )
+        {
+            box.IfValidProperty( nameof( box.Bag.BenevolenceTypeId ), () => entity.BenevolenceTypeId = box.Bag.BenevolenceTypeId );
+            box.IfValidProperty( nameof( box.Bag.RequestStatusValueId ), () => entity.RequestStatusValueId = box.Bag.RequestStatusValueId );
+            box.IfValidProperty( nameof( box.Bag.RequestDateTime ), () => entity.RequestDateTime = box.Bag.RequestDateTime );
+            box.IfValidProperty( nameof( box.Bag.RequestText ), () => entity.RequestText = box.Bag.RequestText );
+            box.IfValidProperty( nameof( box.Bag.ResultSummary ), () => entity.ResultSummary = box.Bag.ResultSummary );
+            box.IfValidProperty( nameof( box.Bag.ProvidedNextSteps ), () => entity.ProvidedNextSteps = box.Bag.ProvidedNextSteps );
         }
 
         /// <inheritdoc/>
