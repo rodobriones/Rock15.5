@@ -204,7 +204,7 @@
         return config.options ?? {
             benevolenceDocumentBinaryFileTypeGuid: emptyGuid,
             benevolenceRequestStatementPageAttribute: emptyGuid,
-            caseWorkersByRoleAttribute: [],
+            caseWorkersByRole: [],
             displayGovernmentIdAttribute: true,
             displayMiddleNameAttribute: false,
             workflowDetailPageAttribute: emptyGuid,
