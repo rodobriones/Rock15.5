@@ -15,6 +15,7 @@
                  :isEditVisible="isEditable"
                  :isFollowVisible="false"
                  :isSecurityHidden="false"
+                 :footerSecondaryActions="footerSecondaryActions"
                  @cancelEdit="onCancelEdit"
                  @delete="onDelete"
                  @edit="onEdit"
@@ -50,7 +51,7 @@
     import { BenevolenceResultBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceResultBag";
     import { BenevolenceRequestDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Finance/BenevolenceRequestDetail/benevolenceRequestDetailOptionsBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
-    import { emptyGuid } from "@Obsidian/Utility/guid";
+    import { emptyGuid, areEqual } from "@Obsidian/Utility/guid";
 
     const config = useConfigurationValues<DetailBlockBox<BenevolenceRequestBag, BenevolenceRequestDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -104,6 +105,38 @@
     /** The status of the request. */
     const requestStatusValue = computed(() => {
         return benevolenceRequestViewBag.value?.requestStatusValueId;
+    });
+
+    const footerSecondaryActions = computed((): PanelAction[] => {
+        if (panelMode.value !== DetailPanelMode.View) {
+            return [];
+        }
+
+        const actions: PanelAction[] = [];
+
+        if (
+            !areEqual(config.options?.benevolenceRequestStatementPageAttribute, emptyGuid) &&
+            config.navigationUrls?.[NavigationUrlKey.BenevolenceRequestStatementPage] &&
+            benevolenceRequestViewBag.value?.idKey
+        ) {
+            actions.push({
+                type: "default",
+                iconCssClass: "ti ti-printer",
+                handler: async () => {
+                    let urlResult = config.navigationUrls
+                        ? config.navigationUrls[NavigationUrlKey.BenevolenceRequestStatementPage]
+                        : undefined;
+
+                    if (urlResult !== undefined) {
+                        urlResult = urlResult.replace("((Value))", benevolenceRequestViewBag.value?.idKey ?? "");
+
+                        window.location.href = urlResult;
+                    }
+                },
+            });
+        }
+
+        return actions;
     });
 
     /** Additional labels to display in the block panel. */

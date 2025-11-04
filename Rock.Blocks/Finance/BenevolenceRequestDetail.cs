@@ -145,6 +145,7 @@ namespace Rock.Blocks.Finance
         private static class NavigationUrlKey
         {
             public const string ParentPage = "ParentPage";
+            public const string BenevolenceRequestStatementPage = "BenevolenceRequestStatementPage";
         }
 
         #endregion Keys
@@ -629,7 +630,13 @@ namespace Rock.Blocks.Finance
         {
             return new Dictionary<string, string>
             {
-                [NavigationUrlKey.ParentPage] = this.GetParentPageUrl()
+                [NavigationUrlKey.ParentPage] = this.GetParentPageUrl(),
+                [NavigationUrlKey.BenevolenceRequestStatementPage] = this.GetLinkedPageUrl(
+                    AttributeKey.BenevolenceRequestStatementPage,
+                    "BenevolenceRequestId",
+                    "((Value))"
+                ),
+
             };
         }
 
