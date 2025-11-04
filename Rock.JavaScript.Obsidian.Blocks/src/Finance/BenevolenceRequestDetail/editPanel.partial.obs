@@ -295,20 +295,6 @@
 
     const invokeBlockAction = useInvokeBlockAction();
 
-    const raceAndEthnicityWarning =
-        "This field will not be saved unless a person record is created " +
-        "before saving this benevolence request. ";
-
-    const raceAttributeWarning = raceAndEthnicityWarning +
-        props.options.raceOptionAttribute === "Required"
-        ? "This will only be enforced when creating a new person record, not when saving the benevolence request."
-        : "";
-
-    const ethnicityAttributeWarning = raceAndEthnicityWarning +
-        props.options.ethnicityOptionAttribute === "Required"
-        ? "This will only be enforced when creating a new person record, not when saving the benevolence request."
-        : "";
-
     const benevolenceRequestTypes = ref(props.options.benevolenceRequestTypes ?? []);
     const caseWorkersByRoleCount = ref(props.options.caseWorkersByRole?.length ?? 0);
     const requestStatusValues = ref(props.options.requestStatusValues ?? []);
@@ -360,7 +346,20 @@
         requestDateTime.value = new Date().toISOString();
     }
 
-    // #endregion
+    // #region values - Race and Ethnicity Field Warnings
+    const raceAndEthnicityWarning =
+        "This field will not be saved unless a person record is created " +
+        "<strong>before</strong> saving this benevolence request. ";
+
+    const raceAttributeWarning = raceAndEthnicityWarning +
+        getRequirementText(props.options.raceOptionAttribute ?? "Hide");
+
+    const ethnicityAttributeWarning = raceAndEthnicityWarning +
+        getRequirementText(props.options.ethnicityOptionAttribute ?? "Hide");
+
+    // #endregion Values - Race and Ethnicity Field Warnings
+
+    // #endregion Values
 
     // #region Computed Values
 
@@ -702,6 +701,25 @@
     // #endregion Computed Values
 
     // #region Functions
+
+    /**
+     * Get the requirement text for race/ethnicity attributes
+     * @param prop The property option value
+     */
+    function getRequirementText(prop: string): string {
+        switch (prop) {
+            case "Required":
+                return "<strong>Required</strong>: " +
+                    "This field <strong>will</strong> only be required when creating a new person record, " +
+                    "<strong>not</strong> when saving the benevolence request.";
+            case "Optional":
+                return "<strong>Optional</strong>: " +
+                    "This field will <strong>not</strong> be enforced when creating a new person " +
+                    "record or when saving the benevolence request.";
+            default:
+                return "";
+        }
+    }
 
     /**
      * Get an empty PersonBag
