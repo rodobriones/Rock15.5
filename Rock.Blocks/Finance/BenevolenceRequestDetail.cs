@@ -116,6 +116,22 @@ namespace Rock.Blocks.Finance
 
         #endregion Fields
 
+        #region Properties
+
+        #region Service Properties
+
+        private PersonAliasService PersonAliasService => new PersonAliasService( RockContext );
+        private LocationService LocationService => new LocationService( RockContext );
+        private CampusService CampusService => new CampusService( RockContext );
+        private DefinedValueService DefinedValueService => new DefinedValueService( RockContext );
+        private BenevolenceTypeService BenevolenceTypeService => new BenevolenceTypeService( RockContext );
+        private BinaryFileService BinaryFileService => new BinaryFileService( RockContext );
+        private BenevolenceRequestDocumentService BenevolenceRequestDocumentService => new BenevolenceRequestDocumentService( RockContext );
+
+        #endregion Service Properties
+
+        #endregion Properties
+
         #region Keys
 
         private static class AttributeKey
@@ -205,14 +221,14 @@ namespace Rock.Blocks.Finance
 
             #endregion Attribute Options
 
-            options.CountryCodesEnabled = new DefinedValueService( RockContext )
+            options.CountryCodesEnabled = DefinedValueService
                 .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
                 .Where( dv => dv.IsActive )
                 .Select( dv => dv.Value )
                 .Distinct()
                 .Count() > 1;
 
-            options.BenevolenceRequestTypes = new BenevolenceTypeService( RockContext )
+            options.BenevolenceRequestTypes = BenevolenceTypeService
                 .Queryable()
                 .OrderBy( type => type.Id )
                 .Select( type => new ListItemBag
@@ -223,7 +239,7 @@ namespace Rock.Blocks.Finance
                 .ToList();
 
             options.RequestStatusValues = ( DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.BENEVOLENCE_REQUEST_STATUS.AsGuid() ) != null )
-                ? new DefinedValueService( RockContext )
+                ? DefinedValueService
                     .GetByDefinedTypeId( DefinedTypeCache.GetId( Rock.SystemGuid.DefinedType.BENEVOLENCE_REQUEST_STATUS.AsGuid() ).Value )
                     .OrderBy( definedValue => definedValue.Id )
                     .Select( definedValue => new ListItemBag
@@ -235,7 +251,7 @@ namespace Rock.Blocks.Finance
                 : new List<ListItemBag>();
 
             options.ConnectionStatusValues = ( DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS.AsGuid() ) != null )
-                ? new DefinedValueService( RockContext )
+                ? DefinedValueService
                     .GetByDefinedTypeId( DefinedTypeCache.GetId( Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS.AsGuid() ).Value )
                     .OrderBy( definedValue => definedValue.Id )
                     .Select( definedValue => new ListItemBag
@@ -247,7 +263,7 @@ namespace Rock.Blocks.Finance
                 : new List<ListItemBag>();
 
             options.ResultTypeValues = ( DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.BENEVOLENCE_RESULT_TYPE.AsGuid() ) != null )
-                ? new DefinedValueService( RockContext )
+                ? DefinedValueService
                     .GetByDefinedTypeId( DefinedTypeCache.GetId( Rock.SystemGuid.DefinedType.BENEVOLENCE_RESULT_TYPE.AsGuid() ).Value )
                     .OrderBy( definedValue => definedValue.Id )
                     .Select( definedValue => new ListItemBag
@@ -341,8 +357,6 @@ namespace Rock.Blocks.Finance
                 var caseWorkerPersonBag = BuildPersonBag( entity, entity.CaseWorkerPersonAliasId ?? 0, "", isRequester: false );
                 var campus = BuildCampusBag( entity.CampusId ?? 0 );
 
-                var binaryFileService = new BinaryFileService( RockContext );
-
                 return new BenevolenceRequestBag
                 {
                     IdKey = entity.IdKey,
@@ -370,7 +384,7 @@ namespace Rock.Blocks.Finance
                         .Select( document => new BenevolenceDocumentBag
                         {
                             IdKey = document.IdKey,
-                            Guid = binaryFileService.Get( document.BinaryFileId ).Guid,
+                            Guid = BinaryFileService.Get( document.BinaryFileId ).Guid,
                             FileName = document.BinaryFile.FileName,
                             IsMarkedForDeletion = false
                         } )
@@ -429,13 +443,8 @@ namespace Rock.Blocks.Finance
                 return false;
             }
 
-            var personAliasService = new PersonAliasService( RockContext );
-            var definedValueService = new DefinedValueService( RockContext );
-            var locationService = new LocationService( RockContext );
-            var campusService = new CampusService( RockContext );
-            var benevolenceTypeService = new BenevolenceTypeService( RockContext );
 
-            var activeCountryCodes = new DefinedValueService( RockContext )
+            var activeCountryCodes = DefinedValueService
                 .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
                 .Where( dv => dv.IsActive )
                 .Select( dv => dv.Value )
@@ -491,7 +500,7 @@ namespace Rock.Blocks.Finance
                                 && addressFields.State != null
                             )
                             {
-                                var location = locationService.Get(
+                                var location = LocationService.Get(
                                     addressFields.Street1,
                                     addressFields.Street2,
                                     addressFields.City,
@@ -559,9 +568,6 @@ namespace Rock.Blocks.Finance
             box.IfValidProperty( nameof( box.Bag.RequestDocuments ),
                 () =>
                 {
-                    var binaryFileService = new BinaryFileService( RockContext );
-                    var benevolenceDocumentService = new BenevolenceRequestDocumentService( RockContext );
-
                     var existingDocumentIds = entity.Documents.Select( document => document.BinaryFileId ).ToList();
 
                     foreach ( var documentBag in box.Bag.RequestDocuments )
@@ -569,7 +575,7 @@ namespace Rock.Blocks.Finance
                         var isValidGuid = Guid.TryParse( documentBag.Guid.ToString(), out Guid fileGuid );
                         if ( isValidGuid && fileGuid != Guid.Empty )
                         {
-                            var binaryFile = binaryFileService.Get( fileGuid );
+                            var binaryFile = BinaryFileService.Get( fileGuid );
 
                             if ( binaryFile != null )
                             {
@@ -596,7 +602,7 @@ namespace Rock.Blocks.Finance
                                     var benevolenceDocumentToRemove = entity.Documents.FirstOrDefault( d => d.BinaryFileId == binaryFile.Id );
                                     if ( benevolenceDocumentToRemove != null )
                                     {
-                                        benevolenceDocumentService.Delete( benevolenceDocumentToRemove );
+                                        BenevolenceRequestDocumentService.Delete( benevolenceDocumentToRemove );
                                         binaryFile.IsTemporary = true;
                                     }
                                 }
@@ -702,17 +708,14 @@ namespace Rock.Blocks.Finance
                 throw new ArgumentNullException( nameof( entity ) );
             }
 
-            var personAliasService = new PersonAliasService( RockContext );
-            var locationService = new LocationService( RockContext );
-
             var homePhoneTypeId = DefinedValueCache.Get( _homePhoneGuid ).Id;
             var cellPhoneTypeId = DefinedValueCache.Get( _cellPhoneGuid ).Id;
             var workPhoneTypeId = DefinedValueCache.Get( _workPhoneGuid ).Id;
 
             if ( personAliasId > 0 )
             {
-                var person = personAliasService.GetPerson( personAliasId );
-                var personAlias = personAliasService.Get( personAliasId );
+                var person = PersonAliasService.GetPerson( personAliasId );
+                var personAlias = PersonAliasService.Get( personAliasId );
 
                 if ( person != null )
                 {
@@ -745,7 +748,7 @@ namespace Rock.Blocks.Finance
             }
 
             // Fallback: Build from entity
-            var fallbackLocationBag = GetFallbackLocationBag( entity, locationService );
+            var fallbackLocationBag = GetFallbackLocationBag( entity, LocationService );
 
             var requesterBagBuiltFromEntity = new PersonBag
             {
@@ -789,17 +792,14 @@ namespace Rock.Blocks.Finance
         /// langword="false"/>.</returns>
         private bool BuildPersonBag( Guid personAliasGuid, out PersonBag generatedPersonBag )
         {
-            var personAliasService = new PersonAliasService( RockContext );
-
-            // Early out if GUID is empty.
             if ( personAliasGuid.IsEmpty() )
             {
                 generatedPersonBag = new PersonBag();
                 return false;
             }
 
-            var person = personAliasService.GetPerson( personAliasGuid );
-            var personAlias = personAliasService.Get( personAliasGuid );
+            var person = PersonAliasService.GetPerson( personAliasGuid );
+            var personAlias = PersonAliasService.Get( personAliasGuid );
 
             if ( person == null || personAlias == null )
             {
@@ -845,8 +845,7 @@ namespace Rock.Blocks.Finance
         /// cref="CampusBag"/>.</returns>
         private CampusBag BuildCampusBag( int campusId )
         {
-            var campusService = new CampusService( RockContext );
-            var campus = campusService.Get( campusId );
+            var campus = CampusService.Get( campusId );
             if ( campus != null )
             {
                 return new CampusBag
@@ -869,8 +868,7 @@ namespace Rock.Blocks.Finance
         /// cref="CampusBag"/>.</returns>
         private bool BuildCampusBag( Guid campusGuid, out CampusBag campusBag )
         {
-            var campusService = new CampusService( RockContext );
-            var campus = campusService.Get( campusGuid );
+            var campus = CampusService.Get( campusGuid );
             if ( campus != null )
             {
                 campusBag = new CampusBag
@@ -916,7 +914,7 @@ namespace Rock.Blocks.Finance
 
             // Fallback logic: If there are multiple defined country codes, split fallback at first space.
 
-            var activeCountryCodes = new DefinedValueService( RockContext )
+            var activeCountryCodes = DefinedValueService
                 .GetByDefinedTypeId( DefinedTypeCache.GetId( _countryCodeTypeGuid ).Value )
                 .Where( dv => dv.IsActive )
                 .Select( dv => dv.Value )
@@ -1256,12 +1254,11 @@ namespace Rock.Blocks.Finance
                     && !string.IsNullOrWhiteSpace( personBag.Location.AddressFields.State ) )
                 {
                     var address = personBag.Location.AddressFields;
-                    var locationService = new LocationService( RockContext );
 
                     var homeLocationType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() );
                     if ( homeLocationType != null )
                     {
-                        var homeLocation = locationService.Get(
+                        var homeLocation = LocationService.Get(
                                 address.Street1,
                                 address.Street2,
                                 address.City,
