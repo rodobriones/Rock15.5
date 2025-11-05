@@ -939,10 +939,6 @@
             createRecordError.value = "Last Name is required to create a person record.";
             return;
         }
-        if (isNullish(campus.value.id) || campus.value.id <= 0) {
-            createRecordError.value = "A Campus selection is required to create a person record.";
-            return;
-        }
         if (props.options.raceOptionAttribute === "Required" &&
             (isNullish(requester.value.raceGuid) || requester.value.raceGuid === emptyGuid)
         ) {
@@ -975,7 +971,7 @@
             {
                 benevolenceRequestIdKey: props.modelValue.bag.idKey,
                 personBag: requester.value,
-                campusId: campus.value.id
+                campusId: campus.value.id ?? null,
             }
         );
 
