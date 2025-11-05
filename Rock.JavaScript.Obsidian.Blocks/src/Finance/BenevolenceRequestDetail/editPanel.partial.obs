@@ -60,11 +60,12 @@
                                   enableSelfSelection />
                 </div>
             </div>
-            <div class="row">
+            <div class="row" v-if="isCampusPickerVisible">
                 <div class="col-md-3">
                     <CampusPicker v-model="selectedCampus"
                                   label="Campus"
-                                  :showBlankItem="true" />
+                                  :showBlankItem="true"
+                                  @isVisible="(value) => { isCampusPickerVisible = value; }" />
                 </div>
             </div>
         </ContentStack>
@@ -320,6 +321,8 @@
         benevolenceTypeId, requestStatusValueId, requestDateTime, requester, caseWorker, requestText, resultSummary,
         providedNextSteps, campus, requestDocuments, attributes, attributeValues
     ];
+
+    const isCampusPickerVisible = ref<boolean>(false);
 
     const lastRequesterPersonAliasGuid = ref<Guid>("");
     const isConnectionStatusDisabled = ref<boolean>(false);
