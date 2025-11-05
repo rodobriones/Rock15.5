@@ -1339,8 +1339,7 @@ namespace Rock.Blocks.Finance
         /// <param name="person">The person whose primary family address will be updated. Must not be null.</param>
         /// <param name="personBag">The data bag containing the address information to be saved. Must not be null and must include valid address
         /// fields.</param>
-        /// <param name="campusId">The campus identifier associated with the address, or <see langword="null"/> if no campus is specified.</param>
-        private void SaveFamilyAddress( Person person, PersonBag personBag, int? campusId )
+        private void SaveFamilyAddress( Person person, PersonBag personBag )
         {
             var group = person.PrimaryFamily;
             if ( group != null
@@ -1429,7 +1428,7 @@ namespace Rock.Blocks.Finance
             var person = FindOrCreatePerson( personBag, campusId, createRecordNotes );
 
             SavePhoneNumbers( person, personBag );
-            SaveFamilyAddress( person, personBag, campusId );
+            SaveFamilyAddress( person, personBag );
 
             BuildPersonBag( person.PrimaryAlias.Guid, out var returnPersonBag );
             return ActionOk( new { Person = returnPersonBag, CreateRecordNotes = createRecordNotes.ToString() } );
