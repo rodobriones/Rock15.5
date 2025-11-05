@@ -50,6 +50,7 @@
     import Loading from "./loading.obs";
     import { containsRequiredRule } from "@Obsidian/ValidationRules";
 
+
     const props = defineProps({
         ...standardRockFormFieldProps,
 
@@ -75,11 +76,6 @@
 
     // Address Control
     const controlValue = ref({});
-
-    // The underlying picker
-    const isRequired = computed(() => {
-        return containsRequiredRule(props.rules);
-    });
 
     // This Picker
     const pickerValue = ref({});
