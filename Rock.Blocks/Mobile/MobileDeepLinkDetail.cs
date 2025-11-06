@@ -348,8 +348,6 @@ namespace Rock.Blocks.Mobile
             return true;
         }
 
-
-
         /// <summary>
         /// Saves the deep link.
         /// </summary>

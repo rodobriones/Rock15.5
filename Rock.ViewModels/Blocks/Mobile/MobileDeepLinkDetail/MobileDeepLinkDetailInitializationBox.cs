@@ -17,7 +17,6 @@
 
 namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
 {
-
     /// <summary>
     /// Represents the initialization data for the Mobile Deep Link Detail block.
     /// </summary>
