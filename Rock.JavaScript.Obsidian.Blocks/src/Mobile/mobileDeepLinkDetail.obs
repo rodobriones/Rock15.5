@@ -185,7 +185,7 @@
             }
         }
 
-        errorMessage.value = result.errorMessage ?? "Unknown error while trying to save auth scope.";
+        errorMessage.value = result.errorMessage ?? "Unknown error while trying to save deep link.";
 
         return false;
     }
