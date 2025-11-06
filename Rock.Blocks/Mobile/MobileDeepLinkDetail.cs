@@ -222,6 +222,11 @@ namespace Rock.Blocks.Mobile
         {
             var options = new MobileDeepLinkDetailOptionsBag();
 
+            options.RootPageGuid = SiteService
+                .Get( RequestContext.GetPageParameter( PageParameterKey.SiteId ).AsInteger() )
+                .DefaultPage
+                .Guid;
+
             return options;
         }
 

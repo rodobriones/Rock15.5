@@ -20,6 +20,7 @@
             <div class="col-md-6">
                 <PagePicker v-model="mobilePage"
                             :siteType="SiteType.Mobile"
+                            :rootPageGuid="options.rootPageGuid"
                             rules="required"
                             label="Mobile Page"
                             help="The mobile page you want the web route to direct to." />

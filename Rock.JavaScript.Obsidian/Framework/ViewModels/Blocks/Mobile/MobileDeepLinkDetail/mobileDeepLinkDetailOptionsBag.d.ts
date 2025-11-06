@@ -21,6 +21,13 @@
 // </copyright>
 //
 
+import { Guid } from "@Obsidian/Types";
+
 /** Additional Configuration for the Auth Scope List block. */
 export type MobileDeepLinkDetailOptionsBag = {
+    /**
+     * Gets or sets the unique identifier of the root page whose
+     * children are to be enumerated.
+     */
+    rootPageGuid?: Guid | null;
 };

@@ -15,6 +15,8 @@
 // </copyright>
 //
 
+using System;
+
 namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
 {
     /// <summary>
@@ -22,5 +24,10 @@ namespace Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail
     /// </summary>
     public class MobileDeepLinkDetailOptionsBag
     {
+        /// <summary>
+        /// Gets or sets the unique identifier of the root page whose
+        /// children are to be enumerated.
+        /// </summary>
+        public Guid? RootPageGuid { get; set; }
     }
 }
