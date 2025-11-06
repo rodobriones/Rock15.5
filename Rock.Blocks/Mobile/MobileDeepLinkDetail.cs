@@ -76,8 +76,6 @@ namespace Rock.Blocks.Mobile
 
         #region Methods
 
-        #region Methods > Initialization
-
         /// <inheritdoc/>
         public override object GetObsidianBlockInitialization()
         {
@@ -222,10 +220,6 @@ namespace Rock.Blocks.Mobile
             return options;
         }
 
-        #endregion Methods > Initialization
-
-        #region Methods > Bag Management
-
         /// <summary>
         /// Gets the entity bag that is common between both view and edit modes.
         /// </summary>
@@ -304,10 +298,6 @@ namespace Rock.Blocks.Mobile
 
             return bag;
         }
-
-        #endregion Methods > Bag Management
-
-        #region Methods > Block Action Helpers
 
         /// <summary>
         /// Validates the MobileDeepLink for any final information that might not be
@@ -436,10 +426,6 @@ namespace Rock.Blocks.Mobile
             }
         }
 
-        #endregion Methods > Block Action Helpers
-
-        #region Methods > Helpers
-
         private static PageRouteValueBag GetMobilePageRouteValueBag( MobileDeepLink mobileDeepLink )
         {
             var mobilePageCache = PageCache.Get( mobileDeepLink.MobilePageGuid.Value );
@@ -528,8 +514,6 @@ namespace Rock.Blocks.Mobile
             // If no slash found, return empty string (no segments)
             return string.Empty;
         }
-
-        #endregion
 
         #endregion Methods
 
