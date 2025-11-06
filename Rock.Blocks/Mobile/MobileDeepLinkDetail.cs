@@ -194,10 +194,10 @@ namespace Rock.Blocks.Mobile
             return new Dictionary<string, string>
             {
                 [NavigationUrlKey.ParentPage] = this.GetParentPageUrl( new Dictionary<string, string>
-                    {
-                        ["SiteId"] = PageParameter( PageParameterKey.SiteId ),
-                        ["Tab"] = "Deep Links",
-                    }
+                {
+                    ["SiteId"] = PageParameter( PageParameterKey.SiteId ),
+                    ["Tab"] = "Deep Links",
+                }
                 )
             };
         }
@@ -348,74 +348,71 @@ namespace Rock.Blocks.Mobile
             return true;
         }
 
-        private BlockActionResult EditDeepLink(string routeGuid )
+        private BlockActionResult EditDeepLink( string routeGuid )
         {
             var bag = new MobileDeepLinkDetailBag();
 
-            using ( var context = new RockContext() )
+            var pageService = new PageService( RockContext );
+
+            var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
+
+            if ( site == null )
             {
-                var pageService = new PageService( RockContext );
+                return ActionBadRequest( "Site not found." );
+            }
 
-                var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
+            var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
 
-                if ( site == null )
-                {
-                    return ActionBadRequest( "Site not found." );
-                }
+            if ( additionalSettings == null )
+            {
+                return ActionBadRequest( "Additional Settings for site not found." );
+            }
 
-                var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
+            var deepLinkGuid = routeGuid.AsGuidOrNull();
+            var routes = additionalSettings.DeepLinkRoutes;
 
-                if ( additionalSettings == null )
-                {
-                    return ActionBadRequest( "Additional Settings for site not found." );
-                }
+            var route = ( DeepLinkRoute ) null;
+            try
+            {
+                route = routes.First( r => r.Guid == deepLinkGuid ) ?? null;
+            }
+            catch ( InvalidOperationException )
+            {
+                return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
+            }
 
-                var deepLinkGuid = routeGuid.AsGuidOrNull();
-                var routes = additionalSettings.DeepLinkRoutes;
+            if ( route == null )
+            {
+                return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
+            }
 
-                var route = ( DeepLinkRoute ) null;
-                try
-                {
-                    route = routes.First( r => r.Guid == deepLinkGuid ) ?? null;
-                }
-                catch ( InvalidOperationException )
-                {
-                    return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
-                }
+            var mobileDeepLink = new MobileDeepLink
+            {
+                SiteId = site.Id,
+                RouteGuid = route.Guid,
+                Route = route.Route,
+                MobilePageGuid = route.MobilePageGuid,
+                UsesUrlAsFallback = route.UsesUrlAsFallback,
+                WebFallbackPageGuid = route.WebFallbackPageGuid,
+                WebFallbackPageUrl = route.WebFallbackPageUrl,
+            };
 
-                if ( route == null )
-                {
-                    return ActionBadRequest( "The Mobile Deep Link with specified GUID was not found." );
-                }
+            bag.SiteId = site.Id;
+            bag.RouteGuid = route.Guid;
+            bag.PathPrefix = additionalSettings.DeepLinkPathPrefix;
+            bag.Route = route.Route;
+            bag.MobilePage = GetMobilePageRouteValueBag( mobileDeepLink );
+            bag.UsesUrlAsFallback = route.UsesUrlAsFallback;
 
-                var mobileDeepLink = new MobileDeepLink
-                {
-                    SiteId = site.Id,
-                    RouteGuid = route.Guid,
-                    Route = route.Route,
-                    MobilePageGuid = route.MobilePageGuid,
-                    UsesUrlAsFallback = route.UsesUrlAsFallback,
-                    WebFallbackPageGuid = route.WebFallbackPageGuid,
-                    WebFallbackPageUrl = route.WebFallbackPageUrl,
-                };
-
-                bag.SiteId = site.Id;
-                bag.RouteGuid = route.Guid;
-                bag.PathPrefix = additionalSettings.DeepLinkPathPrefix;
-                bag.Route = route.Route;
-                bag.MobilePage = GetMobilePageRouteValueBag( mobileDeepLink );
-                bag.UsesUrlAsFallback = route.UsesUrlAsFallback;
-
-                if ( mobileDeepLink.UsesUrlAsFallback )
-                {
-                    bag.WebFallbackPage = null;
-                    bag.WebFallbackPageUrl = route.WebFallbackPageUrl;
-                }
-                else
-                {
-                    bag.WebFallbackPage = GetWebFallbackPageRouteValueBag( mobileDeepLink );
-                    bag.WebFallbackPageUrl = null;
-                }
+            if ( mobileDeepLink.UsesUrlAsFallback )
+            {
+                bag.WebFallbackPage = null;
+                bag.WebFallbackPageUrl = route.WebFallbackPageUrl;
+            }
+            else
+            {
+                bag.WebFallbackPage = GetWebFallbackPageRouteValueBag( mobileDeepLink );
+                bag.WebFallbackPageUrl = null;
             }
 
             return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
@@ -435,70 +432,67 @@ namespace Rock.Blocks.Mobile
                 return ActionBadRequest( errorMessage );
             }
 
-            using ( var context = new RockContext() )
+            var pageService = new PageService( RockContext );
+
+            // Get the site settings for this specific site.
+            var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
+            var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
+
+            // Generate the guid for our route, and get the guid for the mobile page corresponding to it.
+            Guid guid = Guid.NewGuid();
+
+            // If page parameters contains Guid, change our guid var to match the one we are modifying,
+            // then delete it from our route list, so we don't make a duplicate
+            if ( PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull() != null )
             {
-                var pageService = new PageService( context );
-
-                // Get the site settings for this specific site.
-                var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
-                var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
-
-                // Generate the guid for our route, and get the guid for the mobile page corresponding to it.
-                Guid guid = Guid.NewGuid();
-
-                // If page parameters contains Guid, change our guid var to match the one we are modifying,
-                // then delete it from our route list, so we don't make a duplicate
-                if ( PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull() != null )
-                {
-                    // We actually checked whether this is null in our ConfigureContent(), so we know it exists.
-                    guid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid();
-                    var refRoute = additionalSettings.DeepLinkRoutes.Where( r => r.Guid == guid ).First();
-                    additionalSettings.DeepLinkRoutes.Remove( refRoute );
-                }
-
-                var routeAlreadyExists = additionalSettings.DeepLinkRoutes.Any( r => r.Route == bag.Route );
-                if ( guid != PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() && routeAlreadyExists )
-                {
-                    return ActionBadRequest( $"The route: '{bag.Route}' already exists. Please choose a non-conflicting route." );
-                }
-
-                Guid? webFallbackPageGuid;
-                string webFallbackPageUrl;
-
-                // Clear the selection of the fallback page picker. 
-                if ( bag.UsesUrlAsFallback )
-                {
-                    webFallbackPageGuid = null;
-                    webFallbackPageUrl = bag.WebFallbackPageUrl;
-                }
-                // Clear the selection of the fallback URL textbox.
-                else
-                {
-                    webFallbackPageGuid = bag.WebFallbackPage.Page.Value.AsGuidOrNull();
-                    webFallbackPageUrl = string.Empty;
-                }
-
-                var route = new DeepLinkRoute
-                {
-                    Guid = guid,
-                    Route = bag.Route.Trim( '/' ),
-                    UsesUrlAsFallback = bag.UsesUrlAsFallback,
-                    MobilePageGuid = bag.MobilePage.Page.Value.AsGuid(),
-                    WebFallbackPageGuid = webFallbackPageGuid,
-                    WebFallbackPageUrl = webFallbackPageUrl
-                };
-
-                // Add the route and save the settings.
-                additionalSettings.DeepLinkRoutes.Add( route );
-                site.AdditionalSettings = additionalSettings.ToJson();
-                context.SaveChanges();
-
-                return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
-                {
-                    Bag = bag,
-                    ValidProperties = bag.GetType().GetProperties().Select( p => p.Name ).ToList()
-                } );
+                // We actually checked whether this is null in our ConfigureContent(), so we know it exists.
+                guid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid();
+                var refRoute = additionalSettings.DeepLinkRoutes.Where( r => r.Guid == guid ).First();
+                additionalSettings.DeepLinkRoutes.Remove( refRoute );
             }
+
+            var routeAlreadyExists = additionalSettings.DeepLinkRoutes.Any( r => r.Route == bag.Route );
+            if ( guid != PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() && routeAlreadyExists )
+            {
+                return ActionBadRequest( $"The route: '{bag.Route}' already exists. Please choose a non-conflicting route." );
+            }
+
+            Guid? webFallbackPageGuid;
+            string webFallbackPageUrl;
+
+            // Clear the selection of the fallback page picker. 
+            if ( bag.UsesUrlAsFallback )
+            {
+                webFallbackPageGuid = null;
+                webFallbackPageUrl = bag.WebFallbackPageUrl;
+            }
+            // Clear the selection of the fallback URL textbox.
+            else
+            {
+                webFallbackPageGuid = bag.WebFallbackPage.Page.Value.AsGuidOrNull();
+                webFallbackPageUrl = string.Empty;
+            }
+
+            var route = new DeepLinkRoute
+            {
+                Guid = guid,
+                Route = bag.Route.Trim( '/' ),
+                UsesUrlAsFallback = bag.UsesUrlAsFallback,
+                MobilePageGuid = bag.MobilePage.Page.Value.AsGuid(),
+                WebFallbackPageGuid = webFallbackPageGuid,
+                WebFallbackPageUrl = webFallbackPageUrl
+            };
+
+            // Add the route and save the settings.
+            additionalSettings.DeepLinkRoutes.Add( route );
+            site.AdditionalSettings = additionalSettings.ToJson();
+            RockContext.SaveChanges();
+
+            return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
+            {
+                Bag = bag,
+                ValidProperties = bag.GetType().GetProperties().Select( p => p.Name ).ToList()
+            } );
         }
 
         private static PageRouteValueBag GetMobilePageRouteValueBag( MobileDeepLink mobileDeepLink )
