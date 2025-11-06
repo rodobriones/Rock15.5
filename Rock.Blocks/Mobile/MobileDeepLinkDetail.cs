@@ -488,11 +488,7 @@ namespace Rock.Blocks.Mobile
             site.AdditionalSettings = additionalSettings.ToJson();
             RockContext.SaveChanges();
 
-            return ActionOk( new ValidPropertiesBox<MobileDeepLinkDetailBag>
-            {
-                Bag = bag,
-                ValidProperties = bag.GetType().GetProperties().Select( p => p.Name ).ToList()
-            } );
+            return ActionOk();
         }
 
         private static PageRouteValueBag GetMobilePageRouteValueBag( MobileDeepLink mobileDeepLink )

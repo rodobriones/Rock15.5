@@ -174,11 +174,11 @@
     async function onSave(): Promise<boolean | string> {
         errorMessage.value = "";
 
-        const result = await invokeBlockAction<ValidPropertiesBox<MobileDeepLinkDetailBag> | string>("Save", {
+        const result = await invokeBlockAction("Save", {
             box: mobileDeepLinkEditBag.value
         });
 
-        if (result.isSuccess && result.data) {
+        if (result.isSuccess) {
             // Always redirect to parent page after saving an Edit or Add
             if (config.navigationUrls?.[NavigationUrlKey.ParentPage]) {
                 return config.navigationUrls[NavigationUrlKey.ParentPage];
