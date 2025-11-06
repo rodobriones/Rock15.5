@@ -60,6 +60,12 @@ namespace Rock.Blocks.Mobile
 
         #endregion Fields
 
+        #region Properties
+
+        private SiteService SiteService => new SiteService( RockContext );
+
+        #endregion Properties
+
         #region Keys
 
         private static class PageParameterKey
@@ -87,8 +93,7 @@ namespace Rock.Blocks.Mobile
             var deepLinkRouteGuid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull();
 
             // Pull the site, settings, and route to ensure they exists and we have permission to view/edit them.
-            var siteService = new SiteService( RockContext );
-            var site = siteService.Get( siteId ?? 0 );
+            var site = SiteService.Get( siteId ?? 0 );
             if ( site == null )
             {
                 return new MobileDeepLinkDetailInitializationBox
@@ -123,7 +128,7 @@ namespace Rock.Blocks.Mobile
             box.IsEditable = BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
 
             // If Adding new deep link, short circuit
-            if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() == null)
+            if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() == null )
             {
                 if ( box.IsEditable )
                 {
@@ -357,9 +362,9 @@ namespace Rock.Blocks.Mobile
         /// <summary>
         /// Saves the deep link.
         /// </summary>
-        private BlockActionResult SaveDeepLink(MobileDeepLinkDetailBag bag)
+        private BlockActionResult SaveDeepLink( MobileDeepLinkDetailBag bag )
         {
-            if ( ValidateMobileDeepLinkDetailBag(bag, out string errorMessage) == false )
+            if ( ValidateMobileDeepLinkDetailBag( bag, out string errorMessage ) == false )
             {
                 return ActionBadRequest( errorMessage );
             }
@@ -367,10 +372,9 @@ namespace Rock.Blocks.Mobile
             using ( var context = new RockContext() )
             {
                 var pageService = new PageService( context );
-                var siteService = new SiteService( context );
 
                 // Get the site settings for this specific site.
-                var site = siteService.Get( PageParameter( "SiteId" ) );
+                var site = SiteService.Get( PageParameter( "SiteId" ) );
                 var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
 
                 // Generate the guid for our route, and get the guid for the mobile page corresponding to it.
@@ -544,9 +548,8 @@ namespace Rock.Blocks.Mobile
             using ( var context = new RockContext() )
             {
                 var pageService = new PageService( RockContext );
-                var siteService = new SiteService( RockContext );
 
-                var site = siteService.Get( PageParameter( "SiteId" ) );
+                var site = SiteService.Get( PageParameter( "SiteId" ) );
 
                 if ( site == null )
                 {
@@ -593,7 +596,7 @@ namespace Rock.Blocks.Mobile
                 bag.RouteGuid = route.Guid;
                 bag.PathPrefix = additionalSettings.DeepLinkPathPrefix;
                 bag.Route = route.Route;
-                bag.MobilePage = GetMobilePageRouteValueBag(mobileDeepLink);
+                bag.MobilePage = GetMobilePageRouteValueBag( mobileDeepLink );
                 bag.UsesUrlAsFallback = route.UsesUrlAsFallback;
 
                 if ( mobileDeepLink.UsesUrlAsFallback )
@@ -623,7 +626,7 @@ namespace Rock.Blocks.Mobile
         [BlockAction]
         public BlockActionResult Save( ValidPropertiesBox<MobileDeepLinkDetailBag> box )
         {
-            return SaveDeepLink(box.Bag);
+            return SaveDeepLink( box.Bag );
         }
 
         #endregion Block Actions
