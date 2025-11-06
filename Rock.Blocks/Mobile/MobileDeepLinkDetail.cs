@@ -89,7 +89,11 @@ namespace Rock.Blocks.Mobile
         /// <inheritdoc/>
         public override object GetObsidianBlockInitialization()
         {
-            var siteId = PageParameter( PageParameterKey.SiteId ).AsIntegerOrNull();
+            int? siteId = SiteService
+                .GetQueryableByKey( PageParameter( "SiteId" ), !PageCache.Layout.Site.DisablePredictableIds )
+                .Select( p => ( int? ) p.Id )
+                .FirstOrDefault();
+
             var deepLinkRouteGuid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull();
 
             // Pull the site, settings, and route to ensure they exists and we have permission to view/edit them.
