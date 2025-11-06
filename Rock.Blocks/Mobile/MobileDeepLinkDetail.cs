@@ -80,7 +80,7 @@ namespace Rock.Blocks.Mobile
         public override object GetObsidianBlockInitialization()
         {
             int? siteId = SiteService
-                .GetQueryableByKey( PageParameter( "SiteId" ), !PageCache.Layout.Site.DisablePredictableIds )
+                .GetQueryableByKey( PageParameter( PageParameterKey.SiteId ), !PageCache.Layout.Site.DisablePredictableIds )
                 .Select( p => ( int? ) p.Id )
                 .FirstOrDefault();
 
@@ -122,7 +122,7 @@ namespace Rock.Blocks.Mobile
             box.IsEditable = BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson );
 
             // If Adding new deep link, short circuit
-            if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() == null )
+            if ( PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull() == null )
             {
                 if ( box.IsEditable )
                 {
@@ -365,7 +365,7 @@ namespace Rock.Blocks.Mobile
                 var pageService = new PageService( context );
 
                 // Get the site settings for this specific site.
-                var site = SiteService.Get( PageParameter( "SiteId" ) );
+                var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
                 var additionalSettings = site.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
 
                 // Generate the guid for our route, and get the guid for the mobile page corresponding to it.
@@ -373,16 +373,16 @@ namespace Rock.Blocks.Mobile
 
                 // If page parameters contains Guid, change our guid var to match the one we are modifying,
                 // then delete it from our route list, so we don't make a duplicate
-                if ( PageParameter( "DeepLinkRouteGuid" ).AsGuidOrNull() != null )
+                if ( PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuidOrNull() != null )
                 {
                     // We actually checked whether this is null in our ConfigureContent(), so we know it exists.
-                    guid = PageParameter( "DeepLinkRouteGuid" ).AsGuid();
+                    guid = PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid();
                     var refRoute = additionalSettings.DeepLinkRoutes.Where( r => r.Guid == guid ).First();
                     additionalSettings.DeepLinkRoutes.Remove( refRoute );
                 }
 
                 var routeAlreadyExists = additionalSettings.DeepLinkRoutes.Any( r => r.Route == bag.Route );
-                if ( guid != PageParameter( "DeepLinkRouteGuid" ).AsGuid() && routeAlreadyExists )
+                if ( guid != PageParameter( PageParameterKey.DeepLinkRouteGuid ).AsGuid() && routeAlreadyExists )
                 {
                     return ActionBadRequest( $"The route: '{bag.Route}' already exists. Please choose a non-conflicting route." );
                 }
@@ -534,7 +534,7 @@ namespace Rock.Blocks.Mobile
             {
                 var pageService = new PageService( RockContext );
 
-                var site = SiteService.Get( PageParameter( "SiteId" ) );
+                var site = SiteService.Get( PageParameter( PageParameterKey.SiteId ) );
 
                 if ( site == null )
                 {
