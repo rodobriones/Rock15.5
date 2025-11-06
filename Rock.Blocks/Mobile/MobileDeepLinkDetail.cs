@@ -19,13 +19,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Web.Routing;
-
-using AngleSharp.Dom;
-
-using Lucene.Net.Support;
-
-using Mono.CSharp;
 
 using Rock.Attribute;
 using Rock.Common.Mobile;
@@ -34,7 +27,6 @@ using Rock.Data;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Security;
-using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Mobile.MobileDeepLinkDetail;
 using Rock.ViewModels.Rest.Controls;
 using Rock.ViewModels.Utility;
