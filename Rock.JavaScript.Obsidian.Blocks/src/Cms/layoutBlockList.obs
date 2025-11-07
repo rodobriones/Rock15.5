@@ -50,11 +50,16 @@
 
         <AttributeColumns :attributes="config.gridDefinition?.attributeFields ?? []" />
 
-        <ButtonColumn name="showProperties" :iconClass="icon" @click="onShowProperties" />
+        <ButtonColumn name="showProperties"
+                      title="Block Properties"
+                      :iconClass="blockPropertiesIcon"
+                      @click="onShowProperties" />
 
         <SecurityColumn :itemTitle="'name'" />
 
-        <DeleteColumn v-if="config.isDeleteEnabled" @click="onDeleteClick" />
+        <DeleteColumn v-if="config.isDeleteEnabled"
+                      title="Delete"
+                      @click="onDeleteClick" />
     </Grid>
 </template>
 <script lang="ts">
@@ -81,7 +86,7 @@
     const gridDataSource = ref<Promise<GridDataBag>>();
     let gridData: GridDataBag | undefined;
 
-    const icon = "ti ti-settings";
+    const blockPropertiesIcon = "ti ti-settings";
 
     // #endregion
 
