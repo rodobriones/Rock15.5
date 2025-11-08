@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using System.Web.Hosting;
 
 using CsvHelper;
+using SlingshotCore = global::Slingshot.Core;
 
 using Rock.Attribute;
 using Rock.Model;
@@ -34,6 +35,7 @@ using Rock.ViewModels.Blocks.BulkImport;
 using Rock.ViewModels.Utility;
 using Rock.Web;
 using Rock.Web.Cache;
+using Rock.Data;
 
 namespace Rock.Blocks.BulkImport
 {
@@ -49,6 +51,10 @@ namespace Rock.Blocks.BulkImport
     [Rock.SystemGuid.EntityTypeGuid( "3E6B0AB8-182B-4C16-9E32-BAC0E02F1A43" )]
     public class CsvImport : RockBlockType
     {
+        // This matches the private CsvSlingshotImporter.ERROR_CSV_FILENAME because we
+        // don't want to allow someone to pass in any file name to the DownloadErrorCsv() BlockAction.
+        private const string ERROR_CSV_FILENAME = "errors/errors.csv";
+
         /// <summary>
         /// The properties that should be mapped to by fields in the csv. Not having one of these fields mapped to a csv column will result in an error
         /// </summary>
@@ -166,6 +172,30 @@ namespace Rock.Blocks.BulkImport
                     .Select( foreignKey => new ListItemBag { Text = foreignKey, Value = foreignKey } )
                     .ToList();
 
+            // Get literals used in the display for Suffix options, Grade options, etc.
+            Guid suffixGUID = Rock.SystemGuid.DefinedType.PERSON_SUFFIX.AsGuid();
+            box.SuffixOptions = $"({DefinedTypeCache.Get( suffixGUID ).DefinedValues.Take( 50 ).Select( dv => dv.Value ).ToList().AsDelimited( ", " )})";
+
+            Guid connectionStatusGUID = Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS.AsGuid();
+            box.ConnectionStatusOptions = $"({DefinedTypeCache.Get( connectionStatusGUID ).DefinedValues.Take( 50 ).Select( dv => dv.Value ).ToList().AsDelimited( ", " )})";
+
+            Guid gradeGUID = Rock.SystemGuid.DefinedType.SCHOOL_GRADES.AsGuid();
+            var gradeAbbreviations = DefinedTypeCache.Get( gradeGUID ).DefinedValues.Take( 50 ).Select( a => a.AttributeValues["Abbreviation"]?.Value )
+                .Where( a => !string.IsNullOrWhiteSpace( a ) ).ToList();
+            box.GradeOptions = $"({gradeAbbreviations.AsDelimited( ", " )})";
+
+            var emailPreferenceNames = Enum.GetNames( typeof( SlingshotCore.Model.EmailPreference ) ).Take( 50 ).ToList();
+            box.EmailPreferenceOptions = $"({emailPreferenceNames.AsDelimited( ", " )})";
+
+            var genderNames = Enum.GetNames( typeof( SlingshotCore.Model.Gender ) ).Take( 50 ).ToList();
+            box.GenderOptions = $"({genderNames.AsDelimited( ", " )})";
+
+            var maritalStatusNames = Enum.GetNames( typeof( SlingshotCore.Model.MaritalStatus ) ).Take( 50 ).ToList();
+            box.MaritalStatusOptions = $"({maritalStatusNames.AsDelimited( ", " )})";
+
+            var recordStatusNames = Enum.GetNames( typeof( SlingshotCore.Model.RecordStatus ) ).Take( 50 ).ToList();
+            box.RecordStatusOptions = $"({recordStatusNames.AsDelimited( ", " )})";
+
             return box;
         }
 
@@ -193,27 +223,19 @@ namespace Rock.Blocks.BulkImport
         private List<ListItemBag> CreateListItemBagsDropDown()
         {
             var rockAttributeArray = AttributeCache.GetPersonAttributes( AllowedPersonAttributeFieldTypeClassNames )
-                .Select( attribute => new ListItemBag { Text = attribute.Name, Value = attribute.Key } ) // attribute key is used by the Slingshot Importer to map the attributes.
+                .OrderBy( a => a.Name )
+                .Select( attribute => new ListItemBag { Text = attribute.Name, Value = attribute.Key, Category = ROCK_ATTRIBUTES_OPTION_NAME } ) // attribute key is used by the Slingshot Importer to map the attributes.
                 .ToList();
 
-            foreach ( ListItemBag rockAttribute in rockAttributeArray )
-            {
-                rockAttribute.Category = ROCK_ATTRIBUTES_OPTION_NAME;
-            }
-
-            ListItemBag[] requiredFieldslistItems = RequiredFields.Select( name => new ListItemBag { Text = name, Value = name } )
+            ListItemBag[] requiredFieldslistItems = RequiredFields
+                .OrderBy( name => name )
+                .Select( name => new ListItemBag { Text = name, Value = name, Category = "Required Fields" } )
                 .ToArray();
-            foreach ( ListItemBag listItem in requiredFieldslistItems )
-            {
-                listItem.Category = FIELD_OPTION_NAME;
-            }
 
-            ListItemBag[] optionalFieldslistItems = OptionalFields.Select( name => new ListItemBag { Text = name, Value = name } )
+            ListItemBag[] optionalFieldslistItems = OptionalFields
+                .OrderBy( name => name )
+                .Select( name => new ListItemBag { Text = name, Value = name, Category = FIELD_OPTION_NAME } )
                 .ToArray();
-            foreach ( ListItemBag listItem in optionalFieldslistItems )
-            {
-                listItem.Category = FIELD_OPTION_NAME;
-            }
 
             return requiredFieldslistItems
                 .Concat( optionalFieldslistItems )
@@ -385,29 +407,29 @@ namespace Rock.Blocks.BulkImport
                     progressResults.Add( personImportKey, importer.Results[personImportKey] );
                 }
 
-                if ( importer.HasErrors )
-                {
-                    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
-                    {
-                        TaskName = "import",
-                        Error = errorMessage.IsNullOrWhiteSpace() ? "Unknown Error" : errorMessage
-                    } );
-                    return;
-                }
-                else if ( progressResults.Html.IsNotNullOrWhiteSpace() )
-                {
-                    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
-                    {
-                        TaskName = "import",
-                        Message = progressResults.Html.ConvertCrLfToHtmlBr()
-                    } );
-                    return;
-                }
+                //if ( importer.HasErrors )
+                //{
+                //    progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
+                //    {
+                //        TaskName = "preparation",
+                //        Error = errorMessage.IsNullOrWhiteSpace() ? "Errors Validating Data" : errorMessage
+                //    } );
+                //    return;
+                //}
+
+                //if ( progressResults.Html.IsNotNullOrWhiteSpace() )
+                //{
+                //    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
+                //    {
+                //        TaskName = "import",
+                //        Message = progressResults.Html.ConvertCrLfToHtmlBr()
+                //    } );
+                //}
 
                 progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
                 {
                     TaskName = "import",
-                    Message = progressMessage
+                    Message = progressMessage,
                 } );
 
             } );
@@ -426,8 +448,38 @@ namespace Rock.Blocks.BulkImport
                             CompletionPercentage = ( decimal ) ( ( int ) readLineCount ) / options.RecordCount * 100,
                         } );
                     } );
+
+                    if ( csvSlingshotImporter.HasErrors )
+                    {
+                        await progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
+                        {
+                            TaskName = "preparation",
+                            Error = "Errors Validating Data"
+                        } );
+                    }
+
                     csvSlingshotImporter.DoImport();
                     csvSlingshotImporter.AddPersonCSVImportErrorNotes();
+
+                    if ( csvSlingshotImporter.HasErrors )
+                    {
+                        _ = progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
+                        {
+                            TaskName = "import",
+                            Message = "Completed",
+                            CompletionPercentage = 100,
+                            Error = "Errors Validating Data"
+                        } );
+                    }
+                    else
+                    {
+                        _ = progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
+                        {
+                            TaskName = "import",
+                            Message = "Completed",
+                            CompletionPercentage = 100
+                        } );
+                    }
                 }
                 catch ( Exception exception )
                 {
@@ -446,31 +498,33 @@ namespace Rock.Blocks.BulkImport
             task.Start();
 
             var rootFolder = GetSlingshotPhysicalRootFolder();
-            var errorCsvFileName = csvSlingshotImporter.ErrorCSVfilename.Replace( rootFolder, "" );
+            var errorCsvFolderName = csvSlingshotImporter.ErrorCSVfilename.Replace( rootFolder, "" ).Replace( ERROR_CSV_FILENAME , "");
 
-            return ActionOk( new { ErrorCsvFileName = errorCsvFileName } );
+            return ActionOk( new { ErrorCsvFolderName = errorCsvFolderName } );
         }
 
+        /// <summary>
+        /// Handles the Click event of the Download Log Button fetching the ERROR_CSV_FILENAME
+        /// inside the given partial Slingshot folder name.
+        /// </summary>
         [BlockAction]
-        public void DownloadErrorCsv( string errorCsvFileName )
+        public BlockActionResult DownloadErrorCsv()
         {
-            System.Web.HttpResponse response = System.Web.HttpContext.Current.Response;
-            response.ClearHeaders();
-            response.ClearContent();
-            response.Clear();
-            response.ContentType = "text/csv";
-            response.Charset = "";
-            response.AddHeader( "content-disposition", "attachment; filename=errors.csv" );
+            string folderName = RequestContext.GetPageParameter( "f" );
+            string filePath = GetCsvFilePath( folderName ) + ERROR_CSV_FILENAME;
 
-            string filePath = GetCsvFilePath( errorCsvFileName );
-            if ( File.Exists( filePath ) )
+            if ( !File.Exists( filePath ) )
             {
-                response.TransmitFile( filePath );
+                return ActionNotFound();
             }
 
-            response.Flush();
-            response.SuppressContent = true;
-            System.Web.HttpContext.Current.ApplicationInstance.CompleteRequest();
+            var ms = new MemoryStream();
+            using ( var fileStream = new FileStream( filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ) )
+            {
+                fileStream.CopyTo( ms );
+            }
+            ms.Seek( 0, SeekOrigin.Begin );
+            return new FileBlockActionResult( ms, "text/plain", folderName + "_errors.csv" );
         }
 
         #endregion

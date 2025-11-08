@@ -15,6 +15,7 @@
 // </copyright>
 //
 
+using System;
 using System.Collections.Generic;
 
 using Rock.ViewModels.Utility;
@@ -26,7 +27,6 @@ namespace Rock.ViewModels.Blocks.BulkImport
     /// </summary>
     public class CsvImportBox
     {
-
         /// <summary>
         /// Gets or sets the Encrypted Root Folder.
         /// </summary>
@@ -36,5 +36,40 @@ namespace Rock.ViewModels.Blocks.BulkImport
         /// Gets or sets the list of previous sources for the import.
         /// </summary>
         public List<ListItemBag> Sources { get; set; } = new List<ListItemBag>();
+
+        /// <summary>
+        /// Gets or sets the available Suffix options for this Rock instance.
+        /// </summary>
+        public string SuffixOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Connection Status options for this Rock instance.
+        /// </summary>
+        public string ConnectionStatusOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Grade options for this Rock instance.
+        /// </summary>
+        public string GradeOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Email Preference options for this Rock instance.
+        /// </summary>
+        public string EmailPreferenceOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Gender options for this Rock instance.
+        /// </summary>
+        public string GenderOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Marital Status options for this Rock instance.
+        /// </summary>
+        public string MaritalStatusOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the available Record Status options for this Rock instance.
+        /// </summary>
+        public string RecordStatusOptions { get; set; }
     }
 }

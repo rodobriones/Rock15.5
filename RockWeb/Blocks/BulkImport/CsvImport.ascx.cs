@@ -394,6 +394,7 @@ namespace RockWeb.Blocks.BulkImport
         private ListItem[] CreateListItemsDropDown()
         {
             ListItem[] rockAttributeArray = AttributeCache.GetPersonAttributes( allowedPeronsAttributeFieldTypeClassNames )
+                .OrderBy( a => a.Name )
                 .Select( attribute => new ListItem( attribute.Name, attribute.Key ) ) // attribute key is used by the Slingshot Importer to map the attributes.
                 .ToArray();
             foreach ( ListItem rockAttribute in rockAttributeArray )
@@ -401,18 +402,18 @@ namespace RockWeb.Blocks.BulkImport
                 rockAttribute.Attributes["OptionGroup"] = ROCK_ATTRIBUTES_OPTION_NAME;
             }
 
-            ListItem[] requiredFieldslistItems = requiredFields.Select( name => new ListItem( name ) )
+            ListItem[] requiredFieldslistItems = requiredFields.OrderBy( name => name ).Select( name => new ListItem( name ) )
                 .ToArray();
             foreach ( ListItem listItem in requiredFieldslistItems )
             {
-                listItem.Attributes["OptionGroup"] = FIELD_OPTION_NAME;
+                listItem.Attributes["OptionGroup"] = "Required Fields";
             }
 
-            ListItem[] optionalFieldslistItems = optionalFields.Select( name => new ListItem( name ) )
+            ListItem[] optionalFieldslistItems = optionalFields.OrderBy( name => name ).Select( name => new ListItem( name ) )
                 .ToArray();
             foreach ( ListItem listItem in optionalFieldslistItems )
             {
-                listItem.Attributes["OptionGroup"] = FIELD_OPTION_NAME;
+                listItem.Attributes["OptionGroup"] = "Optional " + FIELD_OPTION_NAME;
             }
 
             ListItem[] emptyDefaultEntry = { new ListItem( "" ) };

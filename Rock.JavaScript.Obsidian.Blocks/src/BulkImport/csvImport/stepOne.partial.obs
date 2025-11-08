@@ -32,7 +32,7 @@
                              rules="required"
                              help="Describe where this data came from. We'll store what you type as a setting so if you import data from this system again we'll be able to match people you've already imported. (e.g.: 'former-chms', 'mailchimp', etc.)" />
 
-                    <RockButton :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = true" type="button">
+                    <RockButton v-if="config.sources && config.sources.length > 0" :btnType="BtnType.Link" class="mb-4 px-0" @click="usePreviousSourceDescription = true" type="button">
                         <small>Choose Previous Source Description</small>
                     </RockButton>
                 </template>
@@ -84,7 +84,7 @@
                     <li>Middle Name - The individual's middle name.</li>
                     <li>Suffix - The person's suffix.
                         <br />
-                        <asp:Label ID="lsuffixlist" runat="server" />
+                        <div v-if="config?.suffixOptions" v-html="config.suffixOptions"></div>
                     </li>
                     <li>Home Phone - The individual's home phone number.
                         <br />
@@ -98,21 +98,21 @@
                     <li>Email - The individual's email address.</li>
                     <li>Email Preference - The permissions you have been granted to email the individual.
                         <br />
-                        <asp:Label ID="lemailPreferenceList" runat="server" />
+                        <div v-if="config?.emailPreferenceOptions" v-html="config.emailPreferenceOptions"></div>
                     </li>
                     <li>Gender - The gender of the individual.
                         <br />
-                        <asp:Label ID="lgenderList" runat="server" />
+                        <div v-if="config?.genderOptions" v-html="config.genderOptions"></div>
                     </li>
                     <li>Marital Status - The marital status of the individual.
                         <br />
-                        <asp:Label ID="lmaritalStatusList" runat="server" />
+                        <div v-if="config?.maritalStatusOptions" v-html="config.maritalStatusOptions"></div>
                     </li>
                     <li>Birthdate - The individual's birthdate. </li>
                     <li>Anniversary Date - The marriage anniversary date of the individual.</li>
                     <li>Record Status - Whether the person is active or not.
                         <br />
-                        <asp:Label ID="lrecordStatusList" runat="server" />
+                        <div v-if="config?.recordStatusOptions" v-html="config.recordStatusOptions"></div>
                     </li>
                     <li>Inactive Reason - The reason why the person is inactive.</li>
                     <li>Is Deceased - Determines whether the person is deceased.
@@ -121,11 +121,11 @@
                     </li>
                     <li>Connection Status - The connection type the individual has to your organization. This must match the connection statuses you have in Rock.
                         <br />
-                        <asp:Label ID="lconnectionStatusList" runat="server" />
+                        <div v-if="config?.connectionStatusOptions" v-html="config.connectionStatusOptions"></div>
                     </li>
                     <li>Grade - The grade of the individual.
                         <br />
-                        <asp:Label ID="lgrade" runat="server" />
+                        <div v-if="config?.gradeOptions" v-html="config.gradeOptions"></div>
                     </li>
                     <li>Home Address Street 1 - The first line of their home street address.</li>
                     <li>Home Address Street 2 - The second line of their home street address.</li>

@@ -22,6 +22,7 @@
                     <DropDownList v-model="columnMappings[csvColumn]"
                                   :items="personFieldOptions"
                                   :label='csvColumn'
+                                  :grouped="true"
                                   enhanceForLongLists />
                 </div>
             </div>

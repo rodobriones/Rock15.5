@@ -44,6 +44,9 @@
     <Reference Include="Rock.Common.Mobile">
       <HintPath>..\RockWeb\Bin\Rock.Common.Mobile.dll</HintPath>
     </Reference>
+    <Reference Include="Slingshot.Core">
+      <HintPath>..\libs\Slingshot\Slingshot.Core.dll</HintPath>
+    </Reference>
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Web" />

@@ -4,7 +4,7 @@
         <h2>Import</h2>
         We'll now start the import process with the data and mappings you have provided.
         <hr>
-        <NotificationBox v-if="completed == 'exception'" alertType="danger" v-html="errorMessage" />
+        <NotificationBox v-if="completed == 'exception'" alertType="danger" v-html="errorMessage" style="word-wrap:break-word;" />
 
         <div ID="pnlImportPreaprationProgress" runat="server" CssClass="mb-5">
             <h4>Step 1: Import Preparation</h4>
@@ -36,7 +36,7 @@
                 Your data has been imported into Rock.
             </NotificationBox>
         </div>
-        <div id="import-csv-error" v-else-if="completed == 'error'">
+        <div id="import-csv-error" v-if="isFinishedWithErrors === true">
             <NotificationBox alertType="warning">
                 There were a few failures while importing. Some records could be imported only partially or could not be
                 imported at all. Click the button to download a new csv file that has all the records that has failures.
@@ -45,7 +45,7 @@
                 imported to Rock at all, it would be marked as FALSE under the 'CSV Import Success' column.
             </NotificationBox>
             <!-- TODO -->
-            <RockButton :btnType="BtnType.Primary" @click="downloadErrorCsv" type="button">Download CSV File With the Errors</RockButton>
+            <RockButton :btnType="BtnType.Primary" @click="onDownloadErrorCsvClick" type="button">Download CSV File with the Errors</RockButton>
         </div>
     </div>
 </template>
@@ -58,7 +58,7 @@
     import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { CsvImportBox } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportBox";
     import { StepTwoResults } from "./types.partial";
-    import { useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { useInvokeBlockAction, useBlockActionUrl } from "@Obsidian/Utility/block";
     import { CsvImportStartImportOptionsBag } from "@Obsidian/ViewModels/Blocks/BulkImport/csvImportStartImportOptionsBag";
     import { getTopic } from "@Obsidian/Utility/realTime";
     import { CsvImportActivityProgressStatusBag } from "@Obsidian/ViewModels/Utility/csvImportActivityProgressStatusBag";
@@ -96,9 +96,13 @@
     });
 
     const invokeBlockAction = useInvokeBlockAction();
+    const blockActionUrl = useBlockActionUrl();
+
     const completed = ref<"exception" | "success" | "error" | undefined>();
+    const isFinishedWithErrors = ref<true | false | undefined>();
+    const isErrorDuringProcessing = ref(false);
     const errorMessage = ref("");
-    const errorCsvFileName = ref("");
+    const errorCsvFolderName = ref("");
 
     const preparationProgress = ref(0);
     const preparationLogMessage = ref("");
@@ -123,6 +127,7 @@
                 preparationProgress.value = status.completionPercentage;
             }
             else if (status.taskName === "import") {
+                console.log(status.completionPercentage);
                 importProgress.value = status.completionPercentage;
             }
         });
@@ -136,23 +141,29 @@
         });
         topic.on("taskErrored", (status: CsvImportActivityProgressStatusBag) => {
             completed.value = "exception";
-            errorMessage.value = status.message ?? "";
+            errorMessage.value = status.error ?? "";
         });
         topic.on("taskCompleted", (status: CsvImportActivityProgressStatusBag) => {
             if (status.error) {
-                completed.value = "error";
+                isErrorDuringProcessing.value = true;
                 errorMessage.value = status.message ?? "";
             }
-            else {
-                if (status.taskName === "preparation") {
-                    preparationProgress.value = 100;
-                }
-                else if (status.taskName === "import") {
-                    importProgress.value = 100;
-                }
-                completed.value = "success";
-                importLogMessage.value = status.message ?? "";
+
+            if (status.taskName === "preparation") {
+                preparationProgress.value = 100;
             }
+            else if (status.taskName === "import") {
+                importProgress.value = 100;
+            }
+
+            completed.value = "success";
+            if (isErrorDuringProcessing.value === true) {
+                isFinishedWithErrors.value = true;
+            }
+            else {
+                isFinishedWithErrors.value = false;
+            }
+            importLogMessage.value = status.message ?? "";
         });
 
         topic.onMessage((...args) => console.debug("Real-time message received:", ...args));
@@ -168,7 +179,7 @@
         // Reset submission errors
         completed.value = undefined;
 
-        const result = await invokeBlockAction<{ errorCsvFileName: string }>("StartImport", {
+        const result = await invokeBlockAction<{ errorCsvFolderName: string }>("StartImport", {
             options: {
                 fileName: props.fileName,
                 columnMappings: props.columnMappings,
@@ -185,25 +196,14 @@
             return;
         }
         else if (result.data) {
-            errorCsvFileName.value = result.data.errorCsvFileName ?? "";
+            errorCsvFolderName.value = result.data.errorCsvFolderName ?? "";
         }
     }
 
-    async function downloadErrorCsv(): Promise<void> {
-        // TODO
-        const result = await invokeBlockAction("DownloadErrorCsv", {
-            errorCsvFileName: errorCsvFileName.value
-        });
-
-        if (!result.isSuccess || !result.data) {
-            console.error("DOWNLOAD ERROR FILE ERROR", result);
-            errorMessage.value = result.errorMessage ?? "Unknown error while downloading error CSV file.";
-            return;
-        }
-
-        // HOW DO I ACTUALLY DOWNLOAD?
+    function onDownloadErrorCsvClick(): void {
+        const url = blockActionUrl("DownloadErrorCsv?f=" + errorCsvFolderName.value);
+        window.location.href = url;
     }
-
 
     // Initialize real-time connection when component mounts
     startRealTime();
