@@ -13,13 +13,13 @@
           :showMergeTemplate="false"
           disablePaging
           isFooterHidden>
-        <Column v-if="hasMultipleInstanceMessages"
+        <Column v-if="false"
                 :field="getField('communicationFlowInstanceStartDate')"
                 :name="getField('communicationFlowInstanceStartDate')"
                 title="Instance Start Date">
             <template #format="{ row }">
                 <span>
-                    {{ RockDateTimeFormatter.format_1_1_1970_1_00_AM(parseRockDateTime(getRow(row).communicationFlowInstanceStartDate)) }}
+                    {{ RockDateTimeFormatter.format_1_1_1970(parseRockDateTime(getRow(row).communicationFlowInstanceStartDate)) }}
                 </span>
             </template>
         </Column>
@@ -51,7 +51,8 @@
             </template>
         </Column>
 
-        <Column :field="getField('conversions')"
+        <Column v-if="!isNullish(props.conversionGoalType)"
+                :field="getField('conversions')"
                 :name="getField('conversions')"
                 title="Conversions">
             <template #format="{ row }">
@@ -60,7 +61,7 @@
                         {{ asLocaleString(getRow(row).conversions) }}
                     </span>
                     <span>
-                        {{ `&nbsp;(${getConversionPercentFormatted(getRow(row).communicationFlowCommunicationIdKey ?? '', getRow(row).conversions)})` }}
+                        {{ `&nbsp;(${getConversionPercentFormatted(getRow(row).conversions)})` }}
                     </span>
                 </template>
             </template>
@@ -109,14 +110,15 @@
     import { GridRowBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/gridRowBag";
     import { MessageBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/messageBag";
     import { CommunicationFlowInstanceBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/communicationFlowInstanceBag";
+    import { ConversionGoalType } from "@Obsidian/Enums/Communication/conversionGoalType";
 
     const getField = useGetTypeMemberName<GridRowBag>();
     const getRow = (v: unknown): GridRowBag => v as GridRowBag;
     const { parseRockDateTime } = useRockDateTimeParser();
 
     const props = defineProps({
-        messages: {
-            type: Array as PropType<MessageBag[]>,
+        conversionGoalType: {
+            type: Number as PropType<ConversionGoalType | null | undefined>,
             required: true
         },
 
@@ -125,17 +127,27 @@
             required: true
         },
 
-        onViewMessage: {
-            type: Function as PropType<((communicationFlowInstanceCommunicationIdKey: string) => void) | undefined>
-        },
-
         instances: {
             type: Object as PropType<CommunicationFlowInstanceBag[]>,
+            required: true
+        },
+
+        messages: {
+            type: Array as PropType<MessageBag[]>,
+            required: true
+        },
+
+        onViewMessage: {
+            type: Function as PropType<((communicationFlowCommunicationIdKey: string) => void) | undefined>
+        },
+
+        uniquePersonCount: {
+            type: Number as PropType<number>,
             required: true
         }
     });
 
-    const keyField = getField("communicationFlowInstanceCommunicationIdKey");
+    const keyField = getField("communicationFlowCommunicationIdKey");
 
     // #region Computed Values
 
@@ -147,23 +159,27 @@
         }
 
         return messageEnumerable
-            .groupBy(m => m.communicationFlowInstanceCommunicationIdKey)
+            .groupBy(m => m.communicationFlowCommunicationIdKey)
             .ofType((g): g is GroupedEnumerable<string, MessageBag> => !isNullish(g.key))
             .where(g => g.any())
-            .select<GridRowBag>(messagesByInstance => {
-                const key = messagesByInstance.key;
-                const firstMessage = messagesByInstance.first();
+            .select<GridRowBag>(messagesByTemplate => {
+                const firstMessage = messagesByTemplate.first();
 
                 return {
-                    communicationFlowCommunicationIdKey: key,
+                    communicationFlowCommunicationIdKey: firstMessage.communicationFlowCommunicationIdKey,
                     communicationFlowInstanceCommunicationIdKey: firstMessage.communicationFlowInstanceCommunicationIdKey,
                     communicationFlowCommunicationName: firstMessage.communicationFlowCommunicationName,
                     communicationType: firstMessage.communicationType,
-                    clicks: messagesByInstance.count(m => !!m.clickedDateTime),
-                    opens: messagesByInstance.count(m => !!m.openedDateTime),
-                    sent: messagesByInstance.count(m => !!m.sentDateTime),
-                    conversions: messagesByInstance.count(m => !!m.convertedDateTime),
-                    unsubscribes: messagesByInstance.count(m => !!m.unsubscribedDateTime),
+                    clicks: messagesByTemplate.count(m => !!m.clickedDateTime),
+                    opens: messagesByTemplate.count(m => !!m.openedDateTime),
+                    sent: messagesByTemplate.count(m => !!m.sentDateTime),
+                    // `conversions` are the number of unique people who converted,
+                    // not the total number of conversions.
+                    conversions: Enumerable
+                        .from(messagesByTemplate)
+                        .groupBy(m => m.personAliasIdKey)
+                        .count(g => g.any(m => !!m.convertedDateTime)),
+                    unsubscribes: messagesByTemplate.count(m => !!m.unsubscribedDateTime),
                     communicationFlowInstanceIdKey: firstMessage.communicationFlowInstanceIdKey,
                     communicationFlowInstanceStartDate: firstMessage.communicationFlowInstanceStartDate,
                 };
@@ -181,28 +197,16 @@
         };
     });
 
-    const hasMultipleInstanceMessages = computed((): boolean => {
-        return Enumerable.from(gridRows.value)
-            .select(m => m.communicationFlowInstanceIdKey)
-            .distinct()
-            .count() > 1;
-    });
-
     // #endregion Computed Values
 
     // #region Functions
 
-    function getConversionPercentFormatted(communicationFlowInstanceIdKey: string, conversionCount: number): string {
-        const uniquePersonCount = Enumerable.from(props.instances)
-            .where(i => i.communicationFlowInstanceIdKey === communicationFlowInstanceIdKey)
-            .select(i => i.uniquePersonCount)
-            .firstOrDefault(0);
-
-        if (uniquePersonCount === 0) {
+    function getConversionPercentFormatted(conversionCount: number): string {
+        if (props.uniquePersonCount === 0 || conversionCount === 0) {
             return "0%";
         }
         else {
-            return asLocalePercent(conversionCount / uniquePersonCount);
+            return asLocalePercent(conversionCount / props.uniquePersonCount);
         }
     }
 

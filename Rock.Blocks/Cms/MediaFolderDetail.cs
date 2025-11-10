@@ -23,6 +23,7 @@ using System.Linq;
 using Rock.Attribute;
 using Rock.Constants;
 using Rock.Data;
+using Rock.Media;
 using Rock.Model;
 using Rock.Security;
 using Rock.ViewModels.Blocks;
@@ -49,7 +50,8 @@ namespace Rock.Blocks.Cms
     #endregion
 
     [Rock.SystemGuid.EntityTypeGuid( "29cf7521-2dcd-467a-98fa-1c28c16c8b69" )]
-    [Rock.SystemGuid.BlockTypeGuid( "662af7bb-5b61-43c6-bda6-a6e7aab8fc00" )]
+    // Was [Rock.SystemGuid.BlockTypeGuid( "662af7bb-5b61-43c6-bda6-a6e7aab8fc00" )]
+    [Rock.SystemGuid.BlockTypeGuid( "3C9D442B-D066-43FA-9380-98C60936992E" )]
     public class MediaFolderDetail : RockDetailBlockType, IBreadCrumbBlock
     {
         #region Keys
@@ -206,6 +208,7 @@ namespace Rock.Blocks.Cms
                 MediaAccount = entity.MediaAccount.ToListItemBag(),
                 Description = entity.Description,
                 IsContentChannelSyncEnabled = entity.IsContentChannelSyncEnabled,
+                IsAllowsManualEntry = DoesMediaAccountComponentAllowManualEntry( entity ),
                 IsPublic = entity.IsPublic,
                 ContentChannelItemAttributes = entity.MediaElements.ToListItemBagList(),
                 Name = entity.Name,
@@ -479,6 +482,32 @@ namespace Rock.Blocks.Cms
                     AdditionalParameters = additionalParameters
                 };
             }
+        }
+
+        /// <summary>
+        /// Determines whether manual entry is allowed for the media account component associated with the given media folder.
+        /// </summary>
+        /// <param name="mediaFolder">The media folder containing the media account information.</param>
+        /// <returns>
+        ///   <c>true</c> if the associated media account component allows manual entry or if no component is found; otherwise, <c>false</c>.
+        /// </returns>
+        private bool DoesMediaAccountComponentAllowManualEntry( MediaFolder mediaFolder )
+        {
+            var componentEntityTypeId = mediaFolder != null && mediaFolder.MediaAccount != null
+                ? mediaFolder.MediaAccount.ComponentEntityTypeId
+                : ( int? ) null;
+
+            if ( componentEntityTypeId.HasValue )
+            {
+                var componentEntityType = EntityTypeCache.Get( componentEntityTypeId.Value );
+                if ( componentEntityType != null )
+                {
+                    var mediaAccountComponent = MediaAccountContainer.GetComponent( componentEntityType.Name );
+                    return mediaAccountComponent.AllowsManualEntry;
+                }
+            }
+
+            return true;
         }
 
         #endregion

@@ -181,10 +181,16 @@ export const ServiceJob = {
     DataMigrations180DeleteGrouplocationhistoricalschedule: "6A76B67B-9C25-4C02-8BC6-06B23EC8C7C3",
     /** The job to run Post v18.0 Data Migrations to Delete Self-Service Kiosk Site, Blocks, BlockTypes and KioskStark theme. */
     DataMigrations180DeleteSelfserviceKioskSiteAndRelated: "6696B495-3EB0-442B-8DAB-82E861B92B41",
+    /** The job to run Post v18.0 Data Migrations to migrate existing eRA records from the History table to the Steps table. */
+    DataMigrations180MigrateEraDataToSteps: "64CB888D-0F81-473B-B200-8FA38337DAED",
     /** The job to run Post v18.0 Data Migrations to populate the newly-added [CommunicationRecipient].[DeliveredDateTime] field. */
     DataMigrations180PopulateCommunicationrecipientDelivereddatetime: "EF2CF0AC-7A83-4BEB-8824-41D3B5B8B832",
+    /** The Job to run Post v18.0 Data Migrations to swap Block. */
+    DataMigrations180SwapObsidianBlocks: "B3663D0F-6426-44BB-9C43-D9921A0974D3",
     /** The job to run Post v18.0 Data Migrations to update an existing index on the CommunicationRecipient table. */
     DataMigrations180UpdateCommunicationrecipientIndex: "FE519BCE-CCB8-42B7-A14C-1620859F23E8",
+    /** The job to run Post v18.0 Data Migrations to update the Manage My Account Page block setting for the recently-chopped Email Preference Entry block. */
+    DataMigrations180UpdateEmailPreferenceEntryBlockManageMyAccountPage: "7319E385-8068-43FE-9085-6F9A21F5972B",
     /** The job to run Post v18.0 Data Migrations to update the Nameless Locations. */
     DataMigrations180UpdateNamelessLocations: "6C3EE640-A442-4F9C-92ED-23E353BA8509",
     /**
@@ -231,12 +237,16 @@ export const ServiceJob = {
     SyncMedia: "FB27C6DF-F8DB-41F8-83AF-BBE09E77A0A9",
     /** The Rock.Jobs.UpdateAnalyticsSourcePostalCode job. */
     UpdateAnalyticsSourcePostalCode: "29731D97-699D-4D34-A9F4-50C7C33D5C48",
+    /** The Rock.Jobs.UpdateEntityUsage job configured to update Media Element usage. */
+    UpdateMediaElementUsage: "32d0cb70-d4ef-4ac2-8693-bfdfe9e5233e",
     /** The Update Persisted Attribute Values job. */
     UpdatePersistedAttributeValue: "A7DDA4B0-BA1D-49F1-8749-5E7A9876AE70",
     /** The Rock.Jobs.UpdatePersistedDatasets job. */
     UpdatePersistedDatasets: "B6D3B48A-039A-4A1C-87BE-3FC0152AB5DA",
     /** The Rock.Jobs.UpdatePersonalizationData job. */
     UpdatePersonalizationData: "67CFE1FE-7C64-4328-8576-F1A4BFD0EA8B",
-    /** The job for updating learning program completions. Rock.Jobs.UpdateProgramCompletions. */
+    /** The job for updating learning program completions. Rock.Jobs.UpdateLearningProgramCompletions. */
     UpdateProgramCompletions: "4E805A88-C031-4BA0-BAD6-0A706E647870",
+    /** The job for updating step program completions. Rock.Jobs.UpdateStepProgramCompletions. */
+    UpdateStepProgramCompletions: "EB658FC8-3DA1-4CE0-86F6-0D3CA6F48AAE",
 };

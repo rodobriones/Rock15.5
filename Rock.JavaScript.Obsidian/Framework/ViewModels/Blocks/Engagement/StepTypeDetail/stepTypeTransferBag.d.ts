@@ -23,6 +23,7 @@
 
 import { Guid } from "@Obsidian/Types";
 
+/** The Bag used to transfer step types */
 export type StepTypeTransferBag = {
     /** Gets or sets the step status mappings for the transfer. */
     stepStatusMappings?: Record<string, string> | null;

@@ -4,6 +4,7 @@
           :data="gridDataSource"
           keyField="idKey"
           itemTerm="Defined Type"
+          title="Defined Types List"
           :entityTypeGuid="EntityType.DefinedType"
           :showLaunchWorkflow="false"
           stickyHeader
@@ -15,7 +16,6 @@
                     title="Category"
                     field="category"
                     :filter="pickExistingValueFilter"
-                    :hideOnScreen="!config.options?.showCategoryColumn"
                     visiblePriority="xs" />
 
         <TextColumn name="name"

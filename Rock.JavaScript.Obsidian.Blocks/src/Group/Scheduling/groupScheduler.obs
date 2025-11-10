@@ -14,7 +14,7 @@
                :headerSecondaryActions="secondaryActions">
 
             <template #helpContent>
-                <div class="p-3 bg-white">
+                <div class="p-3">
                     <div>
                         <h5 class="mt-0 mb-4">Group Scheduler Help</h5>
                         <p><strong>Scheduling Basics</strong></p>
@@ -25,9 +25,9 @@
                             <p><strong>Scheduled Individual Legend</strong></p>
                             <p>Each scheduled individual has one of three invite statuses:</p>
                             <ul>
-                                <li><i class="ti ti-circle text-success"></i> Accepted Invite</li>
-                                <li><i class="ti ti-circle text-muted"></i> Pending Invite</li>
-                                <li><i class="ti ti-circle text-danger"></i> Declined Invite</li>
+                                <li><i class="ti ti-circle-filled text-success"></i> Accepted Invite</li>
+                                <li><i class="ti ti-circle-filled text-muted"></i> Pending Invite</li>
+                                <li><i class="ti ti-circle-filled text-danger"></i> Declined Invite</li>
                             </ul>
                             <p>The invite status is shown by a border around the individual's avatar.</p>
                             <p>Some scheduled individuals may also have notification icons that alert you to issues with their schedule.</p>
@@ -42,10 +42,10 @@
                             <p><strong>Group Location Schedule Status</strong></p>
                             <p>Each group location has a status bar at the bottom that shows the overall status of the schedule.</p>
                             <ul>
-                                <li><i class="ti ti-square text-danger"></i> A red bar means there are not enough accepted invites to reach the minimum number of individuals needed.</li>
-                                <li><i class="ti ti-square text-warning"></i> A yellow bar means there are enough accepted invites to reach the minimum number, but not the desired number.</li>
-                                <li><i class="ti ti-square text-success"></i> A green bar means there are enough accepted invites to reach or exceed the desired number.</li>
-                                <li><i class="ti ti-square text-critical"></i> An orange bar means there are too many accepted invites and the maximum number is exceeded.</li>
+                                <li><i class="ti ti-square-filled text-danger"></i> A red bar means there are not enough accepted invites to reach the minimum number of individuals needed.</li>
+                                <li><i class="ti ti-square-filled text-warning"></i> A yellow bar means there are enough accepted invites to reach the minimum number, but not the desired number.</li>
+                                <li><i class="ti ti-square-filled text-success"></i> A green bar means there are enough accepted invites to reach or exceed the desired number.</li>
+                                <li><i class="ti ti-square-filled text-critical"></i> An orange bar means there are too many accepted invites and the maximum number is exceeded.</li>
                             </ul>
                             <p>Each status bar will show a solid bar representing the accepted invites, and a semi-transparent bar representing pending invites.</p>
                             <p>Bars include ticks, that mark the thresholds (minimum, desired and maximum) for each schedule. You can hover over each tick to see a tooltip with the threshold and the number of individuals required.</p>
@@ -678,6 +678,7 @@
         }
         else {
             schedulesResizeObserver = new ResizeObserver((_: ResizeObserverEntry[]) => {
+                setEqualSchedulesColumnHeights();
                 setEqualOccurrenceDateHeights();
             });
         }
@@ -689,6 +690,44 @@
     }
 
     /**
+     * Sets this group scheduler's descendent schedule columns elements to have a minimum height equal to
+     * their tallest sibling schedule columns element.
+     */
+    function setEqualSchedulesColumnHeights(): void {
+        if (!snapContainerElement.value) {
+            return;
+        }
+
+        const scheduleColumnsElems = snapContainerElement.value.querySelectorAll<HTMLElement>(".js-schedule-columns");
+
+        // Start by setting all schedule columns elements back to "auto" minimum height. This will do two things:
+        //  1. Reclaim any vertical space that is no longer needed (if an individual was removed).
+        //  2. Set up the UI for mobile widths (as we won't synchronize heights in that case).
+        scheduleColumnsElems.forEach((scheduleColumnsElem: HTMLElement) => {
+            scheduleColumnsElem.style.minHeight = "auto";
+        });
+
+        // For non-mobile widths, synchronize heights.
+        if (window.innerWidth >= 992) {
+            nextTick(() => {
+                let maxHeight = 0;
+
+                // Loop through all schedule columns elements to find the tallest one.
+                scheduleColumnsElems.forEach((scheduleColumnsElem: HTMLElement) => {
+                    if (maxHeight < scheduleColumnsElem.offsetHeight) {
+                        maxHeight = scheduleColumnsElem.offsetHeight;
+                    }
+                });
+
+                // Loop through all schedule columns elements again to set each minimum height to match their tallest sibling.
+                scheduleColumnsElems.forEach((scheduleColumnsElem: HTMLElement) => {
+                    scheduleColumnsElem.style.minHeight = `${maxHeight}px`;
+                });
+            });
+        }
+    }
+
+    /**
      * Sets this group scheduler's descendent occurrence date elements to have a minimum height equal to
      * their tallest sibling occurrence date element.
      */
@@ -697,31 +736,33 @@
             return;
         }
 
-        const occurrenceDates = snapContainerElement.value.querySelectorAll<HTMLElement>(".js-occurrence-date");
+        const occurrenceDateElems = snapContainerElement.value.querySelectorAll<HTMLElement>(".js-occurrence-date");
 
-        // Start by setting all occurrence dates back to "auto" minimum height. This will do two things:
+        // Start by setting all occurrence date elements back to "auto" minimum height. This will do two things:
         //  1. Reclaim any vertical space that is no longer needed (if an individual was removed).
         //  2. Set up the UI for mobile widths (as we won't synchronize heights in that case).
-        occurrenceDates.forEach((occurrenceDate: HTMLElement) => {
-            occurrenceDate.style.minHeight = "auto";
+        occurrenceDateElems.forEach((occurrenceDateElem: HTMLElement) => {
+            occurrenceDateElem.style.minHeight = "auto";
         });
 
         // For non-mobile widths, synchronize heights.
-        nextTick(() => {
-            let maxHeight = 0;
+        if (window.innerWidth >= 992) {
+            nextTick(() => {
+                let maxHeight = 0;
 
-            // Loop through all occurrence dates to find the tallest one.
-            occurrenceDates.forEach((occurrenceDate: HTMLElement) => {
-                if (maxHeight < occurrenceDate.offsetHeight) {
-                    maxHeight = occurrenceDate.offsetHeight;
-                }
-            });
+                // Loop through all occurrence date elements to find the tallest one.
+                occurrenceDateElems.forEach((occurrenceDateElem: HTMLElement) => {
+                    if (maxHeight < occurrenceDateElem.offsetHeight) {
+                        maxHeight = occurrenceDateElem.offsetHeight;
+                    }
+                });
 
-            // Loop through all occurrence dates again to set each minimum height to match their tallest sibling.
-            occurrenceDates.forEach((occurrenceDate: HTMLElement) => {
-                occurrenceDate.style.minHeight = `${maxHeight}px`;
+                // Loop through all occurrence date elements again to set each minimum height to match their tallest sibling.
+                occurrenceDateElems.forEach((occurrenceDateElem: HTMLElement) => {
+                    occurrenceDateElem.style.minHeight = `${maxHeight}px`;
+                });
             });
-        });
+        }
     }
 
     /**
@@ -733,9 +774,9 @@
      */
     function scrollToSchedule(currentDateIndex: number, currentScheduleIndex: number, direction: ScrollDirection): void {
         let targetSchedules = scheduleComponentsByOccurrenceDate.value[currentDateIndex];
-        let targetScheduleIndex = direction == ScrollDirection.Previous ? currentScheduleIndex - 1 : currentScheduleIndex + 1;
+        let targetScheduleIndex = direction === ScrollDirection.Previous ? currentScheduleIndex - 1 : currentScheduleIndex + 1;
 
-        if (direction == ScrollDirection.Previous) {
+        if (direction === ScrollDirection.Previous) {
             if (targetScheduleIndex < 0) {
                 // The first schedule of a given occurrence date is currently within view.
                 if (occurrenceDateCount.value > 1) {
@@ -757,7 +798,7 @@
                 }
             }
         }
-        else if (direction == ScrollDirection.Next) {
+        else if (direction === ScrollDirection.Next) {
             if (!targetSchedules) {
                 return;
             }

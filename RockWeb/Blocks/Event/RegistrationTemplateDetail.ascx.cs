@@ -134,7 +134,7 @@ namespace RockWeb.Blocks.Event
     {% endif %}
 
     {% assign paymentPlan = Registration.PaymentPlanFinancialScheduledTransaction %}
-    
+
     {% if paymentPlan and paymentPlan.IsActive %}
         Payment Plan: {{ paymentPlan.TotalAmount | FormatAsCurrency }} × {{ paymentPlan.NumberOfPayments }} ({{ paymentPlan.TransactionFrequencyValue | AsString }})<br>
     {% else %}
@@ -298,15 +298,15 @@ namespace RockWeb.Blocks.Event
         Paid {{ payment.Amount | FormatAsCurrency }} on {{ payment.Transaction.TransactionDateTime| Date:'M/d/yyyy' }}
         <small>(Acct #: {{ payment.Transaction.FinancialPaymentDetail.AccountNumberMasked }}, Ref #: {{ payment.Transaction.TransactionCode }})</small><br/>
     {% endfor %}
-    
+
     {% assign paymentCount = Registration.Payments | Size %}
-        
+
     {% if paymentCount > 1 %}
         Total Paid: {{ Registration.TotalPaid | FormatAsCurrency }}<br/>
     {% endif %}
 
     {% assign paymentPlan = Registration.PaymentPlanFinancialScheduledTransaction %}
-    
+
     {% if paymentPlan and paymentPlan.IsActive %}
         Payment Plan: {{ paymentPlan.TotalAmount | FormatAsCurrency }} × {{ paymentPlan.NumberOfPayments }} ({{ paymentPlan.TransactionFrequencyValue | AsString }})
     {% else %}
@@ -843,7 +843,7 @@ The logged-in person's information will be used to complete the registrar inform
             var rockContext = new RockContext();
             var registrationTemplate = new RegistrationTemplateService( rockContext ).Get( hfRegistrationTemplateId.Value.AsInteger() );
 
-            if ( registrationTemplate != null && ( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) ) )
+            if ( registrationTemplate != null && ( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, this.CurrentPerson ) ) )
             {
                 LoadStateDetails( registrationTemplate, rockContext );
                 ShowEditDetails( registrationTemplate, rockContext );
@@ -864,7 +864,7 @@ The logged-in person's information will be used to complete the registrar inform
 
             if ( registrationTemplate != null )
             {
-                if ( !UserCanEdit && !registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) )
+                if ( ! (UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, this.CurrentPerson ) ) || registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) )
                 {
                     mdDeleteWarning.Show( "You are not authorized to delete this registration template.", ModalAlertType.Information );
                     return;
@@ -1057,7 +1057,7 @@ The logged-in person's information will be used to complete the registrar inform
             ParseControls( true );
 
             var rockContext = new RockContext();
-        
+
             var registrationTemplateService = new RegistrationTemplateService( rockContext );
 
             var registrationTemplate = ( RegistrationTemplate ) null;
@@ -1221,6 +1221,27 @@ The logged-in person's information will be used to complete the registrar inform
                  && !registrationTemplate.FinancialGatewayId.HasValue )
             {
                 validationErrors.Add( "A Financial Gateway is required when the registration has a cost or additional fees or is configured to allow instances to set a cost." );
+            }
+
+            // Check security on category to verify they are authorized to use it.
+            var categoryId = cpCategory.SelectedValueAsInt();
+            if ( categoryId.HasValue )
+            {
+                var category = CategoryCache.Get( categoryId.Value );
+                if ( !category.IsAuthorized( Authorization.EDIT, CurrentPerson ) )
+                {
+                    var categoryValidator = cpCategory.RequiredFieldValidator;
+                    categoryValidator.IsValid = false;
+                    categoryValidator.ErrorMessage = "You are not authorized to create or edit templates for the selected category.";
+                    return;
+                }
+            }
+            else
+            {
+                var categoryValidator = cpCategory.RequiredFieldValidator;
+                categoryValidator.IsValid = false;
+                categoryValidator.ErrorMessage = "You must select a valid category.";
+                return;
             }
 
             if ( validationErrors.Any() )
@@ -1544,22 +1565,6 @@ The logged-in person's information will be used to complete the registrar inform
                         rockContext.SaveChanges();
 
                         SaveAttributes( new Registration().TypeId, "RegistrationTemplateId", registrationTemplate.Id.ToString(), RegistrationAttributesState, rockContext );
-
-                        // If this is a new template, give the current user and the Registration Administrators role administrative
-                        // rights to this template, and staff, and staff like roles edit rights
-                        if ( newTemplate )
-                        {
-                            registrationTemplate.AllowPerson( Authorization.ADMINISTRATE, CurrentPerson, rockContext );
-
-                            var registrationAdmins = groupService.Get( Rock.SystemGuid.Group.GROUP_EVENT_REGISTRATION_ADMINISTRATORS.AsGuid() );
-                            registrationTemplate.AllowSecurityRole( Authorization.ADMINISTRATE, registrationAdmins, rockContext );
-
-                            var staffLikeUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_LIKE_MEMBERS.AsGuid() );
-                            registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffLikeUsers, rockContext );
-
-                            var staffUsers = groupService.Get( Rock.SystemGuid.Group.GROUP_STAFF_MEMBERS.AsGuid() );
-                            registrationTemplate.AllowSecurityRole( Authorization.EDIT, staffUsers, rockContext );
-                        }
                     } );
 
                     var qryParams = new Dictionary<string, string>
@@ -2560,10 +2565,18 @@ The logged-in person's information will be used to complete the registrar inform
 
             if ( registrationTemplate == null )
             {
+                var parentCategory = new Category();
+
+                if ( parentCategoryId.HasValue )
+                {
+                    parentCategory = new CategoryService( rockContext ).Get( parentCategoryId.Value );
+                }
+
                 registrationTemplate = new RegistrationTemplate
                 {
                     Id = 0,
                     IsActive = true,
+                    Category = parentCategory,
                     CategoryId = parentCategoryId,
                     ConfirmationFromName = "{{ RegistrationInstance.ContactPersonAlias.Person.FullName }}",
                     ConfirmationFromEmail = "{{ RegistrationInstance.ContactEmail }}",
@@ -2598,8 +2611,8 @@ The logged-in person's information will be used to complete the registrar inform
 
             nbEditModeMessage.Text = string.Empty;
 
-            // User must have 'Edit' rights to block, or 'Administrate' rights to template
-            if ( !UserCanEdit && !registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, CurrentPerson ) )
+            // User must have 'Edit' rights to block, or 'Edit' rights to template
+            if ( !( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, CurrentPerson ) ) )
             {
                 readOnly = true;
                 nbEditModeMessage.Heading = "Information";
@@ -2927,7 +2940,7 @@ The logged-in person's information will be used to complete the registrar inform
             lRequiredSignedDocument.Visible = lRequiredSignedDocument.Text.IsNotNullOrWhiteSpace();
             lWorkflowType.Text = registrationTemplate.RegistrationWorkflowType != null ? registrationTemplate.RegistrationWorkflowType.Name : string.Empty;
             lWorkflowType.Visible = lWorkflowType.Text.IsNotNullOrWhiteSpace();
-            rcwRegistrantFormsSummary.Label = $"<strong>Registrant Forms</strong> ({registrationTemplate.Forms.Count}) <i class='ti ti-caret-down'></i>";
+            rcwRegistrantFormsSummary.Label = $"<strong>Registrant Forms</strong> ({registrationTemplate.Forms.Count}) <i class='ti ti-caret-down-filled'></i>";
             lRegistrantFormsSummary.Text = string.Empty;
 
             if ( registrationTemplate.Forms.Any() )
@@ -2971,7 +2984,7 @@ The logged-in person's information will be used to complete the registrar inform
                 .ToAttributeCacheList();
 
             rcwRegistrationAttributesSummary.Visible = registrationAttributeNameList.Any();
-            rcwRegistrationAttributesSummary.Label = $"<strong>Registration Attributes</strong> ({registrationAttributeNameList.Count}) <i class='ti ti-caret-down'></i>";
+            rcwRegistrationAttributesSummary.Label = $"<strong>Registration Attributes</strong> ({registrationAttributeNameList.Count}) <i class='ti ti-caret-down-filled'></i>";
 
             var registrationAttributeTextBuilder = new StringBuilder();
             foreach ( var registrationAttribute in registrationAttributeNameList )
@@ -4475,7 +4488,7 @@ The logged-in person's information will be used to complete the registrar inform
                 The "Minimum Initial Payment" field cannot be left blank if "Payment Plans" are enabled.
                 If the "Minimum Initial Payment" is blank, full payment is required, making payment plans unnecessary.
                 To avoid this conflict, require a value in the "Minimum Initial Payment" field when "Payment Plans" are enabled.
-             */            
+             */
             if ( paymentPlansFeatureData.GetValueIfFeatureSupportedOrDefault( p => p.IsPaymentPlanAllowed ) )
             {
                 cbMinimumInitialPayment.Required = true;
@@ -4504,7 +4517,7 @@ The logged-in person's information will be used to complete the registrar inform
         {
             var financialGatewayComponent = GetFinancialGatewayComponent( rockContext, registrationTemplate?.FinancialGatewayId );
             var isPaymentPlansFeatureSupported = IsPaymentPlansFeatureSupportedByFinancialGateway( financialGatewayComponent );
-            
+
             return new PaymentPlansFeatureData
             {
                 FinancialGatewayComponent = financialGatewayComponent,

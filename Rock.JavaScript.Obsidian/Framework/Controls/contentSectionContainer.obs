@@ -1,58 +1,14 @@
 <template>
-    <div class="content-section-container"
+    <div class="contentsection-container"
          :class="additionalSectionContainerClasses">
-        <div class="content-section-list">
+        <div class="contentsection-list">
             <slot />
         </div>
 
         <ContentSectionNav v-if="showSidebar"
-                           :sections="sections" />
+                           :sections="visibleSections" />
     </div>
 </template>
-
-<style>
-.content-section-container {
-    display: flex;
-    flex-direction: row;
-    gap: var(--spacing-large);
-    height: auto;
-    width: 100%;
-    align-items: flex-start;
-}
-
-.content-section-container > .content-section-nav {
-    height: 100%;
-    flex: 0 0 20%;
-    position: sticky;
-    top: 0;
-}
-
-.content-section-list {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 80%;
-    gap: var(--spacing-xlarge);
-    height: auto;
-    overflow-y: auto;
-    scroll-behavior: smooth;
-}
-
-.content-section-container.content-section-nav-left {
-    flex-direction: row-reverse;
-}
-
-@media (max-width: 767px) {
-    .content-section-container .content-section-nav {
-        display: none;
-    }
-}
-
-@media (min-width: 768px) and (max-width: 991px) {
-    .content-section-container > .content-section-nav {
-        top: 16px;
-    }
-}
-</style>
 
 <script setup lang="ts">
     import ContentSectionNav from "@Obsidian/Controls/Internal/contentSectionNav.obs";
@@ -99,9 +55,18 @@
 
     // #region Computed Values
 
+    /**
+     * Filters sections to only include those that have both title and icon.
+     */
+    const visibleSections = computed((): IContentSectionHolder[] => {
+        return sections.value.filter(section =>
+            section.title.value && section.icon.value
+        );
+    });
+
     /** Determines whether the sidebar should be currently shown. */
     const showSidebar = computed((): boolean => {
-        return props.sidebar ?? sections.value.length > 1;
+        return props.sidebar ?? visibleSections.value.length > 1;
     });
 
     /**
@@ -110,7 +75,7 @@
      */
     const additionalSectionContainerClasses = computed((): string[] => {
         return [
-            props.sidebarPosition === "right" ? "content-section-nav-right" : "content-section-nav-left"
+            props.sidebarPosition === "right" ? "contentsection-nav-right" : "contentsection-nav-left"
         ];
     });
 

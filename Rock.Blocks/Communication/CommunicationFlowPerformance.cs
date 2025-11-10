@@ -22,7 +22,6 @@ using System.Linq;
 using System.Linq.Dynamic.Core;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Crm.PersonProfile;
 using Rock.Data;
 using Rock.Enums.Communication;
 using Rock.Model;
@@ -42,7 +41,7 @@ namespace Rock.Blocks.Communication
     [DisplayName( "Communication Flow Performance" )]
     [Category( "Communication" )]
     [Description( "Displays the performance of a particular communication flow." )]
-    [IconCssClass( "fa fa-line-chart" )]
+    [IconCssClass( "ti ti-chart-line" )]
     // [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
@@ -73,6 +72,7 @@ namespace Rock.Blocks.Communication
         {
             public const string ParentPage = "ParentPage";
             public const string MessageMetricsPage = "MessageMetricsPage";
+            public const string MessagesMetricsPage = "MessagesMetricsPage";
             public const string PersonProfilePage = "PersonProfilePage";
         }
 
@@ -119,7 +119,13 @@ namespace Rock.Blocks.Communication
                 {
                     { "CommunicationFlow", PageParameter( PageParameterKey.CommunicationFlow ) },
                     { "CommunicationFlowInstance", "((CommunicationFlowInstanceKey))" },
-                    { "CommunicationFlowInstanceCommunication", "((Key))" }
+                    { "CommunicationFlowInstanceCommunication", "((CommunicationFlowInstanceCommunicationKey))" }
+                } ),
+                [NavigationUrlKey.MessagesMetricsPage] = this.GetLinkedPageUrl( AttributeKey.MessageMetricsPage, new Dictionary<string, string>
+                {
+                    { "CommunicationFlow", PageParameter( PageParameterKey.CommunicationFlow ) },
+                    { "CommunicationFlowCommunication", "((CommunicationFlowCommunicationKey))" },
+                    { "StartDateRange", "((StartDateRange))" }
                 } )
             };
         }
@@ -167,12 +173,6 @@ namespace Rock.Blocks.Communication
                 )
                 .FirstOrDefault();
 
-            if ( communicationFlowPerformanceBag?.ConversionGoalType == null )
-            {
-                // If there is no conversion goal, move on without processing further.
-                return communicationFlowPerformanceBag;
-            }
-
             // Get message instances. These are the actual messages that were (or will be) sent to recipients.
             communicationFlowPerformanceBag.Messages = ctx.CommunicationFlowInstanceCommunications
                 .Where( ic => ic.CommunicationFlowCommunication.CommunicationFlowId == communicationFlowId )
@@ -190,6 +190,7 @@ namespace Rock.Blocks.Communication
                         CommunicationFlowCommunicationName = ic.CommunicationFlowCommunication.Name,
                         cr.Communication.CommunicationType,
                         CommunicationFlowInstanceStartDate = ic.CommunicationFlowInstance.StartDate,
+                        ic.CommunicationFlowInstance.CommunicationFlow.ConversionGoalTimeframeInDays,
 
                         Clicked =
                             ctx.Interactions
@@ -227,7 +228,10 @@ namespace Rock.Blocks.Communication
                     UnsubscribeLevel = cr.UnsubscribeLevel,
                     ClickedDateTime = cr.Clicked,
                     ConvertedDateTime = cr.Converted,
-                    CommunicationFlowInstanceStartDate = cr.CommunicationFlowInstanceStartDate
+                    CommunicationFlowInstanceStartDate = cr.CommunicationFlowInstanceStartDate,
+                    ConversionGoalEndDate = cr.ConversionGoalTimeframeInDays.HasValue ?
+                        cr.CommunicationFlowInstanceStartDate.AddDays( cr.ConversionGoalTimeframeInDays.Value )
+                        : ( DateTime? ) null
                 } )
                 .ToList();
 
@@ -237,13 +241,16 @@ namespace Rock.Blocks.Communication
                 .Select( cfi => new
                 {
                     CommunicationFlowInstanceId = cfi.Id,
-                    UniquePersonCount = cfi.CommunicationFlowInstanceRecipients.Select( cfir => cfir.RecipientPersonAlias.PersonId ).Distinct().Count()
+                    UniquePersonAliasIds = cfi.CommunicationFlowInstanceRecipients.Select( cfir => cfir.RecipientPersonAliasId ).Distinct(),
+                    cfi.StartDate
                 } )
                 .ToList()
                 .Select( cfi => new CommunicationFlowInstanceBag
                 {
                     CommunicationFlowInstanceIdKey = IdHasher.Instance.GetHash( cfi.CommunicationFlowInstanceId ),
-                    UniquePersonCount = cfi.UniquePersonCount
+                    StartDate = cfi.StartDate,
+                    UniquePersonCount = cfi.UniquePersonAliasIds.Count(),
+                    UniquePersonAliasIdKeys = cfi.UniquePersonAliasIds.Select( paId => IdHasher.Instance.GetHash( paId ) ).ToList()
                 } )
                 .ToList();
 

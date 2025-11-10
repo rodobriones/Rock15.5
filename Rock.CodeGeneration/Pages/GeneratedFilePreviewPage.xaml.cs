@@ -8,7 +8,12 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
+
+using ColorCode;
+using ColorCode.Common;
+using ColorCode.Parsing;
 
 using Rock;
 using Rock.CodeGeneration.Utility;
@@ -190,6 +195,16 @@ namespace Rock.CodeGeneration.Pages
             FilePreviewDiffView.IsSideBySide = diffType == 2;
         }
 
+        private void SetCodeText( GeneratedFile file )
+        {
+            var formatter = new RichTextBlockFormatter();
+            var language = file.FileName.EndsWith( ".cs" )
+                ? Languages.CSharp
+                : ( file.FileName.EndsWith( ".obs" ) ? Languages.Html : Languages.Typescript );
+
+            formatter.FormatRichTextBlock( file.Content, language, FilePreviewContent );
+        }
+
         #endregion
 
         #region Event Handlers
@@ -207,7 +222,7 @@ namespace Rock.CodeGeneration.Pages
             {
                 FilePreviewDiffView.OldText = exportFile.OldContent;
                 FilePreviewDiffView.NewText = exportFile.File.Content;
-                FilePreviewContent.Text = exportFile.File.Content;
+                SetCodeText( exportFile.File );
                 FilePreviewContent.ScrollToHome();
                 FilePreviewPath.Text = $"Path: {exportFile.File.SolutionRelativePath}";
             }
@@ -215,7 +230,7 @@ namespace Rock.CodeGeneration.Pages
             {
                 FilePreviewDiffView.OldText = string.Empty;
                 FilePreviewDiffView.NewText = string.Empty;
-                FilePreviewContent.Text = string.Empty;
+                FilePreviewContent.Document.Blocks.Clear();
                 FilePreviewPath.Text = string.Empty;
             }
         }
@@ -350,7 +365,7 @@ namespace Rock.CodeGeneration.Pages
             {
                 FilePreviewDiffView.OldText = exportFile.OldContent;
                 FilePreviewDiffView.NewText = exportFile.File.Content;
-                FilePreviewContent.Text = exportFile.File.Content;
+                SetCodeText( exportFile.File );
                 FilePreviewContent.ScrollToHome();
                 FilePreviewPath.Text = $"Path: {exportFile.File.SolutionRelativePath}";
             }
@@ -358,10 +373,89 @@ namespace Rock.CodeGeneration.Pages
             {
                 FilePreviewDiffView.OldText = string.Empty;
                 FilePreviewDiffView.NewText = string.Empty;
-                FilePreviewContent.Text = string.Empty;
+                FilePreviewContent.Document.Blocks.Clear();
                 FilePreviewPath.Text = string.Empty;
             }
         }
+
+        #region Select/Unselect All
+
+        /// <summary>
+        /// Handles the Click event of the SelectAll control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
+        private void SelectAll_Click( object sender, RoutedEventArgs e )
+        {
+            if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
+            {
+                // Flat list
+                if ( viewModel.ExportFiles != null )
+                {
+                    foreach ( var file in viewModel.ExportFiles )
+                    {
+                        if ( file.IsWriteNeeded )
+                            file.IsExporting = true;
+                    }
+                }
+
+                // Grouped tree view
+                if ( viewModel.ExportFileGroups != null )
+                {
+                    foreach ( var group in viewModel.ExportFileGroups )
+                    {
+                        SetGroupExporting( group, true );
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles the Click event of the UnselectAll control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RoutedEventArgs"/> instance containing the event data.</param>
+        private void UnselectAll_Click( object sender, RoutedEventArgs e )
+        {
+            if ( DataContext is GeneratedFilePreviewPageViewModel viewModel )
+            {
+                // Flat list
+                if ( viewModel.ExportFiles != null )
+                {
+                    foreach ( var file in viewModel.ExportFiles )
+                    {
+                        file.IsExporting = false;
+                    }
+                }
+
+                // Grouped tree view
+                if ( viewModel.ExportFileGroups != null )
+                {
+                    foreach ( var group in viewModel.ExportFileGroups )
+                    {
+                        SetGroupExporting( group, false );
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets all files in the group to exporting or not.
+        /// </summary>
+        private void SetGroupExporting( ExportFileGroup group, bool export )
+        {
+            if ( group.ExportFiles == null ) return;
+
+            foreach ( var file in group.ExportFiles )
+            {
+                if ( file.IsWriteNeeded )
+                    file.IsExporting = export;
+            }
+        }
+
+        #endregion Select/Unselect All
+
+
 
         #endregion
 
@@ -429,7 +523,7 @@ namespace Rock.CodeGeneration.Pages
     }
 
     #region Support Classes
-    
+
     /// <summary>
     /// Wraps the generated file in a class that can be used in the list box
     /// to display more detailed information about the file.
@@ -525,7 +619,7 @@ namespace Rock.CodeGeneration.Pages
 
         #endregion
     }
-    
+
     /// <summary>
     /// Groups ExportFile instances by their folder path.
     /// </summary>

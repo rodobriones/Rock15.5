@@ -25,6 +25,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
 using Rock.Configuration;
+using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Tests.Shared
 {
@@ -241,6 +243,8 @@ namespace Rock.Tests.Shared
             sc.AddSingleton<IDatabaseConfiguration, DatabaseConfiguration>();
             sc.AddSingleton( hostingMock.Object );
 
+            sc.AddSingleton<IRockContextFactory, RockContextFactory>();
+
             configureApp?.Invoke( sc );
 
             var app = new RockApp( sc.BuildServiceProvider() );
@@ -344,6 +348,7 @@ namespace Rock.Tests.Shared
             {
                 if ( ReferenceEquals( RockApp.Current, App ) )
                 {
+                    RockCache.ClearAllCachedItems( false );
                     RockApp.Current = _previousApp;
                 }
                 else

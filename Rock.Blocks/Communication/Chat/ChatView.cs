@@ -514,6 +514,16 @@ namespace Rock.Blocks.Communication.Chat
                 }
 
                 var chatUserAuth = await chatHelper.GetChatUserAuthenticationAsync( person.Id, true );
+                var dataViewGuid = ChatHelper.GetChatConfiguration().DirectMessageAccessDataViewGuid;
+
+                bool dmAllowed = true;
+                if (dataViewGuid.HasValue)
+                {
+                    var dmDataView = DataViewCache.Get( dataViewGuid.Value, RockContext );
+                    var personIds = dmDataView.GetEntityIds();
+
+                    dmAllowed = personIds.Contains( person.Id );
+                }
 
                 return ActionOk( new ChatPersonDataBag
                 {
@@ -522,7 +532,8 @@ namespace Rock.Blocks.Communication.Chat
                     IsAgeVerificationRequired = false,
                     HasFailedAgeVerification = false,
                     AgeRestrictionTemplate = string.Empty,
-                    AgeVerificationTemplate = string.Empty
+                    AgeVerificationTemplate = string.Empty,
+                    IsDirectMessagingAllowed = dmAllowed,
                 } );
             }
         }
@@ -610,7 +621,7 @@ namespace Rock.Blocks.Communication.Chat
 <div class=""age-verification-wrapper"" style=""text-align: center; padding: 1.5rem;"">
   <!-- Font Awesome shield icon -->
   <div class=""icon"" style=""margin-bottom: 1.5rem;"">
-    <i class=""fas fa-shield-alt"" style=""font-size: 4rem; color: var(--color-info-strong);""></i>
+    <i class=""ti ti-shield-half"" style=""font-size: 4rem; color: var(--color-info-strong);""></i>
   </div>
   
   <h2 style=""color: var(--color-interface-strongest)"">
@@ -629,7 +640,7 @@ namespace Rock.Blocks.Communication.Chat
 <div class=""age-verification-wrapper"" style=""text-align: center; padding: 1.5rem;"">
   <!-- Font Awesome shield icon -->
   <div class=""icon"" style=""margin-bottom: 1.5rem;"">
-    <i class=""fas fa-user-lock"" style=""font-size: 4rem; color: var(--color-warning-strong);""></i>
+    <i class=""ti ti-user-shield"" style=""font-size: 4rem; color: var(--color-warning-strong);""></i>
   </div>
   
   <h2 style=""color: var(--color-interface-strongest)"">

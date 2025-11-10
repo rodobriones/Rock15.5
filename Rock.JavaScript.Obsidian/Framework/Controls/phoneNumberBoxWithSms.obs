@@ -4,14 +4,19 @@
                    v-bind="formFieldProps"
                    formGroupClasses="rock-phonenumber-box"
                    :rules="rules"
-                   name="phonenumberbox">
+                   name="phonenumberbox"
+                   :disabled="disabled">
         <template #default="{ uniqueId, field }">
             <div class="control-wrapper">
                 <div class="input-group phone-number-box" :class="inputGroupClasses">
                     <span v-if="availableCountryCodeOptions.length < 2" class="input-group-addon">
                         <i class="ti ti-phone"></i>
                     </span>
-                    <InputGroupDropDown v-else :items="availableCountryCodeOptions" v-model="countryCode" inputGroupClasses="input-group-addon" />
+                    <InputGroupDropDown v-else
+                                        v-model="countryCode"
+                                        :items="availableCountryCodeOptions"
+                                        inputGroupClasses="input-group-addon"
+                                        :disabled="disabled" />
                     <input v-model="number" :id="uniqueId" type="text" class="form-control" v-bind="field" />
                 </div>
                 <div v-if="(showSmsOptIn && !props.hideSms)">
@@ -32,7 +37,7 @@
     import { PhoneNumberBoxWithSmsControlBag } from "@Obsidian/ViewModels/Controls/phoneNumberBoxWithSmsControlBag";
     import { standardRockFormFieldProps, useStandardRockFormFieldProps } from "@Obsidian/Utility/component";
     import { normalizeRules } from "@Obsidian/ValidationRules";
-    import { getPhoneNumberAndSmsConfiguration, formatPhoneNumber, stripPhoneNumber } from "@Obsidian/Utility/phone";
+    import { getPhoneNumberConfiguration, getPhoneNumberAndSmsConfiguration, formatPhoneNumber, stripPhoneNumber } from "@Obsidian/Utility/phone";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import RockFormField from "./rockFormField.obs";
     import InputGroupDropDown from "./inputGroupDropDown.obs";
@@ -50,8 +55,13 @@
             default: ""
         },
 
-        /** When this is enabled, the SMS option will be hidden regardless of server settings. */
+        /** When this is enabled, the SMS option will be hidden. */
         hideSms: {
+            type: Boolean as PropType<boolean>,
+            default: false
+        },
+
+        disabled: {
             type: Boolean as PropType<boolean>,
             default: false
         },
@@ -94,7 +104,7 @@
     });
 
     const availableCountryCodeOptions = computed<ListItemBag[]>(() => {
-        if (availableCountryCodes.value.length == 0) {
+        if (availableCountryCodes.value.length === 0) {
             return [{ value: "1", text: "1" }];
         }
 
@@ -117,13 +127,13 @@
     function validatePhoneNumber(value: unknown): string | boolean {
         const rules = configuredRules.value;
 
-        if (!value || typeof (value) !== "string" || rules.length == 0) {
+        if (!value || typeof (value) !== "string" || rules.length === 0) {
             return true;
         }
 
         const val = stripPhoneNumber(value as string);
 
-        if (rules.length == 0) {
+        if (rules.length === 0) {
             return true;
         }
 
@@ -141,7 +151,9 @@
     /** Retrieve the country code data, validation data, and formatting data from the server */
     async function loadConfiguration(): Promise<void> {
         try {
-            const result = await getPhoneNumberAndSmsConfiguration();
+            const result = (showSmsOptIn && !props.hideSms)
+                ? await getPhoneNumberAndSmsConfiguration()
+                : await getPhoneNumberConfiguration();
 
             if (result) {
                 configuration.value = result;
@@ -164,7 +176,9 @@
 
     // #region Watchers
     watch(() => props.modelValue, () => {
-        autoSyncModelValue = false;
+        if (!props.disabled) {
+            autoSyncModelValue = false;
+        }
         countryCode.value = props.modelValue?.countryCode ?? "";
         number.value = props.modelValue?.number ?? "";
         isMessagingEnabled.value = props.modelValue?.isMessagingEnabled ?? false;
@@ -187,7 +201,7 @@
 
     watch([configuration, availableCountryCodes], () => {
         // If we don't have any country codes from the server, ignore
-        if (configuration.value == null || availableCountryCodes.value.length == 0) return;
+        if (configuration.value == null || availableCountryCodes.value.length === 0) return;
 
         // If no country code set or the set country code isn't in the list of available codes, then change it to the default
         if (countryCode.value == null || !availableCountryCodes.value.includes(countryCode.value)) {

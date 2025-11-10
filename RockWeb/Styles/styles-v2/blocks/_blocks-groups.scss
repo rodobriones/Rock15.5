@@ -4,9 +4,10 @@
 
 
 // =============================================================
-// Table of Content           
+// Table of Content
 //  + Group Viewer - styles for the group viewer block.
 //  + Group Scheduler v2 - styles for the Obsidian group scheduler block.
+//  + Group Schedule Status Board v2
 // =============================================================
 
 
@@ -39,6 +40,14 @@
 }
 // ====================== END GROUP VIEWER ======================
 
+// ====================== GROUP MAP ======================
+
+.group-map .panel-body > .form-inline > .pull-left > .form-group > .checkbox:first-child {
+  padding-left:            0;
+}
+
+// ====================== END GROUP MAP ======================
+
 
 // ======================== GROUP SCHEDULER ========================
 .group-scheduler-v2 {
@@ -51,7 +60,7 @@
   }
 
   .panel-toolbar-mobile {
-    padding:             var(--spacing-tiny) var(--spacing-medium);
+    padding:             var(--spacing-small) var(--spacing-medium);
   }
 
   .panel-body {
@@ -67,12 +76,16 @@
     flex:                1 1 auto;
     width:               100%;
     min-height:          100%;
-    padding:             var(--spacing-medium) 0 var(--spacing-large);
+    padding:             0 0 var(--spacing-large);
     overflow:            auto;
-    scroll-snap-type:    x mandatory;
+    scroll-snap-type:    x proximity;
     scroll-behavior:     smooth;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+
+    @media (min-width: $screen-medium) {
+      scroll-snap-type:  x mandatory;
+    }
   }
 
   .occurrence-date {
@@ -100,6 +113,16 @@
     }
   }
 
+  .occurrence-date-title-container {
+    height:              var(--spacing-xlarge);
+    position:            sticky;
+    top:                 0;
+    z-index:             1;
+    display:             flex;
+    align-items:         flex-end;
+    background-color:    var(--color-interface-softest);
+  }
+
   .occurrence-date-title {
     position:            sticky;
     left:                12px;
@@ -117,7 +140,7 @@
   .schedule-column {
     scroll-snap-align:   start;
     width:               calc(100% / var(--schedule-count));
-    padding:             0 var(--spacing-column);
+    padding:             0 var(--spacing-medium);
 
     @media (min-width: $screen-medium) {
       width:             360px;
@@ -127,6 +150,7 @@
 
   .card-sched {
     margin-bottom:       var(--spacing-small);
+    overflow:            visible;
 
     .location {
       margin-bottom:     var(--spacing-medium);
@@ -233,12 +257,27 @@
     left:                0;
     border-radius:       50px;
     box-shadow:          none;
+
+    &.bg-danger {
+      background-color: var(--color-danger-strong) !important;
+    }
+    &.bg-success {
+      background-color: var(--color-success-strong) !important;
+    }
+
   }
 
   .avatar {
     flex-shrink:         0;
     width:               24px;
     height:              24px;
+  }
+
+  .schedule-header-container {
+    position:          sticky;
+    top:               var(--spacing-xlarge);
+    z-index:           1;
+    background-color:  var(--color-interface-softest);
   }
 
   .schedule-header {
@@ -320,12 +359,6 @@
 
 .featured-content {
   .group-scheduler-v2 {
-    @media screen and (max-width: ($screen-medium - 1) ) {
-      .panel.panel-block {
-        height:          auto;
-      }
-    }
-
     .panel-body {
       position:          relative;
       display:           flex;
@@ -346,3 +379,68 @@
   }
 }
 // ====================== END GROUP SCHEDULER ======================
+
+// ====================== GROUP SCHEDULE STATUS BOARD ======================
+
+.schedule-status-board {
+  & th.location {
+    background: var(--color-interface-softest);
+    border-right: var(--color-interface-soft);
+  }
+  & td.schedule-location {
+    border-left: 1px solid var(--color-interface-soft);
+  }
+}
+
+.schedule-status-board-header {
+  position: sticky;
+  inset-block-start: 0; /* "top" */
+  z-index: 1;
+
+  tr {
+    th {
+    background: var(--color-interface-softest);
+    border-bottom-color: transparent !important;
+    box-shadow: inset 0 -1px 0 var(--color-interface-medium) !important; // Emulate bottom-border for position sticky
+    }
+  }
+}
+
+.location-scheduled-list {
+  & .person {
+  background: var(--color-interface-softest);
+}
+
+  & .person.pending {
+    color: var(--color-interface-medium);
+  }
+
+  & .slot {
+    border-bottom: 1px solid var(--color-interface-soft);
+  }
+
+}
+
+.group-schedule-roster {
+  .location {
+    border-radius: 0;
+    & > .panel-block {
+      border-radius: 0;
+    }
+    &:last-of-type {
+      border-bottom-left-radius: var(--rounded-medium);
+      border-bottom-right-radius: var(--rounded-medium);
+      .panel-block {
+        border-bottom-left-radius: var(--rounded-medium);
+        border-bottom-right-radius: var(--rounded-medium);
+      }
+    }
+  }
+}
+
+
+
+
+
+
+// ====================== END GROUP SCHEDULE STATUS BOARD ======================

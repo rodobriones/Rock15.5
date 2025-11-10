@@ -17,6 +17,7 @@
 
 using System;
 using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
 
 using Rock;
@@ -179,14 +180,12 @@ namespace Rock.Blocks.Core
             }
 
             box.IfValidProperty( nameof( box.Bag.ExpirationDate ),
-                () => {
-                    if ( !box.Bag.ExpirationDate.HasValue )
-                    {
-                        return false;
-                    }
+                () =>
+                {
                     entity.ExpirationDate = box.Bag.ExpirationDate?.DateTime;
                     return true;
                 }, true );
+
             box.IfValidProperty( nameof( box.Bag.Note ),
                 () => entity.Note = box.Bag.Note );
 
@@ -206,7 +205,10 @@ namespace Rock.Blocks.Core
         protected override IQueryable<PersonSignal> GetListQueryable( RockContext rockContext )
         {
             var personInView = this.RequestContext.GetContextEntity<Person>();
-            return base.GetListQueryable( rockContext ).Where( s => s.PersonId == personInView.Id );
+            return base.GetListQueryable( rockContext )
+                .Include( s => s.SignalType )
+                .Include( s => s.OwnerPersonAlias.Person )
+                .Where( s => s.PersonId == personInView.Id );
         }
 
         /// <inheritdoc/>
@@ -295,6 +297,18 @@ namespace Rock.Blocks.Core
                     entity.SaveAttributeValues( rockContext );
                 } );
 
+                // Recalculate the person's top signal so badges update immediately on refresh.
+                var person = new PersonService( rockContext )
+                    .Queryable()
+                    .Include( p => p.Signals )
+                    .FirstOrDefault( p => p.Id == entity.PersonId );
+
+                if ( person != null )
+                {
+                    person.CalculateSignals();
+                    rockContext.SaveChanges();
+                }
+
                 if ( isNew )
                 {
                     return ActionOk( GetGridBuilder() );
@@ -332,6 +346,19 @@ namespace Rock.Blocks.Core
 
             entityService.Delete( entity );
             RockContext.SaveChanges();
+
+            // Recalculate the person's top signal after deletion so badges update immediately on refresh.
+            var personId = entity.PersonId;
+            var person = new PersonService( RockContext )
+                .Queryable()
+                .Include( p => p.Signals )
+                .FirstOrDefault( p => p.Id == personId );
+
+            if ( person != null )
+            {
+                person.CalculateSignals();
+                RockContext.SaveChanges();
+            }
 
             return ActionOk();
         }

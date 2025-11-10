@@ -25,6 +25,8 @@ using System.Web;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using OpenXmlPowerTools;
+
 using Rock.Communication.Chat;
 using Rock.Data;
 using Rock.Model;
@@ -212,6 +214,7 @@ namespace Rock.Lava
             }
 
             mergeFields.Add( "IsChatEnabled", ChatHelper.IsChatEnabled );
+            mergeFields.Add( "ExperienceMode", Rock.Web.SystemSettings.GetValue( SystemKey.SystemSetting.TRAILBLAZER_MODE ).AsBoolean() ? "Trailblazer" : "Essentials" );
 
             return mergeFields;
         }
@@ -443,45 +446,95 @@ namespace Rock.Lava
         /// <returns></returns>
         public static IDataViewDefinition GetDataViewDefinitionFromInputParameter( object input, RockContext rockContext )
         {
-            IDataViewDefinition dataView = null;
+            /*  Test Lava for all options
+                {% assign dataViewAsInt = 10 %}
+                {% assign dataViewAsStringInt = dataViewAsInt | AsString %}
+                {% assign dataViewAsIdKey = dataViewAsInt | ToIdHash %}
+
+                {% dataview id:'{{ dataViewAsInt }}' %}
+                    {% assign dataViewAsGuid = dataview.Guid %}
+                    {% assign dataViewAsStringInt = dataViewAsGuid | AsString %}
+                    {% assign dataViewName = dataview.Name %}
+    
+                    As DataView: {{ CurrentPerson | IsInDataView:dataview }} ({{ dataview }})<br>
+                {% enddataview %}
+
+                As Int: {{ CurrentPerson | IsInDataView:dataViewAsInt }} ({{ dataViewAsInt }})<br>
+                As String Int: {{ CurrentPerson | IsInDataView:dataViewAsStringInt }} ({{ dataViewAsStringInt }})<br>
+                <br>
+                As IdKey: {{ CurrentPerson | IsInDataView:dataViewAsIdKey }} ({{ dataViewAsIdKey }})<br>
+                <br>
+                As Guid: {{ CurrentPerson | IsInDataView:dataViewAsGuid }} ({{ dataViewAsGuid }})<br>
+                As String Guid: {{ CurrentPerson | IsInDataView:dataViewAsStringInt }} ({{ dataViewAsStringInt }})<br>
+                <br>
+                As Name: {{ CurrentPerson | IsInDataView:dataViewName }} ({{ dataViewName }})<br>
+            */
 
             // Parse the input object for a dataView.
             if ( input is IDataViewDefinition dv )
             {
-                dataView = dv;
+                return dv;
             }
-            else if ( input is string s )
+
+            // Retrieve by type int
+            if ( input is int i )
             {
-                var inputAsGuid = s.AsGuidOrNull();
-                if ( inputAsGuid != null )
-                {
-                    // If the input is a Guid, retrieve the corresponding DataView.
-                    dataView = DataViewCache.Get( inputAsGuid.Value );
-                }
-                else
-                {
-                    var inputAsInt = s.AsIntegerOrNull();
-                    if ( inputAsInt != null )
-                    {
-                        // If the input is an integer, retrieve the corresponding dataView.
-                        dataView = DataViewCache.Get( inputAsInt.Value );
-                    }
-                    else
-                    {
-                        // If the input is a string, retrieve by name.
-                        var dataViewService = new DataViewService( rockContext );
-
-                        var inputAsString = s.ToStringSafe().Trim();
-                        var dataViewId = dataViewService.Queryable()
-                            .Where( d => d.Name != null && d.Name.Equals( inputAsString ) )
-                            .Select( d => d.Id )
-                            .FirstOrDefault();
-
-                        dataView = DataViewCache.Get( dataViewId );
-                    }
-                }
+                return DataViewCache.Get( i );
             }
-            return dataView;
+
+            // Retrieve by type guid
+            if ( input is Guid g )
+            {
+                return DataViewCache.Get( g );
+            }
+
+            // If it's not string we're run out of types
+            if ( !(input is string) )
+            {
+                return null;
+            }
+
+            //
+            // String Logic
+            //
+
+            var inputAsString = input.ToStringSafe().Trim();
+
+            // Check if input is a string of a Guid
+            var inputAsGuid = inputAsString.AsGuidOrNull();
+            if ( inputAsGuid != null )
+            {
+                return DataViewCache.Get( inputAsGuid.Value );
+            }
+
+            // Check if input is a string of an int
+            var inputAsInt = inputAsString.AsIntegerOrNull();
+            if ( inputAsInt != null )
+            {
+                return DataViewCache.Get( inputAsInt.Value );
+            }
+
+            // Check if input is an IdKey
+            var dataView = DataViewCache.GetByIdKey( inputAsString );
+            if ( dataView != null )
+            {
+                return dataView;
+            }
+
+            // If the input is a string, retrieve by name.
+            var dataViewService = new DataViewService( rockContext );
+            var dataViewId = dataViewService.Queryable()
+                .Where( d => d.Name != null && d.Name.Equals( inputAsString ) )
+                .Select( d => d.Id )
+                .FirstOrDefault();
+
+            if ( dataViewId != 0 )
+            {
+                return DataViewCache.Get( dataViewId );
+            }
+            
+            // Ran out of options...
+            return null;
         }
 
         /// <summary>
@@ -872,95 +925,6 @@ namespace Rock.Lava
             }
 
             return true;
-        }
-
-        #endregion
-
-        #region RockLiquid Lava Code
-
-        /// <summary>
-        /// Determines whether the specified command is authorized within the context.
-        /// </summary>
-        /// <param name="context">The context.</param>
-        /// <param name="command">The command.</param>
-        /// <returns>
-        ///   <c>true</c> if the specified command is authorized; otherwise, <c>false</c>.
-        /// </returns>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static bool IsAuthorized( DotLiquid.Context context, string command )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
-        }
-
-        /// <summary>
-        /// Gets the current person.
-        /// </summary>
-        /// <param name="context">The context.</param>
-        /// <returns>The current person or null if not found.</returns>
-        /// <exception cref="ArgumentNullException">context</exception>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static Person GetCurrentPerson( DotLiquid.Context context )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
-        }
-
-        /// <summary>
-        /// Parses the Lava Command markup, first resolving merge fields and then harvesting any provided parameters.
-        /// </summary>
-        /// <param name="markup">The Lava Command markup.</param>
-        /// <param name="context">The DotLiquid context.</param>
-        /// <param name="parms">
-        /// A dictionary into which any parameters discovered within the <paramref name="markup"/> will be added or replaced.
-        /// Default values may be pre-loaded into this collection, and will be overwritten if a matching key is present within the <paramref name="markup"/>.
-        /// Note that parameter keys should be added in lower case.
-        /// <para>
-        /// When searching the <paramref name="markup"/> for key/value parameter pairs, the following <see cref="Regex"/> pattern will be used: @"\S+:('[^']+'|\d+)".
-        /// This means that the following patterns will be matched: "key:'value'" OR "key:integer". While this should work for most - if not all - Lava Command parameters,
-        /// you can always choose to not use this helper method and instead roll your own implementation.
-        /// </para>
-        /// </param>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static void ParseCommandMarkup( string markup, DotLiquid.Context context, Dictionary<string, string> parms )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
-        }
-
-        /// <summary>
-        /// Parse the provided Lava template using the current Lava engine, and write any errors to the exception log.
-        /// </summary>
-        /// <param name="content"></param>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static void VerifyParseTemplateForCurrentEngine( string content )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
-        }
-
-        /// <summary>
-        /// Wrap an existing Exception if it is not a LavaException.
-        /// </summary>
-        /// <param name="ex"></param>
-        /// <returns></returns>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static LavaException ConvertToLavaException( Exception ex )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
-        }
-
-        /// <summary>
-        /// Create a DotLiquid Template object from a string.
-        /// </summary>
-        /// <param name="templateString"></param>
-        /// <returns></returns>
-        [Obsolete( "This method was for DotLiquid which is no longer supported." )]
-        [RockObsolete( "18.0" )]
-        public static DotLiquid.Template CreateDotLiquidTemplate( string templateString )
-        {
-            throw new NotSupportedException( "DotLiquid is no longer supported." );
         }
 
         #endregion

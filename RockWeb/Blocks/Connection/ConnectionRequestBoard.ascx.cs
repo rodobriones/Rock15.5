@@ -144,19 +144,48 @@ namespace RockWeb.Blocks.Connection
         Order = 13,
         Key = AttributeKey.ConnectionTypes )]
 
+    [BooleanField(
+        "Limit to Assigned Connections",
+        DefaultBooleanValue = false,
+        Description = "When enabled, only requests assigned to the current person will be shown.",
+        Key = AttributeKey.OnlyShowAssigned,
+        IsRequired = true,
+        Order = 14 )]
+
+    [LinkedPage(
+        "Connection Request History Page",
+        Description = "Page used to display history details.",
+        IsRequired = true,
+        DefaultValue = Rock.SystemGuid.Page.GROUP_VIEWER,
+        Order = 15,
+        Key = AttributeKey.ConnectionRequestHistoryPage )]
+
+    [LinkedPage(
+        "Bulk Update Requests",
+        Description = "Page used to update selected connection requests",
+        IsRequired = true,
+        DefaultValue = Rock.SystemGuid.Page.CONNECTION_REQUESTS_BULK_UPDATE,
+        Order = 16,
+        Key = AttributeKey.BulkUpdateRequestsPage )]
+
+    #endregion Block Attributes
+
+    #region Advanced Settings Block Attributes
+
     [CustomCheckboxListField(
         "Default Filtered Connection States",
         "Specifies the default states that should be used for the Connection State Filter.",
         "Active^Active,Inactive^Inactive,FutureFollowUp^Future Follow Up,Connected^Connected",
         false,
         "Active",
-        Order = 14,
+        Category = "Advanced",
+        IsRequired = true,
         Key = AttributeKey.DefaultFilteredConnectionStates )]
 
     [CustomCheckboxListField(
         "Default Filtered Connection Statuses",
         "Specifies the default statuses that should be used for the Connection Statuses Filter.",
-        @"SELECT 
+        @"SELECT
     cs.[Id] AS [Value]
     , cs.[Name] + ' (' + ct.[Name] + ')' AS [Text]
 FROM [ConnectionStatus] cs
@@ -165,34 +194,10 @@ WHERE cs.[IsActive] = 1
 ORDER BY ct.[Name], cs.[Name]",
         false,
         "",
-        Order = 15,
+        Category = "Advanced",
         Key = AttributeKey.DefaultFilteredConnectionStatuses )]
 
-    [BooleanField(
-        "Limit to Assigned Connections",
-        DefaultBooleanValue = false,
-        Description = "When enabled, only requests assigned to the current person will be shown.",
-        Key = AttributeKey.OnlyShowAssigned,
-        IsRequired = true,
-        Order = 16 )]
-
-    [LinkedPage(
-        "Connection Request History Page",
-        Description = "Page used to display history details.",
-        IsRequired = true,
-        DefaultValue = Rock.SystemGuid.Page.GROUP_VIEWER,
-        Order = 17,
-        Key = AttributeKey.ConnectionRequestHistoryPage )]
-
-    [LinkedPage(
-        "Bulk Update Requests",
-        Description = "Page used to update selected connection requests",
-        IsRequired = true,
-        DefaultValue = Rock.SystemGuid.Page.CONNECTION_REQUESTS_BULK_UPDATE,
-        Order = 18,
-        Key = AttributeKey.BulkUpdateRequestsPage )]
-
-    #endregion Block Attributes
+    #endregion Advanced Settings Block Attributes
 
     [ContextAware( typeof( Person ), IsConfigurable = false )]
     [Rock.SystemGuid.BlockTypeGuid( "28DBE708-E99B-4879-A64D-656C030D25B5" )]
@@ -678,7 +683,7 @@ ORDER BY ct.[Name], cs.[Name]",
 
         private void LbUpdateConnections_Click( object sender, EventArgs e )
         {
-            var selectedItems = new List<int>();          
+            var selectedItems = new List<int>();
 
             if ( gRequests.SelectedKeys.Count == 0 )
             {
@@ -947,7 +952,7 @@ ORDER BY ct.[Name], cs.[Name]",
                     IncrementRequestOrder( requestsOfStatus, newIndex, rockContext );
                 }
                 // A Connection Request remained in its original status and was moved up in order.
-                else if ( newIndex < oldIndex ) 
+                else if ( newIndex < oldIndex )
                 {
                     IncrementRequestOrder( requestsOfStatus, newIndex, rockContext );
                 }
@@ -1121,7 +1126,7 @@ ORDER BY ct.[Name], cs.[Name]",
             aRequestModalViewModeProfileLink.Attributes["href"] = string.Format( "/person/{0}", viewModel.PersonId );
             btnRequestModalViewModeTransfer.Visible = DoShowTransferButton();
 
-            /* 
+            /*
                 08/09/2022 - SK
                 This is special case where we are not using viewModel.CanConnect in order to make this align with older ConnectionRequestDetail block.
                 CanConnect() method use RequiresPlacementGroupToConnect and AssignedGroupId are also being used in calculation
@@ -2271,8 +2276,17 @@ ORDER BY ct.[Name], cs.[Name]",
                     w.TriggerType == ConnectionWorkflowTriggerType.Manual &&
                     w.WorkflowType != null &&
                     ( w.ManualTriggerFilterConnectionStatusId == null || w.ManualTriggerFilterConnectionStatusId == connectionRequest.ConnectionStatusId ) )
-                .OrderBy( w => w.WorkflowType.Name )
                 .Distinct();
+
+            var workflowTypeOrder = connectionOpportunity.GetAdditionalSettingsOrNull<List<int>>( "WorkflowTypeOrder" ) ?? new List<int>();
+
+            var orderedManualWorkflows = manualWorkflows
+                .OrderBy( w =>
+                {
+                    var index = workflowTypeOrder.IndexOf( w.WorkflowTypeId ?? -1 );
+                    return index == -1 ? int.MaxValue : index;
+                } )
+                .ThenBy( w => w.WorkflowType.Name );
 
             var person = connectionRequest.PersonAlias?.Person;
             if ( person == null )
@@ -2284,7 +2298,7 @@ ORDER BY ct.[Name], cs.[Name]",
             var workflowsNeedingDataViewChecks = new List<ConnectionWorkflow>();
             var authorizedWorkflows = new List<ConnectionWorkflow>();
 
-            foreach ( var manualWorkflow in manualWorkflows )
+            foreach ( var manualWorkflow in orderedManualWorkflows )
             {
                 if ( ( manualWorkflow.WorkflowType.IsActive ?? true ) && manualWorkflow.WorkflowType.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
                 {
@@ -2501,12 +2515,12 @@ ORDER BY ct.[Name], cs.[Name]",
                 if ( isMergeDocumentExport )
                 {
                     // If the export is as a result of the MergeTemplate button click then the ConnectionRequest itself is used as the data source for the grid.
-                    // This is done to avoid any issues that may arise from the Grid trying to build additionalMergeProperties using the viewModel. see issue #5405 
+                    // This is done to avoid any issues that may arise from the Grid trying to build additionalMergeProperties using the viewModel. see issue #5405
                     gRequests.SetLinqDataSource( _ConnectionRequestViewModelsWithFullModel.Select( a => a.ConnectionRequest ).AsQueryable() );
                 }
                 else
                 {
-                    // If its an excel export the ConnectionRequestViewModel is used so the data exported is limited. 
+                    // If its an excel export the ConnectionRequestViewModel is used so the data exported is limited.
                     gRequests.SetLinqDataSource( _ConnectionRequestViewModelsWithFullModel.Select( a => ( ConnectionRequestViewModel ) a ).AsQueryable() );
                 }
             }
@@ -2796,7 +2810,7 @@ ORDER BY ct.[Name], cs.[Name]",
             {
                 // Open the workflow detail page.
                 script = $@"
-<script language='javascript' type='text/javascript'> 
+<script language='javascript' type='text/javascript'>
     Sys.Application.add_load(openWorkflowEntryPage);
     function openWorkflowEntryPage() {{
         Sys.Application.remove_load( openWorkflowEntryPage );
@@ -2809,7 +2823,7 @@ ORDER BY ct.[Name], cs.[Name]",
                 // Show a modal message dialog, and open the workflow detail page when the dialog is closed.
                 message = message.SanitizeHtml( false ).Replace( "'", "&#39;" );
                 script = $@"
-<script language='javascript' type='text/javascript'> 
+<script language='javascript' type='text/javascript'>
     Sys.Application.add_load(openWorkflowEntryPage);
     function openWorkflowEntryPage() {{
         Sys.Application.remove_load( openWorkflowEntryPage );
@@ -3918,6 +3932,11 @@ ORDER BY ct.[Name], cs.[Name]",
         /// <param name="e"></param>
         protected void lbApplyFilter_Click( object sender, EventArgs e )
         {
+            if ( !Page.IsValid )
+            {
+                return;
+            }
+
             SaveSettingByConnectionType( FilterKey.DateRange, sdrpLastActivityDateRangeFilter.DelimitedValues );
             SaveSettingByConnectionType( FilterKey.Requester, ppRequesterFilter.PersonId.ToStringSafe() );
             SaveSettingByConnectionType( FilterKey.Statuses, cblStatusFilter.SelectedValues.AsDelimited( DefaultDelimiter ) );
@@ -3983,6 +4002,8 @@ ORDER BY ct.[Name], cs.[Name]",
                 Text = cs.ToString().SplitCase()
             } );
             cblStateFilter.DataBind();
+
+            cblStateFilter.Required = true;
 
             cblLastActivityFilter.DataSource = GetConnectionActivityTypes().Select( cat => new
             {
@@ -4548,6 +4569,12 @@ ORDER BY ct.[Name], cs.[Name]",
             if ( connectionOpportunity.ShowCampusOnTransfer )
             {
                 cpTransferCampus.IncludeInactive = false;
+
+                // Filter campuses to only those associated with the selected connection opportunity for transfer
+                var campusIds = connectionOpportunity.ConnectionOpportunityCampuses.Select( c => c.CampusId ).ToList();
+                var availableCampuses = CampusCache.All().Where( c => campusIds.Contains( c.Id ) && ( c.IsActive ?? false ) ).ToList();
+                cpTransferCampus.Campuses = availableCampuses;
+
                 cpTransferCampus.SetValue( connectionRequest.CampusId );
             }
         }
@@ -6229,7 +6256,7 @@ ORDER BY ct.[Name], cs.[Name]",
             {
                 get
                 {
-                    return string.Format( @"<p>{0}</p><p class=""text-muted"">{1}</p>", ActivityTypeName, Note );
+                    return string.Format( @"<p class=""mb-0"">{0}</p><p class=""text-muted"">{1}</p>", ActivityTypeName, Note );
                 }
             }
 

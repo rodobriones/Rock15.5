@@ -17,6 +17,12 @@ module.exports = {
         ecmaVersion: 6,
         sourceType: "module"
     },
+    ignorePatterns: [
+        "dist/",
+        "Framework/ViewModels/",
+        "shims-vue.d.ts",
+        ".eslintrc.js"
+    ],
     rules: {
         // Warn if tabs are used anywhere in a file.
         "no-tabs": "warn",
@@ -103,11 +109,15 @@ module.exports = {
         "@typescript-eslint/brace-style": ["warn", "stroustrup"],
 
         // Make unwanted white-space inside parenthesis an error.
-        "space-in-parens": ["error", "never"]
+        "space-in-parens": ["error", "never"],
+
+        // Require === and !== instead of == and !=, except when comparing with
+        // null or literal values.
+        "eqeqeq": ["error", "smart"],
     },
     overrides: [
         {
-            "files": ["src/**/*.ts", "src/**/*.vue", "src/**/*.obs"],
+            "files": ["**/*.ts", "**/*.obs"],
             "rules": {
                 // Disable undefined use warnings, TypeScript will tell us.
                 "no-undef": 0

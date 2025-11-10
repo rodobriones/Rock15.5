@@ -144,10 +144,10 @@
 
                     <span v-if="row.remoteSettlementAmountStatus !== 0" class="ml-1 text-xs">
                         <i v-if="row.remoteSettlementAmountStatus === 1"
-                           class="ti ti-circle text-warning"
+                           class="ti ti-circle-filled text-warning"
                            title="The batch totals do not match the remote settlement amount."></i>
                         <i v-else
-                           class="ti ti-circle text-success"
+                           class="ti ti-circle-filled text-success"
                            title="The batch totals match the remote settlement amount."></i>
                     </span>
                 </div>
@@ -539,7 +539,7 @@
         const r = <Row>row;
 
         if (r.variance) {
-            if (r.variance.count != 0) {
+            if (r.variance.count !== 0) {
                 return 2;
             }
             else {

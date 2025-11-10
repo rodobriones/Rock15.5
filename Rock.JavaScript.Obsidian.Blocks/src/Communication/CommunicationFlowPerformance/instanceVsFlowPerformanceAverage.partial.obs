@@ -1,37 +1,13 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <Panel v-if="hasSentCommunications"
+    <Panel v-if="hasData"
            hasFullscreen
-           panelBodyCssClass="chart-container"
            title="Instance vs. Flow Performance Average">
-        <BarChart :modelValue="dataPoints"
-                  :axes="{
-                    label: {
-                        type: 'string'
-                    },
-                    value: {
-                        type: 'percent',
-                        maxDecimalPlaces: 2,
-                        limits: { min: 0 },
-                        tooltip: {
-                            hide: true
-                        }
-                    }
-                }"
-                  :barLabels="{
-                    inside: {
-                        formatter: ({ value }) => {
-                            return value.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 2 });
-                        }
-                    },
-                    outside: {
-                        formatter: ({ seriesName }) => seriesName
-                    }
-                }"
-                  :legend="{
-                    hide: true
-                }"
-                  :seriesSort="[SeriesName.Instance, SeriesName.Instances, SeriesName.Average]" />
+        <BarChart :series="data.series"
+                  :labels="data.labels"
+                  :barLabels="barLabels"
+                  hideLegend
+                  type="percent" />
     </Panel>
 
     <NothingToShow v-else title="Instance vs. Flow Performance Average" />
@@ -48,11 +24,12 @@
     import NothingToShow from "./nothingToShow.partial.obs";
     import BarChart from "@Obsidian/Controls/barChart.obs";
     import Panel from "@Obsidian/Controls/panel.obs";
-    import { Enumerable, GroupedEnumerable } from "@Obsidian/Utility/linq";
-    import { ChartNumericDataPointBag } from "@Obsidian/ViewModels/Reporting/chartNumericDataPointBag";
-    import { MessageBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/messageBag";
+    import { BarLabelsConfig, BarSeries } from "@Obsidian/Core/Controls/chart";
+    import { Enumerable } from "@Obsidian/Utility/linq";
+    import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { isNullish } from "@Obsidian/Utility/util";
     import { CommunicationFlowInstanceBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/communicationFlowInstanceBag";
+    import { MessageBag } from "@Obsidian/ViewModels/Blocks/Communication/CommunicationFlowPerformance/messageBag";
 
     /**
      * In terms of metrics, the percentage of PEOPLE who achieved the conversion goal is most important,
@@ -89,91 +66,153 @@
 
     // #region Computed Values
 
-    const hasSentCommunications = computed<boolean>(() => {
+    const barLabels = computed<BarLabelsConfig>(() => {
+        return {
+            outside: {
+                formatter: ({ seriesName }) => {
+                    return seriesName;
+                }
+            },
+            inside: {
+                formatter: ({ formattedValue, value }) => {
+                    return formattedValue ?? value.toLocaleString(undefined, { style: "percent", maximumFractionDigits: 0 });
+                }
+            }
+        };
+    });
+
+    const hasData = computed<boolean>(() => {
         // Check if there are any recipients with a sent date.
-        return Enumerable.from(props.messages).any(m => !!m.sentDateTime);
+        return Enumerable.from(data.value.series).any(s => !!s.data.length);
     });
 
-    const allMessagesGroupedByInstance = computed<GroupedEnumerable<string, MessageBag>[]>(() => {
-        // Group messages by their instance ID.
-        return Enumerable.from(props.allMessages)
-            .groupBy(m => m.communicationFlowInstanceIdKey)
-            .ofType((g): g is GroupedEnumerable<string, MessageBag> => !isNullish(g))
-            .toArray();
-    });
-
-    const dataPoints = computed<ChartNumericDataPointBag[]>(() => {
-        // Calculate conversion and unsubscribe rates for each instance.
-        const allInstanceRates = Enumerable
-            .from(allMessagesGroupedByInstance.value)
-            .select(messagesByInstance => {
-                const messageCount = messagesByInstance.count();
-                const personCount = Enumerable.from(props.instances).where(i => i.communicationFlowInstanceIdKey === messagesByInstance.key).select(i => i.uniquePersonCount).firstOrDefault(0);
-                // Count the number of PEOPLE who converted, not the number of conversion events.
-                const conversionCount = messagesByInstance
-                    .groupBy(m => m.personAliasIdKey)
-                    .count(g => g.any(m => !!m.convertedDateTime));
-                const unsubscribeCount = messagesByInstance.count(m => !!m.unsubscribedDateTime);
-
-                return {
-                    communicationFlowInstanceIdKey: messagesByInstance.key,
-                    rates: {
-                        conversionRate: personCount ? conversionCount / personCount : 0,
-                        unsubscribeRate: messageCount ? unsubscribeCount / personCount : 0
-                    }
-                };
-            })
-            .toDictionary(ir => ir.communicationFlowInstanceIdKey, ir => ir.rates);
-
-        // If there are no instances, return an empty array.
-        if (allInstanceRates.size === 0) {
-            return [];
-        }
-
-        const selectedInstanceRates = Enumerable
+    const selectedInstanceCount = computed<number>(() => {
+        return Enumerable
             .from(props.messages)
             .select(m => m.communicationFlowInstanceIdKey)
-            .ofType((m): m is string => !isNullish(m))
+            .where(id => !isNullish(id))
             .distinct()
-            .where(k => allInstanceRates.has(k))
-            .select(k => allInstanceRates.get(k)!)
-            .toArray();
+            .count();
+    });
 
-        const dataPoints: ChartNumericDataPointBag[] = [];
-
-        // Add data points for the average rates of selected instances.
-        if (selectedInstanceRates.length > 0) {
-            dataPoints.push({
-                seriesName: selectedInstanceRates.length > 1 ? SeriesName.Instances : SeriesName.Instance,
-                label: "Conversion Rate",
-                value: Enumerable.from(selectedInstanceRates).average(i => i.conversionRate),
-                color: "#38A169"
-            });
-
-            dataPoints.push({
-                seriesName: selectedInstanceRates.length > 1 ? SeriesName.Instances : SeriesName.Instance,
-                label: "Unsubscribe Rate",
-                value: Enumerable.from(selectedInstanceRates).average(i => i.unsubscribeRate),
-                color: "#E53E3E"
-            });
+    const selectedInstanceConversionRate = computed((): number => {
+        if (props.uniquePersonCount === 0) {
+            return 0;
         }
 
-        // Add data points for the average rates of all instances.
-        dataPoints.push({
-            seriesName: SeriesName.Average,
-            label: "Conversion Rate",
-            value: Enumerable.from(allInstanceRates.values()).average(i => i.conversionRate),
-            color: "#CDEAE1"
-        });
+        const selectedConversionCount = Enumerable
+            .from(props.messages)
+            .groupBy(m => m.personAliasIdKey)
+            .count(g => !!g.key && g.any(m => {
+                const instanceConversionGoalEndDate = RockDateTime.parseISO(m.conversionGoalEndDate ?? "");
 
-        dataPoints.push({
-            seriesName: SeriesName.Average,
-            label: "Unsubscribe Rate",
-            value: Enumerable.from(allInstanceRates.values()).average(i => i.unsubscribeRate),
-            color: "#FAD8D8"
-        });
+                if (!instanceConversionGoalEndDate) {
+                    // If the instance doesn't have an end date,
+                    // then treat it as an instance where conversion goal
+                    // tracking is indefinite.
+                    return !!m.convertedDateTime;
+                }
+                else {
+                    const conversionDate = RockDateTime.parseISO(m.convertedDateTime ?? "");
+                    return !!conversionDate && !conversionDate.isLaterThan(instanceConversionGoalEndDate);
+                }
+            }));
 
-        return dataPoints;
+        return selectedConversionCount / props.uniquePersonCount;
+    });
+
+    const averageConversionRate = computed((): number => {
+        return Enumerable
+            .from(props.allMessages)
+            .groupBy(m => m.communicationFlowInstanceIdKey)
+            .select(g => {
+                const instanceMessagesByPerson = g
+                    .groupBy(m => m.personAliasIdKey)
+                    .toArray();
+
+                const uniquePeopleInInstanceCount = instanceMessagesByPerson.length;
+
+                if (uniquePeopleInInstanceCount === 0) {
+                    return 0;
+                }
+
+                const instanceConversionGoalEndDate = RockDateTime.parseISO(g.firstOrDefault()?.conversionGoalEndDate ?? "");
+
+                const uniquePeopleInInstanceWhoAchievedGoalCount = Enumerable
+                    .from(instanceMessagesByPerson)
+                    .count(g => !!g.key && g.any(m => {
+                        const conversionDate = RockDateTime.parseISO(m.convertedDateTime ?? "");
+                        return !!conversionDate && (!instanceConversionGoalEndDate || !conversionDate.isLaterThan(instanceConversionGoalEndDate));
+                    }));
+
+                return uniquePeopleInInstanceWhoAchievedGoalCount / uniquePeopleInInstanceCount;
+            })
+            .average(r => r);
+    });
+
+    const selectedInstanceUnsubscribeRate = computed((): number => {
+        if (props.uniquePersonCount === 0) {
+            return 0;
+        }
+
+        const selectedInstanceUnsubscribeCount = Enumerable
+            .from(props.messages)
+            .groupBy(m => m.personAliasIdKey)
+            .count(g => !!g.key && g.any(m => !!m.unsubscribedDateTime));
+
+        return selectedInstanceUnsubscribeCount / props.uniquePersonCount;
+    });
+
+    const averageUnsubscribeRate = computed((): number => {
+        return Enumerable
+            .from(props.allMessages)
+            .groupBy(m => m.communicationFlowInstanceIdKey)
+            .select(g => {
+                const instanceMessagesByPerson = g
+                    .groupBy(m => m.personAliasIdKey)
+                    .toArray();
+
+                const uniquePeopleInInstanceCount = instanceMessagesByPerson.length;
+
+                if (uniquePeopleInInstanceCount === 0) {
+                    return 0;
+                }
+
+                const uniquePeopleInInstanceWhoUnsubscribedCount = Enumerable
+                    .from(instanceMessagesByPerson)
+                    .count(g => !!g.key && g.any(m => !!m.unsubscribedDateTime));
+
+                return uniquePeopleInInstanceWhoUnsubscribedCount / uniquePeopleInInstanceCount;
+            })
+            .average(r => r);
+    });
+
+    const data = computed<{ series: BarSeries[]; labels: string[]; }>(() => {
+        if (props.messages.length === 0 || props.uniquePersonCount === 0) {
+            return { series: [], labels: [] };
+        }
+
+        return {
+            labels: ["Conversion Rate", "Unsubscribe Rate"],
+            series: [
+                {
+                    label: selectedInstanceCount.value > 1 ? SeriesName.Instances : SeriesName.Instance,
+                    data: [
+                        selectedInstanceConversionRate.value,
+                        selectedInstanceUnsubscribeRate.value
+                    ],
+                    color: ["#38A169", "#E53E3E"]
+                },
+                {
+                    label: SeriesName.Average,
+                    data: [
+                        averageConversionRate.value,
+                        averageUnsubscribeRate.value
+                    ],
+                    color: ["#CDEAE1", "#FAD8D8"]
+                }
+            ]
+        };
     });
 
     // #endregion Computed Values

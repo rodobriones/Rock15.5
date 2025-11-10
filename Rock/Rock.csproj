@@ -22,6 +22,8 @@
     <PackageReference Include="Antlr" Version="3.5.0.2" />
     <PackageReference Include="AWSSDK.Core" Version="3.3.25.4" />
     <PackageReference Include="AWSSDK.S3" Version="3.3.21.1" />
+    <PackageReference Include="Azure.AI.DocumentIntelligence" Version="1.0.0" />
+    <PackageReference Include="Azure.Core" Version="1.44.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.20.0" />
     <PackageReference Include="BCrypt-Official" Version="0.1.109" />
     <PackageReference Include="CacheManager.SystemRuntimeCaching" Version="1.2.0" />
@@ -34,6 +36,7 @@
     <PackageReference Include="EntityFramework" Version="6.4.4" />
     <PackageReference Include="FirebaseAdmin" Version="2.4.0" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="2.4.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.27.1" />
     <PackageReference Include="Hashids.net" Version="1.4.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.4.9.5" />
     <PackageReference Include="Ical.Net" Version="4.2.0" />
@@ -52,7 +55,9 @@
     <PackageReference Include="Microsoft.AspNet.WebApi.WebHost" Version="5.2.3" />
     <PackageReference Include="Microsoft.Azure.SignalR.AspNet" Version="1.0.14" />
     <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="11.1.3" />
+    <PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.EventSource.Redist" Version="1.1.28" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
     <PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="2.21.301221612" />
@@ -62,6 +67,7 @@
     <PackageReference Include="Microsoft.Owin.Cors" Version="4.2.2" />
     <PackageReference Include="Microsoft.Owin.Host.SystemWeb" Version="3.0.1" />
     <PackageReference Include="Microsoft.Owin.Security" Version="4.0.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.60.0" />
     <PackageReference Include="Microsoft.SqlServer.Types" Version="11.0.2" />
     <PackageReference Include="Microsoft.Web.Xdt" Version="2.1.1" />
     <PackageReference Include="NEST.JsonNetSerializer" Version="7.17.0" />
@@ -77,18 +83,19 @@
     <PackageReference Include="Serilog.Formatting.Compact" Version="1.1.0" />
     <PackageReference Include="Serilog.Formatting.Compact.Reader" Version="1.0.3" />
     <PackageReference Include="Serilog.Sinks.File" Version="4.1.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.10" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.11" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta15" />
+    <PackageReference Include="System.ClientModel" Version="1.4.0" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="4.7.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="5.7.0" />
-    <PackageReference Include="System.Interactive.Async" Version="3.2.0" />
     <PackageReference Include="System.IO.Pipelines" Version="9.0.6" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.6" />
+    <PackageReference Include="System.Memory.Data" Version="8.0.1" />
     <PackageReference Include="System.Reflection.Emit" Version="4.7.0" />
     <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
     <PackageReference Include="System.Text.Json" Version="9.0.6" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
-    <PackageReference Include="TimeZoneConverter" Version="6.0.1" />
+    <PackageReference Include="TimeZoneConverter" Version="7.0.0" />
     <PackageReference Include="Twilio" Version="5.1.0" />
     <PackageReference Include="UAParser" Version="3.1.47" />
     <PackageReference Include="xxHashSharp" Version="1.0.0" />
@@ -192,6 +199,16 @@
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Command="REM Sets vbcscompiler.exe time to live to 10 seconds. Dev environment defaults to 600 secs which can cause issues when switching branches&#xD;&#xA;REM In a production environment, it will be 10 seconds, even without the VBCSCOMPILER_TTL environment variable&#xD;&#xA;if &quot;$(ConfigurationName)&quot; == &quot;Debug&quot; (&#xD;&#xA; echo &quot;setting VBCSCOMPILER_TTL to 10 seconds&quot;&#xD;&#xA; call &quot;$(ProjectDir)..\Dev Tools\VBCS_Compiler\setVBCSCOMPILER_TTL.bat&quot;&#xD;&#xA; if Exist &quot;$(ProjectDir)..\.githooks\&quot; (&#xD;&#xA;  if Exist &quot;$(ProjectDir)..\.git\hooks\&quot; (&#xD;&#xA;   xcopy &quot;$(ProjectDir)..\.githooks\*&quot; &quot;$(ProjectDir)..\.git\hooks\&quot; /S /Y&#xD;&#xA;  )&#xD;&#xA; )&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;REM delete build artifacts from stuff that is no longer part of Rock (InteractivePreGeneratedViews and React)&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\JavaScriptEngineSwitcher.Core.resources.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\JavaScriptEngineSwitcher.Core.resources.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\JavaScriptEngineSwitcher.V8.resources.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\JavaScriptEngineSwitcher.V8.resources.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\MsieJavaScriptEngine.resources.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\ru-ru\MsieJavaScriptEngine.resources.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\InteractivePreGeneratedViews.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\InteractivePreGeneratedViews.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.Core.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.Core.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.Msie.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.Msie.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.V8.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\JavaScriptEngineSwitcher.V8.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\JSPool.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\JSPool.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\MsieJavaScriptEngine.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\MsieJavaScriptEngine.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\React.Core.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\React.Core.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\React.Web.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\React.Web.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\React.Web.Mvc4.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\React.Web.Mvc4.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Helpers.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Helpers.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Mvc.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Mvc.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Razor.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.Razor.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.Deployment.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.Deployment.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.Razor.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\System.Web.WebPages.Razor.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\VroomJs.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\VroomJs.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\WebActivatorEx.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\WebActivatorEx.dll&quot;&#xD;&#xA;if Exist &quot;$(ProjectDir)..\RockWeb\Bin\Rock.TransNational.Pi.dll&quot; del &quot;$(ProjectDir)..\RockWeb\Bin\Rock.TransNational.Pi.dll&quot;" />
+  </Target>
+
+  <Target Name="DisableAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'AWSSDK.S3.CodeAnalysis'" />
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'Microsoft.Extensions.Logging.Generators'" />
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'Microsoft.Extensions.Options.SourceGeneration'" />
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'System.ClientModel.SourceGeneration'" />
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'System.Text.Json.SourceGeneration'" />
+    </ItemGroup>
   </Target>
 
 </Project>

@@ -39,7 +39,7 @@ namespace Rock.ViewModels.Blocks.Engagement.StepTypeDetail
         /// <value>
         /// The step statuses.
         /// </value>
-        public List<ListItemBag> StepStatuses { get; set; }
+        public List<StepStatusBag> StepStatuses { get; set; }
 
         /// <summary>
         /// Gets or sets the step programs.
@@ -48,5 +48,21 @@ namespace Rock.ViewModels.Blocks.Engagement.StepTypeDetail
         /// The step programs.
         /// </value>
         public List<StepProgramBag> StepPrograms { get; set; }
+
+        /// <summary>
+        /// Gets or sets the organizational objectives.
+        /// </summary>
+        /// <value>
+        /// The organizational objectives.
+        /// </value>
+        public List<ListItemBag> OrganizationalObjectives { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the reorder column should be visible in the Step Attributes grid.
+        /// </summary>
+        /// <value>
+        /// Whether the reorder column is visible.
+        /// </value>
+        public bool IsReOrderColumnVisible { get; set; }
     }
 }

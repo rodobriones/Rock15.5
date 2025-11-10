@@ -63,6 +63,7 @@ namespace RockWeb.Blocks.Core
         Category = "CustomSetting",
         Key = AttributeKey.ExcludeCategories )]
 
+    [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Primary )]
     [Rock.SystemGuid.BlockTypeGuid( "7BC54887-21C2-4688-BD1D-C1C8B9C86F7C" )]
     public partial class CategoryDetail : RockBlockCustomSettings
     {
@@ -138,10 +139,12 @@ namespace RockWeb.Blocks.Core
         {
             if ( !Page.IsPostBack )
             {
-                string categoryIdParam = PageParameter( "CategoryId" );
-                if ( !string.IsNullOrEmpty( categoryIdParam ) )
+                var categoryId = GetCategoryIdFromPageParameter();
+                var parentCategoryId = GetParentCategoryIdFromPageParameter();
+
+                if ( categoryId.HasValue )
                 {
-                    ShowDetail( categoryIdParam.AsInteger(), PageParameter( "ParentCategoryId" ).AsIntegerOrNull() );
+                    ShowDetail( categoryId.Value, parentCategoryId );
                 }
                 else
                 {
@@ -165,8 +168,8 @@ namespace RockWeb.Blocks.Core
         {
             if ( hfCategoryId.Value.Equals( "0" ) )
             {
-                int? parentCategoryId = PageParameter( "ParentCategoryId" ).AsIntegerOrNull();
-                // Cancelling on Add, and we know the parentCategoryId, so we are probably in treeview mode, so navigate to the current page
+                int? parentCategoryId = GetParentCategoryIdFromPageParameter();
+                // Canceling on Add, and we know the parentCategoryId, so we are probably in treeview mode, so navigate to the current page
                 var qryParams = new Dictionary<string, string>();
                 qryParams["CategoryId"] = parentCategoryId.ToString();
                 qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
@@ -273,6 +276,21 @@ namespace RockWeb.Blocks.Core
             else
             {
                 category = categoryService.Get( categoryId );
+            }
+
+            // Check security on parent category to verify they are authorized to use it.
+            var parentCategoryId = cpParentCategory.SelectedValueAsInt();
+            if ( parentCategoryId.HasValue )
+            {
+                var parentCategory = CategoryCache.Get( parentCategoryId.Value );
+                if ( ! ( parentCategory.IsAuthorized( Authorization.EDIT, CurrentPerson ) || parentCategory.IsAuthorized( Authorization.ADMINISTRATE, CurrentPerson ) ) )
+                {
+                    var parentCategoryValidator = cpParentCategory.RequiredFieldValidator;
+                    parentCategoryValidator.IsValid = false;
+                    cvCategory.IsValid = false;
+                    parentCategoryValidator.ErrorMessage = "You are not authorized to create or edit for the selected parent category.";
+                    return;
+                }
             }
 
             category.Name = tbName.Text;
@@ -576,6 +594,30 @@ namespace RockWeb.Blocks.Core
             mdCategoryDetailConfig.Visible = false;
             mdCategoryDetailConfig.Hide();
             Block_BlockUpdated( sender, e );
+        }
+
+        private int? GetCategoryIdFromPageParameter()
+        {
+            var categoryId = PageParameter( "CategoryId" ).AsIntegerOrNull();
+
+            // See if it's an IdKey...
+            if ( categoryId == null )
+            {
+                categoryId = Rock.Utility.IdHasher.Instance.GetId( PageParameter( "CategoryId" ) );
+            }
+            return categoryId;
+        }
+
+        private int? GetParentCategoryIdFromPageParameter()
+        {
+            var parentCategoryId = PageParameter( "ParentCategoryId" ).AsIntegerOrNull();
+
+            // See if it's an IdKey...
+            if ( parentCategoryId == null )
+            {
+                parentCategoryId = Rock.Utility.IdHasher.Instance.GetId( PageParameter( "ParentCategoryId" ) );
+            }
+            return parentCategoryId;
         }
 
         #endregion
