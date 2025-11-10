@@ -454,6 +454,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 .AsEnumerable()
                 .Select( tp => new TouchpointHistoryBag
                 {
+                    CommunicationMedium = tp.CommunicationMedium.ToMobile(),
                     TouchpointType = tp.Type.ToMobile(),
                     ContactFirstName = contact.FirstName,
                     ScheduleDateTime = tp.ScheduledDateTime,
