@@ -60,70 +60,70 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 case TouchpointType.Prayer:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.png",
                         Title = "Prayer",
                         InformationText = $"Lift up {contact.FirstName} in prayer."
                     };
                 case TouchpointType.Connection:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-conversation-bubble.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-conversation-bubble.png",
                         Title = "Connection",
                         InformationText = $"Check in to see how {contact.FirstName} doing."
                     };
                 case TouchpointType.Reminder:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-sticky-note.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-sticky-note.png",
                         Title = "Reminder",
                         InformationText = "Here’s what you wrote:"
                     };
                 case TouchpointType.Pulse:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-heart.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-heart.png",
                         Title = "Pulse",
                         InformationText = $"Has your connection with {contact.FirstName} grown,or has he taken a step toward Christ?"
                     };
                 case TouchpointType.Birthday:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-birthday.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-birthday.png",
                         Title = "Birthday",
                         InformationText = "Celebrate his life and your relationship", // PS TODO: gender it
                     };
                 case TouchpointType.WeddingAnniversary:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-wedding-anniversary.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-wedding-anniversary.png",
                         Title = "Wedding Anniversary",
                         InformationText = "Celebrate her commitment", // PS TODO: Gender it
                     };
                 case TouchpointType.BaptismAnniversary:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-baptism-anniversary.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-baptism-anniversary.png",
                         Title = "Baptism Anniversary",
                         InformationText = "Celebrate his decision", // PS TODO: Gender it
                     };
                 case TouchpointType.SalvationAnniversary:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-salvation-anniversary.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-salvation-anniversary.png",
                         Title = "Salvation Anniversary",
                         InformationText = "Celebrate her decision", // PS TODO: Gender it
                     };
                 case TouchpointType.Share:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-share.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-share.png",
                         Title = "Share",
                         InformationText = $"Share your faith with {contact.FirstName}.",
                     };
                 default:
                     return new TouchpointViewBag
                     {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.svg",
+                        IconSource = "resource://Rock.Mobile.Resources.outreach-prayer-hand.png",
                         Title = "Touchpoint",
                         InformationText = $"Connect with {contact.FirstName}.",
                     };

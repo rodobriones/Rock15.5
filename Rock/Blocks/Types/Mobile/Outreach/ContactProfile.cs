@@ -29,7 +29,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_CONTACT_PROFILE )]
     public class ContactProfile : RockBlockType
     {
-
         #region Methods
 
         private int GetTouchpointCount( int contactId, TouchpointType type, int? completedDaysAgo = null )
