@@ -210,7 +210,7 @@
     const dataType = ref<string>(dataTypes.value[0].value ?? "");
 
     const previousSourceDescriptions = props.config.sources ?? undefined;
-    const selectedPreviousSourceDescription = ref<string | undefined>(previousSourceDescriptions?.length ? previousSourceDescriptions[0].value ?? undefined : undefined);
+    const selectedPreviousSourceDescription = ref<string | undefined>();
     const typedSourceDescription = ref<string>("");
     const usePreviousSourceDescription = ref<boolean>((previousSourceDescriptions?.length ?? 0) > 0);
     const selectedSourceDescription = computed(() => {

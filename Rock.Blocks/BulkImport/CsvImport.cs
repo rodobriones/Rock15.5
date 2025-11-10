@@ -407,29 +407,27 @@ namespace Rock.Blocks.BulkImport
                     progressResults.Add( personImportKey, importer.Results[personImportKey] );
                 }
 
-                //if ( importer.HasErrors )
-                //{
-                //    progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
-                //    {
-                //        TaskName = "preparation",
-                //        Error = errorMessage.IsNullOrWhiteSpace() ? "Errors Validating Data" : errorMessage
-                //    } );
-                //    return;
-                //}
+                // Motive: As of the writing there was no easy way to get the totalCount and the CompletedCount from
+                // the server to display the progress bar. Thus, we decided to parse the message string to get the values
+                var messageCharArray = progressMessage.Split( ' ' );
+                var percentageComplete = 0;
+                if ( messageCharArray.Length >= 6 )
+                {
+                    var completedCount = ( int ) messageCharArray[3].ToIntSafe();
+                    // remove any trailing ... from the last number in the total:
+                    var totalCount = ( int ) messageCharArray[5].Replace( "...", "" ).ToIntSafe();
 
-                //if ( progressResults.Html.IsNotNullOrWhiteSpace() )
-                //{
-                //    progressReporter.TaskCompleted( new CsvImportActivityProgressStatusBag
-                //    {
-                //        TaskName = "import",
-                //        Message = progressResults.Html.ConvertCrLfToHtmlBr()
-                //    } );
-                //}
+                    if ( totalCount > 0 && completedCount > 0 )
+                    {
+                        percentageComplete = ( int ) Math.Round( ( ( double ) completedCount / totalCount ) * 100 );
+                    }
+                }
 
                 progressReporter.UpdateTaskLog( new CsvImportActivityProgressStatusBag
                 {
                     TaskName = "import",
                     Message = progressMessage,
+                    CompletionPercentage = percentageComplete
                 } );
 
             } );

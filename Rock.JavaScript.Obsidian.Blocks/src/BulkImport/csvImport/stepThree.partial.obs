@@ -126,10 +126,6 @@
             if (status.taskName === "preparation") {
                 preparationProgress.value = status.completionPercentage;
             }
-            else if (status.taskName === "import") {
-                console.log(status.completionPercentage);
-                importProgress.value = status.completionPercentage;
-            }
         });
         topic.on("updateTaskLog", (status: CsvImportActivityProgressStatusBag) => {
             if (status.taskName === "preparation") {
@@ -137,6 +133,7 @@
             }
             else if (status.taskName === "import") {
                 importLogMessage.value = status.message ?? "";
+                importProgress.value = status.completionPercentage;
             }
         });
         topic.on("taskErrored", (status: CsvImportActivityProgressStatusBag) => {
