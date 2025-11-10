@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
@@ -28,6 +29,31 @@ namespace Rock.Blocks.Types.Mobile.Outreach
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_CONTACT_PROFILE )]
     public class ContactProfile : RockBlockType
     {
+
+        #region Methods
+
+        private int GetTouchpointCount( int contactId, TouchpointType type, int? completedDaysAgo = null )
+        {
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+
+            var qry = contactTouchpointService.Queryable()
+                .Where( tp => tp.ContactId == contactId )
+                .Where( tp => tp.Type == type )
+                .Where( tp => tp.CompletedDateTime.HasValue );
+
+            if ( completedDaysAgo.HasValue )
+            {
+                var dateTime = RockDateTime.Now.AddDays( -completedDaysAgo.Value );
+                qry = qry.Where( tp => tp.CompletedDateTime >= dateTime );
+            }
+
+            var totalCount = qry.Count();
+
+            return totalCount;
+        }
+
+        #endregion
+
         #region Block Action
 
         /// <summary>
@@ -78,7 +104,11 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 PrayerCadence = contact.PrayerCadence.ToMobile(),
                 ConnectionCadence = contact.ConnectionCadence.ToMobile(),
                 PrayerNote = contact.PrayerNote,
+                TotalCompletedPrayersCount = GetTouchpointCount( contact.Id, TouchpointType.Prayer ),
+                CompletedPrayersLast30DaysCount = GetTouchpointCount( contact.Id, TouchpointType.Prayer, 30 ),
                 ConnectionNote = contact.ConnectionNote,
+                TotalCompletedConnectionsCount = GetTouchpointCount( contact.Id, TouchpointType.Connection ),
+                CompletedConnectionsLast30DaysCount = GetTouchpointCount( contact.Id, TouchpointType.Connection, 30 ),
             };
 
             return ActionOk( contactProfile );
