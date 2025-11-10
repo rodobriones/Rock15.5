@@ -66,7 +66,8 @@ namespace Rock.Blocks.Cms
     )]
 
     #endregion Block Attributes
-    [Rock.SystemGuid.BlockTypeGuid( "327370A5-3CC0-42AD-B236-F45260F6A1EE" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "327370A5-3CC0-42AD-B236-F45260F6A1EE" )]
+    [Rock.SystemGuid.BlockTypeGuid( "0F1DADBC-6B12-4BAA-A828-FD1AA86AA387" )]
     public partial class FileEditor : RockBlockType
     {
         #region Fields
