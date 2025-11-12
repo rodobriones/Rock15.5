@@ -50,7 +50,8 @@ namespace Rock.Blocks.Prayer
 
     [ContextAware( typeof( Rock.Model.Person ) )]
     [Rock.SystemGuid.EntityTypeGuid( "e8be562a-bb24-47a9-b3df-63cfb508f831" )]
-    [Rock.SystemGuid.BlockTypeGuid( "e860f577-f30d-4197-87f0-c3dc6132f537" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "e860f577-f30d-4197-87f0-c3dc6132f537" )]
+    [Rock.SystemGuid.BlockTypeGuid( "4D6B686A-79DF-4EFC-A8BA-9841C248BF74" )]
     [CustomizedGrid]
     public class PrayerRequestList : RockEntityListBlockType<PrayerRequest>
     {
