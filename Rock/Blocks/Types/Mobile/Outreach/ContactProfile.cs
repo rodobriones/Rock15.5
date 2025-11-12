@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Common.Mobile.Enums;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -216,6 +217,32 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
+        /// Updates the contact note and cadence.
+        /// </summary>
+        /// <param name="bag"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult UpdateContactNoteAndCadence( UpdateContactNoteAndCadence bag )
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( bag.ContactIdKey );
+            if ( contact == null )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            // Only update the fields that were included in the request
+            contact.PrayerNote = bag.PrayerNote != null ? bag.PrayerNote : contact.PrayerNote;
+            contact.ConnectionNote = bag.ConnectionNote != null ? bag.ConnectionNote : contact.ConnectionNote;
+            contact.PrayerCadence = bag.PrayerCadence != null ? bag.PrayerCadence.Value.ToNative() : contact.PrayerCadence;
+            contact.ConnectionCadence = bag.ConnectionCadence != null ? bag.ConnectionCadence.Value.ToNative() : contact.ConnectionCadence;
+
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        /// <summary>
         /// Gets the contact touchpoint history.
         /// </summary>
         /// <param name="idKey"></param>
@@ -264,5 +291,14 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
+    }
+
+    public class UpdateContactNoteAndCadence
+    {
+        public string ContactIdKey { get; set; }
+        public string PrayerNote { get; set; }
+        public string ConnectionNote { get; set; }
+        public OutreachCadence? PrayerCadence { get; set; }
+        public OutreachCadence? ConnectionCadence { get; set; }
     }
 }
