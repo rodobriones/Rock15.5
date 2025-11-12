@@ -227,9 +227,51 @@ namespace Rock.Blocks.Prayer
             }
         }
 
+        /// <summary>
+        /// Determines whether the current Person has either edit or administrative authorization for the block.
+        /// </summary>
+        /// <remarks>This method checks the current Person's permissions against the block's authorization
+        /// settings  for the "Edit" and "Administrate" roles.</remarks>
+        /// <returns><see langword="true"/> if the current Person is authorized with either edit or administrative permissions;
+        /// otherwise, <see langword="false"/>.</returns>
+        private bool IsPersonEditOrAdminAuthorized()
+        {
+            var currentPerson = RequestContext.CurrentPerson;
+            var allowedAuthorizations = new[] { Authorization.EDIT, Authorization.ADMINISTRATE };
+
+            if ( allowedAuthorizations.Any( auth => BlockCache.IsAuthorized( auth, currentPerson ) ) )
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         #endregion
 
         #region Block Actions
+
+        [BlockAction]
+        public BlockActionResult UpdateApprovalStatus( string prayerRequestIdKey, bool isApproved )
+        {
+            var entityService = new PrayerRequestService( RockContext );
+            var entity = entityService.Get( prayerRequestIdKey, !PageCache.Layout.Site.DisablePredictableIds );
+
+            if ( entity == null )
+            {
+                return ActionBadRequest( $"{PrayerRequest.FriendlyTypeName} not found." );
+            }
+
+            if ( !IsPersonEditOrAdminAuthorized() )
+            {
+                return ActionBadRequest( $"Not authorized to update approval status of {PrayerRequest.FriendlyTypeName}." );
+            }
+
+            entity.IsApproved = isApproved;
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
 
         /// <summary>
         /// Deletes the specified entity.
@@ -247,7 +289,7 @@ namespace Rock.Blocks.Prayer
                 return ActionBadRequest( $"{PrayerRequest.FriendlyTypeName} not found." );
             }
 
-            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
+            if ( !IsPersonEditOrAdminAuthorized() )
             {
                 return ActionBadRequest( $"Not authorized to delete {PrayerRequest.FriendlyTypeName}." );
             }
