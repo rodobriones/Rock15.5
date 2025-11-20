@@ -48,7 +48,7 @@ namespace Rock.Blocks.Core
     [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "8fae9715-89f1-4faa-a35f-18cb55e269c0" )]
     [Rock.SystemGuid.BlockTypeGuid( "ffca1f50-e5fa-45b0-8d97-e2707e19bba7" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.SignatureDocumentTemplate</code> (e.g. <code>{{ Row.SignatureDocumentTemplate.Id }}</code>)." )]
     public class SignatureDocumentTemplateList : RockListBlockType<SignatureDocumentTemplateList.SignatureDocumentTemplateData>
     {
         #region Keys

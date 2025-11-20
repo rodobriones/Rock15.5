@@ -52,7 +52,7 @@ namespace Rock.Blocks.Cms
     [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "9c7e8e9d-2af4-40e7-a4f9-307e114db918" )]
     [Rock.SystemGuid.BlockTypeGuid( "cba57502-8c9a-4414-b0d4-db0d57ef89bd" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.AdaptiveMessage</code> (e.g. <code>{{ Row.AdaptiveMessage.Id }}</code>)." )]
     public class AdaptiveMessageList : RockListBlockType<AdaptiveMessageData>
     {
         #region Keys

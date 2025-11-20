@@ -68,7 +68,7 @@ namespace Rock.Blocks.Finance
 
     [Rock.SystemGuid.EntityTypeGuid( "a68dd358-1392-475f-92b4-dea544ff219e" )]
     [Rock.SystemGuid.BlockTypeGuid( "f1950524-e959-440f-9cf6-1a8b9b7527d8" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.FinancialBatch</code> (e.g. <code>{{ Row.FinancialBatch.Id }}</code>)." )]
     public class FinancialBatchList : RockListBlockType<FinancialBatchList.BatchData>
     {
         #region Keys

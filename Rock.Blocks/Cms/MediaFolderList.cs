@@ -58,7 +58,7 @@ namespace Rock.Blocks.Cms
     [Rock.SystemGuid.EntityTypeGuid( "af4fa9d1-c8e7-47a6-a522-d40a7370517c" )]
     // Was [Rock.SystemGuid.BlockTypeGuid( "75133c37-547f-47fa-991c-6d957b2ea92d" )]
     [Rock.SystemGuid.BlockTypeGuid( "02A91579-9355-45E7-A67A-56E998FB332A" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.MediaFolder</code> (e.g. <code>{{ Row.MediaFolder.Id }}</code>)." )]
     public class MediaFolderList : RockListBlockType<MediaFolderData>
     {
         private MediaAccount SelectedMediaAccount { get; set; }
@@ -213,7 +213,7 @@ namespace Rock.Blocks.Cms
 
             // Load attribute values for the grid-selected attributes.
             GridAttributeLoader.LoadFor( items, a => a.MediaFolder, _gridAttributes.Value, rockContext );
-            
+
             var interactionChannelId = InteractionChannelCache.GetId( Rock.SystemGuid.InteractionChannel.MEDIA_EVENTS.AsGuid() );
             var mediaElementQry = new MediaElementService( rockContext ).Queryable();
             var interactionComponentQry = new InteractionComponentService( rockContext )

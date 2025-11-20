@@ -47,7 +47,7 @@ namespace Rock.Blocks.Group
 
     [Rock.SystemGuid.EntityTypeGuid( "b67a0c89-1550-4960-8aaf-baa713be3277" )]
     [Rock.SystemGuid.BlockTypeGuid( "972ad143-8294-4462-b2a7-1b36ea127374" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.GroupArchived</code> (e.g. <code>{{ Row.GroupArchived.Id }}</code>)." )]
     public class GroupArchivedList : RockListBlockType<GroupArchivedList.ArchivedGroupRow>
     {
         #region Keys

@@ -50,7 +50,7 @@ namespace Rock.Blocks.Group
     [Rock.SystemGuid.EntityTypeGuid( "562ed873-bd66-4287-ae9f-d7c43fecd7a8" )]
     // Was [Rock.SystemGuid.BlockTypeGuid( "8885f47d-9262-48b0-b969-9bee003370eb" )]
     [Rock.SystemGuid.BlockTypeGuid( "80306BB1-FE4B-436F-AC7A-691CF0BC0F5E" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.GroupType</code> (e.g. <code>{{ Row.GroupType.Id }}</code>)." )]
     public class GroupTypeList : RockListBlockType<GroupTypeWithGroupCounts>
     {
         #region Keys

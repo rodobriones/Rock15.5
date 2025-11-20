@@ -88,7 +88,7 @@ namespace Rock.Blocks.Finance
 
     [Rock.SystemGuid.EntityTypeGuid( "946127ec-adec-46c9-8181-a405c137a8a3" )]
     [Rock.SystemGuid.BlockTypeGuid( "2db92ea3-f3b3-496e-a1f0-8eebd8dc928a" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.FinancialScheduledTransaction</code> (e.g. <code>{{ Row.FinancialScheduledTransaction.Id }}</code>)." )]
     [Rock.Web.UI.ContextAware]
     public class FinancialScheduledTransactionList : RockListBlockType<FinancialScheduledTransactionData>
     {

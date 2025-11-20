@@ -48,7 +48,7 @@ namespace Rock.Blocks.Cms
 
     [Rock.SystemGuid.EntityTypeGuid( "de1ab18e-c973-4333-832e-a8b4754f0571" )]
     [Rock.SystemGuid.BlockTypeGuid( "f381936b-0d8c-43f0-8da5-401383e40883" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.ContentChannel</code> (e.g. <code>{{ Row.ContentChannel.Id }}</code>)." )]
     public class ContentChannelList : RockListBlockType<ContentChannelList.ContentChannelListBag>
     {
         #region Keys

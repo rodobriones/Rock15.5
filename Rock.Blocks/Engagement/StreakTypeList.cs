@@ -47,7 +47,7 @@ namespace Rock.Blocks.Engagement
 
     [Rock.SystemGuid.EntityTypeGuid( "fb234106-94fd-4206-aa85-4377f1d2c512" )]
     [Rock.SystemGuid.BlockTypeGuid( "6f0f3ad2-4989-4f50-b394-0de3c7af35ad" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.StreakType</code> (e.g. <code>{{ Row.StreakType.Id }}</code>)." )]
     public class StreakTypeList : RockListBlockType<StreakTypeList.StreakTypeWithEnrollment>
     {
         #region Keys

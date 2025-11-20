@@ -52,7 +52,7 @@ namespace Rock.Blocks.Cms
     [Rock.SystemGuid.EntityTypeGuid( "4b445e33-8ae3-4831-a5dc-88ed46d1ccea" )]
     // Was [Rock.SystemGuid.BlockTypeGuid( "baf39b55-c4e5-4eb4-a834-b4f820dd2f42" )]
     [Rock.SystemGuid.BlockTypeGuid( "7537AB61-F80B-43B1-998B-1D2B03303B36" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.MediaAccount</code> (e.g. <code>{{ Row.MediaAccount.Id }}</code>)." )]
     public class MediaAccountList : RockListBlockType<MediaAccountData>
     {
         #region Keys

@@ -65,7 +65,7 @@ namespace Rock.Blocks.Core
 
     [Rock.SystemGuid.EntityTypeGuid( "8fdb4340-bdde-4797-b173-ea456a825b2a" )]
     [Rock.SystemGuid.BlockTypeGuid( "ed4cd6ae-ed86-4607-a252-f15971e4f2e3" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.NoteWatch</code> (e.g. <code>{{ Row.NoteWatch.Id }}</code>)." )]
     public class NoteWatchList : RockListBlockType<NoteWatchList.NoteWatchRow>
     {
         #region Keys

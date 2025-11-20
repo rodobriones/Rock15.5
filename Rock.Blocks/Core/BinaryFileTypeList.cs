@@ -50,7 +50,7 @@ namespace Rock.Blocks.Core
 
     [Rock.SystemGuid.EntityTypeGuid( "94ac60ce-b192-4559-88a0-af0cc143f631" )]
     [Rock.SystemGuid.BlockTypeGuid( "000ca534-6164-485e-b405-ba0fa6ae92f9" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.BinaryFileType</code> (e.g. <code>{{ Row.BinaryFileType.Id }}</code>)." )]
     public class BinaryFileTypeList : RockListBlockType<BinaryFileTypeData>
     {
         #region Keys

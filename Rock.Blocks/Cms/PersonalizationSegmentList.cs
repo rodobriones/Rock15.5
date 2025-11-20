@@ -48,7 +48,7 @@ namespace Rock.Blocks.Cms
 
     [Rock.SystemGuid.EntityTypeGuid( "18cdd594-a0e4-4190-86f5-0f7fa0b0cedc" )]
     [Rock.SystemGuid.BlockTypeGuid( "4d65b168-9fba-4dff-9442-6754bc4afa48" )]
-    [CustomizedGrid]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.PersonalizationSegment</code> (e.g. <code>{{ Row.PersonalizationSegment.Id }}</code>)." )]
     public class PersonalizationSegmentList : RockListBlockType<PersonalizationSegmentList.PersonalizationSegmentListBag>
     {
         #region Keys
