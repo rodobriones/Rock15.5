@@ -43,7 +43,7 @@
                             </div>
 
                             <div class="col-md-6">
-                                <Rock:RockDropDownList ID="ddlBlockRole" runat="server" Label="Role" Help="The role determines how the block is being used on the page. If not set, the default from the block type will be used.">
+                                <Rock:RockDropDownList ID="ddlBlockRole" runat="server" Label="Role" Help="The role determines how the block is being used on the page. If not set, the default from the block type will be used. This is sometimes overriden by a property in the basic settings, such as 'Is Seconday Block'.">
                                     <asp:ListItem Value="" Text="" />
                                     <asp:ListItem Value="0" Text="System" />
                                     <asp:ListItem Value="1" Text="Navigation" />
