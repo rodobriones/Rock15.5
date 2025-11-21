@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -273,7 +274,7 @@ namespace Rock.Blocks.Group
         /// <summary>
         /// The temporary data format to use when building the results for the grid.
         /// </summary>
-        public class GroupTypeWithGroupCounts
+        public class GroupTypeWithGroupCounts : LavaDataObject
         {
             public Rock.Model.GroupType GroupType { get; set; }
             public int GroupsCount { get; set; }

@@ -20,8 +20,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.ViewModels.Blocks;
@@ -47,7 +49,7 @@ namespace Rock.Blocks.Crm
 
     [Rock.SystemGuid.EntityTypeGuid( "911EA779-AC00-4A93-B706-B6A642C727CB" )]
     [Rock.SystemGuid.BlockTypeGuid( "6e9672e6-ee42-4aac-b0a9-b041c3b8368c" )]
-    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.NamelessPerson</code> (e.g. <code>{{ Row.NamelessPerson.Id }}</code>)." )]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.Person</code> (e.g. <code>{{ Row.Person.Id }}</code>)." )]
     public class NamelessPersonList : RockListBlockType<NamelessPersonList.NamelessPersonRow>
     {
         #region Keys
@@ -371,7 +373,7 @@ namespace Rock.Blocks.Crm
 
         #region Helper Classes
 
-        public class NamelessPersonRow
+        public class NamelessPersonRow : LavaDataObject
         {
             public Person Person { get; set; }
 

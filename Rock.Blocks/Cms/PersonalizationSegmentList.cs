@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -283,7 +284,7 @@ namespace Rock.Blocks.Cms
         /// <summary>
         /// The data displayed in the Personal Link Section List block.
         /// </summary>
-        public class PersonalizationSegmentListBag
+        public class PersonalizationSegmentListBag : LavaDataObject
         {
             public PersonalizationSegment PersonalizationSegment { get; set; }
 

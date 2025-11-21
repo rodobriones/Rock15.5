@@ -25,6 +25,7 @@ using System.Web.ModelBinding;
 using Rock.Address;
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -543,7 +544,7 @@ namespace Rock.Blocks.Finance
         /// <summary>
         /// 
         /// </summary>
-        public class FinancialScheduledTransactionData
+        public class FinancialScheduledTransactionData : LavaDataObject
         {
             /// <summary>
             /// Gets or sets the amount

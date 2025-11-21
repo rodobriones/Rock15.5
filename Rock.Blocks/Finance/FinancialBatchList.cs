@@ -22,6 +22,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -68,7 +69,7 @@ namespace Rock.Blocks.Finance
 
     [Rock.SystemGuid.EntityTypeGuid( "a68dd358-1392-475f-92b4-dea544ff219e" )]
     [Rock.SystemGuid.BlockTypeGuid( "f1950524-e959-440f-9cf6-1a8b9b7527d8" )]
-    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.FinancialBatch</code> (e.g. <code>{{ Row.FinancialBatch.Id }}</code>)." )]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.Batch</code> (e.g. <code>{{ Row.Batch.Id }}</code>)." )]
     public class FinancialBatchList : RockListBlockType<FinancialBatchList.BatchData>
     {
         #region Keys
@@ -585,7 +586,7 @@ namespace Rock.Blocks.Finance
         /// The temporary data format to use when building the results for the
         /// grid.
         /// </summary>
-        public class BatchData
+        public class BatchData : LavaDataObject
         {
             /// <summary>
             /// Gets or sets the whole batch object from the database.

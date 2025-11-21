@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -278,7 +279,7 @@ namespace Rock.Blocks.Engagement
 
         #region Helper Classes
 
-        public class StreakTypeWithEnrollment
+        public class StreakTypeWithEnrollment : LavaDataObject
         {
             public StreakType StreakType { get; set; }
 

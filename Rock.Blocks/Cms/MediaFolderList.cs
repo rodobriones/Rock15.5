@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Media;
 using Rock.Model;
 using Rock.Obsidian.UI;
@@ -334,7 +335,7 @@ namespace Rock.Blocks.Cms
         /// The temporary data format to use when building the results for the
         /// grid.
         /// </summary>
-        public class MediaFolderData
+        public class MediaFolderData : LavaDataObject
         {
             /// <summary>
             /// Gets or sets the whole media folder object from the database.

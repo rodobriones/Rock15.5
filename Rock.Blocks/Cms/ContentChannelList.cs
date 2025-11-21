@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -251,7 +252,7 @@ namespace Rock.Blocks.Cms
 
         #region Helper Classes
 
-        public sealed class ContentChannelListBag
+        public sealed class ContentChannelListBag : LavaDataObject
         {
             public string IdKey { get; set; }
             public string Name { get; set; }

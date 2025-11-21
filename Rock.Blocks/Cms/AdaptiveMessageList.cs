@@ -23,6 +23,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -343,7 +344,7 @@ namespace Rock.Blocks.Cms
         /// The temporary data format to use when building the results for the
         /// grid.
         /// </summary>
-        public class AdaptiveMessageData
+        public class AdaptiveMessageData : LavaDataObject
         {
             /// <summary>
             /// Gets or sets the whole message object from the database.

@@ -22,6 +22,7 @@ using System.Linq;
 
 using Rock.Attribute;
 using Rock.Data;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -209,7 +210,7 @@ namespace Rock.Blocks.Core
         /// The temporary data format to use when building the results for the
         /// grid.
         /// </summary>
-        public class SignatureDocumentTemplateData
+        public class SignatureDocumentTemplateData : LavaDataObject
         {
             /// <summary>
             /// Gets or sets the whole SignatureDocumentTemplate object from the database.

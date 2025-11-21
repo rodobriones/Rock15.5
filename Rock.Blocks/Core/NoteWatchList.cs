@@ -24,6 +24,7 @@ using System.Linq;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Enums.Controls;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -415,7 +416,7 @@ namespace Rock.Blocks.Core
 
         #region Helper Classes
 
-        public class NoteWatchRow
+        public class NoteWatchRow : LavaDataObject
         {
             public NoteWatch NoteWatch { get; set; }
 

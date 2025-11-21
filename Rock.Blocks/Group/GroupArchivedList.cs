@@ -24,6 +24,7 @@ using System.Linq;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Enums.Controls;
+using Rock.Lava;
 using Rock.Model;
 using Rock.Obsidian.UI;
 using Rock.Security;
@@ -47,7 +48,7 @@ namespace Rock.Blocks.Group
 
     [Rock.SystemGuid.EntityTypeGuid( "b67a0c89-1550-4960-8aaf-baa713be3277" )]
     [Rock.SystemGuid.BlockTypeGuid( "972ad143-8294-4462-b2a7-1b36ea127374" )]
-    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.GroupArchived</code> (e.g. <code>{{ Row.GroupArchived.Id }}</code>)." )]
+    [CustomizedGrid( CustomColumnMessage = "To access the entity, prefix your property names with <code>Row.Group</code> (e.g. <code>{{ Row.Group.Id }}</code>)." )]
     public class GroupArchivedList : RockListBlockType<GroupArchivedList.ArchivedGroupRow>
     {
         #region Keys
@@ -330,7 +331,7 @@ namespace Rock.Blocks.Group
 
         #region Helper Classes
 
-        public class ArchivedGroupRow
+        public class ArchivedGroupRow : LavaDataObject
         {
             public Rock.Model.Group Group { get; set; }
 
