@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
-using System.Windows.Documents;
+
+using MassTransit;
 
 using Rock.Attribute;
-using Rock.Common.Mobile;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Enums.Outreach;
@@ -152,6 +152,27 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             }
         }
 
+        /// <summary>
+        /// Gets the pending touchpoints.
+        /// </summary>
+        /// <param name="contactIds"></param>
+        /// <returns></returns>
+        private List<ContactTouchpoint> GetPendingTouchpoints( List<int> contactIds )
+        {
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+
+            var pendingTouchpoints = contactTouchpointService
+                .Queryable()
+                .AsNoTracking()
+                .Where( tp => contactIds.Contains( tp.ContactId ) )      // Grab the person contact touchpoints
+                .Where( tp => tp.CompletedDateTime == null )                // Only get the uncompleted touchpoints
+                .Where( tp => tp.ScheduledDateTime < RockDateTime.Now )     // Only get the touchpoints that are scheduled for now or earlier
+                .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
+                .ToList();
+
+            return pendingTouchpoints;
+        }
+
         #endregion
 
         #region Block Actions
@@ -164,26 +185,89 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         public BlockActionResult GetInitialData()
         {
             var person = RequestContext.CurrentPerson;
-            var mobilePerson = MobileHelper.GetMobilePerson( person, PageCache.Layout.Site );
 
             ContactService contactService = new ContactService( RockContext );
             var personContactIds = contactService
                 .Queryable()
                 .Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId )
-                .Select( c => c.Id );
+                .Select( c => c.Id )
+                .ToList();
 
             ContactTouchpointService touchpointService = new ContactTouchpointService( RockContext );
             var pendingTouchpointCount = touchpointService
                 .Queryable()
                 .Where( tp => personContactIds.Contains( tp.ContactId ) )
                 .Where( tp => tp.CompletedDateTime == null )
+                .Where( tp => tp.ScheduledDateTime <= RockDateTime.Now )
                 .Count();
+
+            var prayerQry = touchpointService
+                .Queryable()
+                .Where( tp => tp.Type == TouchpointType.Prayer )
+                .Where( tp => personContactIds.Contains( tp.ContactId ) )
+                .Where( tp => tp.CompletedDateTime != null );
+            var totalCompletedPrayerCount = prayerQry.Count();
+            var prayerCompletedThisMonth = prayerQry
+                .Where( tp => tp.CompletedDateTime.Value.Month == RockDateTime.Now.Month && tp.CompletedDateTime.Value.Year == RockDateTime.Now.Year )
+                .Count();
+
+            var connectionQry = touchpointService
+                .Queryable()
+                .Where( tp => tp.Type == TouchpointType.Connection )
+                .Where( tp => personContactIds.Contains( tp.ContactId ) )
+                .Where( tp => tp.CompletedDateTime != null );
+            var totalCompletedConnectionsCount = connectionQry.Count();
+            var connectionsCompletedThisMonth = connectionQry
+                .Where( tp => tp.CompletedDateTime.Value.Month == RockDateTime.Now.Month && tp.CompletedDateTime.Value.Year == RockDateTime.Now.Year )
+                .Count();
+
+            // Get any special events that have occurred in the past week.
+            var weekAgoDay = RockDateTime.Now.AddDays( -7 ).Day;
+            var pastSpecialEventsTouchpoint = touchpointService
+                .Queryable()
+                .Where( tp => tp.Type == TouchpointType.Birthday
+                    || tp.Type == TouchpointType.WeddingAnniversary
+                    || tp.Type == TouchpointType.BaptismAnniversary
+                    || tp.Type == TouchpointType.SalvationAnniversary )
+                .Where( tp => personContactIds.Contains( tp.ContactId ) )
+                .Where( tp => tp.ScheduledDateTime.Day <= RockDateTime.Now.Day && tp.ScheduledDateTime.Day >= weekAgoDay )
+                .Where( tp => tp.CompletedDateTime == null )
+                .OrderByDescending( tp => tp.ScheduledDateTime )
+                .AsEnumerable()
+                .Select( tp =>
+                {
+                    var profileURL = tp.Contact.PhotoId.HasValue
+                        ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( tp.Contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) )
+                        : "";
+
+                    return new PastTouchpointEvent
+                    {
+                        ProfileURL = profileURL,
+                        contactName = tp.Contact.FirstName,
+                        TouchpointType = tp.Type,
+                        ScheduledDate = tp.ScheduledDateTime
+                    };
+                } ).ToList();
+
+            var pendingTouchpointImageUrls = GetPendingTouchpoints( personContactIds )
+                .Select( tp =>
+                {
+                    var profileURL = tp.Contact.PhotoId.HasValue
+                        ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( tp.Contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) )
+                        : "";
+                    return profileURL;
+                } ).ToList();
 
             var data = new InitialDataBag
             {
-                CurrentPerson = mobilePerson,
                 ContactCount = personContactIds.Count(),
                 PendingTouchpointCount = pendingTouchpointCount,
+                PrayerCompletedThisMonth = prayerCompletedThisMonth,
+                TotalCompletedPrayerCount = totalCompletedPrayerCount,
+                ConnectionsCompletedThisMonth = connectionsCompletedThisMonth,
+                TotalCompletedConnectionsCount = totalCompletedConnectionsCount,
+                PastSpecialEvents = pastSpecialEventsTouchpoint,
+                TouchpointContactImageUrls = pendingTouchpointImageUrls
             };
 
             return ActionOk( data );
@@ -216,18 +300,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 .Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId ) // Get all the person contacts
                 .ToList();
 
-            var contactIdList = contacts.Select( c => c.Id );
+            var contactIdList = contacts.Select( c => c.Id ).ToList();
 
-            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
-
-            var pendingTouchpoints = contactTouchpointService
-                .Queryable()
-                .AsNoTracking()
-                .Where( tp => contactIdList.Contains( tp.ContactId ) )      // Grab the person contact touchpoints
-                .Where( tp => tp.CompletedDateTime == null )                // Only get the uncompleted touchpoints
-                .Where( tp => tp.ScheduledDateTime < RockDateTime.Now )     // Only get the touchpoints that are scheduled for now or earlier
-                .OrderBy( tp => tp.ScheduledDateTime )                      // Order by scheduled date time
-                .ToList();
+            var pendingTouchpoints = GetPendingTouchpoints( contactIdList );
 
             var touchpointBags = new List<ContactTouchpointBag>();
 
@@ -479,8 +554,21 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
     public class InitialDataBag
     {
-        public MobilePerson CurrentPerson { get; set; }
         public int ContactCount { get; set; }
         public int PendingTouchpointCount { get; set; }
+        public int PrayerCompletedThisMonth { get; set; }
+        public int TotalCompletedPrayerCount { get; set; }
+        public int ConnectionsCompletedThisMonth { get; set; }
+        public int TotalCompletedConnectionsCount { get; set; }
+        public List<PastTouchpointEvent> PastSpecialEvents { get; set; }
+        public List<string> TouchpointContactImageUrls { get; set; }
+
+    }
+    public class PastTouchpointEvent
+    {
+        public string ProfileURL { get; set; }
+        public string contactName { get; set; }
+        public TouchpointType TouchpointType { get; set; }
+        public DateTime ScheduledDate { get; set; }
     }
 }
