@@ -23,6 +23,7 @@ using System.Linq;
 using System.Text;
 
 using Rock.Attribute;
+using Rock.Data;
 using Rock.Enums.Cms;
 using Rock.Lava;
 using Rock.Model;
@@ -88,7 +89,7 @@ namespace Rock.Blocks.Cms
 
     [BooleanField(
         "Is Secondary Block",
-        Description = "Flag indicating whether this block is considered secondary and should be hidden when other secondary blocks are hidden.",
+        Description = "Flag indicating whether this block is considered secondary and should be hidden when other secondary blocks are hidden. This overrides the Role in Advanced Settings and sets it to Secondary.",
         DefaultBooleanValue = false,
         Key = AttributeKey.IsSecondaryBlock )]
 
@@ -130,6 +131,8 @@ namespace Rock.Blocks.Cms
         /// <inheritdoc/>
         public override object GetObsidianBlockInitialization()
         {
+            BlockPropertyOverride();
+
             var cssFile = GetAttributeValue( AttributeKey.CSSFile );
 
             // add css file to page
@@ -139,6 +142,25 @@ namespace Rock.Blocks.Cms
             }
 
             return base.GetObsidianBlockInitialization();
+        }
+
+        /// <summary>
+        /// Overrides block properties based on attribute values.
+        /// If <c>IsSecondaryBlock</c> is true, sets the block role to <see cref="BlockRole.Secondary"/>
+        /// so it respects Edit mode visibility settings.
+        /// </summary>
+        private void BlockPropertyOverride()
+        {
+            // If IsSecondaryBlock is true, set the block role to Secondary so it respects Edit mode visibility settings
+            if ( GetAttributeValue( AttributeKey.IsSecondaryBlock ).AsBoolean() )
+            {
+                var blockService = new BlockService( RockContext );
+                var block = blockService.Get( this.BlockId );
+
+                block.Role = BlockRole.Secondary;
+
+                RockContext.SaveChanges();
+            }
         }
 
         /// <inheritdoc/>
