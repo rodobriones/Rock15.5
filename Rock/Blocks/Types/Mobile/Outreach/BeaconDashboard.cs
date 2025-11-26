@@ -522,6 +522,26 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
+        /// Updates the prayer cadence.s
+        /// </summary>
+        /// <param name="contactId"></param>
+        /// <param name="prayerCadence"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult UpdatePrayerCadence( int contactId, int prayerCadence )
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( contactId );
+            if ( contact == null )
+            {
+                return ActionNotFound( "Contact not found." );
+            }
+            contact.PrayerCadence = ( ( Rock.Common.Mobile.Enums.OutreachCadence ) prayerCadence ).ToNative();
+            RockContext.SaveChanges();
+            return ActionOk();
+        }
+
+        /// <summary>
         /// Pulses the touchpoint contact update.
         /// </summary>
         /// <param name="bag"></param>
