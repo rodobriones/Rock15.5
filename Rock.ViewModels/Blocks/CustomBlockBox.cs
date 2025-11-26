@@ -15,10 +15,6 @@
 // </copyright>
 //
 
-using System.Collections.Generic;
-
-using Rock.ViewModels.Utility;
-
 namespace Rock.ViewModels.Blocks
 {
     /// <summary>
@@ -28,7 +24,7 @@ namespace Rock.ViewModels.Blocks
     /// </summary>
     /// <typeparam name="TCustomBag">The type of the settings property.</typeparam>
     /// <typeparam name="TOptions">The type of the options property.</typeparam>
-    public class CustomBlockBox<TCustomBag, TOptions> : BlockBox, IValidPropertiesBox
+    public class CustomBlockBox<TCustomBag, TOptions> : BlockBox
         where TOptions : new()
     {
         /// <summary>
@@ -42,11 +38,5 @@ namespace Rock.ViewModels.Blocks
         /// </summary>
         /// <value>The options.</value>
         public TOptions Options { get; set; } = new TOptions();
-
-        /// <summary>
-        /// Gets or sets the valid properties.
-        /// </summary>
-        /// <value>The valid properties.</value>
-        public List<string> ValidProperties { get; set; }
     }
 }
