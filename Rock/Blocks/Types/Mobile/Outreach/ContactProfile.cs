@@ -99,6 +99,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BaptismDay = contact.BaptismDay,
                 BaptismMonth = contact.BaptismMonth,
                 BaptismYear = contact.BaptismYear,
+                LinkedInProfileUrl = contact.LinkedInProfileUrl,
+                FacebookProfileUrl = contact.FacebookProfileUrl,
+                TikTokProfileUrl = contact.TikTokProfileUrl,
                 InstagramProfileUrl = contact.InstagramProfileUrl,
                 XProfileUrl = contact.XProfileUrl,
                 PrayerCadence = contact.PrayerCadence.ToMobile(),
@@ -209,6 +212,11 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 contact.BaptismYear = contactProfileBag.BaptismYear;
                 contact.RelationshipFocus = newRelationshipFocus;
                 contact.RelationshipStrength = newRelationshipStrength;
+                contact.LinkedInProfileUrl = contactProfileBag.LinkedInProfileUrl;
+                contact.FacebookProfileUrl = contactProfileBag.FacebookProfileUrl;
+                contact.TikTokProfileUrl = contactProfileBag.TikTokProfileUrl;
+                contact.InstagramProfileUrl = contactProfileBag.InstagramProfileUrl;
+                contact.XProfileUrl = contactProfileBag.XProfileUrl;
 
                 RockContext.SaveChanges();
             } );
@@ -291,14 +299,5 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         #endregion
-    }
-
-    public class UpdateContactNoteAndCadence
-    {
-        public string ContactIdKey { get; set; }
-        public string PrayerNote { get; set; }
-        public string ConnectionNote { get; set; }
-        public OutreachCadence? PrayerCadence { get; set; }
-        public OutreachCadence? ConnectionCadence { get; set; }
     }
 }
