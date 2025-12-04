@@ -9,6 +9,7 @@ using MassTransit;
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Common.Mobile.Blocks.Outreach.MyContact;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -637,6 +638,91 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 } ).ToList();
 
             return ActionOk( touchpointHistoryBag );
+        }
+
+        /// <summary>
+        /// Adds the reminder touchpoint.
+        /// </summary>
+        /// <param name="contactId"></param>
+        /// <param name="reminderDate"></param>
+        /// <param name="reminderNote"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult AddReminderTouchpoint( int contactId, DateTimeOffset reminderDate, string reminderNote )
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( contactId );
+            if ( contact == null )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var newTouchpoint = new ContactTouchpoint
+            {
+                ContactId = contact.Id,
+                Type = TouchpointType.Reminder,
+                ScheduledDateTime = reminderDate.DateTime,
+                SystemNote = reminderNote,
+            };
+            contactTouchpointService.Add( newTouchpoint );
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        /// <summary>
+        /// Searches the contacts with options.
+        /// </summary>
+        /// <param name="option"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult Search( ContactSearchOptions option )
+        {
+            var currentPerson = GetCurrentPerson();
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "You are not logged in" );
+            }
+
+            var personAliasId = currentPerson.PrimaryAliasId;
+            if ( personAliasId == null )
+            {
+                return ActionBadRequest( "The current person doesn't have a primary alias Id" );
+            }
+
+            ContactService contactService = new ContactService( RockContext );
+
+            var qry = contactService
+                .Queryable()
+                .AsNoTracking()
+                .Where( c => c.OwnerPersonAliasId == personAliasId );
+
+            if ( option.SearchTerm.IsNotNullOrWhiteSpace() )
+            {
+                var searchTerm = option.SearchTerm.ToLower().Trim();
+                qry = qry.Where( c =>
+                    ( c.FirstName ?? "" ).ToLower().Contains( searchTerm ) ||
+                    ( c.LastName ?? "" ).ToLower().Contains( searchTerm ) ||
+                    ( ( ( c.FirstName ?? "" ) + " " + ( c.LastName ?? "" ) ).ToLower().Contains( searchTerm ) )
+                );
+            }
+
+            var contacts = qry.OrderByDescending( c => c.Id )
+                .Skip( option.Offset )
+                .Take( option.Limit )
+                .ToList();
+
+            var result = contacts.Select( c => new ContactItem
+            {
+                ContactIdKey = c.IdKey,
+                Name = c.FirstName + " " + c.LastName,
+                ProfilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
+                Email = c.Email,
+                PhoneNumber = c.MobilePhone
+            } );
+
+            return ActionOk( result );
         }
 
         #endregion

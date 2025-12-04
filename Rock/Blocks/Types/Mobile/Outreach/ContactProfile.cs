@@ -298,6 +298,37 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk( touchpointHistoryBag );
         }
 
+        /// <summary>
+        /// Adds the reminder touchpoint.
+        /// </summary>
+        /// <param name="contactIdKey"></param>
+        /// <param name="reminderDate"></param>
+        /// <param name="reminderNote"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult AddReminderTouchpoint(string contactIdKey, DateTimeOffset reminderDate, string reminderNote)
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( contactIdKey );
+            if ( contact == null )
+            {
+                return ActionBadRequest( "Contact not found." );
+            }
+
+            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
+            var reminderTouchpoint = new ContactTouchpoint
+            {
+                ContactId = contact.Id,
+                Type = TouchpointType.Reminder,
+                ScheduledDateTime = reminderDate.DateTime,
+                SystemNote = reminderNote,
+            };
+            contactTouchpointService.Add( reminderTouchpoint );
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
         #endregion
     }
 }

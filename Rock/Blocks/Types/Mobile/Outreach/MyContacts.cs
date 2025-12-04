@@ -100,8 +100,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             var result = contacts.Select( c => new ContactItem
             {
                 ContactIdKey = c.IdKey,
-                name = c.FirstName + " " + c.LastName,
-                profilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
+                Name = c.FirstName + " " + c.LastName,
+                ProfilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
             } );
 
             return ActionOk( result );
