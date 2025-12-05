@@ -86,12 +86,6 @@ namespace Rock.Blocks.Cms
         DefaultBooleanValue = false,
         Key = AttributeKey.IncludeCurrentQueryString )]
 
-    [BooleanField(
-        "Is Secondary Block",
-        Description = "Flag indicating whether this block is considered secondary and should be hidden when other secondary blocks are hidden.",
-        DefaultBooleanValue = false,
-        Key = AttributeKey.IsSecondaryBlock )]
-
     [KeyValueListField(
         "Include Page List",
         Description = "List of pages to include in the Lava. Any ~/ will be resolved by Rock. Enable debug for assistance. Example 'Give Now' with '~/page/186' or 'Me' with '~/MyAccount'.",
