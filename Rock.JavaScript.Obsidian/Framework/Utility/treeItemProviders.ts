@@ -180,13 +180,15 @@ export class LocationTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid?: Guid | null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: LocationItemPickerGetActiveChildrenOptionsBag = {
             guid: toGuidOrNull(parentGuid) ?? emptyGuid,
             rootLocationGuid: emptyGuid,
+            expandToValues: expandToValues,
             securityGrantToken: this.securityGrantToken
         };
         const url = "/api/v2/Controls/LocationItemPickerGetActiveChildren";
@@ -204,8 +206,8 @@ export class LocationTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -373,21 +375,29 @@ export class PageTreeItemProvider implements ITreeItemProvider {
     public siteType?: SiteType | null;
 
     /**
+     * The unique identifier of the root page whose
+     * children are to be enumerated.
+     */
+    public rootPageGuid?: Guid | null;
+
+    /**
      * Gets the child items of the given parent (or root if no parent given) from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid?: Guid | null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         let result: TreeItemBag[];
 
         const options: PagePickerGetChildrenOptionsBag = {
             guid: toGuidOrNull(parentGuid) ?? emptyGuid,
-            rootPageGuid: null,
+            rootPageGuid: this.rootPageGuid ?? null,
             hidePageGuids: this.hidePageGuids ?? [],
             securityGrantToken: this.securityGrantToken,
-            siteType: this.siteType
+            siteType: this.siteType,
+            expandToValues
         };
         const url = "/api/v2/Controls/PagePickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -442,7 +452,7 @@ export class PageTreeItemProvider implements ITreeItemProvider {
     private async getHierarchyToSelectedPage(rootLayer: TreeItemBag[]): Promise<TreeItemBag[]> {
         const parents = await this.getParentList();
 
-        if (!parents || parents.length == 0) {
+        if (!parents || parents.length === 0) {
             // Selected page has no parents, so we're done.
             return rootLayer;
         }
@@ -451,7 +461,7 @@ export class PageTreeItemProvider implements ITreeItemProvider {
         const allPages = rootLayer.concat(flatten(childLists));
 
         parents.forEach((parentGuid, i) => {
-            const parentPage: TreeItemBag | undefined = allPages.find(page => page.value == parentGuid);
+            const parentPage: TreeItemBag | undefined = allPages.find(page => page.value === parentGuid);
             if (parentPage) {
                 parentPage.children = childLists[i];
             }
@@ -464,8 +474,8 @@ export class PageTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -492,13 +502,15 @@ export class ConnectionRequestTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid?: Guid | null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: ConnectionRequestPickerGetChildrenOptionsBag = {
             parentGuid,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/ConnectionRequestPickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -515,8 +527,8 @@ export class ConnectionRequestTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -555,10 +567,11 @@ export class GroupTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: GroupPickerGetChildrenOptionsBag = {
             guid: parentGuid,
             rootGroupGuid: this.rootGroupGuid,
@@ -566,7 +579,8 @@ export class GroupTreeItemProvider implements ITreeItemProvider {
             includeInactiveGroups: this.includeInactiveGroups,
             limitToSchedulingEnabled: this.limitToSchedulingEnabled,
             limitToRSVPEnabled: this.limitToRSVPEnabled,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/GroupPickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -583,8 +597,8 @@ export class GroupTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -611,14 +625,16 @@ export class MergeTemplateTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: MergeTemplatePickerGetMergeTemplatesOptionsBag = {
             parentGuid,
             mergeTemplateOwnership: (toNumberOrNull(this.mergeTemplateOwnership) ?? 0) as MergeTemplateOwnership,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/MergeTemplatePickerGetMergeTemplates";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -635,8 +651,8 @@ export class MergeTemplateTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -660,13 +676,15 @@ export class MetricCategoryTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: MetricCategoryPickerGetChildrenOptionsBag = {
             parentGuid,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/MetricCategoryPickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -683,8 +701,8 @@ export class MetricCategoryTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -759,13 +777,15 @@ export class RegistrationTemplateTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: RegistrationTemplatePickerGetChildrenOptionsBag = {
             parentGuid,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/RegistrationTemplatePickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -782,8 +802,8 @@ export class RegistrationTemplateTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -813,15 +833,17 @@ export class ReportTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: ReportPickerGetChildrenOptionsBag = {
             parentGuid,
             includeCategoryGuids: this.includeCategoryGuids,
             entityTypeGuid: this.entityTypeGuid,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/ReportPickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -838,8 +860,8 @@ export class ReportTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -872,16 +894,18 @@ export class ScheduleTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid: Guid | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid: Guid | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: SchedulePickerGetChildrenOptionsBag = {
             parentGuid,
             includeInactiveItems: this.includeInactive,
             includePublicItemsOnly: this.includePublicOnly,
             includeCategoryGuids: this.includeCategoryGuids,
             securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/SchedulePickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -898,8 +922,8 @@ export class ScheduleTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -926,13 +950,15 @@ export class WorkflowActionTypeTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentId: string | null = null): Promise<TreeItemBag[]> {
+    private async getItems(parentId: string | null = null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: WorkflowActionTypePickerGetChildrenOptionsBag = {
             parentId: toNumberOrNull(parentId) ?? 0,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/WorkflowActionTypePickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -949,8 +975,8 @@ export class WorkflowActionTypeTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
@@ -1008,7 +1034,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
         }
 
         // If we're getting child nodes or if there is no selected page
-        if (parentId || !this.selectedIds || this.selectedIds.length == 0) {
+        if (parentId || !this.selectedIds || this.selectedIds.length === 0) {
             return result;
         }
 
@@ -1027,7 +1053,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
     private async getHierarchyToSelectedMergeField(rootLayer: TreeItemBag[]): Promise<TreeItemBag[]> {
         const parents = this.getParentList();
 
-        if (!parents || parents.length == 0) {
+        if (!parents || parents.length === 0) {
             // Selected page has no parents, so we're done.
             return rootLayer;
         }
@@ -1036,7 +1062,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
         const allMergeFields = rootLayer.concat(flatten(childLists));
 
         parents.forEach((parentGuid, i) => {
-            const parentMergeField: TreeItemBag | undefined = allMergeFields.find(page => page.value == parentGuid);
+            const parentMergeField: TreeItemBag | undefined = allMergeFields.find(page => page.value === parentGuid);
             if (parentMergeField) {
                 parentMergeField.children = childLists[i];
             }
@@ -1051,7 +1077,7 @@ export class MergeFieldTreeItemProvider implements ITreeItemProvider {
      * @returns A list of IDs of the parent merge fields
      */
     private getParentList(): string[] | null {
-        if (!this.selectedIds || this.selectedIds.length == 0) {
+        if (!this.selectedIds || this.selectedIds.length === 0) {
             return null;
         }
 
@@ -1182,13 +1208,15 @@ export class AdaptiveMessageTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid?: Guid | null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: UniversalItemTreePickerOptionsBag = {
             parentValue: parentGuid,
             securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
 
         const response = await post<TreeItemBag[]>("/api/v2/Controls/AdaptiveMessagePickerGetAdaptiveMessages", {}, options);
@@ -1205,8 +1233,8 @@ export class AdaptiveMessageTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems();
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**

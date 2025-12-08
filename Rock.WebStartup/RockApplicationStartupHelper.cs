@@ -45,6 +45,7 @@ using Rock.Model;
 using Rock.Net;
 using Rock.Net.Geolocation;
 using Rock.Observability;
+using Rock.Utility.CaptchaApi;
 using Rock.Utility.Settings;
 using Rock.Web;
 using Rock.Web.Cache;
@@ -136,8 +137,6 @@ namespace Rock.WebStartup
             }
 
             ShowDebugTimingMessage( "EF Migrations" );
-
-            TempOneTimeDataMigration();
 
             // Register Entity SaveHooks.
             LogStartupMessage( "Configuring Entity SaveHooks" );
@@ -335,6 +334,7 @@ namespace Rock.WebStartup
             sc.AddSingleton<IDatabaseConfiguration, DatabaseConfiguration>();
             sc.AddSingleton<IHostingSettings, HostingSettings>();
             sc.AddSingleton<IChatProvider, StreamChatProvider>();
+            sc.AddSingleton<ICaptchaProvider, CaptchaProofOfWorkProvider>();
             sc.AddSingleton<IRockRequestContextAccessor, RockRequestContextAccessor>();
             sc.AddSingleton<IWebHostEnvironment>( provider => new Utility.WebHostEnvironment
             {
@@ -342,6 +342,7 @@ namespace Rock.WebStartup
             } );
             sc.AddSingleton<MetadataHelper>();
             sc.AddSingleton<ObsidianFingerprintManager>();
+            sc.AddSingleton<ILavaEngineFactory, LavaEngineFactory>();
 
             sc.AddScoped<RockContext>();
 
@@ -638,52 +639,6 @@ namespace Rock.WebStartup
             return false;
         }
 
-        private static void TempOneTimeDataMigration()
-        {
-            var sql = @"
-IF EXISTS (SELECT 1 FROM dbo.[Person] WHERE [Guid] = 'ad28da19-4af1-408f-9090-2672f8376f27')
-BEGIN
-
-    BEGIN TRANSACTION
-
-    DECLARE @NewPersonGuid uniqueidentifier = NEWID()
-    DECLARE @NewPersonAliasGuid uniqueidentifier = NEWID()
-
-    UPDATE [Person]
-    SET [Guid] = @NewPersonGuid
-    WHERE [Guid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
-
-    DECLARE @PersonFieldTypeId int = (SELECT TOP 1 [Id] FROM [FieldType] WHERE [Guid] = 'E4EAB7B2-0B76-429B-AFE4-AD86D7428C70')
-
-    -- Update built-in admin user person alias guid (if it still exists)
-    UPDATE [PersonAlias]
-    SET [Guid] = @NewPersonAliasGuid
-        ,[AliasPersonGuid] = @NewPersonGuid
-    WHERE [Guid] = '996c8b72-c255-40e6-bb98-b1d5cf345f3b' AND [AliasPersonGuid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
-
-    -- Update the old PersonAlias.[AliasPersonGuid] with their new @NewPersonGuid
-    UPDATE [PersonAlias]
-    SET [AliasPersonGuid] = @NewPersonGuid
-    WHERE [PersonId] = 1 AND [AliasPersonGuid] = 'ad28da19-4af1-408f-9090-2672f8376f27'
-
-    -- Update the Person with the new top primary alias  (NOT AVAILABLE IN v16.x)
-    UPDATE [Person]
-    SET [PrimaryAliasGuid] = (SELECT TOP 1 [Guid] FROM [PersonAlias] WHERE Id = Person.PrimaryAliasId)
-    WHERE [Guid] = @NewPersonGuid
-
-    -- Update attribute values that reference the old person alias guid
-    UPDATE av
-        SET av.[Value] = CAST(@NewPersonAliasGuid AS nvarchar(36))
-    FROM [AttributeValue] av
-    INNER JOIN [Attribute] a ON av.[AttributeId] = a.[Id]
-    WHERE a.[FieldTypeId] = @PersonFieldTypeId AND av.[ValueChecksum] = '817829624' AND av.[Value] = '996c8b72-c255-40e6-bb98-b1d5cf345f3b'
-
-    COMMIT TRANSACTION
-END
-";
-            DbService.ExecuteCommand( sql, System.Data.CommandType.Text, null, 60 );
-        }
-
         /// <summary>
         /// Logs all the system related info to Migration Log
         /// </summary>
@@ -763,8 +718,17 @@ END
             // will be logged and stop running any more migrations for that assembly
             foreach ( var pluginMigration in pluginAssemblies )
             {
-                bool ranPluginMigration = RunPluginMigrations( pluginMigration );
-                migrationsWereRun = migrationsWereRun || ranPluginMigration;
+                try
+                {
+                    bool ranPluginMigration = RunPluginMigrations( pluginMigration );
+                    migrationsWereRun = migrationsWereRun || ranPluginMigration;
+                }
+                catch ( Exception ex )
+                {
+                    // Don't throw exceptions caused by plugins, just log them
+                    // and keep going so we don't prevent Rock from starting.
+                    ExceptionLogService.LogException( ex );
+                }
             }
 
             return migrationsWereRun;
@@ -1262,18 +1226,9 @@ WHERE [PQ].[row_number] = 1
         /// </summary>
         private static void InitializeLava()
         {
-            // Get the Lava Engine configuration settings.
-            Type engineType = null;
-
-            // The Fluid Engine is the default engine for Rock v17 and above.
-            engineType = typeof( FluidEngine );
-
             InitializeLavaEngines();
 
-            if ( engineType != null )
-            {
-                InitializeGlobalLavaEngineInstance( engineType );
-            }
+            InitializeGlobalLavaEngineInstance();
         }
 
         private static void InitializeLavaEngines()
@@ -1281,11 +1236,7 @@ WHERE [PQ].[row_number] = 1
             // Register the Fluid Engine factory.
             LavaService.RegisterEngine( ( engineServiceType, options ) =>
             {
-                var fluidEngine = new FluidEngine();
-
-                InitializeLavaEngineInstance( fluidEngine, options as LavaEngineConfigurationOptions );
-
-                return fluidEngine;
+                return RockApp.Current.GetRequiredService<ILavaEngineFactory>().CreateEngine( options as LavaEngineConfigurationOptions );
             } );
         }
 
@@ -1308,187 +1259,22 @@ WHERE [PQ].[row_number] = 1
         /// <summary>
         /// Initialize the global Lava Engine instance.
         /// </summary>
-        /// <param name="engineType"></param>
-        private static void InitializeGlobalLavaEngineInstance( Type engineType )
+        private static void InitializeGlobalLavaEngineInstance()
         {
             // Initialize the Lava engine.
             var options = GetDefaultEngineConfiguration();
 
-            LavaService.SetCurrentEngine( engineType, options );
+            LavaService.SetCurrentEngine( typeof( ILavaEngine ), options );
 
             // Subscribe to exception notifications from the Lava Engine.
             var engine = LavaService.GetCurrentEngine();
 
             engine.ExceptionEncountered += Engine_ExceptionEncountered;
-
-            InitializeLavaEngineInstance( engine, options );
-        }
-
-        /// <summary>
-        /// Initialize a specific Lava Engine instance.
-        /// </summary>
-        /// <param name="engine"></param>
-        /// <param name="options"></param>
-        private static void InitializeLavaEngineInstance( ILavaEngine engine, LavaEngineConfigurationOptions options )
-        {
-            options = options ?? GetDefaultEngineConfiguration();
-
-            InitializeLavaFilters( engine );
-            InitializeLavaTags( engine );
-            InitializeLavaBlocks( engine );
-
-            if ( options.InitializeDynamicShortcodes )
-            {
-                InitializeLavaShortcodes( engine );
-            }
-
-            InitializeLavaSafeTypes( engine );
-
-            engine.Initialize( options );
         }
 
         private static void Engine_ExceptionEncountered( object sender, LavaEngineExceptionEventArgs e )
         {
             ExceptionLogService.LogException( e.Exception, System.Web.HttpContext.Current );
-        }
-
-        private static void InitializeLavaFilters( ILavaEngine engine )
-        {
-            // Register the common Rock.Lava filters first, then overwrite with the engine-specific filters.
-            engine.RegisterFilters( typeof( Rock.Lava.Filters.TemplateFilters ) );
-            engine.RegisterFilters( typeof( Rock.Lava.LavaFilters ) );
-        }
-
-        private static void InitializeLavaShortcodes( ILavaEngine engine )
-        {
-            // Register shortcodes defined in the codebase.
-            try
-            {
-                var shortcodeTypes = Rock.Reflection.FindTypes( typeof( ILavaShortcode ) ).Select( a => a.Value ).ToList();
-
-                foreach ( var shortcodeType in shortcodeTypes )
-                {
-                    // Create an instance of the shortcode to get the registration name.
-                    var instance = Activator.CreateInstance( shortcodeType ) as ILavaShortcode;
-
-                    var name = instance.SourceElementName;
-
-                    if ( string.IsNullOrWhiteSpace( name ) )
-                    {
-                        name = shortcodeType.Name;
-                    }
-
-                    // Register the shortcode with a factory method to create a new instance of the shortcode from the System.Type defined in the codebase.
-                    engine.RegisterShortcode( name, ( shortcodeName ) =>
-                    {
-                        var shortcode = Activator.CreateInstance( shortcodeType ) as ILavaShortcode;
-
-                        return shortcode;
-                    } );
-                }
-            }
-            catch ( Exception ex )
-            {
-                ExceptionLogService.LogException( ex, null );
-            }
-
-            // Register shortcodes defined in the current database.
-            var shortCodes = LavaShortcodeCache.All();
-
-            foreach ( var shortcode in shortCodes )
-            {
-                // Register the shortcode with the current Lava Engine.
-                // The provider is responsible for retrieving the shortcode definition from the data store and managing the web-based shortcode cache.
-                WebsiteLavaShortcodeProvider.RegisterShortcode( engine, shortcode.TagName );
-            }
-        }
-
-        private static void InitializeLavaTags( ILavaEngine engine )
-        {
-            // Get all tags and call OnStartup methods
-            try
-            {
-                var elementTypes = Rock.Reflection.FindTypes( typeof( ILavaTag ) ).Select( a => a.Value ).ToList();
-
-                foreach ( var elementType in elementTypes )
-                {
-                    var instance = Activator.CreateInstance( elementType ) as ILavaTag;
-
-                    var name = instance.SourceElementName;
-
-                    if ( string.IsNullOrWhiteSpace( name ) )
-                    {
-                        name = elementType.Name;
-                    }
-
-                    engine.RegisterTag( name, ( tagName ) =>
-                    {
-                        var tag = Activator.CreateInstance( elementType ) as ILavaTag;
-                        return tag;
-                    } );
-
-                    try
-                    {
-                        instance.OnStartup( engine );
-                    }
-                    catch ( Exception ex )
-                    {
-                        var lavaException = new Exception( string.Format( "Lava component initialization failure. Startup failed for Lava Tag \"{0}\".", elementType.FullName ), ex );
-
-                        ExceptionLogService.LogException( lavaException, null );
-                    }
-                }
-            }
-            catch ( Exception ex )
-            {
-                ExceptionLogService.LogException( ex, null );
-            }
-        }
-
-        private static void InitializeLavaBlocks( ILavaEngine engine )
-        {
-            // Get all blocks and call OnStartup methods
-            try
-            {
-                var blockTypes = Rock.Reflection.FindTypes( typeof( ILavaBlock ) ).Select( a => a.Value ).ToList();
-
-                foreach ( var blockType in blockTypes )
-                {
-                    var blockInstance = Activator.CreateInstance( blockType ) as ILavaBlock;
-
-                    engine.RegisterBlock( blockInstance.SourceElementName, ( blockName ) =>
-                    {
-                        return Activator.CreateInstance( blockType ) as ILavaBlock;
-                    } );
-
-                    try
-                    {
-                        blockInstance.OnStartup( engine );
-                    }
-                    catch ( Exception ex )
-                    {
-                        ExceptionLogService.LogException( ex, null );
-                    }
-
-                }
-            }
-            catch ( Exception ex )
-            {
-                ExceptionLogService.LogException( ex, null );
-            }
-        }
-
-        /// <summary>
-        /// Initializes the lava safe types on the engine. This takes care
-        /// of special types that we don't have direct access to so we can't
-        /// add the proper interfaces to them.
-        /// </summary>
-        /// <param name="engine">The engine.</param>
-        private static void InitializeLavaSafeTypes( ILavaEngine engine )
-        {
-            engine.RegisterSafeType( typeof( Common.Mobile.DeviceData ) );
-            engine.RegisterSafeType( typeof( Utility.RockColor ) );
-            engine.RegisterSafeType( typeof( Utilities.ColorPair ) );
         }
 
         #endregion

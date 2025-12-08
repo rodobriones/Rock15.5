@@ -193,6 +193,12 @@ export const ServiceJob = {
     DataMigrations180UpdateEmailPreferenceEntryBlockManageMyAccountPage: "7319E385-8068-43FE-9085-6F9A21F5972B",
     /** The job to run Post v18.0 Data Migrations to update the Nameless Locations. */
     DataMigrations180UpdateNamelessLocations: "6C3EE640-A442-4F9C-92ED-23E353BA8509",
+    /** The job to run Post v18.1 Data Migrations to add a new index to the FinancialBatch table. */
+    DataMigrations181AddFinancialbatchIndex: "EA5D69D8-8ABB-42CD-A664-48F6BC5E2C7F",
+    /** The job to run Post v18.1 Data Migrations to add indexes to improve communication prep performance. */
+    DataMigrations181AddIndexesForCommunicationPrep: "88C42A48-6713-4CB1-BF6B-A12AB2E292E7",
+    /** The Job to run Post v19.0 Data Migrations to swap Block. */
+    DataMigrations190SwapObsidianBlocks: "C05C0C81-12B2-4C35-9405-C3CE09E3CE75",
     /**
      * The Post Update Data Migration Job to chop the Schedule Detail, Asset Storage Provider Detail, Page Short Link Detail, Streak Type Detail,
      * Following Event Type Detail, Financial Batch Detail

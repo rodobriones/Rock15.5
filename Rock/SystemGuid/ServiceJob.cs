@@ -515,11 +515,6 @@ namespace Rock.SystemGuid
         public const string DATA_MIGRATIONS_173_UPDATE_NAMELESS_SCHEDULES = "4C7CC0FC-12A7-4578-B9B1-FEF2732EB912";
 
         /// <summary>
-        /// The job to run Post v18.0 Data Migrations to update an existing index on the CommunicationRecipient table.
-        /// </summary>
-        public const string DATA_MIGRATIONS_180_UPDATE_COMMUNICATIONRECIPIENT_INDEX = "FE519BCE-CCB8-42B7-A14C-1620859F23E8";
-
-        /// <summary>
         /// The job to run Post v18.0 Data Migrations to migrate existing eRA records from the History table to the Steps table.
         /// </summary>
         public const string DATA_MIGRATIONS_180_MIGRATE_ERA_DATA_TO_STEPS = "64CB888D-0F81-473B-B200-8FA38337DAED";
@@ -538,6 +533,11 @@ namespace Rock.SystemGuid
         /// The Job to run Post v18.0 Data Migrations to swap Block.
         /// </summary>
         public const string DATA_MIGRATIONS_180_SWAP_OBSIDIAN_BLOCKS = "B3663D0F-6426-44BB-9C43-D9921A0974D3";
+
+        /// <summary>
+        /// The Job to run Post v19.0 Data Migrations to swap Block.
+        /// </summary>
+        public const string DATA_MIGRATIONS_190_SWAP_OBSIDIAN_BLOCKS = "C05C0C81-12B2-4C35-9405-C3CE09E3CE75";
 
         /// <summary>
         /// The job to run Post v18.0 Data Migrations to populate the newly-added [CommunicationRecipient].[DeliveredDateTime] field.
@@ -563,5 +563,15 @@ namespace Rock.SystemGuid
         /// The job to run Post v18.0 Data Migrations to update the Manage My Account Page block setting for the recently-chopped Email Preference Entry block.
         /// </summary>
         public const string DATA_MIGRATIONS_180_UPDATE_EMAIL_PREFERENCE_ENTRY_BLOCK_MANAGE_MY_ACCOUNT_PAGE = "7319E385-8068-43FE-9085-6F9A21F5972B";
+
+        /// <summary>
+        /// The job to run Post v18.1 Data Migrations to add a new index to the FinancialBatch table.
+        /// </summary>
+        public const string DATA_MIGRATIONS_181_ADD_FINANCIALBATCH_INDEX = "EA5D69D8-8ABB-42CD-A664-48F6BC5E2C7F";
+
+        /// <summary>
+        /// The job to run Post v18.1 Data Migrations to add indexes to improve communication prep performance.
+        /// </summary>
+        public const string DATA_MIGRATIONS_181_ADD_INDEXES_FOR_COMMUNICATION_PREP = "88C42A48-6713-4CB1-BF6B-A12AB2E292E7";
     }
 }

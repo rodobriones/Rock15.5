@@ -29,6 +29,14 @@
             </div>
         </div>
 
+        <div v-if="$slots.middleSection" class="displaycard-middle">
+            <slot name="middleSection" />
+        </div>
+
+        <div v-if="$slots.rightMiddleSection" class="displaycard-right-middle">
+            <slot name="rightMiddleSection" />
+        </div>
+
         <div v-if="asideIconCssClass || aside" class="displaycard-aside">
             <i v-if="asideIconCssClass" :class="`${asideIconCssClass}`"></i>
             <small v-if="aside">{{ aside }}</small>
@@ -68,6 +76,22 @@
         </div>
     </div>
 </template>
+
+<style scoped>
+.displaycard-middle {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    text-align: center;
+}
+
+.displaycard-right-middle {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    text-align: center;
+}
+</style>
 
 <script setup lang="ts">
     import { computed, PropType, ref } from "vue";

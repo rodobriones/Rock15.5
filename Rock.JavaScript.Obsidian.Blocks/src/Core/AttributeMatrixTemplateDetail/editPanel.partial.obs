@@ -65,7 +65,6 @@
             <CodeEditor v-model="formattedLava"
                         label="Formatted Lava"
                         :editorHeight="400"
-                        theme="rock"
                         mode="lava"
                         help="This will determine how the Matrix Attribute Field will display its formatted value."
                         :disabled="!isEditable" />
@@ -151,7 +150,7 @@
     });
 
     const showNotification = computed((): boolean => {
-        if (props.modelValue?.bag?.idKey && templateAttributes.value.length == 0) {
+        if (props.modelValue?.bag?.idKey && templateAttributes.value.length === 0) {
             return true;
         }
         else {
@@ -268,8 +267,8 @@
             const index = templateAttributes.value.findIndex(a => a.guid === templateAttribute.value?.guid);
             if (index !== -1) {
                 // Get the updated attribute and rowItem.
-                let editedAttribute = templateAttributes.value.find(a => a.guid == templateAttribute.value?.guid);
-                let rowItem = attributesGridData.rows?.find(x => x.guid == templateAttribute.value?.guid);
+                let editedAttribute = templateAttributes.value.find(a => a.guid === templateAttribute.value?.guid);
+                let rowItem = attributesGridData.rows?.find(x => x.guid === templateAttribute.value?.guid);
 
                 if (editedAttribute) {
                     // Replace old attribute with updated attribute.

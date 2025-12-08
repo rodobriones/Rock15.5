@@ -64,7 +64,7 @@ import CampusAccountAmountPickerGallery from "./ControlGallery/campusAccountAmou
 import PersonPickerGallery from "./ControlGallery/personPickerGallery.partial.obs";
 import ImageEditorGallery from "./ControlGallery/imageEditorGallery.partial.obs";
 import HighlightLabelGallery from "./ControlGallery/highlightLabelGallery.partial.obs";
-import LightGridGallery from "./ControlGallery/lightGridGallery.partial.obs";
+import GridGallery from "./ControlGallery/gridGallery.partial.obs";
 import PdfViewerGallery from "./ControlGallery/pdfViewerGallery.partial.obs";
 import ChartGallery from "./ControlGallery/chartGallery.partial.obs";
 import EntityPickerGallery from "./ControlGallery/entityPickerGallery.partial.obs";
@@ -258,6 +258,7 @@ import CampusContextPickerGallery from "./ControlGallery/campusContextPickerGall
 import BarChartGallery from "./ControlGallery/barChartGallery.partial.obs";
 import PieChartGallery from "./ControlGallery/pieChartGallery.partial.obs";
 import ExperieceModePickerGallery from "./ControlGallery/experienceModePickerGallery.partial.obs";
+import PageTreeGallery from "./ControlGallery/pageTreeGallery.partial.obs";
 
 const controlGalleryComponents: Record<string, Component> = [
     NotificationBoxGallery,
@@ -414,7 +415,7 @@ const controlGalleryComponents: Record<string, Component> = [
     DropDownContentGallery,
     ButtonDropDownListGallery,
     CampusAccountAmountPickerGallery,
-    LightGridGallery,
+    GridGallery,
     ImageEditorGallery,
     HighlightLabelGallery,
     PdfViewerGallery,
@@ -461,6 +462,7 @@ const controlGalleryComponents: Record<string, Component> = [
     BarChartGallery,
     PieChartGallery,
     ExperieceModePickerGallery,
+    PageTreeGallery,
 ]
     // Fix vue 3 SFC putting name in __name.
     .map(a => {
