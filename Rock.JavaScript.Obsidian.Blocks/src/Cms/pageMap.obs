@@ -1,0 +1,309 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
+    <Panel :title="panelName"
+           type="block"
+           :isCollapsible="false"
+           :isInitiallyCollapsed="false">
+        <template #headerActions>
+            <DropDownMenu title="Add Page"
+                          :items="dropDownMenuItems"
+                          :align="'left'">
+                <i class="ti ti-plus"></i>
+            </DropDownMenu>
+        </template>
+        <PageTree v-if="pageInitialized"
+                  v-model="selectedPage"
+                  :rootPageGuid="rootPageGuid"
+                  :siteType="siteType"
+                  :multiple="false" />
+    </Panel>
+</template>
+<script setup lang="ts">
+    import { ref, watch, computed } from "vue";
+    import { SiteType } from "@Obsidian/Enums/Cms/siteType";
+    import { MenuAction } from "@Obsidian/Types/Controls/dropDownMenu";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { TreeItemBag } from "@Obsidian/ViewModels/Utility/treeItemBag";
+    import { PageMapOptionsBag } from "@Obsidian/ViewModels/Blocks/Cms/PageMap/pageMapOptionsBag";
+    import { PageTreeItemProvider } from "@Obsidian/Utility/treeItemProviders";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import DropDownMenu from "@Obsidian/Controls/dropDownMenu.obs";
+    import PageTree from "@Obsidian/Controls/pageTree.obs";
+
+    const options = useConfigurationValues<PageMapOptionsBag>();
+
+    // #region Values
+
+    const panelName = "Pages";
+
+    const rootPageGuid = options.rootPage ?? undefined;
+    const siteType = options.siteType !== undefined ? SiteType[options.siteType as keyof typeof SiteType] : undefined;
+
+    const itemProvider = new PageTreeItemProvider();
+    itemProvider.rootPageGuid = options.rootPage ?? undefined;
+    itemProvider.siteType = options.siteType !== undefined ? SiteType[options.siteType as keyof typeof SiteType] : undefined;
+    itemProvider.selectedPageGuids = [];
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    const errorMessage = ref("");
+
+    const pageId = getUrlParameter("Page");
+    const selectedPage = ref<ListItemBag | null>(null);
+    const isPageSelected = ref(false);
+
+    const pageInitialized = ref(false);
+    const isInitializing = ref(true);
+
+    // Get ExpandedParentIds from window.location.search (comma delimited)
+    const initiallyExpandedParentsOfSelected = ref<string[]>(
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            const expandedIds = params.get("ExpandedParentIds");
+            return expandedIds ? expandedIds.split(",") : [];
+        })()
+    );
+
+    const dropDownMenuItems = computed<MenuAction[]>(() => [
+        {
+            title: "Add Top-Level",
+            type: "default",
+            handler: async () => {
+                window.location.search = rebuildUrlSearch(0);
+            }
+        },
+        {
+            title: "Add Child To Selected",
+            disabled: !isPageSelected.value,
+            type: "default",
+            handler: async () => {
+                if (!isPageSelected.value) {
+                    return;
+                }
+
+                let parentPageId = selectedPage.value ? await getPageIdsKey(selectedPage.value.value!) : null;
+                if (Array.isArray(parentPageId)) {
+                    return;
+                }
+                if (parentPageId) {
+                    window.location.search = rebuildUrlSearch(0, parentPageId);
+                }
+            }
+        }
+    ]);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    // #endregion Computed Values
+
+    // #region Functions
+
+    async function initializeSelectedPage(): Promise<void> {
+        const initiallySelectedPageListItemBag = pageId !== null ? await getPagesListItemBag(pageId) : null;
+        if (initiallySelectedPageListItemBag !== null) {
+            if (Array.isArray(initiallySelectedPageListItemBag)) {
+                selectedPage.value = initiallySelectedPageListItemBag.length > 0 ? initiallySelectedPageListItemBag[0] : null;
+            }
+            else {
+                selectedPage.value = initiallySelectedPageListItemBag;
+            }
+        }
+
+        // Set initiallyExpandedParentsOfSelected to an array of .value from ListItemBags
+        const expandedParentList = await getPagesListItemBag(getUrlParameter("ExpandedParentIds")?.split(",") ?? "");
+        if (Array.isArray(expandedParentList)) {
+            initiallyExpandedParentsOfSelected.value = expandedParentList.map(item => item.value!);
+        }
+        else if (expandedParentList && expandedParentList.value) {
+            initiallyExpandedParentsOfSelected.value = [expandedParentList.value];
+        }
+        else {
+            initiallyExpandedParentsOfSelected.value = [];
+        }
+
+        initiallyExpandedParentsOfSelected.value.push(selectedPage.value ? selectedPage.value.value! : "");
+
+        itemProvider.selectedPageGuids = selectedPage.value ? [selectedPage.value.value!] : [];
+
+        pageInitialized.value = true;
+        isInitializing.value = false;
+    }
+
+    function getUrlParameter(parameterName: string): string | null {
+        const params = new URLSearchParams(window.location.search);
+        const param = { value: params.get(parameterName) };
+        return param?.value;
+    }
+
+    /**
+     * Rebuilds the URL search parameters based on the provided page ID,
+     * parent page ID, expanded parent IDs, and redirect flag.
+     *
+     * @param pageId The page ID to include in the URL.
+     * @param parentPageId The parent page ID to include in the URL.
+     * @param expandedIds The list of expanded parent IDs to include in the URL.
+     * @param redirect Whether to include the redirect parameter in the URL.
+     * @return The rebuilt URL search string.
+     */
+    function rebuildUrlSearch(pageId: string | number | null, parentPageId: string | null = null, expandedIds: string[] = [], redirect: boolean = false): string {
+        let url = `Page=${pageId ?? ""}`;
+
+        if (parentPageId) {
+            url += `&ParentPageId=${parentPageId}`;
+        }
+
+        if (expandedIds.length > 0) {
+            url += `&ExpandedParentIds=` + expandedIds.join(",");
+        }
+
+        url += `&Redirect=${redirect}`;
+
+        return url;
+    }
+
+    /**
+     * Finds the parent of a given child GUID within a list of TreeItemBags.
+     *
+     * @param items The list of TreeItemBags to search.
+     * @param childGuid The GUID of the child item whose parent is to be found.
+     * @return The parent TreeItemBag if found; otherwise, null.
+     * @remark This function performs a recursive search through the tree structure.
+     *         However, only selected items and their ancestors are loaded, so the
+     *         impact of recursion is minimal.
+     */
+    const findParent = (items: TreeItemBag[], childGuid: string): TreeItemBag | null => {
+        for (const item of items) {
+            if (item.children?.some(child => child.value === childGuid)) {
+                return item;
+            }
+            if (item.children && item.children.length > 0) {
+                const parent = findParent(item.children, childGuid);
+                if (parent) {
+                    return parent;
+                }
+            }
+        }
+        return null;
+    };
+
+    // #endregion Functions
+
+    // #region Block Actions
+
+    /**
+     * Returns the page ID key(s) associated with the specified page GUID.
+     * If the page GUID maps to a single page, a string is returned.
+     * If the page GUID maps to multiple pages, an array of strings is returned.
+     *
+     * @param pageGuids The page GUID(s) to look up.
+     * @return A string or an array of strings representing the page ID key(s).
+     */
+    async function getPageIdsKey(pageGuids: string[] | string): Promise<string[] | string | null> {
+        if (typeof pageGuids === "string") {
+            pageGuids = [pageGuids];
+        }
+
+        const result = await invokeBlockAction<string[] | null>("GetPageIdsKey", { pageGuids });
+        if (result.isSuccess) {
+            if (pageGuids.length > 1) {
+                return result.data;
+            }
+            else if (result.data && pageGuids.length === 1) {
+                return result.data[0];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the ListItemBag for the specified page ID.
+     *
+     * @param pageId The page ID to look up. If null or empty, the PageId URL parameter is used.
+     * @return A Promise that resolves to the ListItemBag of the page.
+     */
+    async function getPagesListItemBag(pageIds: string[] | string): Promise<ListItemBag[] | ListItemBag> {
+        if (typeof pageIds === "string") {
+            pageIds = [pageIds];
+        }
+
+        const result = await invokeBlockAction<ListItemBag[] | ListItemBag>("GetPagesListItemBag", { pageIds });
+
+        if (result.isSuccess && result.data) {
+            if (pageIds.length > 1) {
+                return result.data;
+            }
+            else {
+                return result.data[0];
+            }
+        }
+
+        return {};
+    }
+
+    // #endregion Block Actions
+
+    /**
+     * Watch for changes to the selected page and update the URL accordingly.
+     * @remarks This will cause a page reload.
+     * @param newValue The newly selected page.
+     * @param oldValue The previously selected page.
+     */
+    watch(selectedPage, async (newValue, oldValue) => {
+        if (isInitializing.value) {
+            if (newValue && newValue.value) {
+                isPageSelected.value = true;
+            }
+            else {
+                isPageSelected.value = false;
+            }
+            // Do not trigger navigation during initialization
+            return;
+        }
+        if (newValue && newValue.value) {
+            // Update the drop down menu items to enable/disable the "Add Child To Selected" item.
+            isPageSelected.value = newValue !== null;
+
+            // Only navigate if:
+            // - This is the first user selection (oldValue is null/undefined, newValue is set)
+            // - OR, the user changed selection (oldValue and newValue are set, and their values differ)
+            const isFirstUserSelection = oldValue === null || oldValue === undefined;
+            const isSelectionChanged = oldValue && newValue.value !== oldValue.value;
+            if (isFirstUserSelection || isSelectionChanged) {
+                // Prevent navigation only if the selected page is already the current page in the URL
+                const currentPageId = getUrlParameter("Page");
+                if (newValue.value !== currentPageId) {
+                    itemProvider.selectedPageGuids = [newValue.value];
+                    const items = await itemProvider.getRootItems([]);
+
+                    // Find parents and grandparents of the selected page
+                    const expandedGuids: string[] = [];
+                    let currentGuid = newValue.value;
+                    while (currentGuid) {
+                        const parentOfCurrentGuid = findParent(items, currentGuid);
+                        if (parentOfCurrentGuid && parentOfCurrentGuid.value) {
+                            expandedGuids.unshift(parentOfCurrentGuid.value);
+                            currentGuid = parentOfCurrentGuid.value;
+                        }
+                        else {
+                            break;
+                        }
+                    }
+
+                    // Build IDs for the URL
+                    const pageIdKeyResult = await getPageIdsKey(newValue.value);
+                    const pageIdKey = Array.isArray(pageIdKeyResult) ? null : pageIdKeyResult;
+                    const expandedIdsResult = await getPageIdsKey(expandedGuids);
+                    const expandedIds = Array.isArray(expandedIdsResult) ? expandedIdsResult : (expandedIdsResult ? [expandedIdsResult] : []);
+                    window.location.search = rebuildUrlSearch(pageIdKey, null, expandedIds, false);
+                }
+            }
+        }
+    }, { immediate: true });
+
+    initializeSelectedPage();
+</script>
