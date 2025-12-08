@@ -1,11 +1,9 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Common.Mobile.Enums;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -218,6 +216,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 contact.InstagramProfileUrl = contactProfileBag.InstagramProfileUrl;
                 contact.XProfileUrl = contactProfileBag.XProfileUrl;
 
+                contact.HasBeenBaptized = contactProfileBag.BaptismDay.HasValue && contactProfileBag.BaptismMonth.HasValue;
+                contact.HasAcceptedJesus = contactProfileBag.SalvationDay.HasValue && contactProfileBag.SalvationMonth.HasValue;
+
                 RockContext.SaveChanges();
             } );
 
@@ -306,7 +307,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <param name="reminderNote"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult AddReminderTouchpoint(string contactIdKey, DateTimeOffset reminderDate, string reminderNote)
+        public BlockActionResult AddReminderTouchpoint( string contactIdKey, DateTimeOffset reminderDate, string reminderNote )
         {
             ContactService contactService = new ContactService( RockContext );
             var contact = contactService.Get( contactIdKey );
