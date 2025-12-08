@@ -14,6 +14,7 @@ namespace Rock.Blocks.Cms
     [DisplayName( "Page Map" )]
     [Category( "CMS" )]
     [Description( "Displays a page map in a tree view." )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
 
@@ -31,6 +32,7 @@ namespace Rock.Blocks.Cms
 
     #endregion Block Attributes
 
+    //was [Rock.SystemGuid.BlockTypeGuid( "362179DE-5E57-46AE-A41D-A1E0F869179F" )]
     [Rock.SystemGuid.BlockTypeGuid( "2700A1B8-BD1A-40F1-A660-476DA86D0432" )]
     public class PageMap : RockBlockType
     {
