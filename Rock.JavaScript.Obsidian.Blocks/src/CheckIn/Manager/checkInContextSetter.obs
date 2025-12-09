@@ -51,6 +51,7 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-medium);
+    margin-right: var(--spacing-medium);
 }
 
 .context-setters-container > .contextsetter-campus {

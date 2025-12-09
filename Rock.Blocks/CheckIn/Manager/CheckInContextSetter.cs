@@ -135,7 +135,7 @@ namespace Rock.Blocks.CheckIn.Manager
                     </button>";
             }
             return $@"
-<div class=""context-setters-container"" style=""display: flex; align-items: center; gap: var(--spacing-medium);"">
+<div class=""context-setters-container"" style=""display: flex; align-items: center; gap: var(--spacing-medium); margin-right: var(--spacing-medium);"">
     <ul class=""nav navbar-nav contextsetter contextsetter-campus"" style=""margin: 0;"">
         <li class=""dropdown"">
             <a class=""dropdown-toggle navbar-link"" href=""#"" data-toggle=""dropdown"">
