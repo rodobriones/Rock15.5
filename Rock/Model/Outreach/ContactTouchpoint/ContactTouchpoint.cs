@@ -66,7 +66,7 @@ namespace Rock.Model
         /// Gets or sets the communication medium.
         /// </summary>
         [DataMember]
-        public TouchpointCommunicationMedium CommunicationMedium { get; set; }
+        public TouchpointCommunicationMedium? CommunicationMedium { get; set; }
 
         /// <summary>
         /// Gets or sets the shared entity type identifier.

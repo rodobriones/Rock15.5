@@ -7,13 +7,13 @@ namespace Rock.Migrations
     using System.Resources;
     
     [GeneratedCode("EntityFramework.Migrations", "6.4.4")]
-    public sealed partial class TempAddOutreachModel : IMigrationMetadata
+    public sealed partial class TempOutreachModel : IMigrationMetadata
     {
-        private readonly ResourceManager Resources = new ResourceManager(typeof(TempAddOutreachModel));
+        private readonly ResourceManager Resources = new ResourceManager(typeof(TempOutreachModel));
         
         string IMigrationMetadata.Id
         {
-            get { return "202510231716059_TempAddOutreachModel"; }
+            get { return "202512082306324_TempOutreachModel"; }
         }
         
         string IMigrationMetadata.Source

@@ -52,6 +52,18 @@ namespace Rock.Model
         public bool CanDelete( Contact item, out string errorMessage )
         {
             errorMessage = string.Empty;
+
+            if ( new Service<ContactRelationshipStrengthChanges>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactRelationshipStrengthChanges.FriendlyTypeName );
+                return false;
+            }
+
+            if ( new Service<ContactTouchpoint>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactTouchpoint.FriendlyTypeName );
+                return false;
+            }
             return true;
         }
     }

@@ -22,7 +22,7 @@ namespace Rock.Migrations
     /// <summary>
     ///
     /// </summary>
-    public partial class TempAddOutreachModel : Rock.Migrations.RockMigration
+    public partial class TempOutreachModel : Rock.Migrations.RockMigration
     {
         /// <summary>
         /// Operations to be performed during the upgrade process.
@@ -96,8 +96,8 @@ namespace Rock.Migrations
                     {
                         Id = c.Int(nullable: false, identity: true),
                         ContactId = c.Int(nullable: false),
-                        PreviousRelationshipStrength = c.Int(nullable: false),
-                        NewRelationshipStrength = c.Int(nullable: false),
+                        PreviousRelationshipStrength = c.Int(),
+                        NewRelationshipStrength = c.Int(),
                         HasAcceptedJesus = c.Boolean(),
                         WasAcceptanceInfluencedByApp = c.Boolean(),
                         HasBeenBaptized = c.Boolean(),
@@ -123,7 +123,7 @@ namespace Rock.Migrations
                         ScheduledDateTime = c.DateTime(nullable: false),
                         CompletedDateTime = c.DateTime(),
                         SystemNote = c.String(maxLength: 1000),
-                        CommunicationMedium = c.Int(nullable: false),
+                        CommunicationMedium = c.Int(),
                         SharedEntityTypeId = c.Int(),
                         SharedEntityId = c.Int(),
                         SharedSummary = c.String(maxLength: 250),

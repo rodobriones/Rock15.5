@@ -30,13 +30,13 @@ namespace Rock.Model
         /// Gets or sets the previous relationship strength.
         /// </summary>
         [DataMember]
-        public RelationshipStrength PreviousRelationshipStrength { get; set; }
+        public RelationshipStrength? PreviousRelationshipStrength { get; set; }
 
         /// <summary>
         /// Gets or sets the new relationship strength.
         /// </summary>
         [DataMember]
-        public RelationshipStrength NewRelationshipStrength { get; set; }
+        public RelationshipStrength? NewRelationshipStrength { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the change was app influenced growth.
