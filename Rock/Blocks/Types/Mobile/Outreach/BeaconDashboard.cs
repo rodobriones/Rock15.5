@@ -299,20 +299,21 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 } ).ToList();
 
             // Calculate the percentage of touchpoints finished on time.
-            var touchpointsFinishedOnTime = touchpointService
+            var completedTouchpoints = touchpointService
                 .Queryable()
                 .Where( tp => tp.CompletedDateTime != null )
-                .Where( tp => personContactIds.Contains( tp.ContactId ) )
-                .Where( tp => tp.CompletedDateTime.Value <= tp.ScheduledDateTime )
+                .Where( tp => personContactIds.Contains( tp.ContactId ) );
+
+            var totalCompleted = completedTouchpoints.Count();
+
+            var finishedOnTime = completedTouchpoints
+                .Where( tp => tp.CompletedDateTime.Value <= DbFunctions.AddDays( tp.ScheduledDateTime, 1 ) )
                 .Count();
-            var totalTouchpointsCompleted = touchpointService
-                .Queryable()
-                .Where( tp => tp.CompletedDateTime != null )
-                .Where( tp => personContactIds.Contains( tp.ContactId ) )
-                .Count();
-            var percentTouchpointsFinishedOnTime = totalTouchpointsCompleted == 0
+
+            var percentTouchpointsFinishedOnTime = totalCompleted == 0
                 ? 0
-                : ( int ) Math.Round( ( double ) touchpointsFinishedOnTime / totalTouchpointsCompleted * 100 );
+                : ( int ) Math.Round( ( double ) finishedOnTime / totalCompleted * 100 );
+
 
             var data = new InitialDataBag
             {
