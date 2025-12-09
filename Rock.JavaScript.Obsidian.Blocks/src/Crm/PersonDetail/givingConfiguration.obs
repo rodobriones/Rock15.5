@@ -246,40 +246,6 @@
     </Panel>
 </template>
 
-<style scoped>
-.rollover-container-nested {
-    transition: background-color 0.3s;
-}
-
-.rollover-container-nested:hover {
-    background-color: var(--color-interface-lightest);
-}
-
-.btn-link:hover {
-    text-decoration: underline;
-}
-
-.showinactive {
-    background-color: var(--color-interface-lightest);
-    border: none;
-    color: var(--color-link);
-}
-
-.separator {
-    margin-top: 2px;
-    margin-bottom: 24px;
-    border: 0;
-    border-top: 1px solid var(--color-interface-soft) !important;
-    width: calc(100% + 40px);
-    margin-left: -20px;
-}
-
-.content-section {
-    margin-top: var(--spacing-medium);
-    margin-bottom: var(--spacing-medium);
-}
-</style>
-
 <script setup lang="ts">
     import { computed, ref } from "vue";
     import { useInvokeBlockAction, useConfigurationValues, onConfigurationValuesChanged } from "@Obsidian/Utility/block";

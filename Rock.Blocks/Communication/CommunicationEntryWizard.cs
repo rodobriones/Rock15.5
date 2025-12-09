@@ -3030,39 +3030,8 @@ namespace Rock.Blocks.Communication
                         }
                     }
 
-                    /*
-                        1/2/2024 - JPH
-
-                        Rather than leveraging the default EF behavior of inserting each new recipient one-by-one,
-                        let's remove them from change tracking and perform a BULK INSERT operation instead, after
-                        saving the parent Communication record.
-
-                        We can get away with this because none of the downstream processes further reference the
-                        Communication.Recipients collection. If this changes, we will need to rethink this strategy.
-
-                        Reason: Communications with a large number of recipients time out and don't send.
-                        https://github.com/SparkDevNetwork/Rock/issues/5651
-                    */
-                    var newRecipients = new List<CommunicationRecipient>( communication.Recipients.Where( r => r.Id == 0 ) );
-
-                    // Stop tracking these entities.
-                    communication.Recipients.RemoveAll( newRecipients );
-
-                    // Save the communication entity and any updated/deleted recipients.
+                    // Save the communication entity.
                     rockContext.SaveChanges();
-
-                    if ( newRecipients.Any() )
-                    {
-                        using ( var bulkInsertActivity = ObservabilityHelper.StartActivity( "COMMUNICATION: Entry Wizard > Send Communication > Bulk-Insert New Communication Recipients" ) )
-                        {
-                            foreach ( var recipient in newRecipients )
-                            {
-                                recipient.CommunicationId = communication.Id;
-                            }
-
-                            rockContext.BulkInsert<CommunicationRecipient>( newRecipients );
-                        }
-                    }
                 }
 
                 // send approval email if needed (now that we have a communication id)

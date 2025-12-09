@@ -15,7 +15,7 @@ export const EditComponent = defineComponent({
     props: getFieldEditorProps(),
 
     setup(props, { emit }) {
-        const internalValue = ref({} as ListItemBag);
+        const internalValue = ref([] as ListItemBag[]);
 
         // The selected Entity Type.
         const entityTypeGuid = computed((): string | null | undefined => {
@@ -24,7 +24,7 @@ export const EditComponent = defineComponent({
         });
 
         watch(() => props.modelValue, () => {
-            internalValue.value = JSON.parse(props.modelValue || "null");
+            internalValue.value = JSON.parse(props.modelValue || "[]");
         }, { immediate: true });
 
         watch(() => internalValue.value, () => {
