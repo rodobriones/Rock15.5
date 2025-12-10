@@ -101,11 +101,6 @@ namespace Rock.Blocks.Finance
         /// <value>
         /// The account identifiers to use when filtering the batches.
         /// </value>
-        //protected List<Guid> FilterAccounts => GetBlockPersonPreferences()
-        //    .GetValue( PreferenceKey.FilterAccounts )
-        //    .FromJsonOrNull<List<ListItemBag>>()
-        //    ?.Select( li => li.Value.AsGuid() )
-        //    .ToList() ?? new List<Guid>();
         protected List<Guid> FilterAccounts => GetBlockPersonPreferences()
             .GetValue( PreferenceKey.FilterAccounts )
             .Split( ',' )
@@ -169,13 +164,6 @@ namespace Rock.Blocks.Finance
 
             options.IncludeOptions = personPreferences.GetValue( PreferenceKey.FilterInclude );
 
-            var currencyInfo = new RockCurrencyCodeInfo();
-            options.CurrencyInfo = new ViewModels.Utility.CurrencyInfoBag
-            {
-                Symbol = currencyInfo.Symbol,
-                DecimalPlaces = currencyInfo.DecimalPlaces,
-                SymbolLocation = currencyInfo.SymbolLocation
-            };
             return options;
         }
 
@@ -194,7 +182,7 @@ namespace Rock.Blocks.Finance
 
         /// <summary>
         /// Gets the grid builder that will provide all the details and values
-        /// of the recipients grid.
+        /// of the grid.
         /// </summary>
         /// <returns>An instance of <see cref="GridBuilder{T}"/>.</returns>
         private GridBuilder<PledgeGridDataBag> GetPledgeGridBuilder()
@@ -203,8 +191,8 @@ namespace Rock.Blocks.Finance
                 .WithBlock( this )
                 .AddField( "personId", a => a.PersonId )
                 .AddField( "personGuid", a => a.PersonGuid )
-                .AddField( "personNickName", a => a.PersonNickName )
-                .AddField( "personLastName", a => a.PersonLastName )
+                .AddTextField( "personNickName", a => a.PersonNickName )
+                .AddTextField( "personLastName", a => a.PersonLastName )
                 .AddTextField( "personFullNameReversed", a => a.PersonFullNameReversed )
                 .AddField( "personEmail", a => a.PersonEmail )
                 .AddField( "pledgeTotal", a => a.PledgeTotal )
@@ -284,6 +272,7 @@ namespace Rock.Blocks.Finance
 
             return GetPledgeGridBuilder().Build( gridData );
         }
+
         #endregion Methods
 
         #region Block Actions
@@ -304,48 +293,6 @@ namespace Rock.Blocks.Finance
 
             return ActionOk( bag );
         }
-
-        #endregion Block Actions
-
-        #region Helper Methods
-        private static T FieldOrDefault<T>( DataRow row, string column )
-        {
-            if ( !row.Table.Columns.Contains( column ) )
-            {
-                return default( T )!;
-            }
-            var val = row[column];
-            if ( val == null || val == DBNull.Value )
-            {
-                return default( T )!;
-            }
-            if ( val is T typed )
-            {
-                return typed;
-            }
-            var target = Nullable.GetUnderlyingType( typeof( T ) ) ?? typeof( T );
-            return ( T ) Convert.ChangeType( val, target, CultureInfo.InvariantCulture );
-        }
-
-        private static NumberRange CalculateNumberRangeFromDelimitedValues( string value )
-        {
-            var numberRange = new NumberRange();
-            if ( string.IsNullOrWhiteSpace( value ) )
-            {
-                return numberRange;
-            }
-            var values = value.Split( ',' );
-            if ( values.Length > 0 )
-            {
-                numberRange.LowerValue = values[0].AsIntegerOrNull();
-            }
-            if ( values.Length > 1 )
-            {
-                numberRange.UpperValue = values[1].AsIntegerOrNull();
-            }
-            return numberRange;
-        }
-
 
         /// <summary>
         /// Creates an entity set for the subset of selected rows in the grid.
@@ -401,7 +348,46 @@ namespace Rock.Blocks.Finance
             return ActionOk( rockCommunication.Id.ToString() );
         }
 
+        #endregion Block Actions
+
         #region Helper Methods
+        private static T FieldOrDefault<T>( DataRow row, string column )
+        {
+            if ( !row.Table.Columns.Contains( column ) )
+            {
+                return default( T )!;
+            }
+            var val = row[column];
+            if ( val == null || val == DBNull.Value )
+            {
+                return default( T )!;
+            }
+            if ( val is T typed )
+            {
+                return typed;
+            }
+            var target = Nullable.GetUnderlyingType( typeof( T ) ) ?? typeof( T );
+            return ( T ) Convert.ChangeType( val, target, CultureInfo.InvariantCulture );
+        }
+
+        private static NumberRange CalculateNumberRangeFromDelimitedValues( string value )
+        {
+            var numberRange = new NumberRange();
+            if ( string.IsNullOrWhiteSpace( value ) )
+            {
+                return numberRange;
+            }
+            var values = value.Split( ',' );
+            if ( values.Length > 0 )
+            {
+                numberRange.LowerValue = values[0].AsIntegerOrNull();
+            }
+            if ( values.Length > 1 )
+            {
+                numberRange.UpperValue = values[1].AsIntegerOrNull();
+            }
+            return numberRange;
+        }
 
         /*
             12/10/2025 - N.A.
@@ -432,9 +418,6 @@ namespace Rock.Blocks.Finance
         {
             return true;
         }
-
-        #endregion
-
 
         #endregion
 
@@ -508,32 +491,72 @@ namespace Rock.Blocks.Finance
             public int GivingCount { get; set; }
         }
 
-        class ComputedFilters
+        private class ComputedFilters
         {
+            /// <summary>
+            /// Financial account identifiers (database Ids) resolved from selected account GUIDs; used by the server query.
+            /// </summary>
             public List<int> AccountIds { get; set; }
 
+            /// <summary>
+            /// Inclusive lower bound of the pledge date range; null means unbounded.
+            /// </summary>
             public DateTime? PledgeStartDate { get; set; }
 
+            /// <summary>
+            /// Inclusive upper bound of the pledge date range; null means unbounded.
+            /// </summary>
             public DateTime? PledgeEndDate { get; set; }
 
+            /// <summary>
+            /// Inclusive lower bound of the giving (gift transaction) date range; null means unbounded.
+            /// </summary>
             public DateTime? GivingStartDate { get; set; }
+
+            /// <summary>
+            /// Inclusive upper bound of the giving (gift transaction) date range; null means unbounded.
+            /// </summary>
             public DateTime? GivingEndDate { get; set; }
 
+            /// <summary>
+            /// Minimum pledge amount (whole currency units); null means no minimum.
+            /// </summary>
             public int? PledgeAmountLowerValue { get; set; }
+
+            /// <summary>
+            /// Maximum pledge amount (whole currency units); null means no maximum.
+            /// </summary>
             public int? PledgeAmountUpperValue { get; set; }
 
+            /// <summary>
+            /// Minimum percent complete (usually 0–100); null means no minimum.
+            /// </summary>
             public int? PercentCompleteLowerValue { get; set; }
+
+            /// <summary>
+            /// Maximum percent complete (usually 0–100); null means no maximum.
+            /// </summary>
             public int? PercentCompleteUpperValue { get; set; }
 
+            /// <summary>
+            /// Minimum amount given (whole currency units); null means no minimum.
+            /// </summary>
             public int? AmountGivenLowerValue { get; set; }
+
+            /// <summary>
+            /// Maximum amount given (whole currency units); null means no maximum.
+            /// </summary>
             public int? AmountGivenUpperValue { get; set; }
 
+            /// <summary>
+            /// Selected include option from the UI (e.g., pledges, gifts, or both).
+            /// </summary>
             public int? IncludeOption { get; set; }
 
             /// <summary>
             /// Create the computed filters from the data in the filter bag and the attributes found on the block cache.
             /// </summary>
-            public ComputedFilters( FinancialPledgeAnalyticsFiltersBag filterBag, BlockCache blockCache )
+            internal ComputedFilters( FinancialPledgeAnalyticsFiltersBag filterBag, BlockCache blockCache )
             {
                 // Convert the guids to ids for the AccountIds needed for the server query later.
                 var selectedAccountGuids = filterBag.PledgeAccounts?.ConvertAll( lb => lb.Value.AsGuid() );
@@ -570,203 +593,15 @@ namespace Rock.Blocks.Finance
             }
         }
 
+        /// <summary>
+        /// Used to keep track of the lower and upper values for a number range.
+        /// </summary>
         internal class NumberRange
         {
             public int? LowerValue { get; set; } = null;
             public int? UpperValue { get; set; } = null;
         }
+
         #endregion Helper Classes
-
-        //---------------------------------------------------------------------------
-
-        #region Fields
-
-        #endregion
-
-        #region Properties
-
-        // used for public / protected properties
-
-        #endregion
-
-        //#region Methods
-
-        ///// <summary>
-        ///// Binds the grid.
-        ///// </summary>
-        //private void BindGrid()
-        //{
-        //    pnlUpdateMessage.Visible = false;
-        //    pnlResults.Visible = true;
-        //    pnlSummary.Visible = true;
-
-        //    int[] accountIds = apAccounts.SelectedIds;
-        //    if ( accountIds.Length == 0 )
-        //    {
-        //        return;
-        //    }
-
-        //    var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( drpSlidingDateRange.DelimitedValues );
-        //    DateTime? start = dateRange.Start ?? ( DateTime? ) System.Data.SqlTypes.SqlDateTime.MinValue;
-        //    DateTime? end = dateRange.End ?? ( DateTime? ) System.Data.SqlTypes.SqlDateTime.MaxValue;
-
-        //    var minPledgeAmount = nrePledgeAmount.LowerValue;
-        //    var maxPledgeAmount = nrePledgeAmount.UpperValue;
-
-        //    var minComplete = nrePercentComplete.LowerValue;
-        //    var maxComplete = nrePercentComplete.UpperValue;
-
-        //    var minGiftAmount = nreAmountGiven.LowerValue;
-        //    var maxGiftAmount = nreAmountGiven.UpperValue;
-
-        //    int includeOption = rblInclude.SelectedValueAsInt() ?? 0;
-        //    bool includePledges = includeOption != 1;
-        //    bool includeGifts = includeOption != 0;
-
-        //    var rockContextAnalytics = new RockContextAnalytics();
-        //    rockContextAnalytics.Database.CommandTimeout = this.GetAttributeValue( AttributeKeys.DatabaseTimeoutSeconds ).AsIntegerOrNull() ?? 180;
-
-        //    DataSet ds = new FinancialPledgeService( rockContextAnalytics ).GetPledgeAnalyticsDataSet( accountIds, start, end,
-        //        minPledgeAmount, maxPledgeAmount, minComplete, maxComplete, minGiftAmount, maxGiftAmount,
-        //        includePledges, includeGifts );
-        //    System.Data.DataView dv = ds.Tables[0].DefaultView;
-
-        //    if ( gList.SortProperty != null )
-        //    {
-        //        try
-        //        {
-        //            var sortProperties = new List<string>();
-        //            foreach ( string prop in gList.SortProperty.Property.SplitDelimitedValues( false ) )
-        //            {
-        //                sortProperties.Add( string.Format( "[{0}] {1}", prop, gList.SortProperty.DirectionString ) );
-        //            }
-        //            dv.Sort = sortProperties.AsDelimited( ", " );
-        //        }
-        //        catch
-        //        {
-        //            dv.Sort = "[LastName] ASC, [NickName] ASC";
-        //        }
-        //    }
-        //    else
-        //    {
-        //        dv.Sort = "[LastName] ASC, [NickName] ASC";
-        //    }
-
-        //    gList.DataSource = dv;
-        //    gList.DataBind();
-
-        //    decimal pledgeTotal = 0;
-        //    decimal totalGivingAmount = 0;
-        //    foreach ( DataRow row in ds.Tables[0].Rows )
-        //    {
-        //        if ( !DBNull.Value.Equals( row["PledgeAmount"] ) )
-        //        {
-        //            pledgeTotal += ( decimal ) row["PledgeAmount"];
-        //        }
-
-        //        if ( !DBNull.Value.Equals( row["GiftAmount"] ) )
-        //        {
-        //            totalGivingAmount += ( decimal ) row["GiftAmount"];
-        //        }
-        //    }
-
-        //    lPledgeTotal.Text = pledgeTotal.FormatAsCurrencyWithDecimalPlaces( 2 );
-        //    lTotalGivingAmount.Text = totalGivingAmount.FormatAsCurrencyWithDecimalPlaces( 2 );
-        //}
-
-        ///// <summary>
-        ///// Saves the attendance reporting settings to user preferences.
-        ///// </summary>
-        //private void SaveSettingsToUserPreferences()
-        //{
-        //    var preferences = GetBlockPersonPreferences();
-
-        //    preferences.SetValue( "apAccounts", apAccounts.SelectedIds.ToList().AsDelimited( "," ) );
-
-        //    preferences.SetValue( "drpDateRange", drpSlidingDateRange.DelimitedValues );
-
-        //    preferences.SetValue( "nrePledgeAmount", nrePledgeAmount.DelimitedValues );
-        //    preferences.SetValue( "nrePercentComplete", nrePercentComplete.DelimitedValues );
-        //    preferences.SetValue( "nreAmountGiven", nreAmountGiven.DelimitedValues );
-
-        //    preferences.SetValue( "Include", rblInclude.SelectedValue );
-
-        //    preferences.Save();
-        //}
-
-        ///// <summary>
-        ///// Loads the attendance reporting settings from user preferences.
-        ///// </summary>
-        //private void LoadSettingsFromUserPreferences()
-        //{
-        //    var preferences = GetBlockPersonPreferences();
-
-        //    var accountSettings = preferences.GetValue( "apAccounts" ).SplitDelimitedValues().AsIntegerList();
-
-        //    apAccounts.SetValues( accountSettings );
-
-        //    string slidingDateRangeSettings = preferences.GetValue( "drpDateRange" );
-        //    if ( string.IsNullOrWhiteSpace( slidingDateRangeSettings ) )
-        //    {
-        //        // default to current year
-        //        drpSlidingDateRange.SlidingDateRangeMode = SlidingDateRangePicker.SlidingDateRangeType.Current;
-        //        drpSlidingDateRange.TimeUnit = SlidingDateRangePicker.TimeUnitType.Year;
-        //    }
-        //    else
-        //    {
-        //        var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( slidingDateRangeSettings );
-        //        if ( !dateRange.Start.HasValue && !dateRange.End.HasValue )
-        //        {
-        //            // default to current year
-        //            drpSlidingDateRange.SlidingDateRangeMode = SlidingDateRangePicker.SlidingDateRangeType.Current;
-        //            drpSlidingDateRange.TimeUnit = SlidingDateRangePicker.TimeUnitType.Year;
-        //        }
-        //        else
-        //        {
-        //            drpSlidingDateRange.DelimitedValues = slidingDateRangeSettings;
-        //        }
-        //    }
-
-        //    nrePledgeAmount.DelimitedValues = preferences.GetValue( "nrePledgeAmount" );
-        //    nrePercentComplete.DelimitedValues = preferences.GetValue( "nrePercentComplete" );
-        //    nreAmountGiven.DelimitedValues = preferences.GetValue( "nreAmountGiven" );
-
-        //    string includeSetting = preferences.GetValue( "Include" );
-        //    if ( !string.IsNullOrWhiteSpace( includeSetting ) )
-        //    {
-        //        rblInclude.SetValue( Int32.Parse( includeSetting ) );
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Formats the name.
-        ///// </summary>
-        ///// <param name="lastname">The lastname.</param>
-        ///// <param name="nickname">The nickname.</param>
-        ///// <returns></returns>
-        //protected string FormatName( object lastname, object nickname )
-        //{
-        //    string result = string.Empty;
-
-        //    if ( lastname != null )
-        //    {
-        //        result = lastname.ToString();
-        //    }
-
-        //    if ( nickname != null )
-        //    {
-        //        if ( !string.IsNullOrWhiteSpace( result ) )
-        //        {
-        //            result += ", ";
-        //        }
-
-        //        result += nickname;
-        //    }
-
-        //    return result;
-        //}
-
-        //#endregion
-
     }
 }

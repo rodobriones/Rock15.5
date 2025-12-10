@@ -66,11 +66,6 @@ namespace Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics
         /// </summary>
         public string IncludeOptions { get; set; }
 
-        /// <summary>
-        /// Gets or sets the currency information.
-        /// </summary>
-        public CurrencyInfoBag CurrencyInfo { get; set; }
-
         #endregion
     }
 }

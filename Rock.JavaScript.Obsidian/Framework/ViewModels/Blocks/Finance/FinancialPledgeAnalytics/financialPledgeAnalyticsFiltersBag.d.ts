@@ -44,7 +44,4 @@ export type FinancialPledgeAnalyticsFiltersBag = {
 
     /** Gets or sets the pledge accounts. */
     pledgeAccounts?: ListItemBag[] | null;
-
-    /** Gets or sets the currency information. */
-    currencyInfo?: CurrencyInfoBag | null;
 };

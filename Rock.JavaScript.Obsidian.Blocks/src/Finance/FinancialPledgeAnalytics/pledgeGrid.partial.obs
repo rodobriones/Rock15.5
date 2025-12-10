@@ -103,7 +103,6 @@
 
 <script setup lang="ts">
     import { PropType, ref, watch } from "vue";
-    import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import Grid, { Column, CurrencyColumn, NumberColumn, TextColumn, numberValueFilter, textValueFilter, SelectColumn } from "@Obsidian/Controls/grid";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
     import { GridDefinitionBag } from "@Obsidian/ViewModels/Core/Grid/gridDefinitionBag";
