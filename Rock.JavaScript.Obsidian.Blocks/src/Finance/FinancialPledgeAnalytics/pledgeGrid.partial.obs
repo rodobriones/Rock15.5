@@ -1,0 +1,153 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <Panel v-if="!isLoading && !hasResults" type="block">
+        <template #headerActions>
+            <div class="mr-3" style="font-size: 18px"><span class="label label-default"><span class="label-value">0 Records</span></span></div>
+        </template>
+        <NothingToShow />
+    </Panel>
+
+    <Grid v-else :definition="config ?? undefined"
+          :data="gridData ?? undefined"
+          :entityTypeGuid="EntityType.Person"
+          personKeyField="personGuid"
+          tooltipField="personEmail"
+          stickyHeader
+          keyField="personId"
+          itemTerm="Item"
+          title="&nbsp;"
+          @selectItem="onSelectItem"
+          liveUpdates
+          disablePreferences>
+        <SelectColumn />
+
+        <Column name="id"
+                title="ID"
+                field="personId"
+                :hideOnScreen="true" />
+
+        <Column name="personGuid"
+                title="Guid"
+                field="personGuid" />
+
+        <TextColumn name="personFullNameReversed"
+                    title="Person"
+                    field="personFullNameReversed"
+                    :filter="textValueFilter" />
+
+        <TextColumn name="personEmail"
+                    title="Email"
+                    field="personEmail"
+                    :hideOnScreen="true" />
+
+        <CurrencyColumn name="pledgeTotal"
+                        title="Pledge Total"
+                        field="pledgeTotal"
+                        :filter="numberValueFilter"
+                        visiblePriority="xs" />
+
+        <CurrencyColumn name="totalGivingAmount"
+                        title="Total Giving Amount"
+                        field="totalGivingAmount"
+                        :itemClass="'justify-content-end text-end'"
+                        :filter="numberValueFilter"
+                        visiblePriority="xs" />
+
+        <Column name="percentComplete"
+                title="Percent Complete"
+                field="percentComplete"
+                :headerClass="'grid-column-header-number'"
+                :itemClass="'justify-content-end text-right'"
+                :filter="numberValueFilter"
+                :filterValue="getPercentCompleteFilterValue"
+                :quickFilterValue="getPercentCompleteFilterValueAsText">
+            <template #format="{ row }">
+                <template v-if="!isNullish(row.percentComplete)">
+                    {{ row.percentComplete.toLocaleString(undefined, { style: 'percent' }) }}
+                </template>
+            </template>
+        </Column>
+
+        <NumberColumn name="givingCount"
+                      title="Giving Count"
+                      field="givingCount"
+                      itemClass="justify-content-end text-right"
+                      :filter="numberValueFilter" />
+    </Grid>
+</template>
+
+<script setup lang="ts">
+    import { PropType, ref, watch } from "vue";
+    import { EntityType } from "@Obsidian/SystemGuids/entityType";
+    import Grid, { Column, CurrencyColumn, NumberColumn, TextColumn, numberValueFilter, textValueFilter, SelectColumn } from "@Obsidian/Controls/grid";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import NothingToShow from "./nothingToShow.partial.obs";
+    import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
+    import { GridDefinitionBag } from "@Obsidian/ViewModels/Core/Grid/gridDefinitionBag";
+    import { isPromise } from "@Obsidian/Utility/promiseUtils";
+    import { isNullish } from "@Obsidian/Utility/util";
+    import { makeUrlRedirectSafe } from "@Obsidian/Utility/url";
+
+    const props = defineProps({
+        config: {
+            type: Object as PropType<GridDefinitionBag>,
+            required: false
+        },
+
+        gridData: {
+            type: Object as PropType<GridDataBag | Promise<GridDataBag> | null>,
+            required: false
+        }
+    });
+
+    const isLoading = ref(false);
+    const hasResults = ref(true);
+
+    watch(() => props.gridData, async () => {
+        if (isPromise(props.gridData)) {
+            isLoading.value = true;
+            hasResults.value = false;
+            // Don't need to await here. The loadGridData function in the parent component never resolves the promise.
+            // Rather, it just reassigns the prop to the value.
+        }
+        else {
+            isLoading.value = false;
+            hasResults.value = (props.gridData?.rows?.length ?? 0) > 0;
+        }
+    }, { immediate: true });
+
+    // #region Functions
+    /**
+    * Gets the quick filter value to use for the Percent column as text.
+    *
+    * @param row The row to be filtered.
+    */
+    function getPercentCompleteFilterValueAsText(row: Record<string, unknown>): string {
+        let filterValue = row.percentComplete as number * 100;
+        return String(filterValue + "%");
+    }
+
+    /**
+     * Gets the filter value to use for the Percent column.
+     *
+     * @param row The row to be filtered.
+     */
+    function getPercentCompleteFilterValue(row: Record<string, unknown>): number {
+        return row.percentComplete as number * 100;
+    }
+
+    // #endregion
+
+    // #region Event Handlers
+
+    /**
+     * Called when a row has been selected.
+     *
+     * @param key The key of the row that was selected.
+     */
+    function onSelectItem(key: string): void {
+        window.location.href = makeUrlRedirectSafe(`/Person/${key}/Contributions`);
+    }
+    // #endregion
+
+</script>
