@@ -16,11 +16,12 @@
 //
 
 using Rock.ViewModels.Core.Grid;
+using Rock.ViewModels.Utility;
 
 namespace Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics
 {
     /// <summary>
-    /// 
+    /// Contains the configuration, filters, and supporting data for the Financial Pledge Analytics block.
     /// </summary>
     public class FinancialPledgeAnalyticsBlockBox : BlockBox
     {
@@ -33,5 +34,10 @@ namespace Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics
         /// The grid configuration for the pledges grid.
         /// </summary>
         public GridDefinitionBag PledgeGridBox { get; set; }
+
+        /// <summary>
+        /// Gets or sets the currency information.
+        /// </summary>
+        public CurrencyInfoBag CurrencyInfo { get; set; }
     }
 }

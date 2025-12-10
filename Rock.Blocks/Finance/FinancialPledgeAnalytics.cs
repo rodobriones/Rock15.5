@@ -110,7 +110,6 @@ namespace Rock.Blocks.Finance
             .GetValue( PreferenceKey.FilterAccounts )
             .Split( ',' )
             .Select( s => s.AsGuid() )
-            //.Where( g => g != Guid.Empty )
             .ToList();
         #endregion
 
@@ -124,6 +123,14 @@ namespace Rock.Blocks.Finance
             box.Filters = GetFilterOptions();
             box.PledgeGridBox = GetPledgeGridBuilder().BuildDefinition();
             box.NavigationUrls = GetBoxNavigationUrls();
+
+            var currencyInfo = new RockCurrencyCodeInfo();
+            box.CurrencyInfo = new ViewModels.Utility.CurrencyInfoBag
+            {
+                Symbol = currencyInfo.Symbol,
+                DecimalPlaces = currencyInfo.DecimalPlaces,
+                SymbolLocation = currencyInfo.SymbolLocation
+            };
 
             return box;
         }
@@ -243,9 +250,12 @@ namespace Rock.Blocks.Finance
 
             DataSet ds = new FinancialPledgeService( rockContextAnalytics )
                 .GetPledgeAnalyticsDataSet(
-                    accountIds, pledgeStartDate, pledgeEndDate,
-                    minPledgeAmount, maxPledgeAmount, minComplete,
-                    maxComplete, minGiftAmount, maxGiftAmount,
+                    accountIds,
+                    pledgeStartDate, pledgeEndDate,
+                    givingStartDate, givingEndDate,
+                    minPledgeAmount, maxPledgeAmount,
+                    minComplete, maxComplete,
+                    minGiftAmount, maxGiftAmount,
                     includePledges, includeGifts
                     );
 
@@ -336,7 +346,97 @@ namespace Rock.Blocks.Finance
             return numberRange;
         }
 
-        #endregion 
+
+        /// <summary>
+        /// Creates an entity set for the subset of selected rows in the grid.
+        /// </summary>
+        /// <returns>An action result that contains the identifier of the entity set.</returns>
+        [BlockAction]
+        public BlockActionResult CreateGridEntitySet( GridEntitySetBag entitySet )
+        {
+            if ( entitySet == null )
+            {
+                return ActionBadRequest( "No entity set data was provided." );
+            }
+
+            if ( !IsAllowedToCreateEntitySet( entitySet ) )
+            {
+                return ActionForbidden( "You are not allowed to create entity sets." );
+            }
+
+            var rockEntitySet = GridHelper.CreateEntitySet( entitySet );
+
+            if ( rockEntitySet == null )
+            {
+                return ActionBadRequest( "No entities were found to create the set." );
+            }
+
+            return ActionOk( rockEntitySet.Id.ToString() );
+        }
+
+        /// <summary>
+        /// Creates a communication for the subset of selected rows in the grid.
+        /// </summary>
+        /// <returns>An action result that contains identifier of the communication.</returns>
+        [BlockAction]
+        public BlockActionResult CreateGridCommunication( GridCommunicationBag communication )
+        {
+            if ( communication == null )
+            {
+                return ActionBadRequest( "No communication data was provided." );
+            }
+
+            if ( !IsAllowedToCreateCommunication( communication ) )
+            {
+                return ActionForbidden( "You are not allowed to create communications." );
+            }
+
+            var rockCommunication = GridHelper.CreateCommunication( communication, RequestContext );
+
+            if ( rockCommunication == null )
+            {
+                return ActionBadRequest( "Grid has no recipients." );
+            }
+
+            return ActionOk( rockCommunication.Id.ToString() );
+        }
+
+        #region Helper Methods
+
+        /*
+            12/10/2025 - N.A.
+
+            These helper methods mirror the RockListBlockType to maintain consistency in structure and behavior.
+
+            Reason: Preserve a familiar pattern for easier maintenance and alignment with existing block logic.
+        */
+
+        /// <summary>
+        /// Checks if the current person is allowed to create the specified
+        /// entity set.
+        /// </summary>
+        /// <param name="entitySetBag">The entity set bag that will be created.</param>
+        /// <returns><c>true</c> if the operation is allowed; otherwise, <c>false</c>.</returns>
+        protected bool IsAllowedToCreateEntitySet( GridEntitySetBag entitySetBag )
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if the current person is allowed to create the specified
+        /// communication.
+        /// </summary>
+        /// <param name="communicationBag">The communication bag that will be created.</param>
+        /// <returns><c>true</c> if the operation is allowed; otherwise, <c>false</c>.</returns>
+        protected bool IsAllowedToCreateCommunication( GridCommunicationBag communicationBag )
+        {
+            return true;
+        }
+
+        #endregion
+
+
+        #endregion
 
         #region Helper Classes
 

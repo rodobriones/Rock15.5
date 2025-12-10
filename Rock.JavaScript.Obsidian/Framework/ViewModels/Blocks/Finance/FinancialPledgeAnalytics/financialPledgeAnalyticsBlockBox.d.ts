@@ -25,6 +25,10 @@ import { FinancialPledgeAnalyticsFiltersBag } from "@Obsidian/ViewModels/Blocks/
 import { GridDefinitionBag } from "@Obsidian/ViewModels/Core/Grid/gridDefinitionBag";
 
 export type FinancialPledgeAnalyticsBlockBox = {
+
+    /** Gets or sets the CurrencyInfo */
+    currencyInfo?: CurrencyInfoBag | null;
+
     /**
      * Gets or sets the error message. A non-empty value indicates that
      * an error is preventing the block from being displayed.
@@ -42,4 +46,5 @@ export type FinancialPledgeAnalyticsBlockBox = {
 
     /** Gets or sets the security grant token. */
     securityGrantToken?: string | null;
+
 };

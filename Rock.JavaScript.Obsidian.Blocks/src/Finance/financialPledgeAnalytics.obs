@@ -1,4 +1,15 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+ /*
+    12/10/2025 - N.A.
+
+    This block's design and layout are somewhat based on the communicationSaturationReport.obs
+    for consistency with the behavior of that block (and the possibility of needing additional
+    'tabs' for this block in the future).
+
+    Reason: Align with the patterns established for easier implementation and review.
+*/
+-->
 <template>
     <Block title="Stark Block">
         <Panel title="Pledge Analytics" type="block" class="panel-analytics" :hasFullscreen="true">
@@ -14,6 +25,7 @@
                                                 previewLocation="Top" />
                         <SlidingDateRangePicker v-model="givingDateRange"
                                                 label="Giving Date Range"
+                                                help="Filters gifts by transaction date. Leave Start or End blank to include all giving transactions. Only affects gift dates — pledge filters are handled separately."
                                                 :enabledTimeUnits="enabledTimeUnits"
                                                 :enabledSlidingDateRangeUnits="enabledRangeUnits"
                                                 previewLocation="Top" />
@@ -51,7 +63,7 @@
                         </div>
 
                         <div v-else>
-                            <PledgeGrid :config="config.pledgeGridBox ?? undefined" :gridData="pledgeGridData" :isLoading="isLoading" />
+                            <PledgeGrid :config="config.pledgeGridBox ?? undefined" :currencyInfo="config.currencyInfo" :gridData="pledgeGridData" :isLoading="isLoading" />
                         </div>
                     </div>
                 </div>
@@ -120,7 +132,6 @@
     // #endregion
 
     // #region Filter
-
     const pledgeAccounts = ref<ListItemBag[]>(config.filters?.pledgeAccounts ?? []);
 
     const pledgeDateRange = ref<SlidingDateRange | null>(parseSlidingDateRangeString(config.filters?.pledgeDateRangeDelimitedString ?? "") ?? {
