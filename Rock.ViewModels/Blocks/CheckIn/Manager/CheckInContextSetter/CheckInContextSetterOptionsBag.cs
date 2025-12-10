@@ -16,6 +16,12 @@ namespace Rock.ViewModels.Blocks.CheckIn.Manager.CheckInContextSetter
         public List<ListItemBag> Campuses { get; set; }
 
         /// <summary>
+        /// The list of schedules that are valid for the currently selected
+        /// location.
+        /// </summary>
+        public List<ListItemBag> Schedules { get; set; } 
+
+        /// <summary>
         /// The root locations to use for the location picker.
         /// </summary>
         public Dictionary<Guid, Guid> RootLocations { get; set; }

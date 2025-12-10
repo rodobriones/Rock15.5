@@ -29,6 +29,8 @@ export type CheckInContextSetterOptionsBag = {
     /** The list of campuses to display in the dropdown. */
     campuses?: ListItemBag[] | null;
 
+    schedules?: ListItemBag[] | null;
+
     /** The root locations to use for the location picker. */
     rootLocations?: Record<Guid, Guid> | null;
 

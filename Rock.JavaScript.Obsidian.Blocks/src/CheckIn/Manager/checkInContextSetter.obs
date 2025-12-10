@@ -27,22 +27,26 @@
                         @update:modelValue="onLocationSelected($event as ListItemBag | null)">
         </TreeItemPicker>
 
-        <TreeItemPicker :modelValue="schedule"
-                        formGroupClasses="schedule-picker"
-                        iconCssClass=""
-                        blankValue="All Schedules"
-                        :provider="scheduleProvider"
-                        disableFolderSelection
-                        autoExpand
-                        @update:modelValue="onScheduleSelected($event as ListItemBag | null)">
+        <ul class="nav navbar-nav contextsetter contextsetter-schedule" style="margin: 0;">
+            <li class="dropdown">
+                <a class="dropdown-toggle navbar-link" href="#" data-toggle="dropdown">
+                    {{ schedule?.text ?? 'All Schedules' }}
+                    <b class="ti ti-caret-down-filled"></b>
+                </a>
 
-            <template #customPickerActions>
-                <label class="rock-checkbox-icon">
-                    <i :class="['ti', includeInactiveSchedules ? 'ti-square-check' : 'ti-square']"></i> Show Inactive
-                    <span style="display:none"><input type="checkbox" v-model="includeInactiveSchedules"></span>
-                </label>
-            </template>
-        </TreeItemPicker>
+                <ul class="dropdown-menu">
+                    <li class="dropdown">
+                        <a href="#" @click.prevent="onScheduleSelected(null)">All Schedules</a>
+                    </li>
+
+                    <li v-for="schedule in scheduleItems"
+                        :key="schedule.value ?? undefined"
+                        class="dropdown">
+                        <a href="#" @click.prevent="onScheduleSelected(schedule)">{{ schedule.text }}</a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
     </div>
 </template>
 
@@ -82,20 +86,26 @@
     /* Hide mis-aligned arrow in popup. */
     display: none;
 }
+
+.context-setters-container :deep(.picker .picker-select-none) {
+    /* Hide the deselect button as we don't want to allow clearing location. */
+    display: none;
+}
 </style>
 
 <script setup lang="ts">
     import TreeItemPicker from "@Obsidian/Controls/treeItemPicker.obs";
     import { useContextEntities } from "@Obsidian/Core/Utilities/contextEntity";
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
-    import { useBlockBrowserBus, useConfigurationValues } from "@Obsidian/Utility/block";
+    import { useBlockBrowserBus, useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { PageMessages } from "@Obsidian/Utility/browserBus";
-    import { ITreeItemProvider, LocationTreeItemProvider, ScheduleTreeItemProvider } from "@Obsidian/Utility/treeItemProviders";
+    import { ITreeItemProvider, LocationTreeItemProvider } from "@Obsidian/Utility/treeItemProviders";
     import { CheckInContextSetterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/CheckInContextSetter/checkInContextSetterOptionsBag";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
-    import { ref, watch } from "vue";
+    import { ref } from "vue";
 
     const config = useConfigurationValues<CheckInContextSetterOptionsBag>();
+    const invokeBlockAction = useInvokeBlockAction();
     const contextEntities = useContextEntities();
     const bus = useBlockBrowserBus();
 
@@ -107,8 +117,7 @@
     const locationProvider = ref<ITreeItemProvider>(createLocationProvider(config.selectedCampus?.value));
 
     const schedule = ref<ListItemBag | null>(config.selectedSchedule ?? null);
-    const includeInactiveSchedules = ref(false);
-    const scheduleProvider = ref<ITreeItemProvider>(createScheduleProvider());
+    const scheduleItems = ref(config.schedules ?? []);
 
     // #endregion
 
@@ -127,19 +136,6 @@
         if (campusGuid) {
             provider.rootLocationGuid = config.rootLocations?.[campusGuid];
         }
-
-        return provider;
-    }
-
-    /**
-     * Creates a schedule provider.
-     *
-     * @returns The schedule provider.
-     */
-    function createScheduleProvider(): ITreeItemProvider {
-        const provider = new ScheduleTreeItemProvider();
-
-        provider.includeInactive = includeInactiveSchedules.value;
 
         return provider;
     }
@@ -175,6 +171,33 @@
         await contextEntities.set("Rock.Model.Schedule", scheduleValue);
     }
 
+    async function loadSchedules(): Promise<void> {
+        if (!location.value?.value) {
+            scheduleItems.value = [];
+            schedule.value = null;
+            return;
+        }
+
+        const data = {
+            locationGuid: location.value.value,
+        };
+
+        const result = await invokeBlockAction<ListItemBag[]>("GetSchedulesByLocation", data);
+
+        if (result.isSuccess && result.data) {
+            scheduleItems.value = result.data;
+
+            // Reset selected schedule if it's not in the new list
+            if (schedule.value && !scheduleItems.value.find(s => s.value === schedule.value?.value)) {
+                schedule.value = null;
+            }
+        }
+        else {
+            scheduleItems.value = [];
+            schedule.value = null;
+        }
+    }
+
     /**
      * Called when a context entity has changed by something (including us) on
      * the page.
@@ -190,6 +213,8 @@
         else if (message.data.entityType === "Rock.Model.Location") {
             const locationEntity = await contextEntities.get("Rock.Model.Location");
             location.value = locationEntity ?? null;
+
+            loadSchedules();
         }
         else if (message.data.entityType === "Rock.Model.Schedule") {
             const scheduleEntity = await contextEntities.get("Rock.Model.Schedule");
@@ -198,10 +223,6 @@
     }
 
     // #endregion
-
-    watch(includeInactiveSchedules, () => {
-        scheduleProvider.value = createScheduleProvider();
-    });
 
     bus.subscribe(PageMessages.ContextEntityChanged, onContextEntityChanged);
 </script>

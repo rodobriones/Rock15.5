@@ -16,6 +16,7 @@
 //
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 
@@ -23,6 +24,7 @@ using Rock.Attribute;
 using Rock.Enums.Cms;
 using Rock.Model;
 using Rock.ViewModels.Blocks.CheckIn.Manager.CheckInContextSetter;
+using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 
 namespace Rock.Blocks.CheckIn.Manager
@@ -125,15 +127,6 @@ namespace Rock.Blocks.CheckIn.Manager
             // issues by rendering the initial HTML server-side.
             var options = GetConfigurationOptionsBag();
 
-            var scheduleClearIcon = "";
-
-            if ( options.SelectedSchedule != null )
-            {
-                scheduleClearIcon = @"
-                    <button type=""button"" role=""button"" class=""btn picker-select-none"">
-                        <i class=""ti ti-x""></i>
-                    </button>";
-            }
             return $@"
 <div class=""context-setters-container"" style=""display: flex; align-items: center; gap: var(--spacing-medium); margin-right: var(--spacing-medium);"">
     <ul class=""nav navbar-nav contextsetter contextsetter-campus"" style=""margin: 0;"">
@@ -149,27 +142,21 @@ namespace Rock.Blocks.CheckIn.Manager
         <div>
             <div class=""picker picker-obsidian picker-select rollover-container picker-show-clear"">
                 <a class=""picker-label"" href=""#"">
-                    <span class=""selected-names"">{options.SelectedLocation?.Text}</span>
-                    <button type=""button"" role=""button"" class=""btn picker-select-none"">
-                        <i class=""ti ti-x""></i>
-                    </button>
+                    <span class=""selected-names"">{options.SelectedLocation?.Text ?? "Select Location"}</span>
                     <b class=""ti ti-caret-down-filled""></b>
                 </a>
             </div>
         </div>
     </div>
 
-    <div class=""control-wrapper"">
-        <div>
-            <div class=""picker picker-obsidian picker-select rollover-container picker-show-clear"">
-                <a class=""picker-label"" href=""#"">
-                    <span class=""selected-names"">{options.SelectedSchedule?.Text ?? "All Schedules"}</span>
-                    {scheduleClearIcon}
-                    <b class=""ti ti-caret-down-filled""></b>
-                </a>
-            </div>
-        </div>
-    </div>
+    <ul class=""nav navbar-nav contextsetter contextsetter-schedule"" style=""margin: 0;"">
+        <li class=""dropdown"">
+            <a class=""dropdown-toggle navbar-link"" href=""#"" data-toggle=""dropdown"">
+                {options.SelectedSchedule?.Text ?? "All Schedules"}
+                <b class=""ti ti-caret-down-filled""></b>
+            </a>
+        </li>
+    </ul>
 </div>";
         }
 
@@ -188,8 +175,10 @@ namespace Rock.Blocks.CheckIn.Manager
 
             InitializeCampusOptions( options );
 
+            var location = RequestContext.GetContextEntity<Location>();
             options.SelectedLocation = RequestContext.GetContextEntity<Location>()?.ToListItemBag();
             options.SelectedSchedule = RequestContext.GetContextEntity<Schedule>()?.ToListItemBag();
+            options.Schedules = location != null ? GetScheduleBagsByLocation( location.Guid ) : new List<ListItemBag>();
 
             _options = options;
 
@@ -283,9 +272,36 @@ namespace Rock.Blocks.CheckIn.Manager
             }
         }
 
+        private List<ListItemBag> GetScheduleBagsByLocation( Guid locationGuid )
+        {
+            return new GroupLocationService( RockContext )
+                .Queryable()
+                .Where( gl => gl.Location.Guid == locationGuid && gl.Schedules.Any() )
+                .SelectMany( gl => gl.Schedules )
+                .Select( s => new
+                {
+                    s.Guid,
+                    s.Name
+                } )
+                .Where( s => !string.IsNullOrEmpty( s.Name ) )
+                .Distinct()
+                .Select( s => new ListItemBag
+                {
+                    Value = s.Guid.ToString(),
+                    Text = s.Name
+                } )
+                .ToList();
+        }
+
         #endregion
 
         #region Block Actions
+
+        [BlockAction]
+        public BlockActionResult GetSchedulesByLocation( Guid locationGuid )
+        {
+            return ActionOk( GetScheduleBagsByLocation( locationGuid ) );
+        }
 
         #endregion
     }
