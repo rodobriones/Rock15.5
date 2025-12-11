@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from "vue";
+    import { computed, ref, unref } from "vue";
     import Panel from "@Obsidian/Controls/panel.obs";
     import AccountPicker from "@Obsidian/Controls/accountPicker.obs";
     import SlidingDateRangePicker from "@Obsidian/Controls/slidingDateRangePicker.obs";
@@ -109,6 +109,10 @@
     onConfigurationValuesChanged(useReloadBlock());
     const preferences = usePersonPreferences().blockPreferences;
 
+    // #endregion Block Config
+
+    // #region Filter
+    const isFirstRun = ref(true);
     const includeOptions = ref(config.filters?.includeOptions ?? "");
     const showOptionItems: ListItemBag[] = [
         {
@@ -124,38 +128,37 @@
             text: "Those with gifts or pledges"
         }
     ];
+    const defaultRange: SlidingDateRange = {
+        rangeType: RangeType.Current,
+        timeValue: 1,
+        timeUnit: TimeUnit.Year
+    };
 
-    // #endregion
-
-    // #region Values
-
-    // #endregion
-
-    // #region Filter
+    const allRange: SlidingDateRange = {
+        rangeType: RangeType.All,
+    };
     const pledgeAccounts = ref<ListItemBag[]>(config.filters?.pledgeAccounts ?? []);
 
-    const pledgeDateRange = ref<SlidingDateRange | null>(parseSlidingDateRangeString(config.filters?.pledgeDateRangeDelimitedString ?? "") ?? {
-        rangeType: RangeType.Current,
-        timeUnit: TimeUnit.Year,
-        timeValue: 1
-    });
+    // Set to the defaultRange if this is the first time and there was no given pledgeDateRange
+    const pledgeDateRange = ref<SlidingDateRange | null>(
+        (parseSlidingDateRangeString(config.filters?.pledgeDateRangeDelimitedString ?? "")) ??
+        (unref(isFirstRun) ? defaultRange : allRange)
+    );
     const givingDateRange = ref<SlidingDateRange | null>(parseSlidingDateRangeString(config.filters?.givingDateRangeDelimitedString ?? ""));
 
     const pledgeAmountRange = ref<NumberRangeModelValue>(convertDelimitedRangeValueToNumberRangeModelValue(config.filters?.pledgeAmountRange ?? ""));
     const givenAmountRange = ref<NumberRangeModelValue>(convertDelimitedRangeValueToNumberRangeModelValue(config.filters?.givenAmountRange ?? ""));
     const percentCompleteRange = ref<NumberRangeModelValue>(convertDelimitedRangeValueToNumberRangeModelValue(config.filters?.percentCompleteRange ?? ""));
-
     const enabledTimeUnits = [TimeUnit.Day, TimeUnit.Week, TimeUnit.Month, TimeUnit.Year];
     const enabledRangeUnits = [RangeType.Current, RangeType.Previous, RangeType.Last, RangeType.DateRange];
-    const pledgeDateRangeAsString = computed(() => slidingDateRangeToString(pledgeDateRange.value as SlidingDateRange ?? { rangeType: RangeType.Last, timeValue: 1, timeUnit: TimeUnit.Month }));
-    const givingDateRangeAsString = computed(() => slidingDateRangeToString(givingDateRange.value as SlidingDateRange ?? { rangeType: RangeType.All }));
+    const pledgeDateRangeAsString = computed(() => slidingDateRangeToString(pledgeDateRange.value as SlidingDateRange ?? allRange));
+    const givingDateRangeAsString = computed(() => slidingDateRangeToString(givingDateRange.value as SlidingDateRange ?? allRange));
 
     /**
      * Event handler for when the submit button has been clicked and validation
      * has succeeded.
      */
     async function applyFiltersAndLoadData(): Promise<void> {
-
         isFirstRun.value = false;
         isLoading.value = true;
         await updatePersonPreferences();
@@ -164,7 +167,6 @@
     }
 
     async function updatePersonPreferences(): Promise<void> {
-
         // Store the pledgeAccounts as a comma delimited string of Guids.
         const pledgeAccountsAsString = pledgeAccounts.value
             .map(i => i?.value)
@@ -182,14 +184,13 @@
         return preferences.save();
     }
 
-    // #endregion
+    // #endregion Filter
 
     // #region Data Loading
 
     const pledgeGridData = ref<GridDataBag | Promise<GridDataBag> | null | undefined>(null);
     const isLoading = ref(false);
     const error = ref<string | undefined>();
-    const isFirstRun = ref(true);
 
     /**
      * Dismisses the error message.
@@ -233,11 +234,37 @@
         }
     }
 
-    // #endregion
+    // #endregion Data Loading
 
+    /*
+        12/10/2025 - N.A.
+
+        Data loading is intentionally delayed until the individual confirms their filter selections.
+
+        Reason: Prevents unnecessary data fetches before filters are finalized.
+    */
     //applyFiltersAndLoadData();
 
     // #region Helper Functions
+
+    /**
+     * Parse a comma-delimited numeric range string into a `{ lower, upper }` object.
+     *
+     * - Input format: `"lower,upper"` (whitespace allowed around the comma).
+     * - Missing or empty parts become `null` (e.g., `"10,"` → `{ lower: 10, upper: null }`, `",25"` → `{ lower: null, upper: 25 }`).
+     * - If the string is `null`/`undefined` or does not contain at least two parts, returns `{ lower: null, upper: null }`.
+     * - Non-numeric parts are converted to `null` via `toNumberOrNull`.
+     *
+     * @param delimited - Comma-delimited range string, e.g., `"10,25"`, `" 10 , 25 "`, `"10,"`, `",25"`, or `null/undefined`.
+     * @returns Range object with numeric bounds or `null` where not provided.
+     *
+     * @example
+     * convertDelimitedRangeValueToNumberRangeModelValue("10,25")   // { lower: 10, upper: 25 }
+     * convertDelimitedRangeValueToNumberRangeModelValue("10,")     // { lower: 10, upper: null }
+     * convertDelimitedRangeValueToNumberRangeModelValue(",25")     // { lower: null, upper: 25 }
+     * convertDelimitedRangeValueToNumberRangeModelValue(",")       // { lower: null, upper: null }
+     * convertDelimitedRangeValueToNumberRangeModelValue(null)      // { lower: null, upper: null }
+     */
     function convertDelimitedRangeValueToNumberRangeModelValue(delimited?: string | null): NumberRangeModelValue {
         let strVal = delimited?.trim().split(",");
         if (!strVal || strVal.length < 2) {
@@ -279,5 +306,6 @@
         const upper = v?.upper ?? "";
         return `${lower},${upper}`;
     }
-    // #endregion
+
+    // #endregion Helper Functions
 </script>

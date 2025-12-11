@@ -15,8 +15,6 @@
 // </copyright>
 //
 
-using System.Collections.Generic;
-
 using Rock.ViewModels.Core.Grid;
 
 namespace Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics
@@ -27,7 +25,7 @@ namespace Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics
     public class FinancialPledgeAnalyticsBlockDataBag
     {
         /// <summary>
-        /// TBD
+        /// Data and configuration for the pledge analytics grid (column definitions and row data) used by the UI.
         /// </summary>
         public GridDataBag PledgeGridData { get; set; }
     }

@@ -21,27 +21,28 @@
 // </copyright>
 //
 
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
 /** The filter options for the Communication Saturation Report block. */
 export type FinancialPledgeAnalyticsFiltersBag = {
+    /** Gets or sets the given amount range filter in a delimited string format. */
+    givenAmountRange?: string | null;
 
     /** String representing a range of time to filter giving results by. */
     givingDateRangeDelimitedString?: string | null;
 
     /** Gets or sets the inclusion options for which pledges should be shown. */
-    includeOptions: string | null;
-
-    /** Gets or sets the pledge amount range filter in a delimited string format. */
-    pledgeAmountRange?: NumberRangeModelValue | null;
-
-    /** Gets or sets the given amount range filter in a delimited string format. */
-    givenAmountRange?: NumberRangeModelValue | null;
+    includeOptions?: string | null;
 
     /** Gets or sets the percent complete range filter in a delimited string format. */
-    percentCompleteRange?: NumberRangeModelValue | null;
+    percentCompleteRange?: string | null;
+
+    /** Gets or sets the selected accounts. */
+    pledgeAccounts?: ListItemBag[] | null;
+
+    /** Gets or sets the pledge amount range filter in a delimited string format. */
+    pledgeAmountRange?: string | null;
 
     /** String representing a range of time to filter pledge results by. */
     pledgeDateRangeDelimitedString?: string | null;
-
-    /** Gets or sets the pledge accounts. */
-    pledgeAccounts?: ListItemBag[] | null;
 };

@@ -23,10 +23,11 @@
 
 import { FinancialPledgeAnalyticsFiltersBag } from "@Obsidian/ViewModels/Blocks/Finance/FinancialPledgeAnalytics/financialPledgeAnalyticsFiltersBag";
 import { GridDefinitionBag } from "@Obsidian/ViewModels/Core/Grid/gridDefinitionBag";
+import { CurrencyInfoBag } from "@Obsidian/ViewModels/Utility/currencyInfoBag";
 
+/** Contains the configuration, filters, and supporting data for the Financial Pledge Analytics block. */
 export type FinancialPledgeAnalyticsBlockBox = {
-
-    /** Gets or sets the CurrencyInfo */
+    /** Gets or sets the currency information. */
     currencyInfo?: CurrencyInfoBag | null;
 
     /**
@@ -46,5 +47,4 @@ export type FinancialPledgeAnalyticsBlockBox = {
 
     /** Gets or sets the security grant token. */
     securityGrantToken?: string | null;
-
 };

@@ -25,7 +25,6 @@ import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
 
 /** The additional configuration options for the Financial Pledge Analytics block. */
 export type FinancialPledgeAnalyticsBlockDataBag = {
-    pledgeGridBox: { rows?: Record<string, unknown>[] | null | undefined; } | { then: <TResult1 = GridDataBag, TResult2 = never>(onfulfilled?: ((value: GridDataBag) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined) => Promise<TResult1 | TResult2>; catch: <TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined) => Promise<GridDataBag | TResult>; finally: (onfinally?: (() => void) | null | undefined) => Promise<GridDataBag>; readonly [Symbol.toStringTag]: string; } | null | undefined;
-    /** The data shown in the grid on the pledge tab */
-    pledgeGridData?: GridDataBag | null
+    /** Data and configuration for the pledge analytics grid (column definitions and row data) used by the UI. */
+    pledgeGridData?: GridDataBag | null;
 };

@@ -22,8 +22,6 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 
-using OpenXmlPowerTools;
-
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -32,7 +30,6 @@ using Rock.SystemGuid;
 using Rock.Utility;
 using Rock.ViewModels.Blocks.Finance.FinancialPledgeAnalytics;
 using Rock.ViewModels.Core.Grid;
-using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 
 namespace Rock.Blocks.Finance
@@ -147,22 +144,12 @@ namespace Rock.Blocks.Finance
                 options.PledgeAccounts.Add( new ViewModels.Utility.ListItemBag() { Value = a.Guid.ToString(), Text = a.Name } );
             } );
 
-            var pledgeDateRangePref = personPreferences.GetValue( PreferenceKey.FilterPledgeDateRange );
-            options.PledgeDateRangeDelimitedString = pledgeDateRangePref.IsNotNullOrWhiteSpace() ? pledgeDateRangePref : options.PledgeDateRangeDelimitedString;
-
+            options.PledgeDateRangeDelimitedString = personPreferences.GetValue( PreferenceKey.FilterPledgeDateRange );
             options.GivingDateRangeDelimitedString = personPreferences.GetValue( PreferenceKey.FilterGivingDateRange );
-
-            var pledgeAmountPref = personPreferences.GetValue( PreferenceKey.FilterPledgeAmount );
-            options.PledgeAmountRange = pledgeAmountPref;
-
-
-            var percentCompletePref = personPreferences.GetValue( PreferenceKey.FilterPercentComplete );
-            options.PercentCompleteRange = percentCompletePref;
-
-            var amountGivenPref = personPreferences.GetValue( PreferenceKey.FilterAmountGiven );
-            options.GivenAmountRange = amountGivenPref;
-
-            options.IncludeOptions = personPreferences.GetValue( PreferenceKey.FilterInclude );
+            options.PledgeAmountRange = personPreferences.GetValue( PreferenceKey.FilterPledgeAmount );
+            options.PercentCompleteRange = personPreferences.GetValue( PreferenceKey.FilterPercentComplete );
+            options.GivenAmountRange = personPreferences.GetValue( PreferenceKey.FilterAmountGiven );
+            options.IncludeOptions = personPreferences.GetValue( PreferenceKey.FilterInclude ).AsInteger().ToStringSafe();
 
             return options;
         }
@@ -256,12 +243,8 @@ namespace Rock.Blocks.Finance
                 {
                     PersonId = FieldOrDefault<int>( r, "Id" ),
                     PersonGuid = FieldOrDefault<Guid>( r, "Guid" ),
-                    PersonNickName = FieldOrDefault<string>( r, "NickName" ) ?? string.Empty,
-                    PersonLastName = FieldOrDefault<string>( r, "LastName" ) ?? string.Empty,
                     PersonFullNameReversed = $"{FieldOrDefault<string>( r, "LastName" ) ?? string.Empty}, {FieldOrDefault<string>( r, "NickName" ) ?? string.Empty}",
                     PersonEmail = FieldOrDefault<string>( r, "Email" ) ?? string.Empty,
-                    GivingId = FieldOrDefault<string>( r, "GivingId" ) ?? string.Empty,
-                    GivingLeaderId = FieldOrDefault<int?>( r, "GivingLeaderId" ),
                     PledgeTotal = FieldOrDefault<decimal?>( r, "PledgeAmount" ) ?? 0m,
                     PledgeCount = FieldOrDefault<int?>( r, "PledgeCount" ) ?? 0,
                     TotalGivingAmount = FieldOrDefault<decimal?>( r, "GiftAmount" ) ?? 0m,
@@ -351,6 +334,7 @@ namespace Rock.Blocks.Finance
         #endregion Block Actions
 
         #region Helper Methods
+
         private static T FieldOrDefault<T>( DataRow row, string column )
         {
             if ( !row.Table.Columns.Contains( column ) )
@@ -423,6 +407,10 @@ namespace Rock.Blocks.Finance
 
         #region Helper Classes
 
+        /// <summary>
+        /// Data container for a single row in the pledge analytics grid, combining
+        /// some person fields with pledge and giving aggregates for display.
+        /// </summary>
         private class PledgeGridDataBag
         {
             /// <summary>
@@ -491,6 +479,10 @@ namespace Rock.Blocks.Finance
             public int GivingCount { get; set; }
         }
 
+        /// <summary>
+        /// Aggregated, normalized filter values computed from the UI filter bag and cache,
+        /// used to parameterize the pledge analytics query without additional transformation.
+        /// </summary>
         private class ComputedFilters
         {
             /// <summary>
