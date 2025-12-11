@@ -3,6 +3,7 @@
     <div ref="dropdownElement" :class="dropDownClasses">
         <slot name="anchor" @click.prevent="onDropDownClick">
             <button :class="anchorButtonClass"
+                    :disabled="disabled"
                     type="button"
                     ref="anchorButtonElement"
                     v-bind="tooltipAttrs"
@@ -58,6 +59,12 @@ li.disabled > button {
         /** This gets turned into a tooltip as well as being the accessibility title */
         title: {
             type: String
+        },
+
+        /** Whether the dropdown menu is disabled */
+        disabled: {
+            type: Boolean,
+            default: false
         },
 
         /**
