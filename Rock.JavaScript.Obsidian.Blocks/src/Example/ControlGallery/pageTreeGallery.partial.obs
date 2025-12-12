@@ -16,8 +16,9 @@
                   :enableDeselect="enableDeselect" />
 
         <template #settings>
-            <div class="d-flex flex-row gap-3">
+            <div class="d-flex flex-row gap-3" style="max-height: 5vw;">
                 <ContentSection title="Demonstratable Settings" icon="ti ti-user" disableCollapse>
+                    <p class="text-semibold font-italic">The settings apply across many use-cases, so their usage and demonstration will show and occur if enabled or changed from defaults.</p>
                     <ContentStack title="Toggle Properties"
                                   description="Properties that typically are either true or false.">
                         <div class="d-flex flex-row gap-3">
@@ -69,8 +70,6 @@
                     </ContentStack>
                 </ContentSection>
             </div>
-            <p class="text-semibold font-italic">Not all settings are demonstrated in this gallery.</p>
-            <p>Additional props extend and are passed to the underlying Rock Form Field.</p>
         </template>
     </GalleryAndResult>
 </template>
