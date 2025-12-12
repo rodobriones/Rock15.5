@@ -135,6 +135,7 @@ namespace Rock.ClientService.Core.Category
                 {
                     Value = c.Guid.ToString(),
                     Text = c.Name,
+                    Type = "Category",
                     IsFolder = true,
                     IconCssClass = c.IconCssClass
                 } )
@@ -376,6 +377,7 @@ namespace Rock.ClientService.Core.Category
                         {
                             Value = childCategory.Guid.ToString(),
                             Text = childCategory.Name,
+                            Type = "Category",
                             IsFolder = true,
                             IconCssClass = childCategory.GetPropertyValue( "IconCssClass" ) as string ?? options.DefaultIconCssClass
                         };
