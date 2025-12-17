@@ -10,6 +10,7 @@ using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Common.Mobile.Blocks.Outreach.MyContact;
+using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -261,30 +262,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     {
                         ProfileURL = profileURL,
                         contactName = tp.Contact.FirstName,
-                        TouchpointType = tp.Type,
+                        TouchpointType = tp.Type.ToMobile(),
                         ScheduledDate = tp.ScheduledDateTime
-                    };
-                } ).ToList();
-
-            // Get Recent Completed Activities
-            var recentActivities = touchpointService
-                .Queryable()
-                .Where( tp => personContactIds.Contains( tp.ContactId ) )
-                .Where( tp => tp.CompletedDateTime != null )
-                .OrderByDescending( tp => tp.CompletedDateTime )
-                .Take( 5 )
-                .AsEnumerable()
-                .Select( tp =>
-                {
-                    var profileURL = tp.Contact.PhotoId.HasValue
-                        ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( tp.Contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) )
-                        : "";
-                    return new RecentActivity
-                    {
-                        ProfileURL = profileURL,
-                        contactName = tp.Contact.FirstName,
-                        TouchpointType = tp.Type,
-                        CompletedDate = tp.CompletedDateTime.Value
                     };
                 } ).ToList();
 
@@ -324,7 +303,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 ConnectionsCompletedThisMonth = connectionsCompletedThisMonth,
                 TotalCompletedConnectionsCount = totalCompletedConnectionsCount,
                 PastSpecialEvents = pastSpecialEventsTouchpoint,
-                RecentActivities = recentActivities,
                 TouchpointContactImageUrls = pendingTouchpointImageUrls,
                 PercentTouchpointFinishedOnTime = percentTouchpointsFinishedOnTime
             };
@@ -736,35 +714,5 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) )
             };
         }
-    }
-
-    public class InitialDataBag
-    {
-        public int ContactCount { get; set; }
-        public int PendingTouchpointCount { get; set; }
-        public int PrayerCompletedThisMonth { get; set; }
-        public int TotalCompletedPrayerCount { get; set; }
-        public int ConnectionsCompletedThisMonth { get; set; }
-        public int TotalCompletedConnectionsCount { get; set; }
-        public List<PastTouchpointEvent> PastSpecialEvents { get; set; }
-        public List<RecentActivity> RecentActivities { get; set; }
-        public List<string> TouchpointContactImageUrls { get; set; }
-        public int PercentTouchpointFinishedOnTime { get; set; }
-    }
-
-    public class PastTouchpointEvent
-    {
-        public string ProfileURL { get; set; }
-        public string contactName { get; set; }
-        public TouchpointType TouchpointType { get; set; }
-        public DateTime ScheduledDate { get; set; }
-    }
-
-    public class RecentActivity
-    {
-        public string ProfileURL { get; set; }
-        public string contactName { get; set; }
-        public TouchpointType TouchpointType { get; set; }
-        public DateTime CompletedDate { get; set; }
     }
 }

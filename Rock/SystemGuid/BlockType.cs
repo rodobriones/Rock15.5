@@ -444,6 +444,11 @@ namespace Rock.SystemGuid
         /// </summary>
         public const string MOBILE_OUTREACH_BEACON_DASHBOARD = "A1B2C3D4-E5F6-4789-ABCD-1234567890AB";
 
+        /// <summary>
+        /// The mobile outreach Recent Activity &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.OutreachRecentActivity">Outreach Recent Activity</see> block type.
+        /// </summary>
+        public const string MOBILE_OUTREACH_OUTREACH_RECENT_ACTIVITY = "469B0581-C7F6-4F8B-913F-E20F5B49E39D";
+
         #endregion
 
         #region Obsidian Block Types

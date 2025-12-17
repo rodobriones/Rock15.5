@@ -553,6 +553,11 @@ namespace Rock.SystemGuid
         public const string MOBILE_OUTREACH_BEACON_DASHBOARD_BLOCK_TYPE = "A3D9F1C4-E3C1-4D3A-8C2E-7F4B5B6D9F1C";
 
         /// <summary>
+        /// The GUid for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.OutreachRecentActivity"/>
+        /// </summary>
+        public const string MOBILE_OUTREACH_OUTREACH_RECENT_ACTIVITY_BLOCK_TYPE = "73CA6269-28BA-4914-92F8-7493E732DCED";
+
+        /// <summary>
         /// The GUID for the entity <see cref="Rock.Blocks.Types.Mobile.Outreach.MyContacts"/>.
         /// </summary>
         public const string MOBILE_OUTREACH_MY_CONTACTS_BLOCK_TYPE = "D1CFF2E3-0E3A-4F2D-8F1D-4C3E3F2B6F2A";
