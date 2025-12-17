@@ -28,7 +28,6 @@ namespace Rock.Model
         /// Gets or sets the contact identifier.
         /// </summary>
         [DataMember]
-
         public int ContactId { get; set; }
 
         /// <summary>
