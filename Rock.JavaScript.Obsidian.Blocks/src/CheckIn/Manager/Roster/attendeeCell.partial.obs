@@ -1,0 +1,107 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <div class="d-flex flex-fill align-items-center">
+        <PersonAvatar :personIdKey="idKey" :photoUrl="photoUrl" :photoSize="51" marginRight="3" />
+
+        <div class="flex-grow-1">
+            <strong>{{ fullName }}</strong>
+            <div v-if="detailText" class="text-muted">{{ detailText }}</div>
+            <div>
+                <span v-for="badge in badges" :title="badge.text ?? undefined">
+                    <i :class="badge.iconCssClass" :style="getBadgeStyle(badge)"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+    import { computed } from "vue";
+    import PersonAvatar from "@Obsidian/Controls/personAvatar.obs";
+    import { standardCellProps } from "@Obsidian/Core/Controls/grid";
+    import { RosterAttendeeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBag";
+    import { RosterAttendeeBadgeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBadgeBag";
+
+    const props = defineProps(standardCellProps);
+
+    const idKey = computed((): string | undefined => {
+        if (!props.column.field) {
+            return undefined;
+        }
+        const value = props.row[props.column.field] as RosterAttendeeBag;
+        if (typeof value?.idKey === "string") {
+            return value.idKey;
+        }
+        return undefined;
+    });
+
+    /** Contains the URL for the avatar. */
+    const photoUrl = computed((): string => {
+        if (!props.column.field) {
+            return "";
+        }
+
+        const value = props.row[props.column.field] as RosterAttendeeBag;
+
+        if (!value || typeof value !== "object") {
+            return "";
+        }
+
+        return value.photoUrl ?? "";
+    });
+
+    /** Contains the full name in the correct format. */
+    const fullName = computed((): string => {
+        if (!props.column.field) {
+            return "";
+        }
+
+        const value = props.row[props.column.field] as RosterAttendeeBag;
+
+        if (!value || typeof value !== "object") {
+            return "";
+        }
+
+        return value.fullName ?? "";
+    });
+
+    /** Contains the detail text to display */
+    const detailText = computed((): string => {
+        if (!props.column.field) {
+            return "";
+        }
+
+        const value = props.row[props.column.field] as RosterAttendeeBag;
+
+        if (!value || typeof value !== "object") {
+            return "";
+        }
+
+        return value.parents ?? "";
+    });
+
+    /** Contains the detail text to display */
+    const badges = computed((): RosterAttendeeBadgeBag[] => {
+        if (!props.column.field) {
+            return [];
+        }
+
+        const value = props.row[props.column.field] as RosterAttendeeBag;
+
+        if (!value || typeof value !== "object") {
+            return [];
+        }
+
+        return value.badges ?? [];
+    });
+
+    function getBadgeStyle(badge: RosterAttendeeBadgeBag): Record<string, string> {
+        const styles: Record<string, string> = {};
+
+        if (badge.color) {
+            styles.color = badge.color;
+        }
+
+        return styles;
+    }
+</script>

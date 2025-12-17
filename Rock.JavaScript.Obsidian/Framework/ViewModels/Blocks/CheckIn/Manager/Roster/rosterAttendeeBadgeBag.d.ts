@@ -21,29 +21,10 @@
 // </copyright>
 //
 
-import { Guid } from "@Obsidian/Types";
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+export type RosterAttendeeBadgeBag = {
+    color?: string | null;
 
-/** The initialization options for the Check-in Context Setter block. */
-export type CheckInContextSetterOptionsBag = {
-    /** The list of campuses to display in the dropdown. */
-    campuses?: ListItemBag[] | null;
+    iconCssClass?: string | null;
 
-    /** The root locations to use for the location picker. */
-    rootLocations?: Record<Guid, Guid> | null;
-
-    /**
-     * The list of schedules that are valid for the currently selected
-     * location.
-     */
-    schedules?: ListItemBag[] | null;
-
-    /** The selected campus when the block loaded. */
-    selectedCampus?: ListItemBag | null;
-
-    /** The selected location when the block loaded. */
-    selectedLocation?: ListItemBag | null;
-
-    /** The selected schedule when the block loaded. */
-    selectedSchedule?: ListItemBag | null;
+    text?: string | null;
 };

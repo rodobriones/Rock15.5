@@ -21,29 +21,18 @@
 // </copyright>
 //
 
-import { Guid } from "@Obsidian/Types";
-import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+export type RosterOptionsBag = {
+    isCheckoutAllEnabled: boolean;
 
-/** The initialization options for the Check-in Context Setter block. */
-export type CheckInContextSetterOptionsBag = {
-    /** The list of campuses to display in the dropdown. */
-    campuses?: ListItemBag[] | null;
+    isDeleteButtonEnabled: boolean;
 
-    /** The root locations to use for the location picker. */
-    rootLocations?: Record<Guid, Guid> | null;
+    isGroupColumnEnabled: boolean;
 
-    /**
-     * The list of schedules that are valid for the currently selected
-     * location.
-     */
-    schedules?: ListItemBag[] | null;
+    isNotPresentButtonEnabled: boolean;
 
-    /** The selected campus when the block loaded. */
-    selectedCampus?: ListItemBag | null;
+    isPresentButtonEnabled: boolean;
 
-    /** The selected location when the block loaded. */
-    selectedLocation?: ListItemBag | null;
+    isStayingButtonEnabled: boolean;
 
-    /** The selected schedule when the block loaded. */
-    selectedSchedule?: ListItemBag | null;
+    personPageUrl?: string | null;
 };
