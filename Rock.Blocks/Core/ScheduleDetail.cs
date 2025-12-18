@@ -91,10 +91,10 @@ namespace Rock.Blocks.Core
                     return box;
                 }
 
-                var categoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull();
-                if ( categoryId.HasValue )
+                var categoryId = PageParameter( PageParameterKey.ParentCategoryId );
+                if ( !string.IsNullOrEmpty( categoryId ) )
                 {
-                    box.Entity.Category = CategoryCache.Get( categoryId.Value )
+                    box.Entity.Category = CategoryCache.Get( categoryId, !PageCache.Layout.Site.DisablePredictableIds )
                         .ToListItemBag();
                 }
                 box.NavigationUrls = GetBoxNavigationUrls();
@@ -382,12 +382,12 @@ namespace Rock.Blocks.Core
 
         private string GetCancelLink()
         {
-            var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull();
-            if ( parentCategoryId.HasValue )
+            var parentCategory = CategoryCache.Get(PageParameter( PageParameterKey.ParentCategoryId ), !PageCache.Layout.Site.DisablePredictableIds);
+            if ( parentCategory != null )
             {
                 // Cancelling on Add, and we know the parentCategoryId, so we are probably in treeview mode, so navigate to the current page
                 var qryParams = new Dictionary<string, string>();
-                qryParams["CategoryId"] = parentCategoryId.ToString();
+                qryParams["CategoryId"] = parentCategory.IdKey;
                 qryParams["ScheduleId"] = null;
                 return this.GetCurrentPageUrl( qryParams );
             }
@@ -611,7 +611,7 @@ namespace Rock.Blocks.Core
                 var qryParams = new Dictionary<string, string>();
                 if ( entity.CategoryId != null )
                 {
-                    qryParams["CategoryId"] = entity.CategoryId.ToString();
+                    qryParams["CategoryId"] = entity.Category.IdKey;
                 }
                 qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
 

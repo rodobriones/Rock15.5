@@ -204,15 +204,15 @@ namespace Rock.Blocks.Core
         {
             if ( _categoryGuid == null )
             {
-                var categoryId = this.PageParameter( PageParameterKey.CategoryId ).AsIntegerOrNull();
+                var category = CategoryCache.Get( PageParameter( PageParameterKey.CategoryId ), !PageCache.Layout.Site.DisablePredictableIds );
 
-                if ( !categoryId.HasValue )
+                if ( category == null )
                 {
-                    _categoryGuid = this.PageParameter( PageParameterKey.CategoryGuid ).AsGuidOrNull();
+                    _categoryGuid = PageParameter( PageParameterKey.CategoryGuid ).AsGuidOrNull();
                 }
                 else
                 {
-                    _categoryGuid = CategoryCache.Get( categoryId.Value )?.Guid;
+                    _categoryGuid = category.Guid;
                 }
             }
 

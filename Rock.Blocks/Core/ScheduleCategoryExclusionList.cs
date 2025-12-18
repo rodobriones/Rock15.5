@@ -165,8 +165,16 @@ namespace Rock.Blocks.Core
 
                 if ( !_categoryId.HasValue )
                 {
-                    var categoryIdParam = PageParameter( PageParameterKey.CategoryId );
-                    _categoryId = Rock.Utility.IdHasher.Instance.GetId( categoryIdParam ) ?? PageParameter( PageParameterKey.CategoryId ).AsIntegerOrNull();
+                    var category = CategoryCache.Get( PageParameter( PageParameterKey.CategoryId ), !PageCache.Layout.Site.DisablePredictableIds );
+
+                    if ( category != null )
+                    {
+                        _categoryId = category.Id;
+                    }
+                    else
+                    {
+                        _categoryId = null;
+                    }
                 }
             }
 
@@ -185,30 +193,30 @@ namespace Rock.Blocks.Core
         [BlockAction]
         public BlockActionResult Delete( string key )
         {
-                            var entityService = new ScheduleCategoryExclusionService( RockContext );
-                var entity = entityService.Get( key, !PageCache.Layout.Site.DisablePredictableIds );
+            var entityService = new ScheduleCategoryExclusionService( RockContext );
+            var entity = entityService.Get( key, !PageCache.Layout.Site.DisablePredictableIds );
 
-                if ( entity == null )
-                {
-                    return ActionBadRequest( $"{ScheduleCategoryExclusion.FriendlyTypeName} not found." );
-                }
+            if ( entity == null )
+            {
+                return ActionBadRequest( $"{ScheduleCategoryExclusion.FriendlyTypeName} not found." );
+            }
 
-                if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
-                {
-                    return ActionBadRequest( $"Not authorized to delete ${ScheduleCategoryExclusion.FriendlyTypeName}." );
-                }
+            if ( !BlockCache.IsAuthorized( Authorization.EDIT, RequestContext.CurrentPerson ) )
+            {
+                return ActionBadRequest( $"Not authorized to delete ${ScheduleCategoryExclusion.FriendlyTypeName}." );
+            }
 
-                if ( !entityService.CanDelete( entity, out var errorMessage ) )
-                {
-                    return ActionBadRequest( errorMessage );
-                }
+            if ( !entityService.CanDelete( entity, out var errorMessage ) )
+            {
+                return ActionBadRequest( errorMessage );
+            }
 
-                entityService.Delete( entity );
-                RockContext.SaveChanges();
+            entityService.Delete( entity );
+            RockContext.SaveChanges();
 
-                Rock.CheckIn.KioskDevice.Clear();
+            Rock.CheckIn.KioskDevice.Clear();
 
-                return ActionOk();
+            return ActionOk();
         }
 
         /// <summary>
