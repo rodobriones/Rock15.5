@@ -62,6 +62,7 @@
         </div>
         <TreeList v-if="isTreeListDataInitialized"
                   v-model="treeListSelectedItems"
+                  class="overflow-visible scrollbar-thin overflow-y-auto"
                   :items="treeListItems"
                   :disableFolderSelection="isTreeListFolderSelectionDisabled"
                   :showChildCount="isTreeListShowingChildCount"
@@ -76,6 +77,12 @@
 </template>
 
 <style scoped>
+/* Scrollbar Fix */
+:deep(.rocktree .rocktree-name::before) {
+    width: auto;
+}
+
+/* Panel Header Button Color Fixes */
 :deep(.panel-header-actions button i) {
     color: var(--color-interface-stronger);
 }
@@ -95,6 +102,34 @@
 
 :deep(.panel-header-actions .dropdown-menu) {
     min-width: 170px;
+}
+
+/* Scrollbar Missing Fix - Copied from CategoryTree */
+.scrollbar-thin {
+    scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-button {
+    display: none;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #858585;
+    border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #6b6b6b;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background-color: #f0f0f0;
+    border-radius: 4px;
 }
 </style>
 
