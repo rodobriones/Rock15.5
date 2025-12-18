@@ -1,0 +1,164 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <Modal v-model="isModalOpen" title="Category Options" :saveText="saveButtonText" @save="onSave">
+
+        <NotificationBox v-if="errorMessage" :alertType="AlertType.Warning">
+            {{ errorMessage }}
+        </NotificationBox>
+
+        <LoadingIndicator v-else-if="isLoading" :delay="500" />
+
+        <template v-else>
+            <div class="row">
+                <div class="col-md-12">
+                    <CategoryPicker v-model="rootCategoryListeItem"
+                                    label="Root Category"
+                                    :multiple="false"
+                                    :entityTypeGuid="entityTypeGuid" />
+
+                    <CategoryPicker v-model="excludedCategoriesListItems"
+                                    label="Exclude Categories"
+                                    :multiple="true"
+                                    :entityTypeGuid="entityTypeGuid" />
+                </div>
+            </div>
+
+        </template>
+
+    </Modal>
+</template>
+
+<style scoped>
+.column-config-reload {
+    gap: 8px;
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, ref, watch } from "vue";
+    import CategoryPicker from "@Obsidian/Controls/categoryPicker.obs";
+    import LoadingIndicator from "@Obsidian/Controls/loadingIndicator.obs";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import { AlertType } from "@Obsidian/Enums/Controls/alertType";
+    import { getSecurityGrant, provideSecurityGrant, setCustomSettingsBoxValue, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
+    import { CustomSettingsBox } from "@Obsidian/ViewModels/Blocks/customSettingsBox";
+    import { CategoryTreeViewCustomSettingsBag } from "@Obsidian/ViewModels/Blocks/Core/categoryTreeView/categoryTreeViewCustomSettingsBag";
+    import { CategoryTreeViewCustomSettingsOptionsBag } from "@Obsidian/ViewModels/Blocks/Core/categoryTreeView/categoryTreeViewCustomSettingsOptionsBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { Guid } from "@Obsidian/Types";
+
+    const invokeBlockAction = useInvokeBlockAction();
+    const securityGrant = getSecurityGrant(null);
+    const reloadBlock = useReloadBlock();
+
+    const emit = defineEmits<{
+        (e: "close"): void
+    }>();
+
+    // #region Values
+
+    const errorMessage = ref("");
+
+    const isLoading = ref(true);
+    const isModalOpen = ref(true);
+
+    const entityTypeGuid = ref<Guid | undefined>(undefined);
+
+    const rootCategoryListeItem = ref<ListItemBag | null>(null);
+
+    const excludedCategoriesListItems = ref<ListItemBag[] | null>(null);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    const saveButtonText = computed((): string => {
+        return errorMessage.value || !isLoading.value ? "Save" : "";
+    });
+
+    // #endregion Computed Values
+
+    // #region Functions
+
+    /**
+     * Begins loading the current settings in the background so that the UI can be displayed.
+     */
+    async function startLoading(): Promise<void> {
+        const result = await invokeBlockAction<CustomSettingsBox<CategoryTreeViewCustomSettingsBag, CategoryTreeViewCustomSettingsOptionsBag>>("GetCustomSettings");
+
+        if (result.isSuccess && result.data && result.data.settings && result.data.options) {
+            entityTypeGuid.value = result.data.options.entityTypeGuid ?? undefined;
+
+            if (
+                result.data.settings.rootCategory != null
+                && result.data.settings.rootCategory.value != null
+                && result.data.settings.rootCategory.value !== ""
+                && result.data.settings.rootCategory.text !== null
+                && result.data.settings.rootCategory.text !== ""
+            ) {
+                rootCategoryListeItem.value = result.data.settings.rootCategory;
+            }
+            else {
+                rootCategoryListeItem.value = null;
+            }
+
+            if (
+                result.data.settings.excludedCategories != null
+                && result.data.settings.excludedCategories.length > 0
+            ) {
+                excludedCategoriesListItems.value = result.data.settings.excludedCategories;
+            }
+            else {
+                excludedCategoriesListItems.value = null;
+            }
+
+            securityGrant.updateToken(result.data.securityGrantToken);
+        }
+        else {
+            errorMessage.value = result.errorMessage || "Unknown error while loading custom settings.";
+        }
+
+        isLoading.value = false;
+    }
+
+    // #endregion Functions
+
+    // #region Event Handlers
+
+    /**
+     * Saves the block settings.
+     */
+    async function onSave(): Promise<void> {
+        const box: CustomSettingsBox<CategoryTreeViewCustomSettingsBag, CategoryTreeViewCustomSettingsOptionsBag> = {};
+
+        setCustomSettingsBoxValue(box, "rootCategory", rootCategoryListeItem.value ?? {});
+        setCustomSettingsBoxValue(box, "excludedCategories", excludedCategoriesListItems.value ?? []);
+
+        const data = {
+            box
+        };
+
+        const result = await invokeBlockAction("SaveCustomSettings", data);
+
+        if (result.isSuccess) {
+            isModalOpen.value = false;
+            reloadBlock();
+        }
+        else {
+            alert(result.errorMessage || "Unable to save block settings.");
+        }
+    }
+
+    // #endregion Event Handlers
+
+    provideSecurityGrant(securityGrant);
+
+    watch(isModalOpen, () => {
+        if (!isModalOpen.value) {
+            emit("close");
+        }
+    });
+
+    startLoading();
+</script>

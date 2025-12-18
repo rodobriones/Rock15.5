@@ -169,6 +169,102 @@ export class CategoryTreeItemProvider implements ITreeItemProvider {
 }
 
 /**
+ * Tree Item Provider for retrieving categories and their categorized items
+ * from the server and displaying them inside a tree list.
+ */
+export class CategoryTreeViewItemProvider implements ITreeItemProvider {
+    /** The HTTP client for making API requests. */
+    private readonly http = useHttp();
+
+    /**
+     * The root category to start pulling categories from. Set to undefined to
+     * begin with any category that does not have a parent.
+     */
+    public rootCategoryGuid?: Guid;
+
+    /**
+     * The entity type unique identifier to restrict results to. Set to undefined
+     * to include all categories, regardless of entity type.
+     */
+    public entityTypeGuid?: Guid;
+
+    /**
+     * The value that must match in the category EntityTypeQualifierColumn
+     * property. Set to undefined or an empty string to ignore.
+     */
+    public entityTypeQualifierColumn?: string;
+
+    /**
+     * The value that must match in the category EntityTypeQualifierValue
+     * property.
+     */
+    public entityTypeQualifierValue?: string;
+
+    /**
+     * Whether to include inactive items in the results.
+     */
+    public includeInactiveItems?: boolean;
+
+    /**
+     * Whether to include unnamed entity items in the results.
+     */
+    public includeUnnamedEntityItems?: boolean;
+
+    /**
+     * The security grant token that will be used to request additional access
+     * to the category list.
+     */
+    public securityGrantToken?: string | null;
+
+    /**
+     * Gets the child items from the server.
+     *
+     * @param parentGuid The parent item whose children are retrieved.
+     *
+     * @returns A collection of TreeItem objects as an asynchronous operation.
+     */
+    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+        const options: CategoryPickerChildTreeItemsOptionsBag = {
+            parentGuid: parentGuid,
+            entityTypeGuid: this.entityTypeGuid,
+            entityTypeQualifierColumn: this.entityTypeQualifierColumn,
+            entityTypeQualifierValue: this.entityTypeQualifierValue,
+            lazyLoad: false,
+            securityGrantToken: this.securityGrantToken,
+
+            getCategorizedItems: true,
+            includeCategoriesWithoutChildren: true,
+            includeInactiveItems: this.includeInactiveItems ?? false,
+            includeUnnamedEntityItems: this.includeUnnamedEntityItems ?? false,
+        };
+
+        const response = await this.http.post<TreeItemBag[]>("/api/v2/Controls/CategoryPickerChildTreeItems", {}, options);
+
+        if (response.isSuccess && response.data) {
+            return response.data;
+        }
+        else {
+            console.log("Error", response.errorMessage);
+            return [];
+        }
+    }
+
+    /**
+     * @inheritdoc
+     */
+    async getRootItems(): Promise<TreeItemBag[]> {
+        return await this.getItems(this.rootCategoryGuid);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    async getChildItems(item: TreeItemBag): Promise<TreeItemBag[]> {
+        return this.getItems(item.value);
+    }
+}
+
+/**
  * Tree Item Provider for retrieving locations from the server and displaying
  * them inside a tree list.
  */
