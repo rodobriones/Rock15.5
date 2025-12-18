@@ -565,7 +565,7 @@ namespace Rock.Blocks.Core
             {
                 return ActionContent( System.Net.HttpStatusCode.Created, this.GetCurrentPageUrl( new Dictionary<string, string>
                 {
-                    [PageParameterKey.CategoryId] = entity.Id.ToString()
+                    [PageParameterKey.CategoryId] = entity.IdKey
                 } ) );
             }
 

@@ -169,9 +169,15 @@ namespace RockWeb.Blocks.Core
             if ( hfCategoryId.Value.Equals( "0" ) )
             {
                 int? parentCategoryId = GetParentCategoryIdFromPageParameter();
+                var parentCategory = CategoryCache.Get( parentCategoryId ?? 0 );
                 // Canceling on Add, and we know the parentCategoryId, so we are probably in treeview mode, so navigate to the current page
                 var qryParams = new Dictionary<string, string>();
-                qryParams["CategoryId"] = parentCategoryId.ToString();
+
+                if ( parentCategory != null )
+                {
+                    qryParams["CategoryId"] = parentCategory.IdKey;
+                }
+
                 qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
                 NavigateToPage( RockPage.Guid, qryParams );
             }
@@ -220,15 +226,16 @@ namespace RockWeb.Blocks.Core
                 else
                 {
                     parentCategoryId = category.ParentCategoryId;
+                    var parentCategory = CategoryCache.Get( parentCategoryId ?? 0 );
 
                     categoryService.Delete( category );
                     rockContext.SaveChanges();
 
                     // reload page, selecting the deleted category's parent
                     var qryParams = new Dictionary<string, string>();
-                    if ( parentCategoryId != null )
+                    if ( parentCategory != null )
                     {
-                        qryParams["CategoryId"] = parentCategoryId.ToString();
+                        qryParams["CategoryId"] = parentCategory.IdKey;
                     }
 
                     qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
@@ -330,7 +337,7 @@ namespace RockWeb.Blocks.Core
             rockContext.SaveChanges();
 
             var qryParams = new Dictionary<string, string>();
-            qryParams["CategoryId"] = category.Id.ToString();
+            qryParams["CategoryId"] = category.IdKey;
             qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
             NavigateToPage( RockPage.Guid, qryParams );
         }
