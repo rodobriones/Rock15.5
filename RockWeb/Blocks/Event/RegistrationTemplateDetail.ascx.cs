@@ -23,7 +23,7 @@ using System.Linq;
 using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-
+using Microsoft.Data.Edm.Library;
 using Newtonsoft.Json;
 
 using Rock;
@@ -2551,22 +2551,27 @@ The logged-in person's information will be used to complete the registrar inform
 
         private RegistrationTemplate GetRegistrationTemplate( string registrationTemplateId, RockContext rockContext = null )
         {
+            RegistrationTemplate registrationTemplate = null;
+
             var registrationTemplateFromArgument = new RegistrationTemplateService( new RockContext() ).GetNoTracking(
                 registrationTemplateId,
                 !PageCache.Layout.Site.DisablePredictableIds
             );
 
-            var key = $"RegistrationTemplate:{registrationTemplateFromArgument.Id}";
-            var registrationTemplate = RockPage.GetSharedItem( key ) as RegistrationTemplate;
-
-            if ( registrationTemplate == null )
+            if ( registrationTemplateFromArgument != null )
             {
-                rockContext = rockContext ?? new RockContext();
-                registrationTemplate = new RegistrationTemplateService( rockContext )
-                    .Queryable( "GroupType.Roles" )
-                    .AsNoTracking()
-                    .FirstOrDefault( i => i.Id == registrationTemplateFromArgument.Id );
-                RockPage.SaveSharedItem( key, registrationTemplate );
+                var key = $"RegistrationTemplate:{registrationTemplateFromArgument.Id}";
+                registrationTemplate = RockPage.GetSharedItem( key ) as RegistrationTemplate;
+
+                if ( registrationTemplate == null )
+                {
+                    rockContext = rockContext ?? new RockContext();
+                    registrationTemplate = new RegistrationTemplateService( rockContext )
+                        .Queryable( "GroupType.Roles" )
+                        .AsNoTracking()
+                        .FirstOrDefault( i => i.Id == registrationTemplateFromArgument.Id );
+                    RockPage.SaveSharedItem( key, registrationTemplate );
+                }
             }
 
             return registrationTemplate;
