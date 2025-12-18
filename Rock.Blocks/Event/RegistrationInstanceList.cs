@@ -92,10 +92,10 @@ namespace Rock.Blocks.Event
         {
             var options = new RegistrationInstanceListOptionsBag();
 
-            var templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
-            if ( templateId != 0 )
+            var templateId = PageParameter( "RegistrationTemplateId" );
+            if ( templateId != "0" )
             {
-                var template = new RegistrationTemplateService( RockContext ).Get( templateId );
+                var template = new RegistrationTemplateService( RockContext ).Get( templateId, !PageCache.Layout.Site.DisablePredictableIds );
                 if ( template != null )
                 {
                     options.RegistrationInstanceName = template.Name;
@@ -118,8 +118,8 @@ namespace Rock.Blocks.Event
         /// <returns>A boolean value that indicates if the add button should be enabled.</returns>
         private bool GetIsAddEnabled()
         {
-            var templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
-            if ( templateId == 0 )
+            var templateId = PageParameter( "RegistrationTemplateId" );
+            if ( templateId == "0" )
             {
                 return false;
             }
@@ -134,13 +134,14 @@ namespace Rock.Blocks.Event
         /// <returns>A dictionary of key names and URL values.</returns>
         private Dictionary<string, string> GetBoxNavigationUrls()
         {
-            var templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
+            var templateId = PageParameter( "RegistrationTemplateId" );
+            var template = new RegistrationTemplateService( RockContext ).Get( templateId, !PageCache.Layout.Site.DisablePredictableIds );
             return new Dictionary<string, string>
             {
                 [NavigationUrlKey.DetailPage] = this.GetLinkedPageUrl( AttributeKey.DetailPage, new Dictionary<string, string>
                 {
                     ["RegistrationInstanceId"] = "((Key))",
-                    ["RegistrationTemplateId"] = templateId.ToString()
+                    ["RegistrationTemplateId"] = template.IdKey
                 })
             };
         }
@@ -151,10 +152,11 @@ namespace Rock.Blocks.Event
             var qry = base.GetListQueryable( rockContext );
             qry = qry.Include( i => i.Registrations.Select( r => r.Registrants ) );
 
-            var templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
-            if ( templateId != 0 )
+            var templateId = PageParameter( "RegistrationTemplateId" );
+            var template = new RegistrationTemplateService( RockContext ).Get( templateId, !PageCache.Layout.Site.DisablePredictableIds );
+            if ( templateId != "0" )
             {
-                qry = qry.Where( i => i.RegistrationTemplateId == templateId );
+                qry = qry.Where( i => i.RegistrationTemplateId == template.Id );
             }
             else
             {
@@ -173,12 +175,12 @@ namespace Rock.Blocks.Event
         /// <inheritdoc/>
         protected override GridBuilder<RegistrationInstance> GetGridBuilder()
         {
-            var templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
+            var templateId = PageParameter( "RegistrationTemplateId" );
             bool showWaitList = false;
 
-            if ( templateId != 0 )
+            if ( templateId != "0" )
             {
-                var template = new RegistrationTemplateService( RockContext ).Get( templateId );
+                var template = new RegistrationTemplateService( RockContext ).Get( templateId, !PageCache.Layout.Site.DisablePredictableIds );
                 showWaitList = template != null && template.WaitListEnabled;
             }
 

@@ -48,6 +48,16 @@ namespace RockWeb.Blocks.Event
 
         #endregion
 
+        #region PageParameter Keys
+
+        private static class PageParameterKey
+        {
+            public const string RegistrationTemplateId = "RegistrationTemplateId";
+            public const string RegistrationInstanceId = "RegistrationInstanceId";
+        }
+
+        #endregion
+
         #region Control Methods
 
         /// <summary>
@@ -58,10 +68,11 @@ namespace RockWeb.Blocks.Event
         {
             base.OnInit( e );
 
-            int templateId = PageParameter( "RegistrationTemplateId" ).AsInteger();
-            if ( templateId != 0 )
+            var templateId = PageParameter( "RegistrationTemplateId" );
+            var template = new RegistrationTemplateService( new RockContext() ).Get( templateId, !PageCache.Layout.Site.DisablePredictableIds );
+            if ( templateId != "0" && template != null )
             {
-                _template = GetRegistrationTemplate( templateId );
+                _template = GetRegistrationTemplate( template.Id );
 
                 if ( _template != null && _template.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
                 {
@@ -276,7 +287,11 @@ namespace RockWeb.Blocks.Event
         /// <exception cref="System.NotImplementedException"></exception>
         protected void gInstances_AddClick( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "RegistrationInstanceId", 0, "RegistrationTemplateId", _template.Id );
+            var qryParams = new Dictionary<string, string>();
+            qryParams[PageParameterKey.RegistrationInstanceId] = "0";
+            qryParams[PageParameterKey.RegistrationTemplateId] = _template.IdKey;
+
+            NavigateToLinkedPage( "DetailPage", qryParams );
         }
 
         /// <summary>
@@ -286,7 +301,10 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gInstances_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "RegistrationInstanceId", e.RowKeyId );
+            var registrationInstance = new RegistrationInstanceService( new RockContext() ).Get( e.RowKeyId );
+            var qryParams = new Dictionary<string, string>();
+            qryParams[PageParameterKey.RegistrationInstanceId] = registrationInstance.IdKey;
+            NavigateToLinkedPage( "DetailPage", qryParams );
         }
 
         /// <summary>

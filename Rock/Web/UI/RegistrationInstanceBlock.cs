@@ -506,10 +506,19 @@ namespace Rock.Web.UI
         {
             base.OnInit( e );
 
-            RegistrationInstanceId = PageParameter( PageParameterKey.RegistrationInstanceId ).AsIntegerOrNull();
+            var registrationInstance = new RegistrationInstanceService( new RockContext() ).Get( PageParameter( PageParameterKey.RegistrationInstanceId ), true );
 
-            if ( RegistrationInstance == null
-                 && RegistrationInstanceId.HasValue )
+            if ( registrationInstance == null )
+            {
+                return;
+            }
+
+            RegistrationInstanceId = registrationInstance.Id;
+
+            if (
+                RegistrationInstance == null
+                 && RegistrationInstanceId.HasValue
+            )
             {
                 RegistrationInstance = GetSharedRegistrationInstance( this.RegistrationInstanceId.Value );
 

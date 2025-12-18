@@ -26,6 +26,7 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Plugin.HotFixes;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -329,7 +330,22 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void gLinkages_AddClick( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( AttributeKey.LinkageDetailPage, "LinkageId", 0, "RegistrationInstanceId", this.RegistrationInstanceId );
+            RegistrationInstance registrationInstance = null;
+
+            if ( this.RegistrationInstanceId.HasValue )
+            {
+                registrationInstance = new RegistrationInstanceService( new RockContext() ).GetNoTracking( this.RegistrationInstanceId.Value );
+            }
+
+            var qryParams = new Dictionary<string, string>();
+            qryParams.Add( "LinkageId", "0" );
+
+            if ( registrationInstance != null )
+            {
+                qryParams.Add( "RegistrationInstanceId", registrationInstance.IdKey );
+            }
+
+            NavigateToLinkedPage( AttributeKey.LinkageDetailPage, qryParams );
         }
 
         /// <summary>
@@ -339,7 +355,28 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
         protected void gLinkages_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( AttributeKey.LinkageDetailPage, "LinkageId", e.RowKeyId, "RegistrationInstanceId", this.RegistrationInstanceId );
+            RegistrationInstance registrationInstance = null;
+            var linkage = new EventItemOccurrenceGroupMapService( new RockContext() ).GetNoTracking( e.RowKeyId );
+
+
+            if ( this.RegistrationInstanceId.HasValue )
+            {
+                registrationInstance = new RegistrationInstanceService( new RockContext() ).GetNoTracking( this.RegistrationInstanceId.Value );
+            }
+
+            var qryParams = new Dictionary<string, string>();
+
+            if ( linkage != null )
+            {
+                qryParams.Add( "LinkageId", linkage.IdKey );
+            }
+
+            if ( registrationInstance != null )
+            {
+                qryParams.Add( "RegistrationInstanceId", registrationInstance.IdKey );
+            }
+
+            NavigateToLinkedPage( AttributeKey.LinkageDetailPage, qryParams );
         }
 
         /// <summary>

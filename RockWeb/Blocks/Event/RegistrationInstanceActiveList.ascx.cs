@@ -14,16 +14,16 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-using System.ComponentModel;
-using System.Linq;
-
 using Rock;
+using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.UI.Controls;
-using Rock.Attribute;
 using Rock.Web.UI;
+using Rock.Web.UI.Controls;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
 
 namespace RockWeb.Blocks.Event
 {
@@ -38,6 +38,15 @@ namespace RockWeb.Blocks.Event
     [Rock.SystemGuid.BlockTypeGuid( "CFE8CAFA-587B-4EF2-A457-18047AC6BA39" )]
     public partial class RegistrationInstanceActiveList : RockBlock, ICustomGridColumns
     {
+
+        #region PageParameter Keys
+
+        private static class PageParameterKey
+        {
+            public const string RegistrationInstanceId = "RegistrationInstanceId";
+        }
+
+        #endregion
 
         #region Base Control Methods
 
@@ -89,7 +98,10 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gRegInstances_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "RegistrationInstanceId", e.RowKeyId );
+            var registrationInstance = new RegistrationInstanceService( new RockContext() ).Get( e.RowKeyId );
+            var qryParams = new Dictionary<string, string>();
+            qryParams[PageParameterKey.RegistrationInstanceId] = registrationInstance.IdKey;
+            NavigateToLinkedPage( "DetailPage", qryParams );
         }
 
         #endregion

@@ -21,6 +21,7 @@ using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Constants;
 using Rock.Data;
@@ -65,7 +66,12 @@ namespace RockWeb.Blocks.Event
         {
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "LinkageId" ).AsInteger() );
+                var linkage = new EventItemOccurrenceGroupMapService( new RockContext() ).GetNoTracking(
+                    PageParameter( "LinkageId" ),
+                    !PageCache.Layout.Site.DisablePredictableIds
+                );
+
+                ShowDetail( linkage != null ? linkage.Id : 0 );
             }
 
             base.OnLoad( e );
@@ -99,7 +105,10 @@ namespace RockWeb.Blocks.Event
                 if ( linkage == null )
                 {
                     linkage = new EventItemOccurrenceGroupMap();
-                    linkage.RegistrationInstanceId = PageParameter( PageParameterKey.RegistrationInstanceId ).AsInteger();
+                    linkage.RegistrationInstanceId = new RegistrationInstanceService( new RockContext() ).GetNoTracking(
+                        PageParameter( PageParameterKey.RegistrationInstanceId ),
+                        !PageCache.Layout.Site.DisablePredictableIds
+                    ).Id;
                     service.Add( linkage );
                 }
 
@@ -333,10 +342,19 @@ namespace RockWeb.Blocks.Event
         /// </summary>
         private void NavigateToParentPage()
         {
-            NavigateToParentPage( new Dictionary<string, string>
+            var registrationInstance = new RegistrationInstanceService( new RockContext() ).GetNoTracking(
+                PageParameter( PageParameterKey.RegistrationInstanceId ),
+                !PageCache.Layout.Site.DisablePredictableIds
+            );
+
+            var qryParams = new Dictionary<string, string>();
+
+            if ( registrationInstance != null )
             {
-                { PageParameterKey.RegistrationInstanceId, PageParameter( PageParameterKey.RegistrationInstanceId ) }
-            } );
+                qryParams.Add( PageParameterKey.RegistrationInstanceId, registrationInstance.IdKey );
+            }
+
+            NavigateToParentPage( qryParams );
         }
 
         /// <summary>
@@ -495,7 +513,7 @@ namespace RockWeb.Blocks.Event
         protected void gpLinkageGroup_SelectItem( object sender, EventArgs e )
         {
             var rockContext = new RockContext();
-            var registrationInstance = new RegistrationInstanceService( rockContext ).Get( PageParameter( PageParameterKey.RegistrationInstanceId ).AsInteger() );
+            var registrationInstance = new RegistrationInstanceService( rockContext ).Get( PageParameter( PageParameterKey.RegistrationInstanceId ), !PageCache.Layout.Site.DisablePredictableIds );
             var group = new GroupService( rockContext ).Get( gpLinkageGroup.SelectedValue.AsInteger() );
             bool showGroupTypeWarning = false;
             if ( registrationInstance != null && group != null )

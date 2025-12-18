@@ -23,7 +23,9 @@ using System.Linq;
 using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Newtonsoft.Json;
+
 using Rock;
 using Rock.Attribute;
 using Rock.Constants;
@@ -35,6 +37,7 @@ using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
+
 using Attribute = Rock.Model.Attribute;
 
 namespace RockWeb.Blocks.Event
@@ -213,7 +216,7 @@ namespace RockWeb.Blocks.Event
     This {{ RegistrationInstance.RegistrationTemplate.RegistrationTerm | Downcase  }} has a remaining balance
     of {{ Registration.BalanceDue | FormatAsCurrency }}.
     You can complete the payment for this {{ RegistrationInstance.RegistrationTemplate.RegistrationTerm | Downcase }}
-    using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.Id }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
+    using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.IdKey }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
     online registration page</a>.
 </p>
 {% endif %}
@@ -371,7 +374,7 @@ namespace RockWeb.Blocks.Event
 
 <p>
     You can complete the payment for this {{ RegistrationInstance.RegistrationTemplate.RegistrationTerm | Downcase }}
-    using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.Id }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
+    using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.IdKey }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
     online registration page</a>.
 </p>
 
@@ -410,7 +413,7 @@ namespace RockWeb.Blocks.Event
 {% if AdditionalFieldsNeeded %}
     <p>
         <strong>Additional information is needed in order to process this registration. Please visit the
-        <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.Id }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}&StartAtBeginning=True'>
+        <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.IdKey }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}&StartAtBeginning=True'>
         online registration page</a> to complete the registration.</strong>
     </p>
 {% endif %}
@@ -418,7 +421,7 @@ namespace RockWeb.Blocks.Event
 {% if Registration.BalanceDue > 0 %}
     <p>
         A balance of {{ Registration.BalanceDue | FormatAsCurrency }} remains on this registration. You can complete the payment for this {{ RegistrationInstance.RegistrationTemplate.RegistrationTerm | Downcase }}
-        using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.Id }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
+        using our <a href='{{ externalSite }}Registration?RegistrationId={{ Registration.IdKey }}&rckipid={{ Registration.PersonAlias.Person | PersonTokenCreate }}'>
         online registration page</a>.
     </p>
 {% endif %}
@@ -768,10 +771,14 @@ The logged-in person's information will be used to complete the registrar inform
         {
             var breadCrumbs = new List<BreadCrumb>();
 
-            var registrationTemplateId = PageParameter( pageReference, PageParameterKey.RegistrationTemplateId ).AsIntegerOrNull();
-            if ( registrationTemplateId.HasValue )
+            var registrationTemplate = new RegistrationTemplateService( new RockContext() ).GetNoTracking(
+                PageParameter( pageReference, PageParameterKey.RegistrationTemplateId ),
+                !PageCache.Layout.Site.DisablePredictableIds
+            );
+
+            if ( registrationTemplate != null )
             {
-                var registrationTemplate = GetRegistrationTemplate( registrationTemplateId.Value );
+                registrationTemplate = GetRegistrationTemplate( registrationTemplate.Id );
                 if ( registrationTemplate != null )
                 {
                     breadCrumbs.Add( new BreadCrumb( registrationTemplate.ToString(), pageReference ) );
@@ -864,7 +871,7 @@ The logged-in person's information will be used to complete the registrar inform
 
             if ( registrationTemplate != null )
             {
-                if ( ! (UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, this.CurrentPerson ) ) || registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) )
+                if ( !( UserCanEdit || registrationTemplate.IsAuthorized( Authorization.EDIT, this.CurrentPerson ) ) || registrationTemplate.IsAuthorized( Authorization.ADMINISTRATE, this.CurrentPerson ) )
                 {
                     mdDeleteWarning.Show( "You are not authorized to delete this registration template.", ModalAlertType.Information );
                     return;
@@ -1569,7 +1576,7 @@ The logged-in person's information will be used to complete the registrar inform
 
                     var qryParams = new Dictionary<string, string>
                     {
-                        ["RegistrationTemplateId"] = registrationTemplate.Id.ToString()
+                        ["RegistrationTemplateId"] = registrationTemplate.IdKey
                     };
                     NavigateToPage( RockPage.Guid, qryParams );
                 }
@@ -1630,13 +1637,14 @@ The logged-in person's information will be used to complete the registrar inform
         {
             if ( hfRegistrationTemplateId.Value.Equals( "0" ) )
             {
-                var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull();
-                if ( parentCategoryId.HasValue )
+                var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId );
+                var parentCategory = CategoryCache.Get( parentCategoryId, !PageCache.Layout.Site.DisablePredictableIds );
+                if ( parentCategory != null )
                 {
                     // Canceling on Add, and we know the parentCategoryId, so we are probably in tree-view mode, so navigate to the current page.
                     var qryParams = new Dictionary<string, string>
                     {
-                        ["CategoryId"] = parentCategoryId.ToString()
+                        ["CategoryId"] = parentCategory.IdKey
                     };
                     NavigateToPage( RockPage.Guid, qryParams );
                 }
@@ -2039,10 +2047,10 @@ The logged-in person's information will be used to complete the registrar inform
         private bool ValidateUniqueKey()
         {
             var attributeGuid = hfAttributeGuid.Value.AsGuid();
-            foreach( var form in FormFieldsState )
+            foreach ( var form in FormFieldsState )
             {
                 var fields = form.Value;
-                foreach( var field in fields )
+                foreach ( var field in fields )
                 {
                     if ( field.Guid != attributeGuid && field.Attribute?.Key == edtRegistrantAttribute.Key )
                     {
@@ -2541,15 +2549,38 @@ The logged-in person's information will be used to complete the registrar inform
             return registrationTemplate;
         }
 
+        private RegistrationTemplate GetRegistrationTemplate( string registrationTemplateId, RockContext rockContext = null )
+        {
+            var registrationTemplateFromArgument = new RegistrationTemplateService( new RockContext() ).GetNoTracking(
+                registrationTemplateId,
+                !PageCache.Layout.Site.DisablePredictableIds
+            );
+
+            var key = $"RegistrationTemplate:{registrationTemplateFromArgument.Id}";
+            var registrationTemplate = RockPage.GetSharedItem( key ) as RegistrationTemplate;
+
+            if ( registrationTemplate == null )
+            {
+                rockContext = rockContext ?? new RockContext();
+                registrationTemplate = new RegistrationTemplateService( rockContext )
+                    .Queryable( "GroupType.Roles" )
+                    .AsNoTracking()
+                    .FirstOrDefault( i => i.Id == registrationTemplateFromArgument.Id );
+                RockPage.SaveSharedItem( key, registrationTemplate );
+            }
+
+            return registrationTemplate;
+        }
+
         /// <summary>
         /// Shows the detail.
         /// </summary>
         private void ShowDetail()
         {
-            var registrationTemplateId = PageParameter( PageParameterKey.RegistrationTemplateId ).AsIntegerOrNull();
-            var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull();
+            var registrationTemplateId = PageParameter( PageParameterKey.RegistrationTemplateId );
+            var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId );
 
-            if ( !registrationTemplateId.HasValue )
+            if ( string.IsNullOrEmpty( registrationTemplateId ) )
             {
                 pnlDetails.Visible = false;
                 return;
@@ -2558,18 +2589,18 @@ The logged-in person's information will be used to complete the registrar inform
             var rockContext = new RockContext();
 
             RegistrationTemplate registrationTemplate = null;
-            if ( registrationTemplateId.HasValue )
+            if ( !string.IsNullOrEmpty( registrationTemplateId ) )
             {
-                registrationTemplate = GetRegistrationTemplate( registrationTemplateId.Value, rockContext );
+                registrationTemplate = GetRegistrationTemplate( registrationTemplateId, rockContext );
             }
 
             if ( registrationTemplate == null )
             {
                 var parentCategory = new Category();
 
-                if ( parentCategoryId.HasValue )
+                if ( !string.IsNullOrEmpty( parentCategoryId ) )
                 {
-                    parentCategory = new CategoryService( rockContext ).Get( parentCategoryId.Value );
+                    parentCategory = new CategoryService( rockContext ).Get( parentCategoryId, !PageCache.Layout.Site.DisablePredictableIds );
                 }
 
                 registrationTemplate = new RegistrationTemplate
@@ -2577,7 +2608,7 @@ The logged-in person's information will be used to complete the registrar inform
                     Id = 0,
                     IsActive = true,
                     Category = parentCategory,
-                    CategoryId = parentCategoryId,
+                    CategoryId = parentCategory.Id,
                     ConfirmationFromName = "{{ RegistrationInstance.ContactPersonAlias.Person.FullName }}",
                     ConfirmationFromEmail = "{{ RegistrationInstance.ContactEmail }}",
                     ConfirmationSubject = "{{ RegistrationInstance.Name }} Confirmation",
@@ -2892,9 +2923,9 @@ The logged-in person's information will be used to complete the registrar inform
         /// Gets the help text for the AllowExternalUpdates field based on whether or not it is enabled
         /// because if it's disabled, we'd like to explain to the user why.
         /// </summary>
-        private string GetAllowExternalUpdatesHelpText(bool isEnabled)
+        private string GetAllowExternalUpdatesHelpText( bool isEnabled )
         {
-            if (isEnabled)
+            if ( isEnabled )
             {
                 return "Allow saved registrations to be updated online. If false, the individual will be able to make additional payments but will not be allowed to change any of the registrant information and attributes.";
             }
@@ -3037,8 +3068,8 @@ The logged-in person's information will be used to complete the registrar inform
                     Name = p.Name,
                     Url = LinkedPageUrl( AttributeKey.GroupPlacementPage, new Dictionary<string, string>
                     {
-                        { PageParameterKey.RegistrationTemplateId, registrationTemplate.Id.ToString() },
-                        { "RegistrationTemplatePlacementId", p.Id.ToString() },
+                        { PageParameterKey.RegistrationTemplateId, registrationTemplate.IdKey },
+                        { "RegistrationTemplatePlacementId", Rock.Utility.IdHasher.Instance.GetHash(p.Id) },
                         { "ReturnUrl", GetCurrentPageUrl() }
                     } )
                 } )

@@ -21,10 +21,13 @@ using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Newtonsoft.Json;
+
 using Rock;
 using Rock.Data;
 using Rock.Model;
+using Rock.Transactions;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -420,7 +423,7 @@ namespace RockWeb.Blocks.Event
                 if ( registrationInstance.TimeoutIsEnabled )
                 {
                     // If the registrant is new or coming off the waitlist then we need to check capacity and reserve a spot.
-                    if ( newRegistrant && tglWaitList.Checked || registrant.OnWaitList && tglWaitList.Checked)
+                    if ( newRegistrant && tglWaitList.Checked || registrant.OnWaitList && tglWaitList.Checked )
                     {
                         var registrationSession = CreateRegistrationSession();
                         if ( registrationSession == null )
@@ -443,13 +446,13 @@ namespace RockWeb.Blocks.Event
                         rockContext.SaveChanges();
 
                         registrant.LoadAttributes();
-                    // NOTE: We will only have Registration Attributes displayed and editable on Registrant Detail.
-                    // To Edit Person or GroupMember Attributes, they will have to go the PersonDetail or GroupMemberDetail blocks
-                    foreach ( var field in this.RegistrationTemplate.Forms
-                            .SelectMany( f => f.Fields
-                                .Where( t =>
-                                    t.FieldSource == RegistrationFieldSource.RegistrantAttribute &&
-                                    t.AttributeId.HasValue ) ) )
+                        // NOTE: We will only have Registration Attributes displayed and editable on Registrant Detail.
+                        // To Edit Person or GroupMember Attributes, they will have to go the PersonDetail or GroupMemberDetail blocks
+                        foreach ( var field in this.RegistrationTemplate.Forms
+                                .SelectMany( f => f.Fields
+                                    .Where( t =>
+                                        t.FieldSource == RegistrationFieldSource.RegistrantAttribute &&
+                                        t.AttributeId.HasValue ) ) )
                         {
                             var attribute = AttributeCache.Get( field.AttributeId.Value );
                             if ( attribute != null )
@@ -548,7 +551,7 @@ namespace RockWeb.Blocks.Event
                             newRockContext.SaveChanges();
                         }
                     }
-                    
+
                     HistoryService.SaveChanges(
                         rockContext,
                         typeof( Registration ),
@@ -597,14 +600,20 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void lbWizardTemplate_Click( object sender, EventArgs e )
         {
+            var registrationTemplate = new RegistrationTemplateService( new RockContext() ).GetNoTracking( this.RegistrationTemplateId );
             var qryParams = new Dictionary<string, string>();
             var pageCache = PageCache.Get( RockPage.PageId );
+
             if ( pageCache != null &&
                 pageCache.ParentPage != null &&
                 pageCache.ParentPage.ParentPage != null &&
                 pageCache.ParentPage.ParentPage.ParentPage != null )
             {
-                qryParams.Add( "RegistrationTemplateId", this.RegistrationTemplateId.ToString() );
+                if ( registrationTemplate != null )
+                {
+                    qryParams.Add( "RegistrationTemplateId", registrationTemplate.IdKey );
+                }
+
                 NavigateToPage( pageCache.ParentPage.ParentPage.ParentPage.Guid, qryParams );
             }
         }
@@ -616,13 +625,18 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void lbWizardInstance_Click( object sender, EventArgs e )
         {
+            var registrationInstance = new RegistrationInstanceService( new RockContext() ).GetNoTracking( this.RegistrationInstanceId );
             var qryParams = new Dictionary<string, string>();
             var pageCache = PageCache.Get( RockPage.PageId );
             if ( pageCache != null &&
                 pageCache.ParentPage != null &&
                 pageCache.ParentPage.ParentPage != null )
             {
-                qryParams.Add( "RegistrationInstanceId", RegistrationInstanceId.ToString() );
+                if ( registrationInstance != null )
+                {
+                    qryParams.Add( "RegistrationInstanceId", registrationInstance.IdKey );
+                }
+
                 NavigateToPage( pageCache.ParentPage.ParentPage.Guid, qryParams );
             }
         }
@@ -722,68 +736,71 @@ namespace RockWeb.Blocks.Event
         /// </summary>
         private void LoadState()
         {
-            int? registrantId = PageParameter( "RegistrantId" ).AsIntegerOrNull();
-            int? registrationId = PageParameter( "RegistrationId" ).AsIntegerOrNull();
+            var registrantId = PageParameter( "RegistrantId" );
+            var registrationId = PageParameter( "RegistrationId" );
+
+            var rockContext = new RockContext();
+
+            var registration = new RegistrationService( rockContext ).GetNoTracking( registrationId, !PageCache.Layout.Site.DisablePredictableIds );
 
             if ( RegistrantState == null )
             {
-                var rockContext = new RockContext();
-                RegistrationRegistrant registrant = null;
+                var registrant = new RegistrationRegistrantService( rockContext ).GetNoTracking( registrantId, !PageCache.Layout.Site.DisablePredictableIds );
 
-                if ( registrantId.HasValue && registrantId.Value != 0 )
+                if ( registrant != null )
                 {
-                    registrant = new RegistrationRegistrantService( rockContext )
+                    var registrantResult = new RegistrationRegistrantService( rockContext )
                         .Queryable().AsNoTracking()
                         .Include( a => a.Registration.RegistrationInstance.RegistrationTemplate.Forms )
                         .Include( a => a.Registration.RegistrationInstance.RegistrationTemplate.Fees )
                         .Include( a => a.PersonAlias.Person )
                         .Include( a => a.Fees )
-                        .Where( r => r.Id == registrantId.Value )
+                        .Where( r => r.Id == registrant.Id )
                         .FirstOrDefault();
 
-                    if ( registrant != null &&
-                        registrant.Registration != null &&
-                        registrant.Registration.RegistrationInstance != null &&
-                        registrant.Registration.RegistrationInstance.RegistrationTemplate != null )
+                    if ( registrantResult != null &&
+                        registrantResult.Registration != null &&
+                        registrantResult.Registration.RegistrationInstance != null &&
+                        registrantResult.Registration.RegistrationInstance.RegistrationTemplate != null )
                     {
-                        RegistrantState = new RegistrantInfo( registrant, rockContext );
-                        this.RegistrationTemplateId = registrant.Registration.RegistrationInstance.RegistrationTemplateId;
-                        this.RegistrationInstanceId = registrant.Registration.RegistrationInstanceId;
+                        RegistrantState = new RegistrantInfo( registrantResult, rockContext );
+                        this.RegistrationTemplateId = registrantResult.Registration.RegistrationInstance.RegistrationTemplateId;
+                        this.RegistrationInstanceId = registrantResult.Registration.RegistrationInstanceId;
 
-                        lTitle.Text = registrant.ToString();
+                        lTitle.Text = registrantResult.ToString();
 
-                        lWizardTemplateName.Text = registrant.Registration.RegistrationInstance.RegistrationTemplate.Name;
-                        lWizardInstanceName.Text = registrant.Registration.RegistrationInstance.Name;
-                        lWizardRegistrationName.Text = registrant.Registration.ToString();
-                        lWizardRegistrantName.Text = registrant.ToString();
+                        lWizardTemplateName.Text = registrantResult.Registration.RegistrationInstance.RegistrationTemplate.Name;
+                        lWizardInstanceName.Text = registrantResult.Registration.RegistrationInstance.Name;
+                        lWizardRegistrationName.Text = registrantResult.Registration.ToString();
+                        lWizardRegistrantName.Text = registrantResult.ToString();
 
-                        tglWaitList.Checked = !registrant.OnWaitList;
+                        tglWaitList.Checked = !registrantResult.OnWaitList;
                     }
                 }
 
-                if ( this.RegistrationTemplate == null && registrationId.HasValue && registrationId.Value != 0 )
+                if ( this.RegistrationTemplate == null && registration != null )
                 {
-                    var registration = new RegistrationService( rockContext )
+                    var registrationResult = new RegistrationService( rockContext )
                         .Queryable().AsNoTracking()
                         .Include( a => a.RegistrationInstance.RegistrationTemplate )
                         .Include( a => a.RegistrationInstance.RegistrationTemplate.Forms )
                         .Include( a => a.RegistrationInstance.RegistrationTemplate.Fees )
                         .Include( a => a.PersonAlias.Person )
-                        .Where( r => r.Id == registrationId.Value )
+                        .Where( r => r.Id == registration.Id )
                         .FirstOrDefault();
 
-                    if ( registration != null &&
-                        registration.RegistrationInstance != null &&
-                        registration.RegistrationInstance.RegistrationTemplate != null )
+                    if ( registrationResult != null &&
+                        registrationResult.RegistrationInstance != null &&
+                        registrationResult.RegistrationInstance.RegistrationTemplate != null )
                     {
-                        this.RegistrationTemplateId = registration.RegistrationInstance.RegistrationTemplateId;
-                        this.RegistrationInstanceId = registration.RegistrationInstanceId;
+                        this.RegistrationTemplateId = registrationResult.RegistrationInstance.RegistrationTemplateId;
+                        this.RegistrationInstanceId = registrationResult.RegistrationInstanceId;
 
                         lTitle.Text = "Add Registrant";
 
-                        lWizardTemplateName.Text = registration.RegistrationInstance.RegistrationTemplate.Name;
-                        lWizardInstanceName.Text = registration.RegistrationInstance.Name;
-                        lWizardRegistrationName.Text = registration.ToString();
+                        lWizardTemplateName.Text = registrationResult.RegistrationInstance.RegistrationTemplate.Name;
+                        lWizardInstanceName.Text = registrationResult.RegistrationInstance.Name;
+                        lWizardRegistrationName.Text = registrationResult.ToString();
                         lWizardRegistrantName.Text = "New Registrant";
                     }
                 }
@@ -796,7 +813,7 @@ namespace RockWeb.Blocks.Event
                 if ( this.RegistrationTemplate != null && RegistrantState == null )
                 {
                     RegistrantState = new RegistrantInfo();
-                    RegistrantState.RegistrationId = registrationId ?? 0;
+                    RegistrantState.RegistrationId = registration != null ? registration.Id : 0;
                     if ( this.RegistrationTemplate.SetCostOnInstance.HasValue && this.RegistrationTemplate.SetCostOnInstance.Value )
                     {
                         var instance = new RegistrationInstanceService( rockContext ).Get( RegistrationInstanceId );
@@ -871,8 +888,14 @@ namespace RockWeb.Blocks.Event
         {
             if ( RegistrantState != null )
             {
+                var registration = new RegistrationService( new RockContext() ).GetNoTracking( RegistrantState.RegistrationId );
                 var qryParams = new Dictionary<string, string>();
-                qryParams.Add( "RegistrationId", RegistrantState.RegistrationId.ToString() );
+
+                if ( registration != null )
+                {
+                    qryParams.Add( "RegistrationId", registration.IdKey );
+                }
+
                 NavigateToParentPage( qryParams );
             }
         }

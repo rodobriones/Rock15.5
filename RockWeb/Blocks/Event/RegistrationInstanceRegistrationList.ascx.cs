@@ -90,6 +90,7 @@ namespace RockWeb.Blocks.Event
         /// </summary>
         private static class PageParameterKey
         {
+            public const string RegistrationId = "RegistrationId";
             /// <summary>
             /// The Registration Instance identifier
             /// </summary>
@@ -428,7 +429,19 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void gRegistrations_AddClick( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( AttributeKey.RegistrationPage, "RegistrationId", 0, PageParameterKey.RegistrationInstanceId, this.RegistrationInstanceId );
+            var qryParams = new Dictionary<string, string>();
+            qryParams[PageParameterKey.RegistrationId] = "0";
+
+            if ( RegistrationInstanceId.HasValue )
+            {
+                var registrationInstance = new RegistrationInstanceService( new RockContext() ).Get( RegistrationInstanceId.Value );
+                if ( registrationInstance != null )
+                {
+                    qryParams[PageParameterKey.RegistrationInstanceId] = registrationInstance.IdKey;
+                }
+            }
+
+            NavigateToLinkedPage( AttributeKey.RegistrationPage, qryParams );
         }
 
         /// <summary>
@@ -522,7 +535,24 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
         protected void gRegistrations_RowSelected( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( AttributeKey.RegistrationPage, "RegistrationId", e.RowKeyId, PageParameterKey.RegistrationInstanceId, this.RegistrationInstanceId );
+            var qryParams = new Dictionary<string, string>();
+
+            var registration = new RegistrationService( new RockContext() ).Get( e.RowKeyId );
+            if ( registration != null )
+            {
+                qryParams[PageParameterKey.RegistrationId] = registration.IdKey;
+            }
+
+            if ( RegistrationInstanceId.HasValue )
+            {
+                var registrationInstance = new RegistrationInstanceService( new RockContext() ).Get( RegistrationInstanceId.Value );
+                if ( registrationInstance != null )
+                {
+                    qryParams[PageParameterKey.RegistrationInstanceId] = registrationInstance.IdKey;
+                }
+            }
+
+            NavigateToLinkedPage( AttributeKey.RegistrationPage, qryParams );
         }
 
         #endregion
