@@ -122,6 +122,7 @@
     import { Guid } from "@Obsidian/Types";
     import { useSecurityGrantToken } from "@Obsidian/Utility/block";
     import { onConfigurationValuesChanged, useConfigurationValues, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
+    import { emptyGuid } from "@Obsidian/Utility/guid";
 
     const invokeBlockAction = useInvokeBlockAction();
 
@@ -423,27 +424,7 @@
             if (matchingTreeListItem && matchingTreeListItem.value) {
                 const isMatchingItemCategory = matchingTreeListItem.type?.toLowerCase() === "category";
 
-                const entityIdKey = await getIdKeysFromGuids(matchingTreeListItem.value, isMatchingItemCategory);
-                const expandedIdKeys = await getIdKeysFromGuids(treeListExpandedItems.value, true);
-
-                if (entityIdKey) {
-                    treeListSelectedItems.value = [value[0]];
-
-                    const url = new URL(window.location.href, window.location.origin);
-
-                    url.search = "";
-
-                    url.searchParams.append(
-                        isMatchingItemCategory ? "CategoryId" : options.blockProperties.pageParameterKey,
-                        Array.isArray(entityIdKey) ? entityIdKey.join(",") : entityIdKey ?? ""
-                    );
-
-                    if (expandedIdKeys && expandedIdKeys.length > 0) {
-                        url.searchParams.append("ExpandedIds", Array.isArray(expandedIdKeys) ? expandedIdKeys.join(",") : expandedIdKeys ?? "");
-                    }
-
-                    window.location.href = url.toString();
-                }
+                window.location.href = await getNavigationUrl(matchingTreeListItem.value, emptyGuid, treeListExpandedItems.value, isMatchingItemCategory);
             }
         }
     }
@@ -493,8 +474,8 @@
             return;
         }
 
+        // Determine the parent category ID based on whether the selected item is a category or an entity
         let parentCategoryIdGuid: Guid | null = null;
-
         if (selectedItem.type?.toLowerCase() === "category") {
             parentCategoryIdGuid = selectedItem.value ?? null;
         }
@@ -525,38 +506,15 @@
             }
         }
 
-        const parentCategoryId = await getIdKeysFromGuids(parentCategoryIdGuid, true);
+        // When adding a new item, the entityGuid is empty
+        selectedItem.value = emptyGuid;
 
-        // If the URL does not end with a numeric segment, append "/0" before adding query params.
-        let url = new URL(window.location.href);
-        let pathname = url.pathname;
-
-        url = new URL(url.origin + pathname);
-
-        url.search = "";
-
-        if (addingCategory) {
-            // For categories, we set CategoryId to 0 instead
-            url.searchParams.append("CategoryId", "0");
-        }
-        else {
-            if (options.blockProperties && options.blockProperties.pageParameterKey) {
-                url.searchParams.append(options.blockProperties.pageParameterKey, "0");
-            }
-        }
-
-        if (parentCategoryId) {
-            url.searchParams.append("ParentCategoryId", parentCategoryId as string);
-        }
-
-        if (treeListExpandedItems.value.length > 0) {
-            const expandedIdKeys = await getIdKeysFromGuids(treeListExpandedItems.value, true);
-            if (expandedIdKeys) {
-                url.searchParams.append("ExpandedIds", Array.isArray(expandedIdKeys) ? expandedIdKeys.join(",") : expandedIdKeys ?? "");
-            }
-        }
-
-        window.location.href = url.toString();
+        window.location.href = await getNavigationUrl(
+            selectedItem.value ?? emptyGuid,
+            parentCategoryIdGuid ?? emptyGuid,
+            treeListExpandedItems.value,
+            addingCategory
+        );
     }
 
     /**
@@ -570,23 +528,12 @@
      * Handles adding a new root category.
      */
     async function onAddCategoryRoot(): Promise<void> {
-        let url = new URL(window.location.href);
-        let pathname = url.pathname;
-
-        url = new URL(url.origin + pathname);
-
-        url.search = "";
-
-        url.searchParams.append("CategoryId", "0");
-
-        if (treeListExpandedItems.value.length > 0) {
-            const expandedIdKeys = await getIdKeysFromGuids(treeListExpandedItems.value, true);
-            if (expandedIdKeys) {
-                url.searchParams.append("ExpandedIds", Array.isArray(expandedIdKeys) ? expandedIdKeys.join(",") : expandedIdKeys ?? "");
-            }
-        }
-
-        window.location.href = url.toString();
+        window.location.href = await getNavigationUrl(
+            emptyGuid,
+            emptyGuid,
+            treeListExpandedItems.value,
+            true
+        );
     }
 
     /**
@@ -599,51 +546,6 @@
     // #endregion Event Handlers
 
     // #region Block Actions
-
-    /**
-     * Gets the ID keys corresponding to the provided GUIDs.
-     *
-     * @param guids The GUID or array of GUIDs to convert.
-     * @param areCategories Whether the GUIDs represent categories.
-     * @returns A promise that resolves to the corresponding ID key(s) or null.
-     */
-    async function getIdKeysFromGuids(guids: Guid | Guid[] | null | undefined, areCategories: boolean): Promise<string | string[] | null> {
-        if (!guids) {
-            return null;
-        }
-
-        if (Array.isArray(guids) && guids.length === 0) {
-            return null;
-        }
-
-        if (!Array.isArray(guids) && (guids === "" || guids === "00000000-0000-0000-0000-000000000000")) {
-            return null;
-        }
-
-        let guidArray: Guid[];
-        if (Array.isArray(guids)) {
-            guidArray = guids;
-        }
-        else {
-            guidArray = [guids];
-        }
-
-        const result = await invokeBlockAction<Guid[]>("GetIdKeysFromGuids", {
-            guids: guidArray,
-            areCategories: areCategories,
-        });
-
-        if (result.isSuccess && result.data) {
-            if (Array.isArray(guids)) {
-                return result.data;
-            }
-            else {
-                return result.data[0];
-            }
-        }
-
-        return null;
-    }
 
     /**
      * Gets the friendly name of an entity type from its GUID.
@@ -675,6 +577,25 @@
             preference: preference,
             value: value
         });
+    }
+
+    async function getNavigationUrl(entityGuid: Guid, parentGuid: Guid, expandedGuids: Guid[], isCategory: boolean): Promise<string> {
+        if (!options.blockProperties) {
+            return "";
+        }
+
+        const result = await invokeBlockAction<string>("GetNavigationUrl", {
+            entityGuid: entityGuid,
+            parentGuid: parentGuid,
+            expandedGuids: expandedGuids,
+            isCategory: isCategory,
+        });
+
+        if (result.isSuccess && result.data) {
+            return result.data;
+        }
+
+        return "";
     }
 
     // #endregion Block Actions

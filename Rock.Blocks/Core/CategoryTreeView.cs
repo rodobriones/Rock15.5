@@ -4,23 +4,15 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-using AngleSharp.Dom;
-
-using Microsoft.Ajax.Utilities;
-
 using Rock.Attribute;
 using Rock.Data;
-using Rock.Jobs;
 using Rock.Model;
 using Rock.Security;
 using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Core.CategoryTreeView;
-using Rock.ViewModels.Blocks.Reporting.DynamicData;
 using Rock.ViewModels.Cms;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-
-using static IdentityModel.OidcConstants;
 
 namespace Rock.Blocks.Core
 {
@@ -127,6 +119,7 @@ namespace Rock.Blocks.Core
         {
             public const string CategoryId = "CategoryId";
             public const string ExpandedIds = "ExpandedIds";
+            public const string ParentCategoryId = "ParentCategoryId";
         }
         private static class PersonPreferenceKey
         {
@@ -248,6 +241,68 @@ namespace Rock.Blocks.Core
             bag.TreeList.isAllowingDeselection = false;
         }
 
+        private string GetNavigationUrl( Guid entityGuid, Guid parentGuid, List<Guid> expandedGuids, bool isCategory, out ErrorPouch compiledError )
+        {
+            var currentError = new ErrorPouch();
+            compiledError = new ErrorPouch();
+
+            // If an empty guid is provided, we're adding an item, aka entityIdKey = "0"
+            string entityIdKey = string.Empty;
+
+            if ( entityGuid != Guid.Empty )
+            {
+                entityIdKey = GetIdKeysFromGuids( new List<Guid> { entityGuid }, isCategory, out currentError ).FirstOrDefault();
+                compiledError = MergeErrorPouch( compiledError, currentError );
+            }
+            else
+            {
+                entityIdKey = "0";
+            }
+
+            if ( !string.IsNullOrEmpty( entityIdKey ) )
+            {
+                var qryParams = new Dictionary<string, string>();
+
+                // Page Parameter IdKey or Category IdKey
+                if ( isCategory )
+                {
+                    qryParams.Add( PageParameterKey.CategoryId, entityIdKey );
+                }
+                else
+                {
+                    qryParams.Add( GetAttributeValue( AttributeKey.PageParameterKey ), entityIdKey );
+                }
+
+                // Parent Category IdKey, if any
+                var parentIdKey = GetIdKeysFromGuids( new List<Guid> { parentGuid }, true, out currentError ).FirstOrDefault();
+                compiledError = MergeErrorPouch( compiledError, currentError );
+
+                if ( !string.IsNullOrEmpty( parentIdKey ) )
+                {
+                    qryParams.Add( PageParameterKey.ParentCategoryId, parentIdKey );
+                }
+
+                // Expanded Category IdKeys, if any
+                var expandedIds = GetIdKeysFromGuids( expandedGuids, true, out currentError );
+                compiledError = MergeErrorPouch( compiledError, currentError );
+
+                if ( expandedIds.Any() )
+                {
+                    qryParams.Add( PageParameterKey.ExpandedIds, string.Join( ",", expandedIds ) );
+                }
+
+                return this.GetLinkedPageUrl( AttributeKey.DetailPage, qryParams );
+            }
+
+            compiledError = MergeErrorPouch( compiledError, new ErrorPouch()
+            {
+                IsError = true,
+                Message = "Invalid entity Guid(s).",
+            } );
+
+            return string.Empty;
+        }
+
         /// <summary>
         /// Populates the selected page parameter or category GUIDs.
         /// </summary>
@@ -266,7 +321,7 @@ namespace Rock.Blocks.Core
             {
                 var attemptedSelectedGuids = GetGuidsFromIdKeys( new[] { pageParameterValue }.ToList(), false, out var error );
 
-                if ( error.isError )
+                if ( error.IsError )
                 {
                     bag.ErrorMessage = error.Message;
                     return;
@@ -285,7 +340,7 @@ namespace Rock.Blocks.Core
 
                 var attemptedSelectedGuids = GetGuidsFromIdKeys( new[] { categoryIdParameterValue }.ToList(), true, out var error );
 
-                if ( error.isError )
+                if ( error.IsError )
                 {
                     bag.ErrorMessage = error.Message;
                     return;
@@ -314,9 +369,13 @@ namespace Rock.Blocks.Core
                 return;
             }
 
-            var attemptedSelectedGuids = GetGuidsFromIdKeys( new[] { expandedIdsParameter }.ToList(), true, out var error );
+            var expandedIds = expandedIdsParameter.Split( new[] { ',' }, StringSplitOptions.RemoveEmptyEntries )
+                .Select( s => s.Trim() )
+                .ToList();
 
-            if ( error.isError )
+            var attemptedSelectedGuids = GetGuidsFromIdKeys( expandedIds, true, out var error );
+
+            if ( error.IsError )
             {
                 bag.ErrorMessage = error.Message;
                 return;
@@ -413,7 +472,7 @@ namespace Rock.Blocks.Core
 
                 if ( dynamicEntityService == null )
                 {
-                    error.isError = true;
+                    error.IsError = true;
                     error.Message = "Failed to create a valid dynamic entity service. Is the intended entity selected in block properties?";
                     return results;
                 }
@@ -472,7 +531,7 @@ namespace Rock.Blocks.Core
 
                 if ( dynamicEntityService == null )
                 {
-                    error.isError = true;
+                    error.IsError = true;
                     error.Message = "Failed to create a valid dynamic entity service. Is the intended entity selected in block properties?";
                     return results;
                 }
@@ -493,6 +552,31 @@ namespace Rock.Blocks.Core
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Merges the error pouch instances, combining their error states and messages and clearing out the newError instance.
+        /// </summary>
+        /// <param name="baseError">The base error pouch to merge with.</param>
+        /// <param name="newError">The new error pouch to merge.</param>
+        /// <returns>The merged error pouch.</returns>
+        private ErrorPouch MergeErrorPouch( ErrorPouch baseError, ErrorPouch newError )
+        {
+            if ( !newError.IsError )
+            {
+                return baseError;
+            }
+
+            var mergedError = new ErrorPouch
+            {
+                IsError = ( baseError?.IsError ?? false ) || ( newError?.IsError ?? false ),
+                Message = string.Join( "\n", new[] { baseError?.Message, newError?.Message }.Where( m => !string.IsNullOrEmpty( m ) ) )
+            };
+
+            // This allows reusing the same newError instance for multiple merges, such as when multiple methods have out error parameters.
+            newError = new ErrorPouch();
+
+            return mergedError;
         }
 
         #endregion Methods
@@ -522,16 +606,21 @@ namespace Rock.Blocks.Core
         #region Block Actions
 
         [BlockAction]
-        public BlockActionResult GetIdKeysFromGuids( List<Guid> guids, bool areCategories )
+        public BlockActionResult GetNavigationUrl( Guid entityGuid, Guid parentGuid, List<Guid> expandedGuids, bool isCategory )
         {
-            var results = GetIdKeysFromGuids( guids, areCategories, out var error );
+            var url = GetNavigationUrl( entityGuid, parentGuid, expandedGuids, isCategory, out var error );
 
-            if ( error.isError )
+            if ( string.IsNullOrEmpty( url ) )
             {
-                return ActionBadRequest( error.Message );
+                if ( error.IsError )
+                {
+                    return ActionBadRequest( error.Message );
+                }
+
+                return ActionBadRequest( "Could not determine navigation URL for the provided entity." );
             }
 
-            return ActionOk( results );
+            return ActionOk( url );
         }
 
         [BlockAction]
@@ -676,8 +765,8 @@ namespace Rock.Blocks.Core
 
         private class ErrorPouch
         {
-            public bool isError { get; set; } = false;
-            public string Message { get; set; }
+            public bool IsError { get; set; } = false;
+            public string Message { get; set; } = string.Empty;
         }
 
         #endregion Helper Classes
