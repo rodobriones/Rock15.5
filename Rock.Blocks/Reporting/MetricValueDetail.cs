@@ -397,27 +397,20 @@ namespace Rock.Blocks.Reporting
 
             if ( entity.Id == 0 )
             {
-                int? metricId = PageParameter( PageParameterKey.MetricId ).AsIntegerOrNull();
-                int? metricCategoryId = PageParameter( PageParameterKey.MetricCategoryId ).AsIntegerOrNull();
+                var disablePredictableIds = PageCache.Layout.Site.DisablePredictableIds;
 
-                if ( metricCategoryId > 0 )
+                var metric = new MetricService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricId ), !disablePredictableIds );
+                var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricCategoryId ), !disablePredictableIds );
+
+                if ( metricCategory != null )
                 {
-                    // editing a metric, but get the metricId from the metricCategory
-                    var metricCategory = new MetricCategoryService( RockContext ).Get( metricCategoryId.Value );
-                    if ( metricCategory != null )
-                    {
-                        entity.MetricId = metricCategory.MetricId;
-                        entity.Metric = metricCategory.Metric;
-                    }
+                    entity.MetricId = metricCategory.MetricId;
+                    entity.Metric = metricCategory.Metric;
                 }
-                else if ( metricId > 0 )
+                else if ( metric != null )
                 {
-                    var metric = new MetricService( RockContext ).Get( metricId.Value );
-                    if ( metric != null )
-                    {
-                        entity.MetricId = metric.Id;
-                        entity.Metric = metric;
-                    }
+                    entity.MetricId = metric.Id;
+                    entity.Metric = metric;
                 }
             }
 
@@ -444,19 +437,21 @@ namespace Rock.Blocks.Reporting
         /// <returns></returns>
         private Dictionary<string, string> GetQueryParams()
         {
+            var disablePredictableIds = PageCache.Layout.Site.DisablePredictableIds;
+
             var qryParams = new Dictionary<string, string>();
-            var metricId = RequestContext.GetPageParameter( PageParameterKey.MetricValueId );
-            var metricCategoryId = RequestContext.GetPageParameter( PageParameterKey.MetricCategoryId );
+            var metric = new MetricService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricValueId ), !disablePredictableIds );
+            var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricCategoryId ), !disablePredictableIds );
             var expandedIds = RequestContext.GetPageParameter( PageParameterKey.ExpandedIds );
 
-            if ( !string.IsNullOrWhiteSpace( metricId ) )
+            if ( metric != null )
             {
-                qryParams.Add( PageParameterKey.MetricId, metricId );
+                qryParams.Add( PageParameterKey.MetricId, metric.IdKey );
             }
 
-            if ( !string.IsNullOrWhiteSpace( metricCategoryId ) )
+            if ( metricCategory != null )
             {
-                qryParams.Add( PageParameterKey.MetricCategoryId, metricCategoryId );
+                qryParams.Add( PageParameterKey.MetricCategoryId, metricCategory.IdKey );
             }
 
             if ( !string.IsNullOrWhiteSpace( expandedIds ) )
