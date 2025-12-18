@@ -463,6 +463,7 @@ namespace RockWeb.Blocks.Event
         {
             public const string ParentCategoryId = "ParentCategoryId";
             public const string RegistrationTemplateId = "RegistrationTemplateId";
+            public const string ExpandedIds = "ExpandedIds";
         }
 
         #endregion
@@ -1578,6 +1579,12 @@ The logged-in person's information will be used to complete the registrar inform
                     {
                         ["RegistrationTemplateId"] = registrationTemplate.IdKey
                     };
+
+                    if ( !string.IsNullOrEmpty( PageParameter( PageParameterKey.ExpandedIds ) ) )
+                    {
+                        qryParams["ExpandedIds"] = PageParameter( PageParameterKey.ExpandedIds );
+                    }
+
                     NavigateToPage( RockPage.Guid, qryParams );
                 }
                 // Catch and display any validation errors from the data layer.
@@ -1646,6 +1653,12 @@ The logged-in person's information will be used to complete the registrar inform
                     {
                         ["CategoryId"] = parentCategory.IdKey
                     };
+
+                    if ( !string.IsNullOrEmpty( PageParameter( PageParameterKey.ExpandedIds ) ) )
+                    {
+                        qryParams["ExpandedIds"] = PageParameter( PageParameterKey.ExpandedIds );
+                    }
+
                     NavigateToPage( RockPage.Guid, qryParams );
                 }
                 else
