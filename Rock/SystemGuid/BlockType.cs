@@ -445,6 +445,11 @@ namespace Rock.SystemGuid
         public const string MOBILE_OUTREACH_BEACON_DASHBOARD = "A1B2C3D4-E5F6-4789-ABCD-1234567890AB";
 
         /// <summary>
+        /// The mobile outreach touchpoint detail &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.TouchpointDetail"></see>
+        /// </summary>
+        public const string MOBILE_OUTREACH_TOUCHPOINT_DETAIL = "616DD7C7-CB7A-444E-A99E-25F2398D56EB";
+
+        /// <summary>
         /// The mobile outreach Recent Activity &gt; <see cref="Rock.Blocks.Types.Mobile.Outreach.OutreachRecentActivity">Outreach Recent Activity</see> block type.
         /// </summary>
         public const string MOBILE_OUTREACH_OUTREACH_RECENT_ACTIVITY = "469B0581-C7F6-4F8B-913F-E20F5B49E39D";
