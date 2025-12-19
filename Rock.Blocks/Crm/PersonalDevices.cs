@@ -41,13 +41,6 @@ namespace Rock.Blocks.Crm
         Description = "The interactions associated with a specific personal device.",
         Order = 0 )]
 
-    [BooleanField(
-        "Show Device Last Seen DateTime",
-        Description = "Checking this option will display the time when the device was last seen.",
-        DefaultBooleanValue = false,
-        Order = 1,
-        Key = AttributeKey.ShowDeviceLastSeenDateTime )]
-
     [ContextAware( typeof( Person ) )]
     // was [Rock.SystemGuid.BlockTypeGuid( "9A504904-8AF6-4351-AE31-CBC4DB2F55BA" )]
     [Rock.SystemGuid.BlockTypeGuid( "2D90562E-7332-46DB-9100-0C4106151CA1" )]
@@ -55,10 +48,6 @@ namespace Rock.Blocks.Crm
     {
         #region Keys
 
-        private static class AttributeKey
-        {
-            public const string ShowDeviceLastSeenDateTime = "ShowDeviceLastSeenDateTime";
-        }
 
         private static class PageParameterKey
         {
@@ -90,7 +79,6 @@ namespace Rock.Blocks.Crm
                 PersonName = person?.FullName ?? string.Empty
             };
 
-            box.Options.ShowDeviceLastSeenDateTime = GetAttributeValue( AttributeKey.ShowDeviceLastSeenDateTime ).AsBoolean();
             box.Options.DeviceTypeOptions = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSONAL_DEVICE_TYPE.AsGuid() ).DefinedValues.ToListItemBagList();
 
             return box;

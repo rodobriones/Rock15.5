@@ -20,10 +20,11 @@ import { BinaryFiletype } from "@Obsidian/SystemGuids/binaryFiletype";
 import { Category } from "@Obsidian/SystemGuids/category";
 import { EmailSection } from "@Obsidian/SystemGuids/emailSection";
 import { HttpResult } from "@Obsidian/Types/Utility/http";
-import { post, uploadBinaryFile } from "@Obsidian/Utility/http";
+import { useHttp, uploadBinaryFile } from "@Obsidian/Utility/http";
 import { Enumerable } from "@Obsidian/Utility/linq";
 import { isPromise } from "@Obsidian/Utility/promiseUtils";
 import { EmailEditorDeleteEmailSectionOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorDeleteEmailSectionOptionsBag";
+import { EmailEditorGetGroupOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetGroupOptionsBag";
 import { EmailEditorEmailSectionBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorEmailSectionBag";
 import { EmailEditorGetAllEmailSectionsOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetAllEmailSectionsOptionsBag";
 import { EmailEditorGetEmailSectionOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetEmailSectionOptionsBag";
@@ -36,6 +37,7 @@ import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { Guid } from "@Obsidian/Types";
 import { findComponentInnerWrappers, getImageComponentHelper, getSectionComponentHelper, getTextComponentHelper, getTitleComponentHelper } from "./utils.partial";
 import { inject, provide, Ref } from "vue";
+import { isNullish } from "@Obsidian/Utility/util";
 
 type ElementBinaryFileInfo = {
     binaryFile: ListItemBag | null | undefined;
@@ -71,6 +73,8 @@ export function useApi(): EmailEditorApi {
 }
 
 export class EmailEditorApi {
+    private readonly http = useHttp();
+
     private securityGrantToken: Ref<string | null>;
 
     constructor(options: { securityGrantToken: Ref<string | null> }) {
@@ -140,7 +144,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorCreateEmailSection", undefined, options);
+        return await this.http.post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorCreateEmailSection", undefined, options);
     }
 
     public async getEmailSection(bag: EmailEditorGetEmailSectionOptionsBag): Promise<HttpResult<EmailEditorEmailSectionBag>> {
@@ -149,7 +153,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorGetEmailSection", undefined, options);
+        return await this.http.post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorGetEmailSection", undefined, options);
     }
 
     public async getAllEmailSections(): Promise<HttpResult<EmailEditorEmailSectionBag[]>> {
@@ -157,7 +161,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorEmailSectionBag[]>("/api/v2/Controls/EmailEditorGetAllEmailSections", undefined, options);
+        return await this.http.post<EmailEditorEmailSectionBag[]>("/api/v2/Controls/EmailEditorGetAllEmailSections", undefined, options);
     }
 
     public async updateEmailSection(bag: EmailEditorEmailSectionBag): Promise<HttpResult<EmailEditorEmailSectionBag>> {
@@ -166,7 +170,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorUpdateEmailSection", undefined, options);
+        return await this.http.post<EmailEditorEmailSectionBag>("/api/v2/Controls/EmailEditorUpdateEmailSection", undefined, options);
     }
 
     public async deleteEmailSection(bag: EmailEditorDeleteEmailSectionOptionsBag): Promise<HttpResult<void>> {
@@ -175,7 +179,16 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post("/api/v2/Controls/EmailEditorDeleteEmailSection", undefined, options);
+        return await this.http.post<void>("/api/v2/Controls/EmailEditorDeleteEmailSection", undefined, options);
+    }
+
+    public async getGroup(bag: EmailEditorGetGroupOptionsBag): Promise<HttpResult<ListItemBag>> {
+        const options: EmailEditorGetGroupOptionsBag = {
+            ...bag,
+            securityGrantToken: this.securityGrantToken.value
+        };
+
+        return await this.http.post("/api/v2/Controls/EmailEditorGetGroup", undefined, options);
     }
 
     private useTemporaryElement(document: Document, html: string, similarElementSelector: string, callback: (tempElement: HTMLElement) => void): void {
@@ -571,7 +584,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post("/api/v2/Controls/EmailEditorRegisterRsvpRecipients", undefined, options);
+        return await this.http.post("/api/v2/Controls/EmailEditorRegisterRsvpRecipients", undefined, options);
     }
 
     public async getAttendanceOccurrence(bag: EmailEditorGetAttendanceOccurrenceOptionsBag): Promise<HttpResult<EmailEditorAttendanceOccurrenceBag>> {
@@ -580,7 +593,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorAttendanceOccurrenceBag>("/api/v2/Controls/EmailEditorGetAttendanceOccurrence", undefined, options);
+        return await this.http.post<EmailEditorAttendanceOccurrenceBag>("/api/v2/Controls/EmailEditorGetAttendanceOccurrence", undefined, options);
     }
 
     public async getFutureAttendanceOccurrences(bag: EmailEditorGetFutureAttendanceOccurrencesOptionsBag): Promise<HttpResult<ListItemBag[]>> {
@@ -589,7 +602,7 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<ListItemBag[]>("/api/v2/Controls/EmailEditorGetFutureAttendanceOccurrences", undefined, options);
+        return await this.http.post<ListItemBag[]>("/api/v2/Controls/EmailEditorGetFutureAttendanceOccurrences", undefined, options);
     }
 
     public async createAttendanceOccurrence(bag: EmailEditorCreateAttendanceOccurrenceOptionsBag): Promise<HttpResult<EmailEditorAttendanceOccurrenceBag>> {
@@ -598,6 +611,6 @@ export class EmailEditorApi {
             securityGrantToken: this.securityGrantToken.value
         };
 
-        return await post<EmailEditorAttendanceOccurrenceBag>("/api/v2/Controls/EmailEditorCreateAttendanceOccurrence", undefined, options);
+        return await this.http.post<EmailEditorAttendanceOccurrenceBag>("/api/v2/Controls/EmailEditorCreateAttendanceOccurrence", undefined, options);
     }
 }
