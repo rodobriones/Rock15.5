@@ -222,9 +222,9 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                 var parentCategoryId = PageParameter( PageParameterKey.ParentCategoryId );
                 var parentCategory = CategoryCache.Get( parentCategoryId, !disablePredictableIds );
 
-                if ( !string.IsNullOrEmpty( metricId ) )
+                if ( metric != null || metricId == "0" )
                 {
-                    ShowDetail( metric.Id, parentCategory != null ? parentCategory.Id : ( int? ) null );
+                    ShowDetail( metric != null ? metric.Id : 0, parentCategory != null ? parentCategory.Id : ( int? ) null );
                 }
                 else
                 {
@@ -626,6 +626,12 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                     if ( parentCategory != null )
                     {
                         qryParams[PageParameterKey.CategoryId] = parentCategory.IdKey;
+                    }
+
+                    var expandedIds = PageParameter( PageParameterKey.ExpandedIds );
+                    if ( !string.IsNullOrEmpty( expandedIds ) )
+                    {
+                        qryParams[PageParameterKey.ExpandedIds] = expandedIds;
                     }
 
                     NavigateToPage( RockPage.Guid, qryParams );
