@@ -225,8 +225,8 @@ namespace Rock.Blocks.Reporting
 
             if ( entity.Id == 0 )
             {
-                var categoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull() ?? entity.CategoryId;
-                var category = CategoryCache.Get( categoryId );
+                var categoryId = PageParameter( PageParameterKey.ParentCategoryId ) ?? entity.Category.IdKey;
+                var category = CategoryCache.Get( categoryId, !PageCache.Layout.Site.DisablePredictableIds );
                 bag.Category = category.ToListItemBag();
             }
 
@@ -371,15 +371,15 @@ namespace Rock.Blocks.Reporting
         private Dictionary<string, string> GetBoxNavigationUrls()
         {
             string url;
-            var categoryId = PageParameter( PageParameterKey.ParentCategoryId ).AsIntegerOrNull();
-
-            if ( categoryId.HasValue )
+            var categoryId = PageParameter( PageParameterKey.ParentCategoryId );
+            var category = CategoryCache.Get( categoryId, !PageCache.Layout.Site.DisablePredictableIds );
+            if ( !string.IsNullOrEmpty( categoryId ) )
             {
                 // Cancelling on Add, and we know the categoryId, so we are probably in treeview mode, so navigate to the current page
                 var qryParams = new Dictionary<string, string>();
-                if ( categoryId != 0 )
+                if ( category != null )
                 {
-                    qryParams[PageParameterKey.CategoryId] = categoryId.ToString();
+                    qryParams[PageParameterKey.CategoryId] = category.IdKey;
                 }
 
                 qryParams[PageParameterKey.ExpandedIds] = PageParameter( PageParameterKey.ExpandedIds );
@@ -643,15 +643,13 @@ namespace Rock.Blocks.Reporting
                     return ActionBadRequest( errorMessage );
                 }
 
-                var categoryId = entity.CategoryId;
-
                 entityService.Delete( entity );
                 rockContext.SaveChanges();
 
                 var queryParams = new Dictionary<string, string>();
-                if ( categoryId != 0 )
+                if ( entity.CategoryId != 0 )
                 {
-                    queryParams[PageParameterKey.CategoryId] = categoryId.ToString();
+                    queryParams[PageParameterKey.CategoryId] = CategoryCache.Get(entity.CategoryId).IdKey;
                 }
 
                 queryParams[PageParameterKey.ExpandedIds] = PageParameter( PageParameterKey.ExpandedIds );
