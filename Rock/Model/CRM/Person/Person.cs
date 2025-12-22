@@ -781,7 +781,7 @@ namespace Rock.Model
         /// <summary>
         /// Gets or sets the outreach notification time of day.
         /// </summary>
-        public OutreachNotificationTimeOfDay OutreachNotificationTimeOfDay { get; set; }
+        public OutreachNotificationTimeOfDay? OutreachNotificationTimeOfDay { get; set; }
 
         #endregion
 

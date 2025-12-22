@@ -138,7 +138,7 @@ namespace Rock.Migrations
             AddColumn("dbo.Person", "OutreachTouchpointNotificationsEnabled", c => c.Boolean(nullable: false));
             AddColumn("dbo.Person", "OutreachEnableDailyNotification", c => c.Boolean(nullable: false));
             AddColumn("dbo.Person", "OutreachEnableSpecialEventsNotification", c => c.Boolean(nullable: false));
-            AddColumn("dbo.Person", "OutreachNotificationTimeOfDay", c => c.Int(nullable: false));
+            AddColumn("dbo.Person", "OutreachNotificationTimeOfDay", c => c.Int());
         }
         
         /// <summary>
