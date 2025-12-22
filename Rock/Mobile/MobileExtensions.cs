@@ -510,6 +510,8 @@ namespace Rock.Mobile
                     return Enums.Outreach.OutreachCadence.EveryOtherMonth;
                 case Rock.Common.Mobile.Enums.OutreachCadence.Quarterly:
                     return Enums.Outreach.OutreachCadence.Quarterly;
+                case Rock.Common.Mobile.Enums.OutreachCadence.Paused:
+                    return Enums.Outreach.OutreachCadence.Paused;
                 default:
                     return Enums.Outreach.OutreachCadence.EveryOtherWeek;
             }
@@ -534,6 +536,8 @@ namespace Rock.Mobile
                     return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherMonth;
                 case Enums.Outreach.OutreachCadence.Quarterly:
                     return Rock.Common.Mobile.Enums.OutreachCadence.Quarterly;
+                case Enums.Outreach.OutreachCadence.Paused:
+                    return Rock.Common.Mobile.Enums.OutreachCadence.Paused;
                 default:
                     return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek;
             }

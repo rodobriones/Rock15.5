@@ -48,5 +48,10 @@ namespace Rock.Enums.Outreach
         /// Quarterly prayer cadence.
         /// </summary>
         Quarterly = 4,
+
+        /// <summary>
+        /// Paused prayer cadence.
+        /// </summary>
+        Paused = 5
     }
 }

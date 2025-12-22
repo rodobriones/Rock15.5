@@ -4,12 +4,8 @@ using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 
-using MassTransit;
-
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Common.Mobile.Blocks.Outreach.MyContact;
 using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
@@ -221,10 +217,36 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 TotalCompletedConnectionsCount = totalCompletedConnectionsCount,
                 PastSpecialEvents = pastSpecialEventsTouchpoint,
                 TouchpointContactImageUrls = pendingTouchpointImageUrls,
-                PercentTouchpointFinishedOnTime = percentTouchpointsFinishedOnTime
+                PercentTouchpointFinishedOnTime = percentTouchpointsFinishedOnTime,
+                DailyNotificationsEnabled = person.OutreachEnableDailyNotification,
+                SpecialEventNotificationsEnabled = person.OutreachEnableSpecialEventsNotification,
+                dayOfWeekFlag = ( Common.Mobile.Enums.DayOfWeekFlag ) ( ( int ) person.OutreachTouchpointSchedule ),
+                OutreachNotificationTimeOfDay = ( Common.Mobile.Enums.OutreachNotificationTimeOfDay? ) person.OutreachNotificationTimeOfDay,
             };
 
             return ActionOk( data );
+        }
+
+        /// <summary>
+        /// Saves the preferences.
+        /// </summary>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult SavePreferences( Common.Mobile.Enums.DayOfWeekFlag dayofWeek, Common.Mobile.Enums.OutreachNotificationTimeOfDay? timeOfDay )
+        {
+            var person = RequestContext.CurrentPerson;
+            if ( person == null )
+            {
+                return ActionBadRequest( "Current person not found." );
+            }
+
+            PersonService personService = new PersonService( RockContext );
+            person = personService.Get( person.Id );
+            person.OutreachTouchpointSchedule = ( Rock.Utility.Enums.DayOfWeekFlag ) ( ( int ) dayofWeek );
+            person.OutreachNotificationTimeOfDay = ( Enums.Outreach.OutreachNotificationTimeOfDay? ) timeOfDay;
+            RockContext.SaveChanges();
+
+            return ActionOk();
         }
 
         /// <summary>
