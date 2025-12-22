@@ -139,14 +139,20 @@ namespace Rock.Blocks.Cms
         /// <returns>A dictionary of key names and URL values.</returns>
         private Dictionary<string, string> GetBoxNavigationUrls()
         {
-            Dictionary<string, string> queryParams = new Dictionary<string, string>()
+            var qryParams = new Dictionary<string, string>();
+            qryParams.Add( PageParameterKey.AdaptiveMessageId, "((Key))" );
+
+            // Convert the selected category into the parent category
+            var parentCategory = CategoryCache.Get( PageParameter( PageParameterKey.CategoryId ), !PageCache.Layout.Site.DisablePredictableIds );
+
+            if ( parentCategory != null )
             {
-                { PageParameterKey.AdaptiveMessageId, "((Key))" },
-                { PageParameterKey.ParentCategoryId, PageParameter( PageParameterKey.CategoryId ) },
-            };
+                qryParams.Add( PageParameterKey.ParentCategoryId, parentCategory.IdKey );
+            }
+
             return new Dictionary<string, string>
             {
-                [NavigationUrlKey.DetailPage] = this.GetLinkedPageUrl( AttributeKey.DetailPage, queryParams ),
+                [NavigationUrlKey.DetailPage] = this.GetLinkedPageUrl( AttributeKey.DetailPage, qryParams ),
             };
         }
 
@@ -250,15 +256,15 @@ namespace Rock.Blocks.Cms
         {
             if ( _categoryGuid == null )
             {
-                var categoryId = this.PageParameter( PageParameterKey.CategoryId ).AsIntegerOrNull();
+                var category = CategoryCache.Get( PageParameter( PageParameterKey.CategoryId ), !PageCache.Layout.Site.DisablePredictableIds );
 
-                if ( !categoryId.HasValue )
+                if ( category == null )
                 {
-                    _categoryGuid = this.PageParameter( PageParameterKey.CategoryGuid ).AsGuidOrNull();
+                    _categoryGuid = PageParameter( PageParameterKey.CategoryGuid ).AsGuidOrNull();
                 }
                 else
                 {
-                    _categoryGuid = CategoryCache.Get( categoryId.Value )?.Guid;
+                    _categoryGuid = category.Guid;
                 }
             }
 

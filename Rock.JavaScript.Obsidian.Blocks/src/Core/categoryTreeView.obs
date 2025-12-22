@@ -60,6 +60,7 @@
                 </div>
             </TransitionVerticalCollapse>
         </div>
+        <NotificationBox v-if="actionError" alertType="warning" v-html="actionError"></NotificationBox>
         <TreeList v-if="isTreeListDataInitialized"
                   v-model="treeListSelectedItems"
                   class="overflow-visible scrollbar-thin overflow-y-auto"
@@ -195,6 +196,7 @@
 
 
     const blockError = ref<string>("");
+    const actionError = ref<string>("");
 
     const navigationUrls = computed(() => box.navigationUrls ?? {});
     const searchPageUrl = computed<string | undefined>(() => {
@@ -544,12 +546,16 @@
         // When adding a new item, the entityGuid is empty
         selectedItem.value = emptyGuid;
 
-        window.location.href = await getNavigationUrl(
+        const newItemUrl = await getNavigationUrl(
             selectedItem.value ?? emptyGuid,
             parentCategoryIdGuid ?? emptyGuid,
             treeListExpandedItems.value,
             addingCategory
         );
+
+        if (newItemUrl && newItemUrl !== "") {
+            window.location.href = newItemUrl;
+        }
     }
 
     /**
@@ -628,6 +634,9 @@
 
         if (result.isSuccess && result.data) {
             return result.data;
+        }
+        else if (result.errorMessage) {
+            actionError.value = result.errorMessage;
         }
 
         return "";

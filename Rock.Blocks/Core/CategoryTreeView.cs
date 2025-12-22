@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 
 using Rock.Attribute;
+using Rock.Cms;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
@@ -21,6 +22,7 @@ namespace Rock.Blocks.Core
     [Category( "Core" )]
     [Description( "Displays a tree of categories for the configured entity type." )]
     [SupportedSiteTypes( Model.SiteType.Web )]
+    [DefaultBlockRole( Rock.Enums.Cms.BlockRole.Navigation )]
 
     #region Block Attributes
 

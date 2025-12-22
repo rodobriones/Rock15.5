@@ -427,8 +427,35 @@ namespace Rock.Rest.v2
 
                 var items = clientService.GetCategorizedTreeItems( queryOptions );
 
+                // We receive the Adaptive Message Categories, so let's give the Adaptive Message Guids instead
+                // so the picker supplies the correct values when selected.
+                items = AdaptiveMessagePickerRecursivelySetGuids( items, rockContext );
+
                 return Ok( items );
             }
+        }
+
+        /// <summary>
+        /// Recursively sets the GUIDs of adaptive messages in the tree items.
+        /// </summary>
+        /// <param name="items">The tree items to process.</param>
+        /// <param name="rockContext">The database context to use for data retrieval.</param>
+        /// <returns>The tree items with adaptive message GUIDs set.</returns>
+        private List<TreeItemBag> AdaptiveMessagePickerRecursivelySetGuids( List<TreeItemBag> items, RockContext rockContext )
+        {
+            foreach ( var item in items )
+            {
+                var adaptiveMessageCategoryEntity = new AdaptiveMessageCategoryService( rockContext ).Get( item.Value.AsGuid() );
+                if ( adaptiveMessageCategoryEntity != null )
+                {
+                    item.Value = adaptiveMessageCategoryEntity.AdaptiveMessage.Guid.ToString();
+                }
+                if ( item.Children != null && item.Children.Any() )
+                {
+                    item.Children = AdaptiveMessagePickerRecursivelySetGuids( item.Children, rockContext );
+                }
+            }
+            return items;
         }
 
         /// <summary>

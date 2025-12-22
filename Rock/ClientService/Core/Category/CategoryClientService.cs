@@ -267,13 +267,6 @@ namespace Rock.ClientService.Core.Category
         /// <returns>A list of child items that should be included in the results.</returns>
         private List<TreeItemBag> GetChildrenItems<T>( CategoryItemTreeOptions options, EntityTypeCache cachedEntityType, IQueryable<ICategorized> itemsQry, Func<T, bool> filterMethod = null ) where T : ICategorized
         {
-            var entityTypeIsAdaptiveMessageCategory = cachedEntityType?.Id == EntityTypeCache.GetId<Rock.Model.AdaptiveMessageCategory>();
-            if ( entityTypeIsAdaptiveMessageCategory )
-            {
-                // Eager-load the adaptive message since that's the actual value needed in this case.
-                itemsQry = itemsQry.Include( "AdaptiveMessage" );
-            }
-
             // Do a ToList() to load from database prior to ordering
             // by name, just in case Name is a virtual property.
             var itemsList = itemsQry.ToList();
@@ -315,11 +308,6 @@ namespace Rock.ClientService.Core.Category
                     if ( categorizedItem is IHasActiveFlag activatedItem )
                     {
                         categoryItem.IsActive = activatedItem.IsActive;
-                    }
-
-                    if ( entityTypeIsAdaptiveMessageCategory && categorizedItem is AdaptiveMessageCategory amc )
-                    {
-                        categoryItem.Value = amc.AdaptiveMessage.Guid.ToString();
                     }
 
                     children.Add( categoryItem );
