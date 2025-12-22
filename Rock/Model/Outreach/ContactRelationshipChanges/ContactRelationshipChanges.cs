@@ -11,12 +11,12 @@ namespace Rock.Model
     /// Represents changes in relationship strength for a <see cref="Rock.Model.Contact"/>.
     /// </summary>
     [RockDomain( "Outreach" )]
-    [Table( "ContactRelationshipStrengthChanges" )]
+    [Table( "ContactRelationshipChanges" )]
     [DataContract]
     [CodeGenerateRest( ~Enums.CodeGenerateRestEndpoint.DeleteItem, DisableEntitySecurity = true )]
     [Analytics( true, true )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_STRENGTH_CHANGES )]
-    public partial class ContactRelationshipStrengthChanges : Entity<ContactRelationshipStrengthChanges>
+    public partial class ContactRelationshipChanges : Entity<ContactRelationshipChanges>
     {
         #region Entity Properties
 
@@ -30,13 +30,13 @@ namespace Rock.Model
         /// Gets or sets the previous relationship strength.
         /// </summary>
         [DataMember]
-        public RelationshipStrength? PreviousRelationshipStrength { get; set; }
+        public RelationshipStrength PreviousRelationshipStrength { get; set; }
 
         /// <summary>
         /// Gets or sets the new relationship strength.
         /// </summary>
         [DataMember]
-        public RelationshipStrength? NewRelationshipStrength { get; set; }
+        public RelationshipStrength NewRelationshipStrength { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the change was app influenced growth.
@@ -79,12 +79,12 @@ namespace Rock.Model
         /// <summary>
         /// ContactRelationshipStrengthChanges Configuration class.
         /// </summary>
-        public partial class ContactRelationshipStrengthChangesConfiguration : EntityTypeConfiguration<ContactRelationshipStrengthChanges>
+        public partial class ContactRelationshipChangesConfiguration : EntityTypeConfiguration<ContactRelationshipChanges>
         {
             /// <summary>
-            /// Initializes a new instance of the <see cref="ContactRelationshipStrengthChangesConfiguration"/> class.
+            /// Initializes a new instance of the <see cref="ContactRelationshipChangesConfiguration"/> class.
             /// </summary>
-            public ContactRelationshipStrengthChangesConfiguration()
+            public ContactRelationshipChangesConfiguration()
             {
                 this.HasRequired( p => p.Contact ).WithMany().HasForeignKey( p => p.ContactId ).WillCascadeOnDelete( false );
             }

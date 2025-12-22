@@ -769,16 +769,19 @@ namespace Rock.Model
         public bool OutreachTouchpointNotificationsEnabled { get; set; }
 
         /// <summary>
-        /// Gets or sets the outreach prayers per day.
+        /// Gets or sets a value indicating whether outreach daily notification is enable.
         /// </summary>
-        [DataMember]
-        public int? OutreachTouchpointPrayersPerDay { get; set; }
+        public bool OutreachEnableDailyNotification { get; set; }
 
         /// <summary>
-        /// Gets or sets the outreach cadence.
+        /// Gets or sets a value indicating whether outreach special events notification is enable.
         /// </summary>
-        [DataMember]
-        public OutreachCadence ConnectionCadence { get; set; }
+        public bool OutreachEnableSpecialEventsNotification { get; set; }
+
+        /// <summary>
+        /// Gets or sets the outreach notification time of day.
+        /// </summary>
+        public OutreachNotificationTimeOfDay OutreachNotificationTimeOfDay { get; set; }
 
         #endregion
 

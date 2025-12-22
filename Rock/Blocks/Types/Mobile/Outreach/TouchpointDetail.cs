@@ -434,7 +434,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         {
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
             ContactService contactService = new ContactService( RockContext );
-            var contactRelationshipChangesService = new ContactRelationshipStrengthChangesService( RockContext );
+            var contactRelationshipChangesService = new ContactRelationshipChangesService( RockContext );
 
             var touchpoint = contactTouchpointService.Get( bag.IdKey );
             var contact = contactService.Get( touchpoint.ContactId );
@@ -443,7 +443,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             // If the relationship strength change.
             if ( contact.RelationshipStrength != bag.RelationshipStrength.ToNative() )
             {
-                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                var newRelationshipChange = new ContactRelationshipChanges();
                 newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.PreviousRelationshipStrength = contact.RelationshipStrength; // PS TODO: The PreviousRelationshipStrength should be nullable.
                 newRelationshipChange.NewRelationshipStrength = bag.RelationshipStrength.ToNative(); // PS TODO: The NewRelationshipStrength should be nullable.
@@ -452,7 +452,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             if ( contact.HasAcceptedJesus != bag.hasAcceptedJesus )
             {
-                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                var newRelationshipChange = new ContactRelationshipChanges();
                 newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.HasAcceptedJesus = bag.hasAcceptedJesus;
                 newRelationshipChange.WasAcceptanceInfluencedByApp = bag.AppInfluenceSalvation ?? false;
@@ -461,7 +461,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             if ( contact.HasBeenBaptized != bag.Baptized )
             {
-                var newRelationshipChange = new ContactRelationshipStrengthChanges();
+                var newRelationshipChange = new ContactRelationshipChanges();
                 newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.HasBeenBaptized = bag.Baptized;
                 newRelationshipChange.WasBaptismInfluencedByApp = bag.AppInfluenceBaptism ?? false;

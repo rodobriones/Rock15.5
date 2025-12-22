@@ -48,11 +48,11 @@ namespace Rock.Rest.v2.Models
 #endif
 
     /// <summary>
-    /// Provides data API endpoints for Contact Relationship Strength Changes.
+    /// Provides data API endpoints for Contact Relationship Changes.
     /// </summary>
-    [RoutePrefix( "api/v2/models/contactrelationshipstrengthchanges" )]
-    [Rock.SystemGuid.RestControllerGuid( "545e9c50-cc84-555d-a4c2-2b8c684bf316" )]
-    public partial class ContactRelationshipStrengthChangesController : ApiControllerBase
+    [RoutePrefix( "api/v2/models/contactrelationshipchanges" )]
+    [Rock.SystemGuid.RestControllerGuid( "351b7810-0341-5f66-84d7-9a0dabdad946" )]
+    public partial class ContactRelationshipChangesController : ApiControllerBase
     {
         /// <summary>
         /// Gets a single item from the database.
@@ -64,14 +64,14 @@ namespace Rock.Rest.v2.Models
         [Authenticate]
         [Secured( Security.Authorization.EXECUTE_UNRESTRICTED_READ )]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
-        [ProducesResponse( HttpStatusCode.OK, Type = typeof( Rock.Model.ContactRelationshipStrengthChanges ) )]
+        [ProducesResponse( HttpStatusCode.OK, Type = typeof( Rock.Model.ContactRelationshipChanges ) )]
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "ddd9f5fd-9db2-5f20-85d1-efb8cf462d74" )]
+        [SystemGuid.RestActionGuid( "932ab157-8cff-5328-a4cc-8a1ee9378fdc" )]
         public IActionResult GetItem( string id )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -92,10 +92,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "585c564a-70aa-5657-94ff-30d3a6818a78" )]
-        public IActionResult PostItem( [FromBody] Rock.Model.ContactRelationshipStrengthChanges value )
+        [SystemGuid.RestActionGuid( "ddfcbbf7-bea2-54f2-8105-42999f1c57bc" )]
+        public IActionResult PostItem( [FromBody] Rock.Model.ContactRelationshipChanges value )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -118,10 +118,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "8c722cd8-fa35-57d5-86f7-fe96f696137e" )]
-        public IActionResult PutItem( string id, [FromBody] Rock.Model.ContactRelationshipStrengthChanges value )
+        [SystemGuid.RestActionGuid( "d6f494fa-2f30-5749-91f9-3dbd74a39996" )]
+        public IActionResult PutItem( string id, [FromBody] Rock.Model.ContactRelationshipChanges value )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -144,10 +144,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "3d7b1155-379f-540f-a632-9c3a5a2c3b0f" )]
+        [SystemGuid.RestActionGuid( "73eda6d0-884f-5d2b-8af8-1c754598876f" )]
         public IActionResult PatchItem( string id, [FromBody] Dictionary<string, object> values )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -168,10 +168,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "cbcc8c9c-4d61-5f6b-b5a1-e2a9035e27b6" )]
+        [SystemGuid.RestActionGuid( "88b1ff39-0b12-564b-82d7-d9d32da51c18" )]
         public IActionResult GetAttributeValues( string id )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -194,10 +194,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "746ed801-4720-5402-9130-e9187f3da679" )]
+        [SystemGuid.RestActionGuid( "1166b05d-7c72-57bc-aee3-3042551e588f" )]
         public IActionResult PatchAttributeValues( string id, [FromBody] Dictionary<string, string> values )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -215,10 +215,10 @@ namespace Rock.Rest.v2.Models
         [Secured( Security.Authorization.EXECUTE_UNRESTRICTED_READ )]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
         [ProducesResponse( HttpStatusCode.OK, Type = typeof( object ) )]
-        [SystemGuid.RestActionGuid( "d9ef92ab-31d4-579b-8388-fe390f86341e" )]
+        [SystemGuid.RestActionGuid( "a911ee0b-9bea-5abf-80ae-ee02aa3a2434" )]
         public IActionResult PostSearch( [FromBody] EntitySearchQueryBag query )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             return helper.Search( query );
         }
@@ -236,10 +236,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.OK, Type = typeof( object ) )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "eac4a925-83ed-504f-9881-87a54cd4dfdc" )]
+        [SystemGuid.RestActionGuid( "806cccac-554a-5e97-b557-5e2b30d3c448" )]
         public IActionResult GetSearchByKey( string searchKey )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = IsCurrentPersonAuthorized( Security.Authorization.EXECUTE_UNRESTRICTED_READ );
 
@@ -261,10 +261,10 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "e026b690-b27b-58d2-ab23-9b1f22bcbe70" )]
+        [SystemGuid.RestActionGuid( "a849d9d5-0aed-58dd-b61a-e18c5161933d" )]
         public IActionResult PostSearchByKey( string searchKey, [FromBody] EntitySearchQueryBag query )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipStrengthChanges, Rock.Model.ContactRelationshipStrengthChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
 
             helper.IsSecurityIgnored = IsCurrentPersonAuthorized( Security.Authorization.EXECUTE_UNRESTRICTED_READ );
 

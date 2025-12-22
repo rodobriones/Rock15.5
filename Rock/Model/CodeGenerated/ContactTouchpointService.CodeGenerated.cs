@@ -112,14 +112,8 @@ namespace Rock.Model
             target.ContactId = source.ContactId;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
-            target.IsAnniversary = source.IsAnniversary;
-            target.IsBirthday = source.IsBirthday;
-            target.IsScheduled = source.IsScheduled;
             target.Note = source.Note;
             target.ScheduledDateTime = source.ScheduledDateTime;
-            target.SharedEntityId = source.SharedEntityId;
-            target.SharedEntityTypeId = source.SharedEntityTypeId;
-            target.SharedSummary = source.SharedSummary;
             target.SystemNote = source.SystemNote;
             target.Type = source.Type;
             target.Guid = source.Guid;

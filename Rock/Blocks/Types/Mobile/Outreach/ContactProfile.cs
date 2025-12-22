@@ -180,15 +180,15 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 // If the relationship strength has changed, create a new ContactRelationshipStrengthChanges record.
                 if ( contact.RelationshipStrength != newRelationshipStrength )
                 {
-                    ContactRelationshipStrengthChangesService contactRelationshipStrengthChangesService = new ContactRelationshipStrengthChangesService( RockContext );
-                    var contactRelationshipStrengthChange = new ContactRelationshipStrengthChanges
+                    ContactRelationshipChangesService contactRelationshipChangesService = new ContactRelationshipChangesService( RockContext );
+                    var contactRelationshipChange = new ContactRelationshipChanges
                     {
                         ContactId = contact.Id,
                         PreviousRelationshipStrength = contact.RelationshipStrength,
                         NewRelationshipStrength = newRelationshipStrength,
                     };
 
-                    contactRelationshipStrengthChangesService.Add( contactRelationshipStrengthChange );
+                    contactRelationshipChangesService.Add( contactRelationshipChange );
                 }
 
                 contact.FirstName = contactProfileBag.FirstName;

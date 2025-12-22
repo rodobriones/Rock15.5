@@ -53,9 +53,9 @@ namespace Rock.Model
         {
             errorMessage = string.Empty;
 
-            if ( new Service<ContactRelationshipStrengthChanges>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
+            if ( new Service<ContactRelationshipChanges>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
             {
-                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactRelationshipStrengthChanges.FriendlyTypeName );
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactRelationshipChanges.FriendlyTypeName );
                 return false;
             }
 

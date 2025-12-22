@@ -70,9 +70,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionBadRequest( "Could not find the current person." );
             }
 
-            person.OutreachTouchpointPrayersPerDay = option.DailyPrayerGoal;
             person.OutreachTouchpointSchedule = ( Utility.Enums.DayOfWeekFlag ) option.DayOfWeekFlags;
-            person.ConnectionCadence = option.OutreachCadence.ToNative();
 
             RockContext.SaveChanges();
 

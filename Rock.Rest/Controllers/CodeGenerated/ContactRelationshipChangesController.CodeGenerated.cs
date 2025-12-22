@@ -27,14 +27,14 @@ using Rock.SystemGuid;
 namespace Rock.Rest.Controllers
 {
     /// <summary>
-    /// ContactRelationshipStrengthChanges REST API
+    /// ContactRelationshipChanges REST API
     /// </summary>
     [RestControllerGuid( "EE67DC05-29E1-474F-8B17-9D5B3FEDC184" )]
-    public partial class ContactRelationshipStrengthChangesController : Rock.Rest.ApiController<Rock.Model.ContactRelationshipStrengthChanges>
+    public partial class ContactRelationshipChangesController : Rock.Rest.ApiController<Rock.Model.ContactRelationshipChanges>
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="ContactRelationshipStrengthChangesController"/> class.
+        /// Initializes a new instance of the <see cref="ContactRelationshipChangesController"/> class.
         /// </summary>
-        public ContactRelationshipStrengthChangesController() : base( new Rock.Model.ContactRelationshipStrengthChangesService( new Rock.Data.RockContext() ) ) { } 
+        public ContactRelationshipChangesController() : base( new Rock.Model.ContactRelationshipChangesService( new Rock.Data.RockContext() ) ) { } 
     }
 }

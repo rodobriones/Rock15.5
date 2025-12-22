@@ -37,12 +37,6 @@ namespace Rock.Model
         public TouchpointType Type { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the touchpoint is scheduled.
-        /// </summary>
-        [DataMember]
-        public bool IsScheduled { get; set; }
-
-        /// <summary>
         /// Gets or sets the scheduled date time.
         /// </summary>
         [DataMember]
@@ -68,42 +62,11 @@ namespace Rock.Model
         public TouchpointCommunicationMedium? CommunicationMedium { get; set; }
 
         /// <summary>
-        /// Gets or sets the shared entity type identifier.
-        /// </summary>
-        [DataMember]
-        public int? SharedEntityTypeId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the shared entity identifier.
-        /// </summary>
-        [DataMember]
-        public int? SharedEntityId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the shared summary.
-        /// </summary>
-        [DataMember]
-        [MaxLength( 250 )]
-        public string SharedSummary { get; set; }
-
-        /// <summary>
         /// Gets or sets the note.
         /// </summary>
         [DataMember]
         [MaxLength( 500 )]
         public string Note { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether this touchpoint is birthday.
-        /// </summary>
-        [DataMember]
-        public bool IsBirthday { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether this touchpoint is wedding anniversary.
-        /// </summary>
-        [DataMember]
-        public bool IsAnniversary { get; set; }
 
         #endregion
 

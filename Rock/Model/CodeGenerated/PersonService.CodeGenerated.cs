@@ -148,7 +148,6 @@ namespace Rock.Model
             target.BirthMonth = source.BirthMonth;
             target.BirthYear = source.BirthYear;
             target.CommunicationPreference = source.CommunicationPreference;
-            target.ConnectionCadence = source.ConnectionCadence;
             target.ConnectionStatusValueId = source.ConnectionStatusValueId;
             target.ContributionFinancialAccountId = source.ContributionFinancialAccountId;
             target.DeceasedDate = source.DeceasedDate;
@@ -177,8 +176,10 @@ namespace Rock.Model
             target.MiddleName = source.MiddleName;
             target.NickName = source.NickName;
             target.NickNamePronunciationOverride = source.NickNamePronunciationOverride;
+            target.OutreachEnableDailyNotification = source.OutreachEnableDailyNotification;
+            target.OutreachEnableSpecialEventsNotification = source.OutreachEnableSpecialEventsNotification;
+            target.OutreachNotificationTimeOfDay = source.OutreachNotificationTimeOfDay;
             target.OutreachTouchpointNotificationsEnabled = source.OutreachTouchpointNotificationsEnabled;
-            target.OutreachTouchpointPrayersPerDay = source.OutreachTouchpointPrayersPerDay;
             target.OutreachTouchpointSchedule = source.OutreachTouchpointSchedule;
             target.PhotoId = source.PhotoId;
             target.PreferredLanguageValueId = source.PreferredLanguageValueId;
