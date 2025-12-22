@@ -722,4 +722,50 @@ namespace Rock.Mobile
             }
         }
     }
+
+    /// <summary>
+    /// Extension methods for <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/>.
+    /// </summary>
+    public static class MobileExtensionOutreachNotificationTimeOfDay
+    {
+        /// <summary>
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/> to a web native <see cref="Enums.Outreach.OutreachNotificationTimeOfDay"/>.
+        /// </summary>
+        /// <param name="timeOfDay"></param>
+        /// <returns></returns>
+        public static Enums.Outreach.OutreachNotificationTimeOfDay ToNative( this Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay timeOfDay )
+        {
+            switch ( timeOfDay )
+            {
+                case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning:
+                    return Enums.Outreach.OutreachNotificationTimeOfDay.Morning;
+                case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Afternoon:
+                    return Enums.Outreach.OutreachNotificationTimeOfDay.Afternoon;
+                case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Evening:
+                    return Enums.Outreach.OutreachNotificationTimeOfDay.Evening;
+                default:
+                    return Enums.Outreach.OutreachNotificationTimeOfDay.Morning;
+            }
+        }
+
+        /// <summary>
+        /// Converts a web native <see cref="Enums.Outreach.OutreachNotificationTimeOfDay"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/>.
+        /// </summary>
+        /// <param name="timeOfDay"></param>
+        /// <returns></returns>
+        public static Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay ToMobile( this Enums.Outreach.OutreachNotificationTimeOfDay timeOfDay )
+        {
+            switch ( timeOfDay )
+            {
+                case Enums.Outreach.OutreachNotificationTimeOfDay.Morning:
+                    return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning;
+                case Enums.Outreach.OutreachNotificationTimeOfDay.Afternoon:
+                    return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Afternoon;
+                case Enums.Outreach.OutreachNotificationTimeOfDay.Evening:
+                    return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Evening;
+                default:
+                    return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning;
+            }
+        }
+    }
 }
