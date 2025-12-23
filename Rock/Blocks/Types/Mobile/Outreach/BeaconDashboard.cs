@@ -5,6 +5,7 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
+using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Enums.Outreach;
@@ -232,7 +233,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// </summary>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult SavePreferences( Common.Mobile.Enums.DayOfWeekFlag dayofWeek, Common.Mobile.Enums.OutreachNotificationTimeOfDay? timeOfDay )
+        public BlockActionResult SavePreferences( SavePreferencesBag savePreferenceBag )
         {
             var person = RequestContext.CurrentPerson;
             if ( person == null )
@@ -242,8 +243,12 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             PersonService personService = new PersonService( RockContext );
             person = personService.Get( person.Id );
-            person.OutreachTouchpointSchedule = ( Rock.Utility.Enums.DayOfWeekFlag ) ( ( int ) dayofWeek );
-            person.OutreachNotificationTimeOfDay = ( Enums.Outreach.OutreachNotificationTimeOfDay? ) timeOfDay;
+            person.OutreachTouchpointSchedule = ( Rock.Utility.Enums.DayOfWeekFlag ) ( ( int ) savePreferenceBag.DayOfWeek );
+            person.OutreachNotificationTimeOfDay = ( Enums.Outreach.OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay;
+            person.OutreachEnableDailyNotification = savePreferenceBag.DailyNotificationsEnabled;
+            person.OutreachEnableSpecialEventsNotification = savePreferenceBag.SpecialEventNotificationsEnabled;
+            person.OutreachTouchpointNotificationsEnabled = savePreferenceBag.DailyNotificationsEnabled || savePreferenceBag.SpecialEventNotificationsEnabled;
+
             RockContext.SaveChanges();
 
             return ActionOk();

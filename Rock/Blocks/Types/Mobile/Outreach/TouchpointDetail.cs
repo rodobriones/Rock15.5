@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Common.Mobile.Blocks.Outreach.TouchpointDetail;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -291,100 +291,54 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
-        /// Updates the in person connect date.
+        /// Updates the contact connection detail.
         /// </summary>
-        /// <param name="idKey"></param>
-        /// <param name="connectDate"></param>
+        /// <param name="updateContactConnectionBag"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult UpdateCompleteDate( string idKey, DateTime connectDate )
-        {
-            if ( idKey.IsNullOrWhiteSpace() )
-            {
-                return ActionBadRequest( "IdKey is required" );
-            }
-
-            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
-            var touchpoint = contactTouchpointService.Get( idKey );
-
-            if ( touchpoint == null )
-            {
-                return ActionNotFound( "Touchpoint not found." );
-            }
-
-            touchpoint.CompletedDateTime = connectDate;
-            RockContext.SaveChanges();
-
-            return ActionOk();
-        }
-
-        /// <summary>
-        /// Updates the scheduled date.
-        /// </summary>
-        /// <param name="idKey"></param>
-        /// <param name="scheduledDate"></param>
-        /// <returns></returns>
-        [BlockAction]
-        public BlockActionResult UpdateScheduledDate( string idKey, DateTime scheduledDate )
-        {
-            if ( idKey.IsNullOrWhiteSpace() )
-            {
-                return ActionBadRequest( "IdKey is required" );
-            }
-
-            ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
-            var touchpoint = contactTouchpointService.Get( idKey );
-
-            if ( touchpoint == null )
-            {
-                return ActionNotFound( "Touchpoint not found." );
-            }
-
-            touchpoint.ScheduledDateTime = scheduledDate;
-            RockContext.SaveChanges();
-
-            return ActionOk();
-        }
-
-        /// <summary>
-        /// Updates the Prayer note.
-        /// </summary>
-        /// <param name="contactId"></param>
-        /// <param name="prayerNote"></param>
-        /// <returns></returns>
-        [BlockAction]
-        public BlockActionResult UpdatePrayerNote( int contactId, string prayerNote )
+        public BlockActionResult UpdateContactConnectionDetail( UpdateContactConnectionBag updateContactConnectionBag )
         {
             ContactService contactService = new ContactService( RockContext );
-            var contact = contactService.Get( contactId );
+            var contact = contactService.Get( updateContactConnectionBag.ContactId );
             if ( contact == null )
             {
                 return ActionNotFound( "Contact not found." );
             }
 
-            contact.PrayerNote = prayerNote;
+            contact.ConnectionNote = updateContactConnectionBag.ConnectionNote;
+            if ( updateContactConnectionBag.ConnectionCadence.HasValue )
+            {
+                contact.ConnectionCadence = updateContactConnectionBag.ConnectionCadence.Value.ToNative();
+            }
+
             RockContext.SaveChanges();
 
             return ActionOk();
         }
 
         /// <summary>
-        /// Updates the prayer cadence.s
+        /// Updates the contact prayer detail.
         /// </summary>
-        /// <param name="contactId"></param>
-        /// <param name="prayerCadence"></param>
+        /// <param name="updateContactPrayerBag"></param>
         /// <returns></returns>
         [BlockAction]
-        public BlockActionResult UpdatePrayerCadence( int contactId, int prayerCadence )
+        public BlockActionResult UpdateContactPrayerDetail( UpdateContactPrayerBag updateContactPrayerBag )
         {
             ContactService contactService = new ContactService( RockContext );
-            var contact = contactService.Get( contactId );
+            var contact = contactService.Get( updateContactPrayerBag.ContactId );
             if ( contact == null )
             {
                 return ActionNotFound( "Contact not found." );
             }
-            contact.PrayerCadence = ( ( Rock.Common.Mobile.Enums.OutreachCadence ) prayerCadence ).ToNative();
+
+            contact.PrayerNote = updateContactPrayerBag.PrayerNote;
+            if ( updateContactPrayerBag.PrayerCadence.HasValue )
+            {
+                contact.PrayerCadence = updateContactPrayerBag.PrayerCadence.Value.ToNative();
+            }
+
             RockContext.SaveChanges();
+
             return ActionOk();
         }
 
@@ -441,28 +395,18 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
 
             // If the relationship strength change.
-            if ( contact.RelationshipStrength != bag.RelationshipStrength.ToNative() )
+            if ( contact.RelationshipStrength != bag.RelationshipStrength.ToNative()
+                || contact.HasAcceptedJesus != bag.hasAcceptedJesus
+                || contact.HasBeenBaptized != bag.Baptized )
             {
                 var newRelationshipChange = new ContactRelationshipChanges();
                 newRelationshipChange.ContactId = contact.Id;
-                newRelationshipChange.PreviousRelationshipStrength = contact.RelationshipStrength; // PS TODO: The PreviousRelationshipStrength should be nullable.
-                newRelationshipChange.NewRelationshipStrength = bag.RelationshipStrength.ToNative(); // PS TODO: The NewRelationshipStrength should be nullable.
-                contactRelationshipChangesService.Add( newRelationshipChange );
-            }
+                newRelationshipChange.PreviousRelationshipStrength = contact.RelationshipStrength;
+                newRelationshipChange.NewRelationshipStrength = bag.RelationshipStrength.ToNative();
 
-            if ( contact.HasAcceptedJesus != bag.hasAcceptedJesus )
-            {
-                var newRelationshipChange = new ContactRelationshipChanges();
-                newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.HasAcceptedJesus = bag.hasAcceptedJesus;
                 newRelationshipChange.WasAcceptanceInfluencedByApp = bag.AppInfluenceSalvation ?? false;
-                contactRelationshipChangesService.Add( newRelationshipChange );
-            }
 
-            if ( contact.HasBeenBaptized != bag.Baptized )
-            {
-                var newRelationshipChange = new ContactRelationshipChanges();
-                newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.HasBeenBaptized = bag.Baptized;
                 newRelationshipChange.WasBaptismInfluencedByApp = bag.AppInfluenceBaptism ?? false;
                 contactRelationshipChangesService.Add( newRelationshipChange );
