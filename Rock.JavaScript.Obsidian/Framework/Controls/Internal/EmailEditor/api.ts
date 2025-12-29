@@ -24,6 +24,7 @@ import { useHttp, uploadBinaryFile } from "@Obsidian/Utility/http";
 import { Enumerable } from "@Obsidian/Utility/linq";
 import { isPromise } from "@Obsidian/Utility/promiseUtils";
 import { EmailEditorDeleteEmailSectionOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorDeleteEmailSectionOptionsBag";
+import { EmailEditorGetGroupOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetGroupOptionsBag";
 import { EmailEditorEmailSectionBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorEmailSectionBag";
 import { EmailEditorGetAllEmailSectionsOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetAllEmailSectionsOptionsBag";
 import { EmailEditorGetEmailSectionOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorGetEmailSectionOptionsBag";
@@ -34,7 +35,7 @@ import { EmailEditorGetFutureAttendanceOccurrencesOptionsBag } from "@Obsidian/V
 import { EmailEditorCreateAttendanceOccurrenceOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/emailEditorCreateAttendanceOccurrenceOptionsBag";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { Guid } from "@Obsidian/Types";
-import { findComponentInnerWrappers, getImageComponentHelper, getSectionComponentHelper, getTextComponentHelper, getTitleComponentHelper } from "./utils.partial";
+import { createImageComponentAdapter, findComponentInnerWrappers, getSectionComponentHelper, getTextComponentHelper, getTitleComponentHelper } from "./utils.partial";
 import { inject, provide, Ref } from "vue";
 
 type ElementBinaryFileInfo = {
@@ -180,6 +181,15 @@ export class EmailEditorApi {
         return await this.http.post<void>("/api/v2/Controls/EmailEditorDeleteEmailSection", undefined, options);
     }
 
+    public async getGroup(bag: EmailEditorGetGroupOptionsBag): Promise<HttpResult<ListItemBag>> {
+        const options: EmailEditorGetGroupOptionsBag = {
+            ...bag,
+            securityGrantToken: this.securityGrantToken.value
+        };
+
+        return await this.http.post("/api/v2/Controls/EmailEditorGetGroup", undefined, options);
+    }
+
     private useTemporaryElement(document: Document, html: string, similarElementSelector: string, callback: (tempElement: HTMLElement) => void): void {
         const tempElement = document.createElement("div");
 
@@ -267,9 +277,9 @@ export class EmailEditorApi {
         } as const;
 
         const sectionComponentHelper = getSectionComponentHelper();
-        const imageComponentHelper = getImageComponentHelper();
         const titleComponentHelper = getTitleComponentHelper();
         const textComponentHelper = getTextComponentHelper();
+        const imageComponentAdapter = createImageComponentAdapter();
 
         const starterHeroSectionComponent = sectionComponentHelper.createComponentElement("section");
         const elements = sectionComponentHelper.getElements(starterHeroSectionComponent);
@@ -286,7 +296,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
@@ -338,7 +348,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
@@ -371,7 +381,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
@@ -424,7 +434,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
@@ -457,7 +467,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
@@ -490,7 +500,7 @@ export class EmailEditorApi {
                     const dropzone = wrappers.marginWrapper.borderWrapper.paddingWrapper.td.querySelector(".dropzone") as HTMLElement;
 
                     if (dropzone) {
-                        const imageComponent = imageComponentHelper.createComponentElement();
+                        const imageComponent = imageComponentAdapter.createComponentElement(document);
                         dropzone.appendChild(imageComponent);
 
                         const titleComponent = titleComponentHelper.createComponentElement();
