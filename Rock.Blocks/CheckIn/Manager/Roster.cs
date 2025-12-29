@@ -18,28 +18,19 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data.Entity;
 using System.Linq;
 using System.Threading.Tasks;
-
-using DocumentFormat.OpenXml.Spreadsheet;
 
 using Rock.Attribute;
 using Rock.CheckIn.v2;
 using Rock.Enums.Cms;
-using Rock.Enums.Event;
 using Rock.Model;
-using Rock.Obsidian.UI;
 using Rock.RealTime;
 using Rock.RealTime.Topics;
 using Rock.Security;
 using Rock.Utility;
 using Rock.ViewModels.Blocks.CheckIn.Manager.Roster;
-using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-using Rock.Web.UI;
-
-using static Rock.CheckIn.CheckinManagerHelper;
 
 namespace Rock.Blocks.CheckIn.Manager
 {
@@ -249,18 +240,45 @@ namespace Rock.Blocks.CheckIn.Manager
             return ActionOk( bags );
         }
 
+        /// <summary>
+        /// Gets the bag that represents a single attendance record.
+        /// </summary>
+        /// <returns>An action result that contains the attendance bag.</returns>
         [BlockAction]
-        public async Task<BlockActionResult> SubscribeToRealTime( string connectionId, string oldLocationKey, string locationKey )
+        public BlockActionResult GetSingleAttendance( string key )
+        {
+            var badgeAttributeIds = GetBadgeAttributeIds();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var manager = new CheckInManager( RockContext, RequestContext );
+            var attendanceId = IdHasher.Instance.GetId( key );
+
+            if ( !attendanceId.HasValue )
+            {
+                return ActionBadRequest( "Attendance record was not found." );
+            }
+
+            var attendance = manager.GetAttendanceQueryable( showAllAreas, checkInAreaGuid )
+                .Where( a => a.Id == attendanceId.Value )
+                .FirstOrDefault();
+
+            if ( attendance == null )
+            {
+                return ActionOk<RosterAttendanceBag>( null );
+            }
+
+            return ActionOk( manager.GetAttendanceBag( attendance, badgeAttributeIds ) );
+        }
+
+        [BlockAction]
+        public async Task<BlockActionResult> SubscribeToRealTime( string connectionId, Guid? oldLocationGuid, Guid? locationGuid )
         {
             // Subscribe the client connection to all the required channels.
             var topicChannels = RealTimeHelper.GetTopicContext<IEntityUpdated>().Channels;
 
-            int? oldLocationId = IdHasher.Instance.GetId( oldLocationKey );
-            int? newLocationId = IdHasher.Instance.GetId( locationKey );
-
-            if ( oldLocationId.HasValue )
+            if ( oldLocationGuid.HasValue )
             {
-                var location = NamedLocationCache.Get( oldLocationId.Value, RockContext );
+                var location = NamedLocationCache.Get( oldLocationGuid.Value, RockContext );
 
                 if ( location != null )
                 {
@@ -270,9 +288,9 @@ namespace Rock.Blocks.CheckIn.Manager
                 }
             }
 
-            if ( newLocationId.HasValue )
+            if ( locationGuid.HasValue )
             {
-                var location = NamedLocationCache.Get( newLocationId.Value, RockContext );
+                var location = NamedLocationCache.Get( locationGuid.Value, RockContext );
 
                 if ( location != null )
                 {

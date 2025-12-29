@@ -205,7 +205,12 @@
     import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
     import { flatten } from "@Obsidian/Utility/arrayUtils";
     import { clone } from "@Obsidian/Utility/objectUtils";
-    import { RosterAttendeeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBag";
+    import { getTopic, ITopic } from "@Obsidian/Utility/realTime";
+    import { AttendanceUpdatedMessageBag } from "@Obsidian/ViewModels/Event/attendanceUpdatedMessageBag";
+    import { areEqual } from "@Obsidian/Utility/guid";
+    import { Guid } from "@Obsidian/Types";
+    import { isPromise } from "@Obsidian/Utility/promiseUtils";
+    import { CancellationTokenSource } from "@Obsidian/Utility/cancellation";
 
     const config = useConfigurationValues<RosterOptionsBag>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -217,8 +222,12 @@
     const gridData = ref<RosterSingleAttendanceRecord[]>();
     const gridDataPendingPromise = new Promise<GridDataBag>(() => { });
     const loadingRowCount = ref<number>();
+    const location = ref<ListItemBag>();
     const schedule = ref<ListItemBag>();
     let durationUpdateTimer: number | undefined;
+
+    let isRealTimeDisconnected = false;
+    const getAttendanceRecordCancellationTokens = new Map<string, CancellationTokenSource>();
 
     const gridDataSource = ref<Promise<GridDataBag> | GridDataBag>(gridDataPendingPromise);
 
@@ -227,10 +236,44 @@
     const checkoutSelectedSchedules = ref<string[]>([]);
     const checkoutScheduleItems = ref<ListItemBag[]>([]);
 
+    let entityUpdatedTopic: ITopic | undefined = undefined;
+
     async function initialize(): Promise<void> {
+        location.value = await contextEntities.get("Rock.Model.Location");
         schedule.value = await contextEntities.get("Rock.Model.Schedule");
 
+        await setupRealTime();
+
         loadGridData();
+    }
+
+    /**
+     * Initialize the real-time engine and start monitoring for updates to the
+     * proxy connection status messages.
+     */
+    async function setupRealTime(): Promise<void> {
+        entityUpdatedTopic = await getTopic("Rock.RealTime.Topics.EntityUpdatedTopic");
+
+        entityUpdatedTopic.on("attendanceUpdated", onAttendanceUpdated);
+        entityUpdatedTopic.on("attendanceDeleted", onAttendanceDeleted);
+        entityUpdatedTopic.onDisconnected(() => isRealTimeDisconnected = true);
+
+        const location = await contextEntities.get("Rock.Model.Location");
+
+        if (!location) {
+            return;
+        }
+
+        const request = {
+            connectionId: entityUpdatedTopic.connectionId,
+            oldLocationGuid: null,
+            locationGuid: location?.value,
+        };
+        const result = await invokeBlockAction("SubscribeToRealTime", request);
+
+        if (!result.isSuccess) {
+            isRealTimeDisconnected = true;
+        }
     }
 
     async function loadGridData(): Promise<void> {
@@ -249,7 +292,7 @@
             gridData.value = result.data
                 .map(a => {
                     const r = { idKey: a.idKey! } as RosterSingleAttendanceRecord;
-                    updateSingleAttendanceRecord(a, r);
+                    updateSingleGridAttendanceRecord(a, r);
 
                     return reactive(r);
                 });
@@ -269,7 +312,7 @@
 
         if (!schedule.value) {
             const filteredRows = Enumerable.from(gridData.value)
-                .where(a => recordMatchesMode(a, rosterMode.value))
+                .where(a => statusMatchesMode(a.status, rosterMode.value))
                 .groupBy(a => a.attendee.idKey!)
                 .select(a => (<RosterCompoundAttendanceRecord>{
                     idKey: a.key,
@@ -293,14 +336,14 @@
         }
     }
 
-    function recordMatchesMode(record: RosterSingleAttendanceRecord, mode: RosterViewMode): boolean {
+    function statusMatchesMode(status: CheckInStatus, mode: RosterViewMode): boolean {
         switch (mode) {
             case RosterViewMode.CheckedIn:
-                return record.status === CheckInStatus.NotPresent;
+                return status === CheckInStatus.NotPresent;
             case RosterViewMode.Present:
-                return record.status === CheckInStatus.Present;
+                return status === CheckInStatus.Present;
             case RosterViewMode.CheckedOut:
-                return record.status === CheckInStatus.CheckedOut;
+                return status === CheckInStatus.CheckedOut;
             default:
                 return true;
         }
@@ -359,11 +402,17 @@
         // Also update the underlying data so that if we switch modes we
         // already have the latest info.
         if (gridData.value) {
-            for (const row of gridData.value) {
-                for (const attendance of updatedAttendances) {
-                    if (attendance.idKey === row.idKey) {
-                        updateSingleAttendanceRecord(attendance, row);
-                    }
+            for (const attendance of updatedAttendances) {
+                const row = gridData.value.find(r => r.idKey === attendance.idKey);
+
+                if (row) {
+                    updateSingleGridAttendanceRecord(attendance, row);
+                }
+                else {
+                    const r = { idKey: attendance.idKey! } as RosterSingleAttendanceRecord;
+                    updateSingleGridAttendanceRecord(attendance, r);
+
+                    gridData.value = [...gridData.value, reactive(r)];
                 }
             }
         }
@@ -378,23 +427,61 @@
         for (const row of rows) {
             const attendance = attendances.find(a => a.idKey === row.idKey);
 
-            row.isRemoved = !attendance || !recordMatchesMode(attendance, rosterMode.value);
+            row.isRemoved = !attendance || !statusMatchesMode(attendance.status, rosterMode.value);
         }
     }
 
     function updateGridAttendance(updatedAttendances: RosterAttendanceBag[]): void {
         const rows = getFlatGridRows();
 
-        for (const row of rows) {
-            for (const attendance of updatedAttendances) {
-                if (attendance.idKey === row.idKey) {
-                    updateSingleAttendanceRecord(attendance, row);
+        for (const attendance of updatedAttendances) {
+            const row = rows.find(r => r.idKey === attendance.idKey);
+
+            if (row) {
+                updateSingleGridAttendanceRecord(attendance, row);
+                continue;
+            }
+
+            if (isPromise(gridDataSource.value) || !gridDataSource.value.rows) {
+                continue;
+            }
+
+            // Only add the row to the grid if it matches the current mode.
+            if (!statusMatchesMode(attendance.status, rosterMode.value)) {
+                continue;
+            }
+
+            const r = { idKey: attendance.idKey! } as RosterSingleAttendanceRecord;
+            updateSingleGridAttendanceRecord(attendance, r);
+
+            if (schedule.value) {
+                gridDataSource.value = {
+                    rows: [...gridDataSource.value.rows, clone(r)]
+                };
+            }
+            else {
+                const personRow = gridDataSource.value.rows.find(a => a.idKey === attendance.attendee!.idKey) as RosterCompoundAttendanceRecord | undefined;
+
+                if (personRow) {
+                    personRow.records.push(clone(r));
+                }
+                else {
+                    gridDataSource.value = {
+                        rows: [
+                            ...gridDataSource.value.rows,
+                            {
+                                idKey: attendance.attendee!.idKey!,
+                                attendee: attendance.attendee!,
+                                records: [clone(r)]
+                            }
+                        ]
+                    };
                 }
             }
         }
     }
 
-    function updateSingleAttendanceRecord(attendance: RosterAttendanceBag, row: RosterSingleAttendanceRecord): void {
+    function updateSingleGridAttendanceRecord(attendance: RosterAttendanceBag, row: RosterSingleAttendanceRecord): void {
         row.attendee = attendance.attendee!;
         row.checkInTime = attendance.checkInTime!;
         row.code = attendance.code!;
@@ -434,9 +521,30 @@
 
         if (result.isSuccess && result.data) {
             updateAttendance(result.data);
+            updateGridDataSource();
         }
         else {
             await alert(result.errorMessage || "An unknown error occurred while checking out attendees.");
+        }
+    }
+
+    async function updateSingleAttendanceRecord(attendanceIdKey: string): Promise<void> {
+        // Cancel any existing request for this attendance record.
+        const existingCancellationToken = getAttendanceRecordCancellationTokens.get(attendanceIdKey);
+        if (existingCancellationToken) {
+            existingCancellationToken.cancel();
+        }
+
+        // Create a new cancellation token for this request.
+        const cancellationTokenSource = new CancellationTokenSource();
+        const token = cancellationTokenSource.token;
+        getAttendanceRecordCancellationTokens.set(attendanceIdKey, cancellationTokenSource);
+
+        const result = await invokeBlockAction<RosterAttendanceBag>("GetSingleAttendance", { key: attendanceIdKey });
+
+        if (result.isSuccess && result.data && !token.isCancellationRequested) {
+            updateAttendance([result.data]);
+            updateGridDataSource();
         }
     }
 
@@ -463,6 +571,24 @@
         }
 
         if (message.data.entityType === "Rock.Model.Location" || message.data.entityType === "Rock.Model.Schedule") {
+            const oldLocationGuid = location.value?.value;
+
+            location.value = await contextEntities.get("Rock.Model.Location");
+
+            if (entityUpdatedTopic) {
+                const request = {
+                    connectionId: entityUpdatedTopic?.connectionId,
+                    oldLocationGuid: oldLocationGuid,
+                    locationGuid: location?.value,
+                };
+
+                const result = await invokeBlockAction("SubscribeToRealTime", request);
+
+                if (!result.isSuccess) {
+                    isRealTimeDisconnected = true;
+                }
+            }
+
             loadGridData();
         }
     }
@@ -481,6 +607,7 @@
 
         if (result.isSuccess && result.data) {
             updateAttendance(result.data);
+            updateGridDataSource();
         }
         else {
             await alert(result.errorMessage || "An unknown error occurred while marking attendance as present.");
@@ -543,10 +670,48 @@
 
         if (result.isSuccess && result.data) {
             updateAttendance(result.data);
+            updateGridDataSource();
         }
         else {
             await alert(result.errorMessage || "An unknown error occurred while marking attendance as present.");
         }
+    }
+
+    /**
+     * Called when we receive a RealTime message that an attendance record
+     * has been created or updated.
+     *
+     * @param attendance The details about the attendance record.
+     */
+    function onAttendanceUpdated(attendance: AttendanceUpdatedMessageBag): void {
+        if (!location.value) {
+            return;
+        }
+
+        if (!areEqual(attendance.locationGuid, location.value.value)) {
+            return;
+        }
+
+        if (attendance.attendanceIdKey) {
+            updateSingleAttendanceRecord(attendance.attendanceIdKey);
+        }
+    }
+
+    /**
+     * Called when we receive a RealTime message that an attendance record has
+     * been deleted from the system.
+     *
+     * @param attendanceGuid The unique identifier of the attendance record.
+     * @param attendance The details about the attendance record.
+     */
+    function onAttendanceDeleted(_attendanceGuid: Guid, attendance?: AttendanceUpdatedMessageBag | null): void {
+        if (!gridData.value || !attendance) {
+            return;
+        }
+
+        gridData.value = gridData.value.filter(a => a.idKey !== attendance.attendanceIdKey);
+
+        updateMissingGridAttendances();
     }
 
     onMounted(() => {
