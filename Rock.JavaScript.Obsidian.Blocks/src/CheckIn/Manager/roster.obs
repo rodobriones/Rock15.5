@@ -1,6 +1,11 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <Grid :data="gridDataSource"
+    <NotificationBox v-if="errorMessage" alertType="warning">
+        {{ errorMessage }}
+    </NotificationBox>
+
+    <Grid v-else
+          :data="gridDataSource"
           keyField="idKey"
           itemTerm="Attendance"
           title="Room Roster"
@@ -75,11 +80,8 @@
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
             <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            @click.stop="onAttendanceActionsClick(row)">
-                    <i class="ti ti-dots-vertical"></i>
-                </RockButton>
+                <PopupMenuButton showDelete
+                                 @delete="onAttendanceDeleteClick(row)" />
             </template>
         </Column>
 
@@ -121,11 +123,8 @@
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
             <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            @click.stop="onAttendanceActionsClick(row)">
-                    <i class="ti ti-dots-vertical"></i>
-                </RockButton>
+                <PopupMenuButton showDelete
+                                 @delete="onAttendanceDeleteClick(row)" />
             </template>
         </Column>
 
@@ -154,6 +153,19 @@
                       horizontal
                       rules="required"
                       :items="checkoutScheduleItems" />
+    </Modal>
+
+    <Modal v-model="isStayingModalVisible"
+           title="Confirm Staying"
+           saveText="Check In"
+           @save="onConfirmStayingClick">
+        <p>Which schedule would you like {{ checkoutRow?.attendee.fullName }} to stay for?</p>
+
+        <RadioButtonList v-model="stayingSelectedSchedule"
+                         label="Schedule"
+                         horizontal
+                         rules="required"
+                         :items="stayingScheduleItems" />
     </Modal>
 </template>
 
@@ -184,6 +196,9 @@
     import CheckInDetailsColumn from "./Roster/checkInDetailsColumn.partial";
     import Grid, { Column, TextColumn } from "@Obsidian/Controls/grid";
     import Modal from "@Obsidian/Controls/modal.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import PopupMenuButton from "./Roster/popupMenuButton.partial.obs";
+    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RosterMenu from "./Roster/rosterMenu.partial.obs";
     import { useContextEntities } from "@Obsidian/Core/Utilities/contextEntity";
@@ -191,14 +206,14 @@
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
     import { useBlockBrowserBus, useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { PageMessages } from "@Obsidian/Utility/browserBus";
-    import { alert } from "@Obsidian/Utility/dialogs";
+    import { alert, confirm, confirmDelete } from "@Obsidian/Utility/dialogs";
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { useSuspense } from "@Obsidian/Utility/suspense";
     import { RosterAttendanceBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendanceBag";
     import { RosterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterOptionsBag";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
-    import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
+    import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
     import { RosterAttendanceRecord, RosterCompoundAttendanceRecord, RosterSingleAttendanceRecord, RosterViewMode } from "./Roster/types.partial";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { provideRosterContext } from "./Roster/utilities.partial";
@@ -222,6 +237,7 @@
     const gridData = ref<RosterSingleAttendanceRecord[]>();
     const gridDataPendingPromise = new Promise<GridDataBag>(() => { });
     const loadingRowCount = ref<number>();
+    const campus = ref<ListItemBag>();
     const location = ref<ListItemBag>();
     const schedule = ref<ListItemBag>();
     let durationUpdateTimer: number | undefined;
@@ -236,9 +252,27 @@
     const checkoutSelectedSchedules = ref<string[]>([]);
     const checkoutScheduleItems = ref<ListItemBag[]>([]);
 
+    const isStayingModalVisible = ref(false);
+    const stayingScheduleItems = ref<ListItemBag[]>([]);
+    const stayingSelectedSchedule = ref<string>("");
+    let stayingAttendanceIdKey: string | null = null;
+
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
+    const errorMessage = computed((): string | null => {
+        if (!campus.value) {
+            return "Please select a campus to view the roster.";
+        }
+
+        if (!location.value) {
+            return "Please select a location to view the roster.";
+        }
+
+        return null;
+    });
+
     async function initialize(): Promise<void> {
+        campus.value = await contextEntities.get("Rock.Model.Campus");
         location.value = await contextEntities.get("Rock.Model.Location");
         schedule.value = await contextEntities.get("Rock.Model.Schedule");
 
@@ -512,6 +546,15 @@
         return flatten(nestedRows);
     }
 
+    function getSingleAttendanceRecords(record: RosterAttendanceRecord): RosterSingleAttendanceRecord[] {
+        if ("records" in record) {
+            return record.records;
+        }
+        else {
+            return [record];
+        }
+    }
+
     async function performCheckout(idKeys: string[]): Promise<void> {
         const data = {
             idKeys: idKeys
@@ -548,17 +591,24 @@
         }
     }
 
-    function onSelectItem(itemId: string): void {
-        if (!gridDataSource.value || !("rows" in gridDataSource.value) || !gridDataSource.value.rows) {
-            return;
+    async function stayForService(attendanceIdKey: string, scheduleKey: string): Promise<void> {
+        const data = {
+            attendanceKey: attendanceIdKey,
+            scheduleKey: scheduleKey
+        };
+
+        const result = await invokeBlockAction<RosterAttendanceBag>("StayForService", data);
+
+        if (result.isSuccess && result.data) {
+            updateAttendance([result.data]);
+            updateGridDataSource();
         }
-
-        const item = gridDataSource.value.rows.find(a => a.idKey === itemId) as RosterAttendanceRecord | undefined;
-
-        if (item && config.personPageUrl) {
-            window.location.href = config.personPageUrl.replace("((Key))", item.attendee.guid!);
+        else {
+            await alert(result.errorMessage || "An unknown error occurred while checking in for the new schedule.");
         }
     }
+
+    // #region Event Handlers
 
     /**
      * Called when a context entity has changed by something on the page.
@@ -566,6 +616,10 @@
      * @param message The message that was received.
      */
     async function onContextEntityChanged(message: Message<ContextEntityChangedData>): Promise<void> {
+        if (message.data.entityType === "Rock.Model.Campus") {
+            campus.value = await contextEntities.get("Rock.Model.Campus");
+        }
+
         if (message.data.entityType === "Rock.Model.Schedule") {
             schedule.value = await contextEntities.get("Rock.Model.Schedule");
         }
@@ -596,6 +650,41 @@
     function onRosterModeChanged(mode: RosterViewMode): void {
         rosterMode.value = mode;
         updateGridDataSource();
+    }
+
+    async function onConfirmCheckoutClick(): Promise<void> {
+        const idKeys = checkoutRow.value!
+            .records
+            .filter(r => checkoutSelectedSchedules.value.includes(r.schedule.value ?? ""))
+            .map(r => r.idKey);
+
+        if (idKeys.length > 0) {
+            await performCheckout(idKeys);
+        }
+
+        isCheckoutModalVisible.value = false;
+    }
+
+    async function onConfirmStayingClick(): Promise<void> {
+        await stayForService(stayingAttendanceIdKey!, stayingSelectedSchedule.value);
+
+        isStayingModalVisible.value = false;
+    }
+
+    // #endregion
+
+    // #region Grid Event Handlers
+
+    function onSelectItem(itemId: string): void {
+        if (!gridDataSource.value || !("rows" in gridDataSource.value) || !gridDataSource.value.rows) {
+            return;
+        }
+
+        const item = gridDataSource.value.rows.find(a => a.idKey === itemId) as RosterAttendanceRecord | undefined;
+
+        if (item && config.personPageUrl) {
+            window.location.href = config.personPageUrl.replace("((Key))", item.attendee.guid!);
+        }
     }
 
     async function onAttendancePresentClick(row: RosterCompoundAttendanceRecord): Promise<void> {
@@ -631,34 +720,65 @@
         }
     }
 
-    async function onConfirmCheckoutClick(): Promise<void> {
-        const idKeys = checkoutRow.value!
-            .records
-            .filter(r => checkoutSelectedSchedules.value.includes(r.schedule.value ?? ""))
-            .map(r => r.idKey);
-
-        if (idKeys.length > 0) {
-            await performCheckout(idKeys);
+    async function onAttendanceDeleteClick(row: RosterCompoundAttendanceRecord): Promise<void> {
+        if (!await confirmDelete(row.records.length === 1 ? "attendance record" : "attendance records")) {
+            return;
         }
 
-        isCheckoutModalVisible.value = false;
-    }
+        const result = await invokeBlockAction("DeleteAttendances", {
+            idKeys: row.records.map(a => a.idKey)
+        });
 
-    async function onAttendanceActionsClick(row: RosterCompoundAttendanceRecord): Promise<void> {
-        let deleteEnabled = false;
+        if (result.isSuccess) {
+            // Remove the records from the grid.
+            if (gridData.value) {
+                gridData.value = gridData.value.filter(a => !row.records.some(r => r.idKey === a.idKey));
+            }
 
-        if (rosterMode.value === RosterViewMode.CheckedIn) {
-            // Enable delete if they are on the Checked In tab.
-            deleteEnabled = true;
+            updateGridDataSource();
         }
-        else if (rosterMode.value === RosterViewMode.Present && row.records.some(a => !a.isPresenceSupported)) {
-            // Enable delete if they are on the Present tab and at least one of
-            // the attendances does not support presence.
-            deleteEnabled = config.isDeleteButtonEnabled;
+        else {
+            await alert(result.errorMessage || "An unknown error occurred while deleting attendance records.");
         }
     }
 
     async function onAttendanceStayingClick(row: RosterCompoundAttendanceRecord): Promise<void> {
+        const originalAttendance = Enumerable.from(getSingleAttendanceRecords(row))
+            .select(a => ({
+                record: a,
+                start: RockDateTime.parseISO(a.checkInTime)?.toMilliseconds() ?? 0
+            }))
+            .orderByDescending(a => a.start)
+            .select(a => a.record)
+            .first();
+
+        const result = await invokeBlockAction<ListItemBag[]>("GetPossibleStayingSchedules", {
+            key: originalAttendance.idKey
+        });
+
+        if (!result.isSuccess || !result.data) {
+            await alert(result.errorMessage || "An unknown error occurred while retrieving possible schedules.");
+            return;
+        }
+
+        if (result.data.length === 0) {
+            await alert("No other schedules available for this group and location.");
+        }
+        else if (result.data.length === 1) {
+            const message = `Would you like ${row.attendee.fullName} to stay for ${result.data[0].text}?`;
+
+            if (!await confirm(message)) {
+                return;
+            }
+
+            await stayForService(originalAttendance.idKey, result.data[0].value!);
+        }
+        else {
+            stayingAttendanceIdKey = originalAttendance.idKey;
+            stayingScheduleItems.value = result.data;
+            stayingSelectedSchedule.value = "";
+            isStayingModalVisible.value = true;
+        }
     }
 
     async function onAttendanceNotPresentClick(row: RosterCompoundAttendanceRecord): Promise<void> {
@@ -676,6 +796,10 @@
             await alert(result.errorMessage || "An unknown error occurred while marking attendance as present.");
         }
     }
+
+    // #endregion
+
+    // #region Real-Time Event Handlers
 
     /**
      * Called when we receive a RealTime message that an attendance record
@@ -713,6 +837,8 @@
 
         updateMissingGridAttendances();
     }
+
+    // #endregion
 
     onMounted(() => {
         durationUpdateTimer = window.setInterval(updateDurations, 10000);

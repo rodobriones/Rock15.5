@@ -64,7 +64,9 @@
 
     function getAttendanceCount(state: CheckInStatus | undefined): number {
         if (state === undefined) {
-            return props.attendances.length;
+            return Enumerable.from(props.attendances)
+                .groupBy(a => a.attendee.idKey)
+                .count();
         }
 
         return Enumerable.from(props.attendances)

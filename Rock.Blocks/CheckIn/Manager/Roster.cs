@@ -30,6 +30,7 @@ using Rock.RealTime.Topics;
 using Rock.Security;
 using Rock.Utility;
 using Rock.ViewModels.Blocks.CheckIn.Manager.Roster;
+using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
 
 namespace Rock.Blocks.CheckIn.Manager
@@ -372,6 +373,92 @@ namespace Rock.Blocks.CheckIn.Manager
                 .ToList();
 
             return ActionOk( bags );
+        }
+
+        [BlockAction]
+        public BlockActionResult DeleteAttendances( List<string> idKeys )
+        {
+            var badgeAttributeIds = GetBadgeAttributeIds();
+            var manager = new CheckInManager( RockContext, RequestContext );
+            var attendanceIds = idKeys.Select( a => IdHasher.Instance.GetId( a ) )
+                .Where( a => a.HasValue )
+                .Select( a => a.Value )
+                .ToList();
+
+            var attendances = manager.GetBaseAttendanceQueryable()
+                .Where( a => attendanceIds.Contains( a.Id ) )
+                .ToList();
+
+            manager.DeleteAttendances( attendances );
+
+            return ActionOk();
+        }
+
+        [BlockAction]
+        public BlockActionResult GetPossibleStayingSchedules( string key )
+        {
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var manager = new CheckInManager( RockContext, RequestContext );
+            var attendanceId = IdHasher.Instance.GetId( key );
+
+            if ( !attendanceId.HasValue )
+            {
+                return ActionBadRequest( "Attendance record was not found." );
+            }
+
+            var attendance = manager.GetAttendanceQueryable( showAllAreas, checkInAreaGuid )
+                .Where( a => a.Id == attendanceId.Value )
+                .FirstOrDefault();
+
+            if ( attendance == null )
+            {
+                return ActionBadRequest( "Attendance record was not found." );
+            }
+
+            var schedules = manager.GetStayingSchedules( attendance )
+                .Select( s => new ListItemBag
+                {
+                    Value = s.IdKey,
+                    Text = s.ToString()
+                } )
+                .ToList();
+
+            return ActionOk( schedules );
+        }
+
+        [BlockAction]
+        public BlockActionResult StayForService( string attendanceKey, string scheduleKey )
+        {
+            var badgeAttributeIds = GetBadgeAttributeIds();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var manager = new CheckInManager( RockContext, RequestContext );
+            var attendanceId = IdHasher.Instance.GetId( attendanceKey );
+            var scheduleId = IdHasher.Instance.GetId( scheduleKey );
+
+            if ( !attendanceId.HasValue )
+            {
+                return ActionBadRequest( "Attendance record was not found." );
+            }
+
+            if ( !scheduleId.HasValue )
+            {
+                return ActionBadRequest( "Schedule was not found." );
+            }
+
+            var attendance = manager.GetAttendanceQueryable( showAllAreas, checkInAreaGuid )
+                .Where( a => a.Id == attendanceId.Value )
+                .FirstOrDefault();
+
+            if ( attendance == null )
+            {
+                return ActionBadRequest( "Attendance record was not found." );
+            }
+
+            var stayingAttendance = manager.CreateStayingAttendance( attendance, scheduleId.Value );
+
+            return ActionOk( manager.GetAttendanceBag( stayingAttendance, badgeAttributeIds ) );
         }
 
         #endregion

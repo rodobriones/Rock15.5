@@ -435,8 +435,6 @@ namespace Rock.CheckIn.v2
         /// <param name="attendances">The attendance records to update.</param>
         public void MarkAsNotPresent( List<Attendance> attendances )
         {
-            var now = RockDateTime.Now;
-
             foreach ( var attendee in attendances )
             {
                 // If they are getting changed from Present to NotPresent,
@@ -483,6 +481,114 @@ namespace Rock.CheckIn.v2
             {
                 KioskLocationAttendance.Remove( locationId );
             }
+        }
+
+        /// <summary>
+        /// Deletes each of the attendance records and then saves the changes
+        /// to the database.
+        /// </summary>
+        /// <param name="attendances">The attendance records to delete.</param>
+        public void DeleteAttendances( List<Attendance> attendances )
+        {
+            var locationIds = attendances.Select( a => a.Occurrence.LocationId )
+                .Where( a => a.HasValue )
+                .Select( a => a.Value )
+                .ToList();
+
+            new AttendanceService( RockContext ).DeleteRange( attendances );
+
+            RockContext.SaveChanges();
+
+            foreach ( var locationId in locationIds )
+            {
+                KioskLocationAttendance.Remove( locationId );
+            }
+        }
+
+        /// <summary>
+        /// Gets the schedules that are valid for the specified attendance
+        /// record to stay for another service.
+        /// </summary>
+        /// <param name="attendance">The attendance record representing the person that will be staying.</param>
+        /// <returns>A collection of <see cref="Schedule"/> objects.</returns>
+        public List<Schedule> GetStayingSchedules( Attendance attendance )
+        {
+            // Limit Schedules to ones that available to this attendance's
+            // GroupId and LocationId.
+            var groupLocationService = new GroupLocationService( RockContext );
+            var groupLocationScheduleQuery = groupLocationService.Queryable()
+                .Where( a => a.GroupId == attendance.Occurrence.GroupId
+                    && a.LocationId == attendance.Occurrence.LocationId )
+                .SelectMany( s => s.Schedules )
+                .Distinct();
+
+            // Also limit to active check-in schedules, and exclude the current schedule.
+            var scheduleList = groupLocationScheduleQuery
+                .Where( s => s.Id != attendance.Occurrence.ScheduleId
+                    && s.IsActive
+                    && s.CheckInStartOffsetMinutes != null
+                    && s.Name != null
+                    && s.Name != string.Empty )
+                .ToList();
+
+            // Limit to schedules for the current day.
+            scheduleList = scheduleList
+                .Where( a => a.GetNextCheckInStartTime( RockDateTime.Today ) < RockDateTime.Today.AddDays( 1 ) )
+                .ToList();
+
+            return scheduleList.OrderByOrderAndNextScheduledDateTime();
+        }
+
+        /// <summary>
+        /// Creates a new attendance record for a person staying for an
+        /// additional schedule, based on an existing attendance.
+        /// </summary>
+        /// <param name="originalAttendance">The original attendance record to use as the basis for the new staying attendance.</param>
+        /// <param name="stayingForScheduleId">The identifier of the schedule for which the person is staying.</param>
+        /// <returns>A new <see cref="Attendance"/> object representing the person's attendance for the specified additional schedule.</returns>
+        public Attendance CreateStayingAttendance( Attendance originalAttendance, int stayingForScheduleId )
+        {
+            var attendanceService = new AttendanceService( RockContext );
+            var occurrenceService = new AttendanceOccurrenceService( RockContext );
+            var selectedOccurrence = originalAttendance.Occurrence;
+
+            var stayingOccurrence = occurrenceService.GetOrAdd( selectedOccurrence.OccurrenceDate, selectedOccurrence.GroupId, selectedOccurrence.LocationId, stayingForScheduleId );
+            if ( stayingOccurrence.Id == 0 )
+            {
+                RockContext.SaveChanges();
+            }
+
+            // Create a new attendance based on the values in the selected
+            // attendance, but change ScheduleId to the schedule they are
+            // staying for.
+            var stayingAttendance = originalAttendance.Clone( false );
+
+            // Reset fields specific to the new attendance.
+            stayingOccurrence.CreatedDateTime = null;
+            stayingOccurrence.ModifiedDateTime = null;
+            stayingAttendance.Id = 0;
+            stayingAttendance.Guid = Guid.NewGuid();
+            stayingAttendance.OccurrenceId = stayingOccurrence.Id;
+            stayingAttendance.Occurrence = stayingOccurrence;
+            stayingAttendance.PersonAlias = originalAttendance.PersonAlias;
+            stayingOccurrence.CreatedByPersonAliasId = RequestContext.CurrentPerson?.PrimaryAliasId;
+
+            // If the selected attendance was their first time, the 2nd one
+            // wouldn't be, so mark IsFirstTime to false.
+            stayingAttendance.IsFirstTime = false;
+
+            /* 2020-12-18 MDP
+                Keep StartDateTime the same as the original StartDateTime,
+                since that is when they checked into the room.
+                see https://app.asana.com/0/0/1199643530714803/f
+            */
+            stayingAttendance.StartDateTime = originalAttendance.StartDateTime;
+
+            attendanceService.Add( stayingAttendance );
+
+            RockContext.SaveChanges();
+
+            return stayingAttendance;
         }
 
         #endregion
