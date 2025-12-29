@@ -29,10 +29,10 @@
                 name="presentAction"
                 width="155px"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <RockButton btnType="success"
                             autoDisable
-                            :disabled="!row.records.some(a => a.isPresenceSupported) && !config.isPresentButtonEnabled"
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported) && !config.isPresentButtonEnabled"
                             @click.stop="onAttendancePresentClick(row)">
                     <i class="ti ti-user-plus"></i> Present
                 </RockButton>
@@ -43,10 +43,10 @@
                 name="checkoutAction"
                 width="155px"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <RockButton btnType="default"
                             autoDisable
-                            :disabled="!row.records.some(a => a.isCheckoutSupported)"
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isCheckoutSupported)"
                             @click.stop="onAttendanceCheckoutClick(row)">
                     <i class="ti ti-user-minus"></i> Check Out
                 </RockButton>
@@ -79,7 +79,7 @@
                 headerClass="grid-rostercommand"
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <PopupMenuButton showDelete
                                  @delete="onAttendanceDeleteClick(row)" />
             </template>
@@ -91,7 +91,7 @@
                 headerClass="grid-rostercommand"
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <RockButton btnType="default"
                             autoDisable
                             @click.stop="onAttendanceStayingClick(row)">
@@ -106,10 +106,10 @@
                 headerClass="grid-rostercommand"
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <RockButton btnType="default"
                             autoDisable
-                            :disabled="!row.records.some(a => a.isPresenceSupported)"
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported)"
                             @click.stop="onAttendanceNotPresentClick(row)">
                     <i class="ti ti-user-off"></i>
                 </RockButton>
@@ -122,7 +122,7 @@
                 headerClass="grid-rostercommand"
                 itemClass="grid-rostercommand"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <PopupMenuButton showDelete
                                  @delete="onAttendanceDeleteClick(row)" />
             </template>
@@ -132,7 +132,7 @@
                 name="presentAction"
                 width="155px"
                 visiblePriority="xs">
-            <template #format="{ row }: { row: RosterCompoundAttendanceRecord }">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
                 <RockButton btnType="default"
                             autoDisable
                             @click.stop="onAttendancePresentClick(row)">
@@ -146,7 +146,7 @@
            title="Confirm Checkout"
            saveText="Checkout"
            @save="onConfirmCheckoutClick">
-        <p>Which schedules would you like to check {{ checkoutRow?.attendee.fullName }} out of?</p>
+        <p>Which schedules would you like to check {{ checkoutRows[0].attendee.fullName }} out of?</p>
 
         <CheckBoxList v-model="checkoutSelectedSchedules"
                       label="Schedules"
@@ -159,7 +159,7 @@
            title="Confirm Staying"
            saveText="Check In"
            @save="onConfirmStayingClick">
-        <p>Which schedule would you like {{ checkoutRow?.attendee.fullName }} to stay for?</p>
+        <p>Which schedule would you like {{ stayingRow!.attendee.fullName }} to stay for?</p>
 
         <RadioButtonList v-model="stayingSelectedSchedule"
                          label="Schedule"
@@ -206,7 +206,7 @@
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
     import { useBlockBrowserBus, useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { PageMessages } from "@Obsidian/Utility/browserBus";
-    import { alert, confirm, confirmDelete } from "@Obsidian/Utility/dialogs";
+    import { alert, confirm } from "@Obsidian/Utility/dialogs";
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { useSuspense } from "@Obsidian/Utility/suspense";
     import { RosterAttendanceBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendanceBag";
@@ -242,20 +242,19 @@
     const schedule = ref<ListItemBag>();
     let durationUpdateTimer: number | undefined;
 
-    let isRealTimeDisconnected = false;
     const getAttendanceRecordCancellationTokens = new Map<string, CancellationTokenSource>();
 
     const gridDataSource = ref<Promise<GridDataBag> | GridDataBag>(gridDataPendingPromise);
 
     const isCheckoutModalVisible = ref(false);
-    const checkoutRow = ref<RosterCompoundAttendanceRecord>();
+    const checkoutRows = ref<RosterSingleAttendanceRecord[]>([]);
     const checkoutSelectedSchedules = ref<string[]>([]);
     const checkoutScheduleItems = ref<ListItemBag[]>([]);
 
     const isStayingModalVisible = ref(false);
+    const stayingRow = ref<RosterSingleAttendanceRecord>();
     const stayingScheduleItems = ref<ListItemBag[]>([]);
     const stayingSelectedSchedule = ref<string>("");
-    let stayingAttendanceIdKey: string | null = null;
 
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
@@ -290,23 +289,20 @@
 
         entityUpdatedTopic.on("attendanceUpdated", onAttendanceUpdated);
         entityUpdatedTopic.on("attendanceDeleted", onAttendanceDeleted);
-        entityUpdatedTopic.onDisconnected(() => isRealTimeDisconnected = true);
+        entityUpdatedTopic.onDisconnected(onRealTimeDisconnected);
 
         const location = await contextEntities.get("Rock.Model.Location");
 
-        if (!location) {
-            return;
-        }
-
-        const request = {
+        const data = {
             connectionId: entityUpdatedTopic.connectionId,
             oldLocationGuid: null,
-            locationGuid: location?.value,
+            locationGuid: location?.value ?? null,
         };
-        const result = await invokeBlockAction("SubscribeToRealTime", request);
+
+        const result = await invokeBlockAction("SubscribeToRealTime", data);
 
         if (!result.isSuccess) {
-            isRealTimeDisconnected = true;
+            onRealTimeDisconnected();
         }
     }
 
@@ -362,10 +358,14 @@
             };
         }
         else {
+            const filteredRows = Enumerable.from(gridData.value)
+                .where(a => statusMatchesMode(a.status, rosterMode.value))
+                .toArray();
+
             // Clone so that when we make live changes to the grid data it
             // doesn't affect the original data.
             gridDataSource.value = {
-                rows: clone(gridData.value)
+                rows: clone(filteredRows)
             };
         }
     }
@@ -633,13 +633,13 @@
                 const request = {
                     connectionId: entityUpdatedTopic?.connectionId,
                     oldLocationGuid: oldLocationGuid,
-                    locationGuid: location?.value,
+                    locationGuid: location.value?.value ?? null,
                 };
 
                 const result = await invokeBlockAction("SubscribeToRealTime", request);
 
                 if (!result.isSuccess) {
-                    isRealTimeDisconnected = true;
+                    onRealTimeDisconnected();
                 }
             }
 
@@ -653,8 +653,7 @@
     }
 
     async function onConfirmCheckoutClick(): Promise<void> {
-        const idKeys = checkoutRow.value!
-            .records
+        const idKeys = checkoutRows.value
             .filter(r => checkoutSelectedSchedules.value.includes(r.schedule.value ?? ""))
             .map(r => r.idKey);
 
@@ -666,7 +665,7 @@
     }
 
     async function onConfirmStayingClick(): Promise<void> {
-        await stayForService(stayingAttendanceIdKey!, stayingSelectedSchedule.value);
+        await stayForService(stayingRow.value!.idKey, stayingSelectedSchedule.value);
 
         isStayingModalVisible.value = false;
     }
@@ -687,9 +686,9 @@
         }
     }
 
-    async function onAttendancePresentClick(row: RosterCompoundAttendanceRecord): Promise<void> {
+    async function onAttendancePresentClick(row: RosterAttendanceRecord): Promise<void> {
         const data = {
-            idKeys: row.records.map(a => a.idKey)
+            idKeys: getSingleAttendanceRecords(row).map(a => a.idKey)
         };
 
         const result = await invokeBlockAction<RosterAttendanceBag[]>("MarkAsPresent", data);
@@ -704,35 +703,37 @@
     }
 
     async function onAttendanceCheckoutClick(row: RosterAttendanceRecord): Promise<void> {
-        if ("records" in row) {
-            if (row.records.length > 1) {
-                checkoutRow.value = row;
-                checkoutScheduleItems.value = row.records.map(r => r.schedule);
-                checkoutSelectedSchedules.value = [];
-                isCheckoutModalVisible.value = true;
-            }
-            else {
-                await performCheckout([row.records[0].idKey]);
-            }
+        const records = getSingleAttendanceRecords(row);
+
+        if (records.length > 1) {
+            checkoutRows.value = records;
+            checkoutScheduleItems.value = records.map(r => r.schedule);
+            checkoutSelectedSchedules.value = [];
+            isCheckoutModalVisible.value = true;
         }
         else {
-            await performCheckout([row.idKey]);
+            await performCheckout([records[0].idKey]);
         }
     }
 
-    async function onAttendanceDeleteClick(row: RosterCompoundAttendanceRecord): Promise<void> {
-        if (!await confirmDelete(row.records.length === 1 ? "attendance record" : "attendance records")) {
+    async function onAttendanceDeleteClick(row: RosterAttendanceRecord): Promise<void> {
+        const records = getSingleAttendanceRecords(row);
+        const message = records.length === 1
+            ? `Are you sure you want to delete the attendance record for ${row.attendee.fullName}?`
+            : `Are you sure you want to delete the attendance records for ${row.attendee.fullName}?`;
+
+        if (!await confirm(message)) {
             return;
         }
 
         const result = await invokeBlockAction("DeleteAttendances", {
-            idKeys: row.records.map(a => a.idKey)
+            idKeys: records.map(a => a.idKey)
         });
 
         if (result.isSuccess) {
             // Remove the records from the grid.
             if (gridData.value) {
-                gridData.value = gridData.value.filter(a => !row.records.some(r => r.idKey === a.idKey));
+                gridData.value = gridData.value.filter(a => !records.some(r => r.idKey === a.idKey));
             }
 
             updateGridDataSource();
@@ -742,7 +743,7 @@
         }
     }
 
-    async function onAttendanceStayingClick(row: RosterCompoundAttendanceRecord): Promise<void> {
+    async function onAttendanceStayingClick(row: RosterAttendanceRecord): Promise<void> {
         const originalAttendance = Enumerable.from(getSingleAttendanceRecords(row))
             .select(a => ({
                 record: a,
@@ -774,16 +775,16 @@
             await stayForService(originalAttendance.idKey, result.data[0].value!);
         }
         else {
-            stayingAttendanceIdKey = originalAttendance.idKey;
+            stayingRow.value = originalAttendance;
             stayingScheduleItems.value = result.data;
             stayingSelectedSchedule.value = "";
             isStayingModalVisible.value = true;
         }
     }
 
-    async function onAttendanceNotPresentClick(row: RosterCompoundAttendanceRecord): Promise<void> {
+    async function onAttendanceNotPresentClick(row: RosterAttendanceRecord): Promise<void> {
         const data = {
-            idKeys: row.records.map(a => a.idKey)
+            idKeys: getSingleAttendanceRecords(row).map(a => a.idKey)
         };
 
         const result = await invokeBlockAction<RosterAttendanceBag[]>("MarkAsNotPresent", data);
@@ -836,6 +837,12 @@
         gridData.value = gridData.value.filter(a => a.idKey !== attendance.attendanceIdKey);
 
         updateMissingGridAttendances();
+    }
+
+    async function onRealTimeDisconnected(): Promise<void> {
+        await alert("The connection to the server has been lost. The page must be refreshed to continue.");
+
+        window.location.assign(window.location.href);
     }
 
     // #endregion
