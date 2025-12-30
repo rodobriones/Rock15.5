@@ -68,6 +68,27 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         }
 
         /// <summary>
+        /// Gets the gender string.
+        /// </summary>
+        /// <param name="gender"></param>
+        /// <param name="maleText"></param>
+        /// <param name="femaleText"></param>
+        /// <param name="unknownText"></param>
+        /// <returns></returns>
+        public string GetGenderString( Gender gender, string maleText, string femaleText, string unknownText )
+        {
+            switch ( gender )
+            {
+                case Gender.Male:
+                    return maleText;
+                case Gender.Female:
+                    return femaleText;
+                default:
+                    return unknownText;
+            }
+        }
+
+        /// <summary>
         /// Gets the touchpoint view bag.
         /// </summary>
         /// <param name="touchpointType"></param>
@@ -75,6 +96,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         /// <returns></returns>
         private TouchpointViewBag GetTouchpointView( TouchpointType touchpointType, Contact contact )
         {
+            var genderedPronoun = GetGenderString( contact.Gender, "him", "her", contact.FirstName );
             switch ( touchpointType )
             {
                 case TouchpointType.Prayer:
@@ -110,28 +132,28 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-birthday.png",
                         Title = "Birthday",
-                        InformationText = "Celebrate his life and your relationship", // PS TODO: gender it
+                        InformationText = $"Celebrate {genderedPronoun} life and your relationship",
                     };
                 case TouchpointType.WeddingAnniversary:
                     return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-wedding-anniversary.png",
                         Title = "Wedding Anniversary",
-                        InformationText = "Celebrate her commitment", // PS TODO: Gender it
+                        InformationText = $"Celebrate {genderedPronoun} commitment",
                     };
                 case TouchpointType.BaptismAnniversary:
                     return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-baptism-anniversary.png",
                         Title = "Baptism Anniversary",
-                        InformationText = "Celebrate his decision", // PS TODO: Gender it
+                        InformationText = $"Celebrate {genderedPronoun} decision",
                     };
                 case TouchpointType.SalvationAnniversary:
                     return new TouchpointViewBag
                     {
                         IconSource = "resource://Rock.Mobile.Resources.outreach-salvation-anniversary.png",
                         Title = "Salvation Anniversary",
-                        InformationText = "Celebrate her decision", // PS TODO: Gender it
+                        InformationText = $"Celebrate {genderedPronoun} decision",
                     };
                 case TouchpointType.Share:
                     return new TouchpointViewBag
@@ -282,7 +304,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionNotFound( "Touchpoint not found." );
             }
 
-            touchpoint.CommunicationMedium = bag.CommunicationMedium?.ToNative() ?? TouchpointCommunicationMedium.Call; // PS TODO: After we make the communication medium nullable on the model, we can remove the null-coalescing operator.
+            touchpoint.CommunicationMedium = bag.CommunicationMedium?.ToNative();
             touchpoint.Note = bag.Note;
             touchpoint.CompletedDateTime = bag.CompletedDate.HasValue ? bag.CompletedDate.Value.DateTime : RockDateTime.Now;
             RockContext.SaveChanges();

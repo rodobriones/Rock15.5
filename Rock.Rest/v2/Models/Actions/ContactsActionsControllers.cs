@@ -115,6 +115,7 @@ namespace Rock.Rest.v2.Models.Actions
                 var result = contacts.Select( c => new ContactItem
                 {
                     ContactIdKey = c.IdKey,
+                    ContactId = c.Id,
                     Name = c.FirstName + " " + c.LastName,
                     ProfilePhotoUrl = c.PhotoId != null ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( c.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) ) : string.Empty,
                     Email = c.Email,

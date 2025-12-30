@@ -244,8 +244,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             PersonService personService = new PersonService( RockContext );
             person = personService.Get( person.Id );
             person.OutreachTouchpointSchedule = ( Rock.Utility.Enums.DayOfWeekFlag ) ( ( int ) savePreferenceBag.DayOfWeek );
-            person.OutreachNotificationTimeOfDay = ( Enums.Outreach.OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay;
             person.OutreachEnableDailyNotification = savePreferenceBag.DailyNotificationsEnabled;
+            person.OutreachNotificationTimeOfDay = savePreferenceBag.DailyNotificationsEnabled ? ( Enums.Outreach.OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay : null; // Clear out time of day if daily notifications are disabled
             person.OutreachEnableSpecialEventsNotification = savePreferenceBag.SpecialEventNotificationsEnabled;
             person.OutreachTouchpointNotificationsEnabled = savePreferenceBag.DailyNotificationsEnabled || savePreferenceBag.SpecialEventNotificationsEnabled;
 
