@@ -30,6 +30,7 @@ import { GroupLocationPickerMode } from "@Obsidian/Enums/Group/groupLocationPick
 import { ScheduleConfirmationLogic } from "@Obsidian/Enums/Group/scheduleConfirmationLogic";
 import { ScheduleCoordinatorNotificationType } from "@Obsidian/Enums/Group/scheduleCoordinatorNotificationType";
 import { ScheduleType } from "@Obsidian/Enums/Group/scheduleType";
+import { Guid } from "@Obsidian/Types";
 import { GroupTypeGroupMemberWorkflowTriggerBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeGroupMemberWorkflowTriggerBag";
 import { GroupTypeGroupRequirementBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeGroupRequirementBag";
 import { GroupTypeRoleBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeRoleBag";
@@ -180,6 +181,9 @@ export type GroupTypeBag = {
 
     /** Gets or sets a lava template that can be used for generating  view details for Group. */
     groupViewLavaTemplate?: string | null;
+
+    /** Gets or sets the Guid of the GroupType. */
+    guid: Guid;
 
     /** Gets or sets the icon CSS class name for a font vector based icon. */
     iconCssClass?: string | null;

@@ -1,26 +1,192 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <ContentSectionContainer>
-        <div class="row">
-            <div class="col-md-6">
-                <TextBox v-model="name"
-                         label="Name"
-                         rules="required" />
+    <ContentSectionContainer sidebar>
+        <ContentSection light>
+            <div class="basic-fields">
+                <div class="row">
+                    <div class="col-md-6">
+                        <TextBox v-model="name" label="Name" rules="required" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <TextBox v-model="description" label="Description" textMode="multiline" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <ColorPicker v-model="groupTypeColor" label="Group Type Color"
+                                     help="Specifies the color used to visually distinguish this group type in lists."
+                                     trailblazerField />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <IconPicker v-model="iconCssClass" label="Group Type Icon"
+                                    help="Specifies the icon used to represent groups of this type." />
+                    </div>
+                </div>
             </div>
+        </ContentSection>
 
-        </div>
+        <!-- GENERAL -->
+        <ContentSection title="General" icon="ti ti-settings">
+            <ContentStack title="Purpose & Structure" description="Defines the overall purpose, identity, and hierarchical relationships of the group type, including what it inherits and what children it can contain.">
+                <DefinedValuePicker label="Group Type Purpose"
+                                    v-model="groupTypePurposeValue"
+                                    :showBlankItem="true"
+                                    :definedTypeGuid="DefinedType.GrouptypePurpose"
+                                    trailblazerField />
 
-        <TextBox v-model="description"
-                 label="Description"
-                 textMode="multiline" />
+                <GroupTypePicker label="Inherit Group Type Attributes From" v-model="inheritedGroupType"
+                                 :showBlankItem="true" :excludeGroupTypes="excludedGroupTypes"
+                                 help="Select which Group Type to inherit attributes from." trailblazerField />
+
+                <div class="form-group">
+                    <InlineCheckBox label="Allow Any Child Group Type" v-model="allowAnyChildGroupType"
+                                    help="When enabled, groups of any type can be added as child groups to this group type." />
+                </div>
+
+                <div v-if="!allowAnyChildGroupType" class="allow-any-child-groupType">
+                    <GroupTypePicker label="Allowed Child Group Types"
+                                     v-model="childGroupTypes" multiple :showBlankItem="true"
+                                     help="Defines which child group types can be added to groups of this type. This setting controls the group hierarchy. To allow an unlimited hierarchy, include this group type as one of its own allowed child types." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Require Campus For Groups" v-model="groupsRequireCampus"
+                                    help="When enabled, all groups of this type must have a campus selected when being added or edited." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Enable Group Administrator" v-model="showAdministrator"
+                                    help="When enabled, groups of this type can have an assigned group administrator." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Enable Specific Group Requirements"
+                                    v-model="enableSpecificGroupRequirements"
+                                    help="When enabled, groups of this type can have their own Group Requirements. This displays the Group Requirements section on the Group Details block. If a group already has specific requirements, the section will remain visible even when this setting is disabled." />
+                </div>
+            </ContentStack>
+
+            <ContentStack title="Location & Scheduling" description="Configures how locations are chosen, how many can be used, whether schedules tie to locations, and which location types are allowed.">
+                <CheckBoxList label="Allowed Location Selection Modes" v-model="locationSelectionModeValue"
+                              :items="locationSelectionModeOptions"
+                              help="Specifies which location selection modes are available when adding locations to groups of this type." />
+
+                <DefinedValuePicker label="Allowed Location Types" v-model="locationTypes" :multiple="true"
+                                    :definedTypeGuid="DefinedType.GroupLocationType"
+                                    help="Defines the location types that can be associated with groups of this type. For example, you might include a meeting location and an assignment target location." />
+
+                <div class="form-group">
+                    <InlineCheckBox label="Allow Multiple Locations" v-model="allowMultipleLocations"
+                                    help="When enabled, groups of this type can have more than one location." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Enable Location Schedules" v-model="enableLocationSchedules"
+                                    help="When enabled, group locations can be linked to one or more predefined schedules." />
+                </div>
+            </ContentStack>
+
+            <ContentStack title="Capacity & Status" description="Controls how group capacity is enforced.">
+                <div class="row">
+                    <div class="col-md-6">
+                        <RadioButtonList label="Group Capacity Enforcement" v-model="groupCapacityRuleValue"
+                                         :items="groupCapacityRuleOptions"
+                                         help="Specifies whether this group type supports a capacity limit and how that limit is enforced." />
+                    </div>
+                    <div class="col-md-6">
+                        <CheckBox v-if="groupCapacityRule !== GroupCapacityRule.None" label="Require Group Capacity"
+                                  v-model="isCapacityRequired"
+                                  help="When enabled, a Group Capacity value is required for all groups of this type." />
+                    </div>
+                </div>
+
+                <DefinedTypePicker label="Group Status Defined Type" v-model="groupStatusDefinedType"
+                                   :isSortedByName="true" :showBlankItem="true"
+                                   help="Specifies the Defined Type that contains the possible statuses for groups of this type."
+                                   trailblazerField />
+
+            </ContentStack>
+
+            <ContentStack title="Record Source & Group-Specific Settings" description="Determines what record source to add to members of this group type and which group-specific settings to allow.">
+                <DefinedValuePicker label="Group Member Record Source" v-model="groupMemberRecordSourceValue"
+                                    :definedTypeGuid="DefinedType.RecordSourceType"
+                                    help="Specifies the record source to assign to group members added to groups of this type." />
+
+                <div class="form-group">
+                    <div class="allowed-group-specific-settings">
+                        <RockLabel>Allowed Group Specific Settings</RockLabel>
+                    </div>
+                    <InlineCheckBox label="Record Source" v-model="allowGroupSpecificRecordSource"
+                                    help="When enabled, groups of this type can override the default record source." />
+                    <InlineCheckBox label="Member Attributes" v-model="allowSpecificGroupMemberAttributes"
+                                    help="When enabled, groups of this type can have their own Group Member Attributes. This displays the Member Attributes section on the Group Details block. Existing specific member attributes are preserved." />
+                    <InlineCheckBox label="Member Workflows" v-model="allowSpecificGroupMemberWorkflows"
+                                    help="When enabled, groups of this type can have their own Group Member Workflows. This displays the Group Member Workflows section on the Group Details block. Existing workflows are retained even if this setting is later disabled." />
+                    <InlineCheckBox label="Tags" v-model="enableGroupTag"
+                                    help="When enabled, groups of this type can create and manage their own tags." />
+                </div>
+            </ContentStack>
+
+            <ContentStack title="System Management" description="Manages system features for syncing and tracking groups.">
+                <div class="form-group">
+                    <InlineCheckBox label="Preserve Member Status on Person Inactivation" v-model="ignorePersonInactivated"
+                                    help="When enabled, members of groups of this type will remain active even if their person record is inactivated."
+                                    trailblazerField />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Enable Universal Search Indexing" v-model="isIndexEnabled"
+                                    help="When enabled, groups of this type are included in Universal Search indexing."
+                                    trailblazerField />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Enable Group History Tracking" v-model="enableGroupHistory"
+                                    help="When enabled, groups of this type will track changes to the group and its members in Group History." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Allow Group Sync" v-model="allowGroupSync"
+                                    help="When enabled, groups of this type can use Group Sync. This displays the Group Sync Settings section on the Group Details block. Existing syncs are retained, and disabling this setting does not stop them from running." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Allow Inactivation Reasons" v-model="enableInactiveReason"
+                                    help="When enabled, a reason can be selected when a group is inactivated. The available reasons are defined in the Inactive Group Reasons Defined Type."
+                                    trailblazerField />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Require Inactive Reason" v-model="requiresInactiveReason"
+                                    help="When enabled, an Inactive Reason must be selected when a group is inactivated. The available reasons are defined in the Inactive Group Reasons Defined Type."
+                                    trailblazerField />
+                </div>
+            </ContentStack>
+        </ContentSection>
 
         <ContentSection v-if="hasAttributes" title="Group Type Attributes" icon="ti ti-binary-tree-2">
             <ContentStack>
-                <AttributeValuesContainer v-model="attributeValues" :attributes="attributes" isEditMode :numberOfColumns="2" />
+                <AttributeValuesContainer v-model="attributeValues" :attributes="attributes" isEditMode
+                                          :numberOfColumns="2" />
             </ContentStack>
         </ContentSection>
     </ContentSectionContainer>
 </template>
+
+<style scoped>
+.allowed-group-specific-settings :deep(.control-label) {
+    font-size: var(--font-size-small);
+    line-height: 18px;
+}
+
+.allow-any-child-groupType {
+    margin-top: var(--spacing-tiny);
+}
+</style>
 
 <script setup lang="ts">
     import { computed, PropType, ref, watch } from "vue";
@@ -34,6 +200,20 @@
     import ContentSectionContainer from "@Obsidian/Controls/contentSectionContainer.obs";
     import ContentSection from "@Obsidian/Controls/contentSection.obs";
     import ContentStack from "@Obsidian/Controls/contentStack.obs";
+    import ColorPicker from "@Obsidian/Controls/colorPicker.obs";
+    import IconPicker from "@Obsidian/Controls/iconPicker.obs";
+    import DefinedValuePicker from "@Obsidian/Controls/definedValuePicker.obs";
+    import { DefinedType } from "@Obsidian/SystemGuids/definedType";
+    import GroupTypePicker from "@Obsidian/Controls/groupTypePicker.obs";
+    import InlineCheckBox from "@Obsidian/Controls/inlineCheckBox.obs";
+    import CheckBoxList from "@Obsidian/Controls/checkBoxList.obs";
+    import { enumToListItemBag } from "@Obsidian/Utility/enumUtils";
+    import { GroupLocationPickerMode, GroupLocationPickerModeDescription } from "@Obsidian/Enums/Group/groupLocationPickerMode";
+    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
+    import { GroupCapacityRule, GroupCapacityRuleDescription } from "@Obsidian/Enums/Group/groupCapacityRule";
+    import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import DefinedTypePicker from "@Obsidian/Controls/definedTypePicker.obs";
+    import RockLabel from "@Obsidian/Controls/rockLabel.obs";
 
     const props = defineProps({
         modelValue: {
@@ -56,14 +236,45 @@
 
     const attributes = ref(props.modelValue.bag?.attributes ?? {});
     const attributeValues = ref(props.modelValue.bag?.attributeValues ?? {});
-    const description = propertyRef(props.modelValue.bag?.description ?? "", "Description");
     const name = propertyRef(props.modelValue.bag?.name ?? "", "Name");
+    const description = propertyRef(props.modelValue.bag?.description ?? "", "Description");
+    const groupTypeColor = propertyRef(props.modelValue.bag?.groupTypeColor ?? "", "GroupTypeColor");
+    const iconCssClass = propertyRef(props.modelValue.bag?.iconCssClass ?? "", "IconCssClass");
+    const groupTypePurposeValue = propertyRef(props.modelValue.bag?.groupTypePurposeValue ?? null, "GroupTypePurposeValue");
+    const inheritedGroupType = propertyRef(props.modelValue.bag?.inheritedGroupType ?? null, "InheritedGroupType");
+    const allowAnyChildGroupType = propertyRef(props.modelValue.bag?.allowAnyChildGroupType ?? false, "AllowAnyChildGroupType");
+    const childGroupTypes = propertyRef(props.modelValue.bag?.childGroupTypes ?? [], "ChildGroupTypes");
+    const groupsRequireCampus = propertyRef(props.modelValue.bag?.groupsRequireCampus ?? false, "GroupsRequireCampus");
+    const showAdministrator = propertyRef(props.modelValue.bag?.showAdministrator ?? false, "ShowAdministrator");
+    const enableSpecificGroupRequirements = propertyRef(props.modelValue.bag?.enableSpecificGroupRequirements ?? false, "EnableSpecificGroupRequirements");
+    const locationSelectionMode = propertyRef(props.modelValue.bag?.locationSelectionMode ?? GroupLocationPickerMode.None, "LocationSelectionMode");
+    const locationTypes = propertyRef(props.modelValue.bag?.locationTypes ?? [], "LocationTypes");
+    const allowMultipleLocations = propertyRef(props.modelValue.bag?.allowMultipleLocations ?? false, "AllowMultipleLocations");
+    const enableLocationSchedules = propertyRef(props.modelValue.bag?.enableLocationSchedules ?? false, "EnableLocationSchedules");
+    const groupCapacityRule = propertyRef(props.modelValue.bag?.groupCapacityRule ?? 0, "GroupCapacityRule");
+    const isCapacityRequired = propertyRef(props.modelValue.bag?.isCapacityRequired ?? false, "IsCapacityRequired");
+    const groupStatusDefinedType = propertyRef(props.modelValue.bag?.groupStatusDefinedType ?? null, "GroupStatusDefinedType");
+    const groupMemberRecordSourceValue = propertyRef(props.modelValue.bag?.groupMemberRecordSourceValue ?? null, "GroupMemberRecordSourceValue");
+    const allowGroupSpecificRecordSource = propertyRef(props.modelValue.bag?.allowGroupSpecificRecordSource ?? false, "AllowGroupSpecificRecordSource");
+    const allowSpecificGroupMemberAttributes = propertyRef(props.modelValue.bag?.allowSpecificGroupMemberAttributes ?? false, "AllowSpecificGroupMemberAttributes");
+    const allowSpecificGroupMemberWorkflows = propertyRef(props.modelValue.bag?.allowSpecificGroupMemberWorkflows ?? false, "AllowSpecificGroupMemberWorkflows");
+    const enableGroupTag = propertyRef(props.modelValue.bag?.enableGroupTag ?? false, "EnableGroupTag");
+    const ignorePersonInactivated = propertyRef(props.modelValue.bag?.ignorePersonInactivated ?? false, "IgnorePersonInactivated");
+    const isIndexEnabled = propertyRef(props.modelValue.bag?.isIndexEnabled ?? false, "IsIndexEnabled");
+    const enableGroupHistory = propertyRef(props.modelValue.bag?.enableGroupHistory ?? false, "EnableGroupHistory");
+    const allowGroupSync = propertyRef(props.modelValue.bag?.allowGroupSync ?? false, "AllowGroupSync");
+    const enableInactiveReason = propertyRef(props.modelValue.bag?.enableInactiveReason ?? false, "EnableInactiveReason");
+    const requiresInactiveReason = propertyRef(props.modelValue.bag?.requiresInactiveReason ?? false, "RequiresInactiveReason");
+
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
-    const propRefs = [description, name];
+    const propRefs = [name, description, groupTypeColor, iconCssClass, groupTypePurposeValue, inheritedGroupType, allowAnyChildGroupType, childGroupTypes,
+        groupsRequireCampus, showAdministrator, enableSpecificGroupRequirements, locationSelectionMode, locationTypes, allowMultipleLocations, enableLocationSchedules,
+        groupCapacityRule, isCapacityRequired, groupStatusDefinedType, groupMemberRecordSourceValue, allowGroupSpecificRecordSource, allowSpecificGroupMemberAttributes,
+        allowSpecificGroupMemberWorkflows, enableGroupTag, ignorePersonInactivated, isIndexEnabled, enableGroupHistory, allowGroupSync, enableInactiveReason, requiresInactiveReason];
 
-    // #endregion
+    // #endregion Values
 
     // #region Computed Values
 
@@ -71,22 +282,102 @@
         return Object.keys(attributes.value).length > 0;
     });
 
-    // #endregion
+    const excludedGroupTypes = computed((): string[] => {
+        return props.modelValue.bag?.guid ? [props.modelValue.bag.guid] : [];
+    });
+
+    const locationSelectionModeValue = computed({
+        get(): string[] {
+            const value = locationSelectionMode.value ?? 0;
+            const values: string[] = [];
+
+            if ((value & GroupLocationPickerMode.Address) === GroupLocationPickerMode.Address) {
+                values.push(GroupLocationPickerMode.Address.toString());
+            }
+
+            if ((value & GroupLocationPickerMode.Named) === GroupLocationPickerMode.Named) {
+                values.push(GroupLocationPickerMode.Named.toString());
+            }
+
+            if ((value & GroupLocationPickerMode.Point) === GroupLocationPickerMode.Point) {
+                values.push(GroupLocationPickerMode.Point.toString());
+            }
+
+            if ((value & GroupLocationPickerMode.Polygon) === GroupLocationPickerMode.Polygon) {
+                values.push(GroupLocationPickerMode.Polygon.toString());
+            }
+
+            if ((value & GroupLocationPickerMode.GroupMember) === GroupLocationPickerMode.GroupMember) {
+                values.push(GroupLocationPickerMode.GroupMember.toString());
+            }
+
+            return values;
+        },
+        set(newValue: string[]) {
+            let value = 0;
+
+            for (const val of newValue) {
+                value |= parseInt(val, 10);
+            }
+
+            locationSelectionMode.value = value as GroupLocationPickerMode;
+        }
+    });
+
+    const locationSelectionModeOptions = enumToListItemBag(GroupLocationPickerModeDescription)
+        .filter(item => item.value !== GroupLocationPickerMode.None.toString() && item.value !== GroupLocationPickerMode.All.toString());
+
+    const groupCapacityRuleValue = computed({
+        get(): string {
+            return (groupCapacityRule.value).toString();
+        },
+        set(newValue: string) {
+            groupCapacityRule.value = parseInt(newValue, 10) as GroupCapacityRule;
+        }
+    });
+
+    const groupCapacityRuleOptions = enumToListItemBag(GroupCapacityRuleDescription);
+
+    // #endregion Computed Values
 
     // #region Functions
 
-    // #endregion
-
-    // #region Event Handlers
-
-    // #endregion
+    // #endregion Functions
 
     // Watch for parental changes in our model value and update all our values.
     watch(() => props.modelValue, () => {
         updateRefValue(attributes, props.modelValue.bag?.attributes ?? {});
         updateRefValue(attributeValues, props.modelValue.bag?.attributeValues ?? {});
-        updateRefValue(description, props.modelValue.bag?.description ?? "");
         updateRefValue(name, props.modelValue.bag?.name ?? "");
+        updateRefValue(description, props.modelValue.bag?.description ?? "");
+        updateRefValue(groupTypeColor, props.modelValue.bag?.groupTypeColor ?? "");
+        updateRefValue(iconCssClass, props.modelValue.bag?.iconCssClass ?? "");
+        updateRefValue(groupTypePurposeValue, props.modelValue.bag?.groupTypePurposeValue ?? null);
+        updateRefValue(inheritedGroupType, props.modelValue.bag?.inheritedGroupType ?? null);
+        updateRefValue(allowAnyChildGroupType, props.modelValue.bag?.allowAnyChildGroupType ?? false);
+        updateRefValue(childGroupTypes, props.modelValue.bag?.childGroupTypes ?? []);
+        updateRefValue(groupsRequireCampus, props.modelValue.bag?.groupsRequireCampus ?? false);
+        updateRefValue(showAdministrator, props.modelValue.bag?.showAdministrator ?? false);
+        updateRefValue(enableSpecificGroupRequirements, props.modelValue.bag?.enableSpecificGroupRequirements ?? false);
+        updateRefValue(locationSelectionMode, props.modelValue.bag?.locationSelectionMode ?? GroupLocationPickerMode.None);
+        updateRefValue(locationTypes, props.modelValue.bag?.locationTypes ?? []);
+        updateRefValue(allowMultipleLocations, props.modelValue.bag?.allowMultipleLocations ?? false);
+        updateRefValue(enableLocationSchedules, props.modelValue.bag?.enableLocationSchedules ?? false);
+        updateRefValue(groupCapacityRule, props.modelValue.bag?.groupCapacityRule ?? 0);
+        updateRefValue(isCapacityRequired, props.modelValue.bag?.isCapacityRequired ?? false);
+        updateRefValue(groupStatusDefinedType, props.modelValue.bag?.groupStatusDefinedType ?? null);
+        updateRefValue(groupMemberRecordSourceValue, props.modelValue.bag?.groupMemberRecordSourceValue ?? null);
+        updateRefValue(allowGroupSpecificRecordSource, props.modelValue.bag?.allowGroupSpecificRecordSource ?? false);
+        updateRefValue(allowSpecificGroupMemberAttributes, props.modelValue.bag?.allowSpecificGroupMemberAttributes ?? false);
+        updateRefValue(allowSpecificGroupMemberWorkflows, props.modelValue.bag?.allowSpecificGroupMemberWorkflows ?? false);
+        updateRefValue(enableGroupTag, props.modelValue.bag?.enableGroupTag ?? false);
+        updateRefValue(ignorePersonInactivated, props.modelValue.bag?.ignorePersonInactivated ?? false);
+        updateRefValue(isIndexEnabled, props.modelValue.bag?.isIndexEnabled ?? false);
+        updateRefValue(enableGroupHistory, props.modelValue.bag?.enableGroupHistory ?? false);
+        updateRefValue(allowGroupSync, props.modelValue.bag?.allowGroupSync ?? false);
+        updateRefValue(enableInactiveReason, props.modelValue.bag?.enableInactiveReason ?? false);
+        updateRefValue(requiresInactiveReason, props.modelValue.bag?.requiresInactiveReason ?? false);
+
     });
 
     // Determines which values we want to track changes on (defined in the
@@ -97,11 +388,42 @@
         };
 
         setPropertiesBoxValue(newValue, "attributeValues", attributeValues.value);
-        setPropertiesBoxValue(newValue, "description", description.value);
         setPropertiesBoxValue(newValue, "name", name.value);
+        setPropertiesBoxValue(newValue, "description", description.value);
+        setPropertiesBoxValue(newValue, "groupTypeColor", groupTypeColor.value);
+        setPropertiesBoxValue(newValue, "iconCssClass", iconCssClass.value);
+        setPropertiesBoxValue(newValue, "groupTypePurposeValue", groupTypePurposeValue.value);
+        setPropertiesBoxValue(newValue, "inheritedGroupType", inheritedGroupType.value);
+        setPropertiesBoxValue(newValue, "allowAnyChildGroupType", allowAnyChildGroupType.value);
+        setPropertiesBoxValue(newValue, "childGroupTypes", childGroupTypes.value);
+        setPropertiesBoxValue(newValue, "groupsRequireCampus", groupsRequireCampus.value);
+        setPropertiesBoxValue(newValue, "showAdministrator", showAdministrator.value);
+        setPropertiesBoxValue(newValue, "enableSpecificGroupRequirements", enableSpecificGroupRequirements.value);
+        setPropertiesBoxValue(newValue, "locationSelectionMode", locationSelectionMode.value);
+        setPropertiesBoxValue(newValue, "locationTypes", locationTypes.value);
+        setPropertiesBoxValue(newValue, "allowMultipleLocations", allowMultipleLocations.value);
+        setPropertiesBoxValue(newValue, "enableLocationSchedules", enableLocationSchedules.value);
+        setPropertiesBoxValue(newValue, "groupCapacityRule", groupCapacityRule.value);
+        setPropertiesBoxValue(newValue, "isCapacityRequired", isCapacityRequired.value);
+        setPropertiesBoxValue(newValue, "groupStatusDefinedType", groupStatusDefinedType.value);
+        setPropertiesBoxValue(newValue, "groupMemberRecordSourceValue", groupMemberRecordSourceValue.value);
+        setPropertiesBoxValue(newValue, "allowGroupSpecificRecordSource", allowGroupSpecificRecordSource.value);
+        setPropertiesBoxValue(newValue, "allowSpecificGroupMemberAttributes", allowSpecificGroupMemberAttributes.value);
+        setPropertiesBoxValue(newValue, "allowSpecificGroupMemberWorkflows", allowSpecificGroupMemberWorkflows.value);
+        setPropertiesBoxValue(newValue, "enableGroupTag", enableGroupTag.value);
+        setPropertiesBoxValue(newValue, "ignorePersonInactivated", ignorePersonInactivated.value);
+        setPropertiesBoxValue(newValue, "isIndexEnabled", isIndexEnabled.value);
+        setPropertiesBoxValue(newValue, "enableGroupHistory", enableGroupHistory.value);
+        setPropertiesBoxValue(newValue, "allowGroupSync", allowGroupSync.value);
+        setPropertiesBoxValue(newValue, "enableInactiveReason", enableInactiveReason.value);
+        setPropertiesBoxValue(newValue, "requiresInactiveReason", requiresInactiveReason.value);
 
         emit("update:modelValue", newValue);
     });
+
+    // #region Watchers
+
+    // #endregion Watchers
 
     // Watch for any changes to props that represent properties and then
     // automatically emit which property changed.

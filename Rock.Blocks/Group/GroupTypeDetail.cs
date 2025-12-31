@@ -181,6 +181,7 @@ namespace Rock.Blocks.Group
             return new GroupTypeBag
             {
                 IdKey = entity.IdKey,
+                Guid = entity.Guid,
                 AdministratorTerm = entity.AdministratorTerm,
                 AllowedScheduleTypes = entity.AllowedScheduleTypes,
                 AllowAnyChildGroupType = entity.AllowAnyChildGroupType,

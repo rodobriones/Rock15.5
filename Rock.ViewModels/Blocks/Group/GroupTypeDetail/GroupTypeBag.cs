@@ -15,6 +15,7 @@
 // </copyright>
 //
 
+using System;
 using System.Collections.Generic;
 
 using Rock.ViewModels.Utility;
@@ -30,6 +31,11 @@ namespace Rock.ViewModels.Blocks.Group.GroupTypeDetail
     /// </summary>
     public class GroupTypeBag : EntityBagBase
     {
+        /// <summary>
+        /// Gets or sets the Guid of the GroupType.
+        /// </summary>
+        public Guid Guid { get; set; }
+
         /// <summary>
         /// Gets or sets the administrator term for the group of this GroupType.
         /// </summary>
