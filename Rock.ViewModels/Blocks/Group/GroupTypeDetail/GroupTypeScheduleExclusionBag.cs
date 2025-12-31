@@ -17,48 +17,28 @@
 
 using System;
 
-namespace Rock.Model
+namespace Rock.ViewModels.Blocks.Group.GroupTypeDetail
 {
     /// <summary>
-    /// Represents and indicates the type of location picker to use when setting a location for a group and/or when searching for group(s)
+    /// Represents a schedule exclusion date range for a group type.
     /// </summary>
-    [Flags]
-    public enum GroupLocationPickerMode
+    public class GroupTypeScheduleExclusionBag
     {
         /// <summary>
-        /// The none
+        /// Gets or sets the unique identifier of the exclusion.
         /// </summary>
-        None = 0,
+        public Guid Guid { get; set; }
 
         /// <summary>
-        /// An Address
+        /// Gets or sets the start date of the exclusion.
         /// </summary>
-        Address = 1,
+        public DateTime? StartDate { get; set; }
 
         /// <summary>
-        /// A Named location (Building, Room)
+        /// Gets or sets the end date of the exclusion.
         /// </summary>
-        Named = 2,
-
-        /// <summary>
-        /// A Geographic point (Latitude/Longitude)
-        /// </summary>
-        Point = 4,
-
-        /// <summary>
-        /// A Geographic Polygon
-        /// </summary>
-        Polygon = 8,
-
-        /// <summary>
-        /// A Group Member's address
-        /// </summary>
-        GroupMember = 16,
-
-        /// <summary>
-        /// All
-        /// </summary>
-        All = Address | Named | Point | Polygon | GroupMember
-
+        public DateTime? EndDate { get; set; }
     }
 }
+
+

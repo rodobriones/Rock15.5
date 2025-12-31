@@ -1,4 +1,4 @@
-﻿// <copyright>
+// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -13,35 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
+//
 
-using System;
-
-namespace Rock.Model
+namespace Rock.ViewModels.Blocks.Group.GroupTypeDetail
 {
     /// <summary>
-    /// Schedule Type
+    /// The additional configuration options for the Group Type Detail block.
     /// </summary>
-    [Flags]
-    public enum ScheduleType
+    public class GroupTypeDetailOptionsBag
     {
-        /// <summary>
-        /// None
-        /// </summary>
-        None = 0,
-
-        /// <summary>
-        /// Weekly
-        /// </summary>
-        Weekly = 1,
-
-        /// <summary>
-        /// Custom
-        /// </summary>
-        Custom = 2,
-
-        /// <summary>
-        /// Custom
-        /// </summary>
-        Named = 4,
     }
 }
