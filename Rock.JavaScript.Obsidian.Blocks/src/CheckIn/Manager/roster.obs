@@ -9,6 +9,7 @@
           keyField="idKey"
           itemTerm="Attendance"
           title="Room Roster"
+          :customActions="gridCustomActions"
           :entityTypeGuid="EntityType.Attendance"
           disablePaging
           stickyHeader
@@ -16,6 +17,7 @@
           @selectItem="onSelectItem"
           :expectedRowCount="loadingRowCount"
           :isCountMessageVisible="false"
+          isFooterHidden
           :showLaunchWorkflow="false"
           :rowClass="getGridRowClass"
           :showExport="false">
@@ -143,10 +145,10 @@
     </Grid>
 
     <Modal v-model="isCheckoutModalVisible"
-           title="Confirm Checkout"
-           saveText="Checkout"
+           title="Mark as Checked-Out"
+           saveText="Confirm"
            @save="onConfirmCheckoutClick">
-        <p>Which schedules would you like to check {{ checkoutRows[0].attendee.fullName }} out of?</p>
+        <p>Which scheduled time would you like to mark {{ checkoutRows[0].attendee.fullName }} as checked-out?</p>
 
         <CheckBoxList v-model="checkoutSelectedSchedules"
                       label="Schedules"
@@ -155,11 +157,24 @@
                       :items="checkoutScheduleItems" />
     </Modal>
 
+    <Modal v-model="isCheckoutAllModalVisible"
+           title="Mark All as Checked-Out"
+           saveText="Confirm"
+           @save="onConfirmCheckoutAllClick">
+        <p>Which scheduled times would you like to mark everyone as checked-out?</p>
+
+        <CheckBoxList v-model="checkoutAllSelectedSchedules"
+                      label="Schedules"
+                      horizontal
+                      rules="required"
+                      :items="checkoutAllScheduleItems" />
+    </Modal>
+
     <Modal v-model="isStayingModalVisible"
-           title="Confirm Staying"
+           title="Stay for Service"
            saveText="Check In"
            @save="onConfirmStayingClick">
-        <p>Which schedule would you like {{ stayingRow!.attendee.fullName }} to stay for?</p>
+        <p>Which scheduled time would you like {{ stayingRow!.attendee.fullName }} to stay for?</p>
 
         <RadioButtonList v-model="stayingSelectedSchedule"
                          label="Schedule"
@@ -226,6 +241,7 @@
     import { Guid } from "@Obsidian/Types";
     import { isPromise } from "@Obsidian/Utility/promiseUtils";
     import { CancellationTokenSource } from "@Obsidian/Utility/cancellation";
+    import { GridAction, IGridState } from "@Obsidian/Types/Controls/grid";
 
     const config = useConfigurationValues<RosterOptionsBag>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -251,6 +267,11 @@
     const checkoutSelectedSchedules = ref<string[]>([]);
     const checkoutScheduleItems = ref<ListItemBag[]>([]);
 
+    const isCheckoutAllModalVisible = ref(false);
+    const checkoutAllRows = ref<RosterSingleAttendanceRecord[]>([]);
+    const checkoutAllSelectedSchedules = ref<string[]>([]);
+    const checkoutAllScheduleItems = ref<ListItemBag[]>([]);
+
     const isStayingModalVisible = ref(false);
     const stayingRow = ref<RosterSingleAttendanceRecord>();
     const stayingScheduleItems = ref<ListItemBag[]>([]);
@@ -268,6 +289,26 @@
         }
 
         return null;
+    });
+
+    const gridCustomActions = computed((): GridAction[] => {
+        const actions: GridAction[] = [];
+
+        if (config.isCheckoutAllEnabled && rosterMode.value === RosterViewMode.Present) {
+            const presentCount = Enumerable.from(gridData.value || [])
+                .where(a => a.status === CheckInStatus.Present)
+                .count();
+
+            actions.push({
+                title: "Check-out All",
+                iconCssClass: "ti ti-user-minus",
+                isPrimary: true,
+                disabled: presentCount === 0,
+                handler: onCheckOutAllClick,
+            });
+        }
+
+        return actions;
     });
 
     async function initialize(): Promise<void> {
@@ -664,6 +705,18 @@
         isCheckoutModalVisible.value = false;
     }
 
+    async function onConfirmCheckoutAllClick(): Promise<void> {
+        const idKeys = checkoutAllRows.value
+            .filter(r => checkoutAllSelectedSchedules.value.includes(r.schedule.value ?? ""))
+            .map(r => r.idKey);
+
+        if (idKeys.length > 0) {
+            await performCheckout(idKeys);
+        }
+
+        isCheckoutAllModalVisible.value = false;
+    }
+
     async function onConfirmStayingClick(): Promise<void> {
         await stayForService(stayingRow.value!.idKey, stayingSelectedSchedule.value);
 
@@ -713,6 +766,48 @@
         }
         else {
             await performCheckout([records[0].idKey]);
+        }
+    }
+
+    async function onCheckOutAllClick(grid: IGridState): Promise<void> {
+        const records = Enumerable.from(grid.filteredRows as RosterAttendanceRecord[])
+            .selectMany(a => getSingleAttendanceRecords(a))
+            .where(a => a.status === CheckInStatus.Present && !a.isRemoved)
+            .toArray();
+
+        if (records.length === 0) {
+            await alert("There are not any attendees available to check out.");
+            return;
+        }
+
+        const schedules = Enumerable.from(records)
+            .select(a => a.schedule)
+            .distinctBy(a => a.value)
+            .toArray();
+
+        if (schedules.length === 1) {
+            if (!await confirm(`Would you like to check out all attendees for ${schedules[0].text}?`)) {
+                return;
+            }
+
+            const attendanceKeys = records
+                .filter(r => r.schedule.value === schedules[0].value)
+                .map(r => r.idKey);
+
+            await performCheckout(attendanceKeys);
+        }
+        else {
+            checkoutAllRows.value = records;
+            checkoutAllScheduleItems.value = schedules.map(s => {
+                const count = Enumerable.from(records).where(r => r.schedule.value === s.value).count();
+
+                return {
+                    value: s.value,
+                    text: `${s.text} (${count} ${(count === 1 ? "person" : "people")})`
+                };
+            });
+            checkoutAllSelectedSchedules.value = [];
+            isCheckoutAllModalVisible.value = true;
         }
     }
 
