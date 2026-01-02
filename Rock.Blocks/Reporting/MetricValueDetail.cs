@@ -110,15 +110,18 @@ namespace Rock.Blocks.Reporting
         {
             errorMessage = null;
 
-            foreach ( var metricPartition in metricValue.Metric.MetricPartitions )
+            if ( metricValue?.Metric?.MetricPartitions != null )
             {
-                var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
-                var metricValuePartition = metricValue.MetricValuePartitions.FirstOrDefault( a => a.MetricPartitionId == metricPartition.Id );
-
-                if ( metricPartition.IsRequired && metricPartitionEntityType != null && metricValuePartition?.EntityId.HasValue != true )
+                foreach ( var metricPartition in metricValue.Metric.MetricPartitions )
                 {
-                    errorMessage = $"A value for {metricPartition.Label ?? metricPartitionEntityType.FriendlyName} is required";
-                    return false;
+                    var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
+                    var metricValuePartition = metricValue.MetricValuePartitions.FirstOrDefault( a => a.MetricPartitionId == metricPartition.Id );
+
+                    if ( metricPartition.IsRequired && metricPartitionEntityType != null && metricValuePartition?.EntityId.HasValue != true )
+                    {
+                        errorMessage = $"A value for {metricPartition.Label ?? metricPartitionEntityType.FriendlyName} is required";
+                        return false;
+                    }
                 }
             }
 
@@ -403,8 +406,8 @@ namespace Rock.Blocks.Reporting
 
             if ( entity.Id == 0 )
             {
-                var metric = new MetricService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricId ), !DisablePredictableIds );
-                var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricCategoryId ), !DisablePredictableIds );
+                var metric = new MetricService( RockContext ).Get( PageParameter( PageParameterKey.MetricId ), !DisablePredictableIds );
+                var metricCategory = new MetricCategoryService( RockContext ).Get( PageParameter( PageParameterKey.MetricCategoryId ), !DisablePredictableIds );
 
                 if ( metricCategory != null )
                 {
