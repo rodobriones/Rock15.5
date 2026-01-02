@@ -48,5 +48,23 @@ export type RosterCompoundAttendanceRecord = {
 export type RosterAttendanceRecord = RosterSingleAttendanceRecord | RosterCompoundAttendanceRecord;
 
 export type RosterContext = {
+    loadingRowCount: Ref<number | undefined>;
+
     mode: Ref<RosterViewMode>;
+
+    schedule: Ref<ListItemBag | undefined>;
+
+    onSelectItem: (key: string) => void;
+
+    onAttendancePresentClick: (row: RosterAttendanceRecord) => Promise<void>;
+
+    onAttendanceCheckoutClick: (row: RosterAttendanceRecord) => Promise<void>;
+
+    onAttendanceCheckoutAllClick: (records: RosterSingleAttendanceRecord[]) => Promise<void>;
+
+    onAttendanceDeleteClick: (row: RosterAttendanceRecord) => Promise<void>;
+
+    onAttendanceStayingClick: (row: RosterAttendanceRecord) => Promise<void>;
+
+    onAttendanceNotPresentClick: (row: RosterAttendanceRecord) => Promise<void>;
 };

@@ -1,0 +1,227 @@
+<template>
+    <Grid :data="source"
+          keyField="idKey"
+          itemTerm="Attendance"
+          title="Room Roster"
+          :customActions="gridCustomActions"
+          :entityTypeGuid="EntityType.Attendance"
+          disablePaging
+          stickyHeader
+          liveUpdates
+          :manualSort="col => emit('updateGridDataSource', col)"
+          @selectItem="rosterContext.onSelectItem($event)"
+          :expectedRowCount="loadingRowCount"
+          :isCountMessageVisible="false"
+          isFooterHidden
+          :showLaunchWorkflow="false"
+          :rowClass="getGridRowClass"
+          :showExport="false">
+        <template #gridHeaderBadges>
+            <RosterMenu :modelValue="rosterMode"
+                        :attendances="data"
+                        @update:modelValue="emit('rosterModeChanged', $event)" />
+        </template>
+
+        <Column v-if="rosterMode === RosterViewMode.CheckedIn"
+                name="presentAction"
+                width="155px"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <RockButton btnType="success"
+                            autoDisable
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported) && !config.isPresentButtonEnabled"
+                            @click.stop="rosterContext.onAttendancePresentClick(row)">
+                    <i class="ti ti-user-plus"></i> Present
+                </RockButton>
+            </template>
+        </Column>
+
+        <Column v-if="rosterMode === RosterViewMode.Present"
+                name="checkoutAction"
+                width="155px"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <RockButton btnType="default"
+                            autoDisable
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isCheckoutSupported)"
+                            @click.stop="rosterContext.onAttendanceCheckoutClick(row)">
+                    <i class="ti ti-user-minus"></i> Check Out
+                </RockButton>
+            </template>
+        </Column>
+
+        <AttendeeColumn name="attendee"
+                        title="Name"
+                        field="attendee"
+                        width="40%"
+                        visiblePriority="xs" />
+
+        <CheckInDetailsColumn v-if="!schedule"
+                              name="details"
+                              title="Check-in Details"
+                              field="records"
+                              width="60%"
+                              visiblePriority="md"
+                              :mode="rosterMode" />
+
+        <TextColumn v-if="schedule"
+                    name="tag"
+                    title="Tag"
+                    field="code"
+                    visiblePriority="xs" />
+
+        <Column v-if="rosterMode === RosterViewMode.CheckedIn && config.isDeleteButtonEnabled"
+                name="actions"
+                width="60px"
+                headerClass="grid-rostercommand"
+                itemClass="grid-rostercommand"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <PopupMenuButton showDelete
+                                 @delete="rosterContext.onAttendanceDeleteClick(row)" />
+            </template>
+        </Column>
+
+        <Column v-if="rosterMode === RosterViewMode.Present && config.isStayingButtonEnabled"
+                name="stayingAction"
+                width="60px"
+                headerClass="grid-rostercommand"
+                itemClass="grid-rostercommand"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <RockButton btnType="default"
+                            autoDisable
+                            @click.stop="rosterContext.onAttendanceStayingClick(row)">
+                    <i class="ti ti-user-down"></i>
+                </RockButton>
+            </template>
+        </Column>
+
+        <Column v-if="rosterMode === RosterViewMode.Present && config.isNotPresentButtonEnabled"
+                name="notPresentAction"
+                width="60px"
+                headerClass="grid-rostercommand"
+                itemClass="grid-rostercommand"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <RockButton btnType="default"
+                            autoDisable
+                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported)"
+                            @click.stop="rosterContext.onAttendanceNotPresentClick(row)">
+                    <i class="ti ti-user-off"></i>
+                </RockButton>
+            </template>
+        </Column>
+
+        <Column v-if="rosterMode === RosterViewMode.Present && config.isDeleteButtonEnabled"
+                name="actions"
+                width="60px"
+                headerClass="grid-rostercommand"
+                itemClass="grid-rostercommand"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <PopupMenuButton showDelete
+                                 @delete="rosterContext.onAttendanceDeleteClick(row)" />
+            </template>
+        </Column>
+
+        <Column v-if="rosterMode === RosterViewMode.CheckedOut && config.isPresentButtonEnabled"
+                name="presentAction"
+                width="155px"
+                visiblePriority="xs">
+            <template #format="{ row }: { row: RosterAttendanceRecord }">
+                <RockButton btnType="default"
+                            autoDisable
+                            @click.stop="rosterContext.onAttendancePresentClick(row)">
+                    <i class="ti ti-user-plus"></i> Present
+                </RockButton>
+            </template>
+        </Column>
+    </Grid>
+</template>
+
+<script setup lang="ts">
+    import AttendeeColumn from "./attendeeColumn.partial";
+    import CheckInDetailsColumn from "./checkInDetailsColumn.partial";
+    import Grid, { Column, TextColumn } from "@Obsidian/Controls/grid";
+    import PopupMenuButton from "./popupMenuButton.partial.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import RosterMenu from "./rosterMenu.partial.obs";
+    import { GridAction } from "@Obsidian/Types/Controls/grid";
+    import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
+    import { computed, PropType } from "vue";
+    import { getGridRowClass, getSingleAttendanceRecords, useRosterContext } from "./utilities.partial";
+    import { RosterAttendanceRecord, RosterSingleAttendanceRecord, RosterViewMode } from "./types.partial";
+    import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
+    import { EntityType } from "@Obsidian/SystemGuids/entityType";
+    import { Enumerable } from "@Obsidian/Utility/linq";
+    import { RosterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterOptionsBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
+    const props = defineProps({
+        config: {
+            type: Object as PropType<RosterOptionsBag>,
+            required: true
+        },
+
+        source: {
+            type: Object as PropType<Promise<GridDataBag> | GridDataBag>,
+            required: true
+        },
+
+        data: {
+            type: Array as PropType<RosterSingleAttendanceRecord[]>,
+            required: true,
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "rosterModeChanged", mode: RosterViewMode): void;
+        (e: "updateGridDataSource", col: string | undefined): void;
+    }>();
+
+    const rosterContext = useRosterContext();
+
+    // #region Computed Values
+
+    const rosterMode = computed((): RosterViewMode => {
+        return rosterContext.mode.value;
+    });
+
+    const schedule = computed((): ListItemBag | undefined => {
+        return rosterContext.schedule.value;
+    });
+
+    const loadingRowCount = computed((): number | undefined => {
+        return rosterContext.loadingRowCount?.value;
+    });
+
+    const gridCustomActions = computed((): GridAction[] => {
+        const actions: GridAction[] = [];
+
+        if (props.config.isCheckoutAllEnabled && rosterMode.value === RosterViewMode.Present) {
+            const presentCount = Enumerable.from(props.data)
+                .where(a => a.status === CheckInStatus.Present)
+                .count();
+
+            actions.push({
+                title: "Check-out All",
+                iconCssClass: "ti ti-user-minus",
+                isPrimary: true,
+                disabled: presentCount === 0,
+                handler: (grid) => {
+                    const records = Enumerable.from(grid.filteredRows as RosterAttendanceRecord[])
+                        .selectMany(a => getSingleAttendanceRecords(a))
+                        .where(a => a.status === CheckInStatus.Present && !a.isRemoved)
+                        .toArray();
+
+                    rosterContext.onAttendanceCheckoutAllClick(records);
+                },
+            });
+        }
+
+        return actions;
+    });
+
+    // #endregion
+</script>
