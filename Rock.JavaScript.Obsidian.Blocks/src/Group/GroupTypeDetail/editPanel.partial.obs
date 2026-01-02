@@ -31,12 +31,10 @@
 
         <!-- GENERAL -->
         <ContentSection title="General" icon="ti ti-settings">
-            <ContentStack title="Purpose & Structure" description="Defines the overall purpose, identity, and hierarchical relationships of the group type, including what it inherits and what children it can contain.">
-                <DefinedValuePicker label="Group Type Purpose"
-                                    v-model="groupTypePurposeValue"
-                                    :showBlankItem="true"
-                                    :definedTypeGuid="DefinedType.GrouptypePurpose"
-                                    trailblazerField />
+            <ContentStack title="Purpose & Structure"
+                          description="Defines the overall purpose, identity, and hierarchical relationships of the group type, including what it inherits and what children it can contain.">
+                <DefinedValuePicker label="Group Type Purpose" v-model="groupTypePurposeValue" :showBlankItem="true"
+                                    :definedTypeGuid="DefinedType.GrouptypePurpose" trailblazerField />
 
                 <GroupTypePicker label="Inherit Group Type Attributes From" v-model="inheritedGroupType"
                                  :showBlankItem="true" :excludeGroupTypes="excludedGroupTypes"
@@ -48,8 +46,8 @@
                 </div>
 
                 <div v-if="!allowAnyChildGroupType" class="allow-any-child-groupType">
-                    <GroupTypePicker label="Allowed Child Group Types"
-                                     v-model="childGroupTypes" multiple :showBlankItem="true"
+                    <GroupTypePicker label="Allowed Child Group Types" v-model="childGroupTypes" multiple
+                                     :showBlankItem="true"
                                      help="Defines which child group types can be added to groups of this type. This setting controls the group hierarchy. To allow an unlimited hierarchy, include this group type as one of its own allowed child types." />
                 </div>
 
@@ -64,13 +62,13 @@
                 </div>
 
                 <div class="form-group">
-                    <InlineCheckBox label="Enable Specific Group Requirements"
-                                    v-model="enableSpecificGroupRequirements"
+                    <InlineCheckBox label="Enable Specific Group Requirements" v-model="enableSpecificGroupRequirements"
                                     help="When enabled, groups of this type can have their own Group Requirements. This displays the Group Requirements section on the Group Details block. If a group already has specific requirements, the section will remain visible even when this setting is disabled." />
                 </div>
             </ContentStack>
 
-            <ContentStack title="Location & Scheduling" description="Configures how locations are chosen, how many can be used, whether schedules tie to locations, and which location types are allowed.">
+            <ContentStack title="Location & Scheduling"
+                          description="Configures how locations are chosen, how many can be used, whether schedules tie to locations, and which location types are allowed.">
                 <CheckBoxList label="Allowed Location Selection Modes" v-model="locationSelectionModeValue"
                               :items="locationSelectionModeOptions"
                               help="Specifies which location selection modes are available when adding locations to groups of this type." />
@@ -111,7 +109,8 @@
 
             </ContentStack>
 
-            <ContentStack title="Record Source & Group-Specific Settings" description="Determines what record source to add to members of this group type and which group-specific settings to allow.">
+            <ContentStack title="Record Source & Group-Specific Settings"
+                          description="Determines what record source to add to members of this group type and which group-specific settings to allow.">
                 <DefinedValuePicker label="Group Member Record Source" v-model="groupMemberRecordSourceValue"
                                     :definedTypeGuid="DefinedType.RecordSourceType"
                                     help="Specifies the record source to assign to group members added to groups of this type." />
@@ -131,9 +130,11 @@
                 </div>
             </ContentStack>
 
-            <ContentStack title="System Management" description="Manages system features for syncing and tracking groups.">
+            <ContentStack title="System Management"
+                          description="Manages system features for syncing and tracking groups.">
                 <div class="form-group">
-                    <InlineCheckBox label="Preserve Member Status on Person Inactivation" v-model="ignorePersonInactivated"
+                    <InlineCheckBox label="Preserve Member Status on Person Inactivation"
+                                    v-model="ignorePersonInactivated"
                                     help="When enabled, members of groups of this type will remain active even if their person record is inactivated."
                                     trailblazerField />
                 </div>
@@ -166,6 +167,58 @@
                                     trailblazerField />
                 </div>
             </ContentStack>
+        </ContentSection>
+
+        <ContentSection title="Display Options" icon="ti ti-device-desktop">
+            <ContentStack title="Group Appearance"
+                          description="Customize how groups of this type appear throughout Rock.">
+                <TextBox v-model="groupTerm" label="Group Term" rules="required"
+                         help="Defines the term used to refer to groups of this type." />
+
+                <TextBox v-model="groupMemberTerm" label="Group Member Term" rules="required"
+                         help="Defines the term used to refer to members within groups of this type." />
+
+                <TextBox v-if="showAdministrator" v-model="administratorTerm" label="Administrator Term"
+                         rules="required" help="Defines the term used for the administrator of groups of this type." />
+
+                <div class="form-group">
+                    <InlineCheckBox label="Show in Group Lists" v-model="showInGroupList"
+                                    help="When enabled, groups of this type appear in the GroupList block's list of groups." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Show in Navigation" v-model="showInNavigation"
+                                    help="When enabled, groups of this type appear in the GroupTreeView block's navigation panel." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Show Connection Status" v-model="showConnectionStatus"
+                                    help="When enabled, the connection status of each person is displayed as a column in the group member list." />
+                </div>
+
+                <div class="form-group">
+                    <InlineCheckBox label="Show Marital Status" v-model="showMaritalStatus"
+                                    help="When enabled, the marital status of each person is displayed as a column in the group member list." />
+                </div>
+
+            </ContentStack>
+
+            <ContentStack v-if="props.options.enableGroupViewLavaTemplate" title="Group View Lava Template"
+                          description="This Lava template will be used by the Group Details block when viewing a group. This allows you to customize the layout of a group base on its type.">
+                <HtmlEditor v-model="groupViewLavaTemplate" :editorHeight="400" :startInCodeEditorMode="true" />
+            </ContentStack>
+        </ContentSection>
+
+        <ContentSection title="Roles" icon="ti ti-masks-theater">
+            <ContentStack headerLocation="top" title="Configure Roles"
+                          description="Defines the roles that people can have within groups of this type, including leadership, permissions, and member limits.">
+                <Roles v-model:roles="roles" v-model:defaultGroupRole="defaultGroupRole" />
+            </ContentStack>
+
+        </ContentSection>
+
+        <ContentSection title="Group Attributes" icon="ti ti-users-group">
+            <GroupAttributes />
         </ContentSection>
 
         <ContentSection v-if="hasAttributes" title="Group Type Attributes" icon="ti ti-binary-tree-2">
@@ -214,6 +267,9 @@
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
     import DefinedTypePicker from "@Obsidian/Controls/definedTypePicker.obs";
     import RockLabel from "@Obsidian/Controls/rockLabel.obs";
+    import HtmlEditor from "@Obsidian/Controls/htmlEditor.obs";
+    import Roles from "./roles.partial.obs";
+    import GroupAttributes from "./groupAttributes.partial.obs";
 
     const props = defineProps({
         modelValue: {
@@ -265,14 +321,25 @@
     const allowGroupSync = propertyRef(props.modelValue.bag?.allowGroupSync ?? false, "AllowGroupSync");
     const enableInactiveReason = propertyRef(props.modelValue.bag?.enableInactiveReason ?? false, "EnableInactiveReason");
     const requiresInactiveReason = propertyRef(props.modelValue.bag?.requiresInactiveReason ?? false, "RequiresInactiveReason");
-
+    const groupTerm = propertyRef(props.modelValue.bag?.groupTerm ?? "", "GroupTerm");
+    const groupMemberTerm = propertyRef(props.modelValue.bag?.groupMemberTerm ?? "", "GroupMemberTerm");
+    const administratorTerm = propertyRef(props.modelValue.bag?.administratorTerm ?? "", "AdministratorTerm");
+    const showInGroupList = propertyRef(props.modelValue.bag?.showInGroupList ?? false, "ShowInGroupList");
+    const showInNavigation = propertyRef(props.modelValue.bag?.showInNavigation ?? false, "ShowInNavigation");
+    const showConnectionStatus = propertyRef(props.modelValue.bag?.showConnectionStatus ?? false, "ShowConnectionStatus");
+    const showMaritalStatus = propertyRef(props.modelValue.bag?.showMaritalStatus ?? false, "ShowMaritalStatus");
+    const groupViewLavaTemplate = propertyRef(props.modelValue.bag?.groupViewLavaTemplate ?? "", "GroupViewLavaTemplate");
+    const roles = propertyRef(props.modelValue.bag?.roles ?? [], "Roles");
+    const defaultGroupRole = propertyRef(props.modelValue.bag?.defaultGroupRole ?? null, "DefaultGroupRole");
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
     const propRefs = [name, description, groupTypeColor, iconCssClass, groupTypePurposeValue, inheritedGroupType, allowAnyChildGroupType, childGroupTypes,
         groupsRequireCampus, showAdministrator, enableSpecificGroupRequirements, locationSelectionMode, locationTypes, allowMultipleLocations, enableLocationSchedules,
         groupCapacityRule, isCapacityRequired, groupStatusDefinedType, groupMemberRecordSourceValue, allowGroupSpecificRecordSource, allowSpecificGroupMemberAttributes,
-        allowSpecificGroupMemberWorkflows, enableGroupTag, ignorePersonInactivated, isIndexEnabled, enableGroupHistory, allowGroupSync, enableInactiveReason, requiresInactiveReason];
+        allowSpecificGroupMemberWorkflows, enableGroupTag, ignorePersonInactivated, isIndexEnabled, enableGroupHistory, allowGroupSync, enableInactiveReason, requiresInactiveReason,
+        groupTerm, groupMemberTerm, administratorTerm, showInGroupList, showInNavigation, showConnectionStatus, showMaritalStatus, groupViewLavaTemplate,
+        roles, defaultGroupRole];
 
     // #endregion Values
 
@@ -377,6 +444,16 @@
         updateRefValue(allowGroupSync, props.modelValue.bag?.allowGroupSync ?? false);
         updateRefValue(enableInactiveReason, props.modelValue.bag?.enableInactiveReason ?? false);
         updateRefValue(requiresInactiveReason, props.modelValue.bag?.requiresInactiveReason ?? false);
+        updateRefValue(groupTerm, props.modelValue.bag?.groupTerm ?? "");
+        updateRefValue(groupMemberTerm, props.modelValue.bag?.groupMemberTerm ?? "");
+        updateRefValue(administratorTerm, props.modelValue.bag?.administratorTerm ?? "");
+        updateRefValue(showInGroupList, props.modelValue.bag?.showInGroupList ?? false);
+        updateRefValue(showInNavigation, props.modelValue.bag?.showInNavigation ?? false);
+        updateRefValue(showConnectionStatus, props.modelValue.bag?.showConnectionStatus ?? false);
+        updateRefValue(showMaritalStatus, props.modelValue.bag?.showMaritalStatus ?? false);
+        updateRefValue(groupViewLavaTemplate, props.modelValue.bag?.groupViewLavaTemplate ?? "");
+        updateRefValue(roles, props.modelValue.bag?.roles ?? []);
+        updateRefValue(defaultGroupRole, props.modelValue.bag?.defaultGroupRole ?? null);
 
     });
 
@@ -417,6 +494,16 @@
         setPropertiesBoxValue(newValue, "allowGroupSync", allowGroupSync.value);
         setPropertiesBoxValue(newValue, "enableInactiveReason", enableInactiveReason.value);
         setPropertiesBoxValue(newValue, "requiresInactiveReason", requiresInactiveReason.value);
+        setPropertiesBoxValue(newValue, "groupTerm", groupTerm.value);
+        setPropertiesBoxValue(newValue, "groupMemberTerm", groupMemberTerm.value);
+        setPropertiesBoxValue(newValue, "administratorTerm", administratorTerm.value);
+        setPropertiesBoxValue(newValue, "showInGroupList", showInGroupList.value);
+        setPropertiesBoxValue(newValue, "showInNavigation", showInNavigation.value);
+        setPropertiesBoxValue(newValue, "showConnectionStatus", showConnectionStatus.value);
+        setPropertiesBoxValue(newValue, "showMaritalStatus", showMaritalStatus.value);
+        setPropertiesBoxValue(newValue, "groupViewLavaTemplate", groupViewLavaTemplate.value);
+        setPropertiesBoxValue(newValue, "roles", roles.value);
+        setPropertiesBoxValue(newValue, "defaultGroupRole", defaultGroupRole.value);
 
         emit("update:modelValue", newValue);
     });

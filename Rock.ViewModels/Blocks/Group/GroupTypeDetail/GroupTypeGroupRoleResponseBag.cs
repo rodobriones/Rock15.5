@@ -18,13 +18,19 @@
 namespace Rock.ViewModels.Blocks.Group.GroupTypeDetail
 {
     /// <summary>
-    /// The additional configuration options for the Group Type Detail block.
+    /// Response bag for operations that target a specific <see cref="Rock.Model.GroupTypeRole"/>
+    /// within the Group Type Detail block.
     /// </summary>
-    public class GroupTypeDetailOptionsBag
+    public class GroupTypeGroupRoleResponseBag
     {
         /// <summary>
-        /// Gets or sets a value indicating whether the Group View Lava Template feature is enabled.
+        /// Gets or sets a value indicating whether the role can be deleted.
         /// </summary>
-        public bool EnableGroupViewLavaTemplate { get; set; }
+        public bool CanDelete { get; set; }
+
+        /// <summary>
+        /// Gets or sets the error message explaining why the role cannot be deleted.
+        /// </summary>
+        public string ErrorMessage { get; set; }
     }
 }

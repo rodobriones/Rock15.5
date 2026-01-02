@@ -21,8 +21,14 @@
 // </copyright>
 //
 
-/** The additional configuration options for the Group Type Detail block. */
-export type GroupTypeDetailOptionsBag = {
-    /** Gets or sets a value indicating whether the Group View Lava Template feature is enabled. */
-    enableGroupViewLavaTemplate: boolean;
+/**
+ * Response bag for operations that target a specific Rock.Model.GroupTypeRole
+ * within the Group Type Detail block.
+ */
+export type GroupTypeGroupRoleResponseBag = {
+    /** Gets or sets a value indicating whether the role can be deleted. */
+    canDelete: boolean;
+
+    /** Gets or sets the error message explaining why the role cannot be deleted. */
+    errorMessage?: string | null;
 };

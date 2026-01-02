@@ -88,7 +88,7 @@ namespace Rock.Blocks.Group
             SetBoxInitialEntityState( box );
 
             box.NavigationUrls = GetBoxNavigationUrls();
-            box.Options = GetBoxOptions( box.IsEditable );
+            box.Options = GetBoxOptions();
 
             return box;
         }
@@ -97,11 +97,12 @@ namespace Rock.Blocks.Group
         /// Gets the box options required for the component to render the view
         /// or edit the entity.
         /// </summary>
-        /// <param name="isEditable"><c>true</c> if the entity is editable; otherwise <c>false</c>.</param>
-        /// <returns>The options that provide additional details to the block.</returns>
-        private GroupTypeDetailOptionsBag GetBoxOptions( bool isEditable )
+        private GroupTypeDetailOptionsBag GetBoxOptions()
         {
-            var options = new GroupTypeDetailOptionsBag();
+            var options = new GroupTypeDetailOptionsBag()
+            {
+                EnableGroupViewLavaTemplate = GetAttributeValue( AttributeKey.EnableGroupViewLavaTemplate ).AsBoolean(),
+            };
 
             return options;
         }
@@ -219,7 +220,9 @@ namespace Rock.Blocks.Group
                 GroupTerm = entity.GroupTerm,
                 GroupTypeColor = entity.GroupTypeColor,
                 GroupTypePurposeValue = entity.GroupTypePurposeValue.ToListItemBag(),
-                GroupViewLavaTemplate = entity.GroupViewLavaTemplate,
+                GroupViewLavaTemplate = entity.Id == 0 && entity.GroupViewLavaTemplate.IsNullOrWhiteSpace()
+                    ? Rock.Web.SystemSettings.GetValue( "core_templates_GroupViewTemplate" )
+                    : entity.GroupViewLavaTemplate,
                 IconCssClass = entity.IconCssClass,
                 IgnorePersonInactivated = entity.IgnorePersonInactivated,
                 InheritedGroupType = entity.InheritedGroupType.ToListItemBag(),
@@ -1036,9 +1039,20 @@ namespace Rock.Blocks.Group
                 {
                     var roleService = new GroupTypeRoleService( RockContext );
                     var roleBags = ( box.Bag.Roles ?? new List<GroupTypeRoleBag>() ).Where( b => b != null ).ToList();
-                    foreach ( var b in roleBags.Where( b => b.Guid == Guid.Empty ) )
+
+                    // The roles are coming from the frontend already sorted in the correct order.
+                    // Since we're potentially creating a new group type or roles, we cannot implement the ReorderItem() block action pattern.
+                    // We set the order properly here.
+                    for ( var i = 0; i < roleBags.Count; i++ )
                     {
-                        b.Guid = Guid.NewGuid();
+                        var bag = roleBags[i];
+
+                        if ( bag.Guid == Guid.Empty )
+                        {
+                            bag.Guid = Guid.NewGuid();
+                        }
+
+                        bag.Order = i;
                     }
 
                     SyncRelatedEntities(
@@ -1213,6 +1227,36 @@ namespace Rock.Blocks.Group
             RockContext.SaveChanges();
 
             return ActionOk( this.GetParentPageUrl() );
+        }
+
+        /// <summary>
+        /// Checks if the specified <see cref="GroupTypeRole"/> can be deleted.
+        /// </summary>
+        /// <param name="request">The request that identifies the role to check.</param>
+        /// <returns>A response indicating if the role can be deleted.</returns>
+        [BlockAction]
+        public BlockActionResult CanDeleteGroupTypeRole( GroupTypeGroupRoleRequestBag request )
+        {
+            if ( request == null || request.RoleGuid == Guid.Empty )
+            {
+                return ActionBadRequest( "Invalid role." );
+            }
+
+            var roleService = new GroupTypeRoleService( RockContext );
+            var role = roleService.Get( request.RoleGuid );
+
+            // If the role doesn't exist yet (new/unsaved), allow the client to remove it.
+            if ( role == null )
+            {
+                return ActionOk( new GroupTypeGroupRoleResponseBag { CanDelete = true, ErrorMessage = string.Empty } );
+            }
+
+            if ( !roleService.CanDelete( role, out var errorMessage ) )
+            {
+                return ActionOk( new GroupTypeGroupRoleResponseBag { CanDelete = false, ErrorMessage = errorMessage } );
+            }
+
+            return ActionOk( new GroupTypeGroupRoleResponseBag { CanDelete = true, ErrorMessage = string.Empty } );
         }
 
         #endregion Block Actions

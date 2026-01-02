@@ -1,0 +1,331 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <NotificationBox v-if="errorMessage" :alertType="AlertType.Danger">
+        {{ errorMessage }}
+    </NotificationBox>
+    <Grid :data="gridData" keyField="guid" itemTerm="Role" liveUpdates light @addItem="onAdd">
+        <ReorderColumn @orderChanged="onOrderChanged" />
+        <TextColumn name="name" field="name" title="Name" />
+        <BooleanColumn name="isLeader" field="isLeader" title="Is Leader" />
+        <TextColumn name="default" field="isDefault" title="Default">
+            <template #format="{ row }">
+                <input type="radio" :name="defaultGroupRoleRadioName" :checked="row.isDefault"
+                       @change="onDefaultRoleSelected(row.guid)" />
+            </template>
+        </TextColumn>
+        <EditColumn @click="onEdit" />
+        <DeleteColumn @click="onDelete" />
+    </Grid>
+
+    <Modal v-model="isModalVisible" :title="`${isEditing ? 'Edit' : 'Add'} Role`" saveText="Save" cancelText="Cancel"
+           :onSave="onSave">
+        <ContentSection light>
+            <TextBox v-model="roleName" label="Name" rules="required" />
+
+            <TextBox v-model="roleDescription" label="Description" textMode="multiline" />
+
+            <InlineCheckBox label="Designate as Leader Role" v-model="theRole.isLeader" />
+        </ContentSection>
+
+        <ContentSection title="Role Permissions" icon="ti ti-lock">
+            <InlineCheckBox label="View Group" v-model="theRole.canView" />
+
+            <InlineCheckBox label="Edit Group" v-model="theRole.canEdit" />
+
+            <InlineCheckBox label="Manage Members" v-model="theRole.canManageMembers" />
+
+            <InlineCheckBox label="Check In to Group" v-model="theRole.isCheckInAllowed" />
+
+            <InlineCheckBox label="Take Attendance" v-model="theRole.canTakeAttendance" />
+        </ContentSection>
+
+        <ContentSection title="Role Attributes" icon="ti ti-database">
+            <NumberBox label="Minimum Members Required" v-model="theRole.minCount" :decimalCount="0" :minimumValue="0"
+                       help="Defines the minimum number of people with this role that a group must have." />
+
+            <NumberBox label="Maximum Members Required" v-model="theRole.maxCount" :decimalCount="0" :minimumValue="0"
+                       help="Defines the maximum number of people with this role that a group can have." />
+
+            <InlineCheckBox label="Receive Requirements Notifications"
+                            v-model="theRole.receiveRequirementsNotifications" />
+
+            <InlineCheckBox label="Exclude from Peer Network" v-model="theRole.isExcludedFromPeerNetwork" />
+
+            <InlineCheckBox label="Make Role Public" v-model="theRole.isPublic" />
+
+            <RadioButtonList label="Default Chat Role" v-model="chatRoleValue" :items="chatRoleOptions"
+                             help="Specifies the chat role assigned to individuals with this group role for synchronization with the external chat system." />
+        </ContentSection>
+    </Modal>
+</template>
+
+<script setup lang="ts">
+    import { computed, PropType, ref } from "vue";
+    import Grid, { BooleanColumn, DeleteColumn, EditColumn, ReorderColumn, TextColumn } from "@Obsidian/Controls/grid";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import InlineCheckBox from "@Obsidian/Controls/inlineCheckBox.obs";
+    import { ChatRole, ChatRoleDescription } from "@Obsidian/Enums/Communication/Chat/chatRole";
+    import { newGuid } from "@Obsidian/Utility/guid";
+    import { useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { GroupTypeRoleBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeRoleBag";
+    import { GroupTypeGroupRoleRequestBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeGroupRoleRequestBag";
+    import { GroupTypeGroupRoleResponseBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeGroupRoleResponseBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import NumberBox from "@Obsidian/Controls/numberBox.obs";
+    import ContentSection from "@Obsidian/Controls/contentSection.obs";
+    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
+    import { enumToListItemBag } from "@Obsidian/Utility/enumUtils";
+    import { AlertType } from "@Obsidian/Enums/Controls/alertType";
+
+    const props = defineProps({
+        roles: {
+            type: Array as PropType<GroupTypeRoleBag[]>,
+            required: true
+        },
+
+        defaultGroupRole: {
+            type: Object as PropType<ListItemBag | null>,
+            required: true
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "update:roles", value: GroupTypeRoleBag[]): void;
+        (e: "update:defaultGroupRole", value: ListItemBag | null): void;
+    }>();
+
+    //#region Values
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    const theRole = ref<GroupTypeRoleBag>(createNewRole());
+
+    const isModalVisible = ref(false);
+    const isEditing = ref(false);
+    const defaultGroupRoleRadioName = `defaultGroupRole_${newGuid()}`;
+    const errorMessage = ref<string | null>(null);
+    const chatRoleOptions = enumToListItemBag(ChatRoleDescription);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    const roleName = computed({
+        get(): string {
+            return theRole.value.name ?? "";
+        },
+        set(value: string) {
+            theRole.value.name = value;
+        }
+    });
+
+    const roleDescription = computed({
+        get(): string {
+            return theRole.value.description ?? "";
+        },
+        set(value: string) {
+            theRole.value.description = value;
+        }
+    });
+
+    const chatRoleValue = computed({
+        get(): string {
+            return (theRole.value.chatRole ?? ChatRole.User).toString();
+        },
+        set(value: string) {
+            theRole.value.chatRole = Number(value) as ChatRole;
+        }
+    });
+
+    const orderedRoles = computed(() => {
+        return [...(props.roles ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    });
+
+    const gridData = computed(() => {
+        const defaultGuid = props.defaultGroupRole?.value ?? null;
+
+        const rows = orderedRoles.value.map(r => ({
+            guid: r.guid,
+            name: r.name ?? "",
+            isLeader: r.isLeader,
+            isDefault: !!defaultGuid && r.guid === defaultGuid
+        }));
+
+        return { rows };
+    });
+
+    // #endregion Computed Values
+
+    // #region Functions
+
+    function createNewRole(): GroupTypeRoleBag {
+        const maxOrder = (props.roles ?? []).reduce((max, r) => Math.max(max, r.order ?? 0), 0);
+
+        return {
+            guid: newGuid(),
+            name: "",
+            description: "",
+            order: maxOrder + 1,
+            isLeader: false,
+            isPublic: false,
+            isSystem: false,
+            isCheckInAllowed: false,
+            isExcludedFromPeerNetwork: false,
+            canView: true,
+            canEdit: false,
+            canManageMembers: false,
+            canTakeAttendance: false,
+            receiveRequirementsNotifications: false,
+            chatRole: ChatRole.User,
+            minCount: null,
+            maxCount: null,
+            attributes: {},
+            attributeValues: {}
+        };
+    }
+
+    // #endregion Functions
+
+    // #region Event Handlers
+
+    function onAdd(): void {
+        isEditing.value = false;
+        theRole.value = createNewRole();
+        errorMessage.value = null;
+        isModalVisible.value = true;
+    }
+
+    function onEdit(guid: string): void {
+        const selected = (props.roles ?? []).find(r => r.guid === guid);
+
+        if (!selected) {
+            return;
+        }
+
+        isEditing.value = true;
+        theRole.value = { ...selected };
+        errorMessage.value = null;
+        isModalVisible.value = true;
+    }
+
+    async function onDelete(guid: string): Promise<void> {
+        const request: GroupTypeGroupRoleRequestBag = {
+            roleGuid: guid
+        };
+
+        const result = await invokeBlockAction<GroupTypeGroupRoleResponseBag>("CanDeleteGroupTypeRole", request);
+
+        if (!result.isSuccess || !result.data) {
+            errorMessage.value = result.errorMessage || "Unable to delete this role.";
+            return;
+        }
+
+        if (!result.data.canDelete) {
+            errorMessage.value = result.data.errorMessage || "This role cannot be deleted.";
+            return;
+        }
+
+        const updatedRoles = (props.roles ?? []).filter(r => r.guid !== guid);
+        emit("update:roles", updatedRoles);
+        errorMessage.value = null;
+
+        // If the deleted role was the default, pick a fallback or clear.
+        if ((props.defaultGroupRole?.value ?? null) === guid) {
+            const fallback = [...updatedRoles].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+            emit("update:defaultGroupRole", fallback ? { value: fallback.guid, text: fallback.name ?? "" } : null);
+        }
+    }
+
+    function onSave(): void {
+        const min = theRole.value.minCount ?? null;
+        const max = theRole.value.maxCount ?? null;
+
+        if (min !== null && min < 0) {
+            errorMessage.value = "Minimum Members Required must be 0 or greater.";
+            return;
+        }
+
+        if (max !== null && max < 0) {
+            errorMessage.value = "Maximum Members Required must be 0 or greater.";
+            return;
+        }
+
+        if (min !== null && max !== null && max < min) {
+            errorMessage.value = "Maximum Members Required must be greater than or equal to Minimum Members Required.";
+            return;
+        }
+
+        const currentRoles = props.roles ?? [];
+        const idx = currentRoles.findIndex(r => r.guid === theRole.value.guid);
+
+        let updatedRoles: GroupTypeRoleBag[];
+        if (idx >= 0) {
+            updatedRoles = [...currentRoles];
+            updatedRoles.splice(idx, 1, { ...theRole.value });
+        }
+        else {
+            updatedRoles = [...currentRoles, { ...theRole.value }];
+        }
+
+        emit("update:roles", updatedRoles);
+
+        // Keep defaultGroupRole text in sync if we renamed the default role.
+        if ((props.defaultGroupRole?.value ?? null) === theRole.value.guid) {
+            emit("update:defaultGroupRole", { value: theRole.value.guid, text: theRole.value.name ?? "" });
+        }
+
+        errorMessage.value = null;
+        isModalVisible.value = false;
+    }
+
+    async function onOrderChanged(item: Record<string, unknown>, beforeItem: Record<string, unknown> | null): Promise<boolean> {
+        const itemGuid = item["guid"] as string;
+        const beforeItemGuid = beforeItem?.["guid"] as string | null;
+
+        // Always reorder based on the same sorted list that the grid is rendering.
+        const currentItems = [...orderedRoles.value];
+        const idx = currentItems.findIndex(i => i.guid === itemGuid);
+
+        if (idx < 0) {
+            return false;
+        }
+
+        const itemToMove = currentItems.splice(idx, 1)[0];
+
+        if (beforeItemGuid) {
+            const beforeIndex = currentItems.findIndex(i => i.guid === beforeItemGuid);
+            if (beforeIndex < 0) {
+                currentItems.push(itemToMove);
+            }
+            else {
+                currentItems.splice(beforeIndex, 0, itemToMove);
+            }
+        }
+        else {
+            currentItems.push(itemToMove);
+        }
+
+        // Re-number role orders to match the UI ordering (0..n-1).
+        const updatedRoles = currentItems.map((r, index) => ({
+            ...r,
+            order: index
+        }));
+
+        emit("update:roles", updatedRoles);
+
+        return true;
+    }
+
+    function onDefaultRoleSelected(roleGuid: string): void {
+        const role = (props.roles ?? []).find(r => r.guid === roleGuid);
+
+        emit("update:defaultGroupRole", {
+            value: roleGuid,
+            text: role?.name ?? ""
+        });
+    }
+
+    // #endregion Event Handlers
+</script>

@@ -21,8 +21,13 @@
 // </copyright>
 //
 
-/** The additional configuration options for the Group Type Detail block. */
-export type GroupTypeDetailOptionsBag = {
-    /** Gets or sets a value indicating whether the Group View Lava Template feature is enabled. */
-    enableGroupViewLavaTemplate: boolean;
+import { Guid } from "@Obsidian/Types";
+
+/**
+ * Request bag for operations that target a specific Rock.Model.GroupTypeRole
+ * within the Group Type Detail block.
+ */
+export type GroupTypeGroupRoleRequestBag = {
+    /** Gets or sets the role unique identifier. */
+    roleGuid: Guid;
 };

@@ -15,16 +15,19 @@
 // </copyright>
 //
 
+using System;
+
 namespace Rock.ViewModels.Blocks.Group.GroupTypeDetail
 {
     /// <summary>
-    /// The additional configuration options for the Group Type Detail block.
+    /// Request bag for operations that target a specific <see cref="Rock.Model.GroupTypeRole"/>
+    /// within the Group Type Detail block.
     /// </summary>
-    public class GroupTypeDetailOptionsBag
+    public class GroupTypeGroupRoleRequestBag
     {
         /// <summary>
-        /// Gets or sets a value indicating whether the Group View Lava Template feature is enabled.
+        /// Gets or sets the role unique identifier.
         /// </summary>
-        public bool EnableGroupViewLavaTemplate { get; set; }
+        public Guid RoleGuid { get; set; }
     }
 }
