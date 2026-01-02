@@ -14,6 +14,7 @@
           disablePaging
           stickyHeader
           liveUpdates
+          :manualSort="col => updateGridDataSource(col)"
           @selectItem="onSelectItem"
           :expectedRowCount="loadingRowCount"
           :isCountMessageVisible="false"
@@ -379,7 +380,7 @@
         }
     }
 
-    function updateGridDataSource(): void {
+    function updateGridDataSource(col?: string): void {
         if (!gridData.value) {
             gridDataSource.value = gridDataPendingPromise;
             return;
@@ -394,6 +395,15 @@
                     attendee: a.first().attendee,
                     records: a.toArray()
                 }))
+                .orderBy(a => {
+                    if (!col || col === "attendee") {
+                        return a.attendee.fullName;
+                    }
+                    else {
+                        console.log(`${a.attendee.fullName}: ${Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds())}`);
+                        return Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds());
+                    }
+                })
                 .toArray();
 
             // Clone so that when we make live changes to the grid data it
@@ -405,6 +415,7 @@
         else {
             const filteredRows = Enumerable.from(gridData.value)
                 .where(a => statusMatchesMode(a.status, rosterMode.value))
+                .orderBy(a => !col || col === "attendee" ? a.attendee.fullName : RockDateTime.parseISO(a.checkInTime)!.toMilliseconds())
                 .toArray();
 
             // Clone so that when we make live changes to the grid data it
