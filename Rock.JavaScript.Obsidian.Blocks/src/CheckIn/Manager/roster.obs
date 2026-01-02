@@ -145,44 +145,9 @@
         </Column>
     </Grid>
 
-    <Modal v-model="isCheckoutModalVisible"
-           title="Mark as Checked-Out"
-           saveText="Confirm"
-           @save="onConfirmCheckoutClick">
-        <p>Which scheduled time would you like to mark {{ checkoutRows[0].attendee.fullName }} as checked-out?</p>
-
-        <CheckBoxList v-model="checkoutSelectedSchedules"
-                      label="Schedules"
-                      horizontal
-                      rules="required"
-                      :items="checkoutScheduleItems" />
-    </Modal>
-
-    <Modal v-model="isCheckoutAllModalVisible"
-           title="Mark All as Checked-Out"
-           saveText="Confirm"
-           @save="onConfirmCheckoutAllClick">
-        <p>Which scheduled times would you like to mark everyone as checked-out?</p>
-
-        <CheckBoxList v-model="checkoutAllSelectedSchedules"
-                      label="Schedules"
-                      horizontal
-                      rules="required"
-                      :items="checkoutAllScheduleItems" />
-    </Modal>
-
-    <Modal v-model="isStayingModalVisible"
-           title="Stay for Service"
-           saveText="Check In"
-           @save="onConfirmStayingClick">
-        <p>Which scheduled time would you like {{ stayingRow!.attendee.fullName }} to stay for?</p>
-
-        <RadioButtonList v-model="stayingSelectedSchedule"
-                         label="Schedule"
-                         horizontal
-                         rules="required"
-                         :items="stayingScheduleItems" />
-    </Modal>
+    <CheckoutModal ref="checkoutModal" />
+    <CheckoutAllModal ref="checkoutAllModal" />
+    <StayingModal ref="stayingModal" />
 </template>
 
 <style scoped>
@@ -208,15 +173,15 @@
 
 <script setup lang="ts">
     import AttendeeColumn from "./Roster/attendeeColumn.partial";
-    import CheckBoxList from "@Obsidian/Controls/checkBoxList.obs";
     import CheckInDetailsColumn from "./Roster/checkInDetailsColumn.partial";
+    import CheckoutAllModal from "./Roster/checkoutAllModal.partial.obs";
+    import CheckoutModal from "./Roster/checkoutModal.partial.obs";
     import Grid, { Column, TextColumn } from "@Obsidian/Controls/grid";
-    import Modal from "@Obsidian/Controls/modal.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import PopupMenuButton from "./Roster/popupMenuButton.partial.obs";
-    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RosterMenu from "./Roster/rosterMenu.partial.obs";
+    import StayingModal from "./Roster/stayingModal.partial.obs";
     import { useContextEntities } from "@Obsidian/Core/Utilities/contextEntity";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
@@ -243,6 +208,7 @@
     import { isPromise } from "@Obsidian/Utility/promiseUtils";
     import { CancellationTokenSource } from "@Obsidian/Utility/cancellation";
     import { GridAction, IGridState } from "@Obsidian/Types/Controls/grid";
+    import { calculateDuration, getSingleAttendanceRecords, statusMatchesMode, updateSingleGridAttendanceRecord } from "./Roster/utility.partial";
 
     const config = useConfigurationValues<RosterOptionsBag>();
     const invokeBlockAction = useInvokeBlockAction();
@@ -263,20 +229,9 @@
 
     const gridDataSource = ref<Promise<GridDataBag> | GridDataBag>(gridDataPendingPromise);
 
-    const isCheckoutModalVisible = ref(false);
-    const checkoutRows = ref<RosterSingleAttendanceRecord[]>([]);
-    const checkoutSelectedSchedules = ref<string[]>([]);
-    const checkoutScheduleItems = ref<ListItemBag[]>([]);
-
-    const isCheckoutAllModalVisible = ref(false);
-    const checkoutAllRows = ref<RosterSingleAttendanceRecord[]>([]);
-    const checkoutAllSelectedSchedules = ref<string[]>([]);
-    const checkoutAllScheduleItems = ref<ListItemBag[]>([]);
-
-    const isStayingModalVisible = ref(false);
-    const stayingRow = ref<RosterSingleAttendanceRecord>();
-    const stayingScheduleItems = ref<ListItemBag[]>([]);
-    const stayingSelectedSchedule = ref<string>("");
+    const checkoutModal = ref<InstanceType<typeof CheckoutModal>>();
+    const checkoutAllModal = ref<InstanceType<typeof CheckoutAllModal>>();
+    const stayingModal = ref<InstanceType<typeof StayingModal>>();
 
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
@@ -400,7 +355,6 @@
                         return a.attendee.fullName;
                     }
                     else {
-                        console.log(`${a.attendee.fullName}: ${Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds())}`);
                         return Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds());
                     }
                 })
@@ -426,19 +380,6 @@
         }
     }
 
-    function statusMatchesMode(status: CheckInStatus, mode: RosterViewMode): boolean {
-        switch (mode) {
-            case RosterViewMode.CheckedIn:
-                return status === CheckInStatus.NotPresent;
-            case RosterViewMode.Present:
-                return status === CheckInStatus.Present;
-            case RosterViewMode.CheckedOut:
-                return status === CheckInStatus.CheckedOut;
-            default:
-                return true;
-        }
-    }
-
     function getGridRowClass(row: Record<string, unknown>): string {
         const record = row as RosterAttendanceRecord;
 
@@ -454,20 +395,6 @@
         }
 
         return "";
-    }
-
-    function calculateDuration(checkInTime: string): number {
-        const date = RockDateTime.parseISO(checkInTime);
-
-        if (!date) {
-            return 0;
-        }
-
-        const localCheckInTime = date.localDateTime;
-        const now = RockDateTime.now();
-        const durationInSeconds = (now.toMilliseconds() - localCheckInTime.toMilliseconds()) / 1000;
-
-        return Math.max(0, Math.floor(durationInSeconds / 60));
     }
 
     function updateDurations(): void {
@@ -579,20 +506,6 @@
         }
     }
 
-    function updateSingleGridAttendanceRecord(attendance: RosterAttendanceBag, row: RosterSingleAttendanceRecord): void {
-        row.attendee = attendance.attendee!;
-        row.checkInTime = attendance.checkInTime!;
-        row.code = attendance.code!;
-        row.schedule = attendance.schedule!;
-        row.group = attendance.group!;
-        row.area = attendance.area!;
-        row.status = attendance.status;
-        row.isCheckoutSupported = attendance.isCheckoutSupported;
-        row.isPresenceSupported = attendance.isPresenceSupported;
-
-        row.checkInDuration = calculateDuration(row.checkInTime);
-    }
-
     function getFlatGridRows(): RosterSingleAttendanceRecord[] {
         if (!gridDataSource.value || !("rows" in gridDataSource.value) || !gridDataSource.value.rows) {
             return [];
@@ -608,15 +521,6 @@
         });
 
         return flatten(nestedRows);
-    }
-
-    function getSingleAttendanceRecords(record: RosterAttendanceRecord): RosterSingleAttendanceRecord[] {
-        if ("records" in record) {
-            return record.records;
-        }
-        else {
-            return [record];
-        }
     }
 
     async function performCheckout(idKeys: string[]): Promise<void> {
@@ -715,36 +619,6 @@
         updateGridDataSource();
     }
 
-    async function onConfirmCheckoutClick(): Promise<void> {
-        const idKeys = checkoutRows.value
-            .filter(r => checkoutSelectedSchedules.value.includes(r.schedule.value ?? ""))
-            .map(r => r.idKey);
-
-        if (idKeys.length > 0) {
-            await performCheckout(idKeys);
-        }
-
-        isCheckoutModalVisible.value = false;
-    }
-
-    async function onConfirmCheckoutAllClick(): Promise<void> {
-        const idKeys = checkoutAllRows.value
-            .filter(r => checkoutAllSelectedSchedules.value.includes(r.schedule.value ?? ""))
-            .map(r => r.idKey);
-
-        if (idKeys.length > 0) {
-            await performCheckout(idKeys);
-        }
-
-        isCheckoutAllModalVisible.value = false;
-    }
-
-    async function onConfirmStayingClick(): Promise<void> {
-        await stayForService(stayingRow.value!.idKey, stayingSelectedSchedule.value);
-
-        isStayingModalVisible.value = false;
-    }
-
     // #endregion
 
     // #region Grid Event Handlers
@@ -781,10 +655,7 @@
         const records = getSingleAttendanceRecords(row);
 
         if (records.length > 1) {
-            checkoutRows.value = records;
-            checkoutScheduleItems.value = records.map(r => r.schedule);
-            checkoutSelectedSchedules.value = [];
-            isCheckoutModalVisible.value = true;
+            await checkoutModal.value!.show(records, performCheckout);
         }
         else {
             await performCheckout([records[0].idKey]);
@@ -819,17 +690,7 @@
             await performCheckout(attendanceKeys);
         }
         else {
-            checkoutAllRows.value = records;
-            checkoutAllScheduleItems.value = schedules.map(s => {
-                const count = Enumerable.from(records).where(r => r.schedule.value === s.value).count();
-
-                return {
-                    value: s.value,
-                    text: `${s.text} (${count} ${(count === 1 ? "person" : "people")})`
-                };
-            });
-            checkoutAllSelectedSchedules.value = [];
-            isCheckoutAllModalVisible.value = true;
+            await checkoutAllModal.value!.show(records, schedules, performCheckout);
         }
     }
 
@@ -892,10 +753,7 @@
             await stayForService(originalAttendance.idKey, result.data[0].value!);
         }
         else {
-            stayingRow.value = originalAttendance;
-            stayingScheduleItems.value = result.data;
-            stayingSelectedSchedule.value = "";
-            isStayingModalVisible.value = true;
+            await stayingModal.value!.show(originalAttendance, result.data, stayForService);
         }
     }
 
