@@ -407,18 +407,9 @@
         }
 
         // Modify the grid data directly so we don't have to reload the entire grid.
-        if (gridDataSource.value && "rows" in gridDataSource.value && gridDataSource.value.rows) {
-            (gridDataSource.value.rows as RosterAttendanceRecord[]).forEach(row => {
-                if ("records" in row) {
-                    row.records.forEach(record => {
-                        record.checkInDuration = calculateDuration(record.checkInTime);
-                    });
-                }
-                else {
-                    row.checkInDuration = calculateDuration(row.checkInTime);
-                }
-            });
-        }
+        getFlatGridRows().forEach(row => {
+            row.checkInDuration = calculateDuration(row.checkInTime);
+        });
     }
 
     function updateAttendance(updatedAttendances: RosterAttendanceBag[]): void {
