@@ -632,7 +632,6 @@
 
         if (result.isSuccess && result.data && !token.isCancellationRequested) {
             updateAttendance([result.data]);
-            updateGridDataSource();
         }
     }
 
