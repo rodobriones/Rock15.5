@@ -48,6 +48,12 @@ namespace Rock.Blocks.Reporting
     [Rock.SystemGuid.BlockTypeGuid( "b52e7cae-c5cc-41cb-a5ec-1cf027074a2c" )]
     public class MetricValueDetail : RockEntityDetailBlockType<MetricValue, MetricValueBag>
     {
+        #region Properties
+
+        private bool DisablePredictableIds => PageCache?.Layout?.Site?.DisablePredictableIds ?? false;
+
+        #endregion Properties
+
         #region Keys
 
         private static class PageParameterKey
@@ -397,10 +403,8 @@ namespace Rock.Blocks.Reporting
 
             if ( entity.Id == 0 )
             {
-                var disablePredictableIds = PageCache.Layout.Site.DisablePredictableIds;
-
-                var metric = new MetricService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricId ), !disablePredictableIds );
-                var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricCategoryId ), !disablePredictableIds );
+                var metric = new MetricService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricId ), !DisablePredictableIds );
+                var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( PageParameter( PageParameterKey.MetricCategoryId ), !DisablePredictableIds );
 
                 if ( metricCategory != null )
                 {
@@ -437,11 +441,9 @@ namespace Rock.Blocks.Reporting
         /// <returns></returns>
         private Dictionary<string, string> GetQueryParams()
         {
-            var disablePredictableIds = PageCache.Layout.Site.DisablePredictableIds;
-
             var qryParams = new Dictionary<string, string>();
-            var metric = new MetricService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricValueId ), !disablePredictableIds );
-            var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricCategoryId ), !disablePredictableIds );
+            var metric = new MetricService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricValueId ), !DisablePredictableIds );
+            var metricCategory = new MetricCategoryService( RockContext ).GetNoTracking( RequestContext.GetPageParameter( PageParameterKey.MetricCategoryId ), !DisablePredictableIds );
             var expandedIds = RequestContext.GetPageParameter( PageParameterKey.ExpandedIds );
 
             if ( metric != null )
@@ -473,7 +475,7 @@ namespace Rock.Blocks.Reporting
             {
                 // If editing an existing entity then load it and make sure it
                 // was found and can still be edited.
-                entity = entityService.Get( idKey, !PageCache.Layout.Site.DisablePredictableIds );
+                entity = entityService.Get( idKey, !DisablePredictableIds );
             }
             else
             {
