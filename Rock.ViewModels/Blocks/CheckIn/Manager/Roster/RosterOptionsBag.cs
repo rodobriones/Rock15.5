@@ -2,6 +2,8 @@
 {
     public class RosterOptionsBag
     {
+        public string ErrorMessage { get; set; }
+
         public bool IsGroupColumnEnabled { get; set; }
 
         public bool IsCheckoutAllEnabled { get; set; }

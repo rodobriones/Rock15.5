@@ -183,7 +183,7 @@ namespace Rock.Blocks.CheckIn.Manager
         /// <returns>The configuration options.</returns>
         private RosterOptionsBag GetConfigurationOptionsBag()
         {
-            return new RosterOptionsBag
+            var bag = new RosterOptionsBag
             {
                 IsCheckoutAllEnabled = GetAttributeValue( AttributeKey.EnableCheckoutAll ).AsBoolean(),
                 IsGroupColumnEnabled = GetAttributeValue( AttributeKey.EnableGroupColumn ).AsBoolean(),
@@ -196,6 +196,27 @@ namespace Rock.Blocks.CheckIn.Manager
                     { PageParameterKey.Person, "((Key))" }
                 } ),
             };
+
+            if ( !GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean() )
+            {
+                var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
+                var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+                var manager = new CheckInManager( RockContext, RequestContext );
+
+                var areaFilter = manager.GetCheckInAreaFilter( showAllAreas, checkInAreaGuid );
+
+                if ( areaFilter == null )
+                {
+                    if ( GetAttributeValue( AttributeKey.AreaSelectPage ).IsNotNullOrWhiteSpace() )
+                    {
+                        RequestContext.Response.RedirectToUrl( this.GetLinkedPageUrl( AttributeKey.AreaSelectPage ) );
+                    }
+
+                    bag.ErrorMessage = "The 'Area Select Page' block setting must be defined when 'Show All Areas' is not enabled.";
+                }
+            }
+
+            return bag;
         }
 
         private List<int> GetBadgeAttributeIds()

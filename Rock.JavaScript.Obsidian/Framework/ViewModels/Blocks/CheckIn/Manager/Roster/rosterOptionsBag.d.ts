@@ -22,6 +22,8 @@
 //
 
 export type RosterOptionsBag = {
+    errorMessage?: string | null;
+
     isCheckoutAllEnabled: boolean;
 
     isDeleteButtonEnabled: boolean;

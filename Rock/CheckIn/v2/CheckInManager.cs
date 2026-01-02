@@ -131,7 +131,7 @@ namespace Rock.CheckIn.v2
         /// <param name="showAllAreas"><c>true</c> if the block is configured to show all areas.</param>
         /// <param name="checkInAreaGuid">Contains the optional <see cref="Guid"/> value of the block setting to use as the default configuration or area.</param>
         /// <returns>An instance of <see cref="GroupTypeCache"/> that represents the check-in configuration or area.</returns>
-        private GroupTypeCache GetCheckInAreaFilter( bool showAllAreas, Guid? checkInAreaGuid )
+        public GroupTypeCache GetCheckInAreaFilter( bool showAllAreas, Guid? checkInAreaGuid )
         {
             // If a Check-in Area query string parameter is defined, it takes precedence.
             var configurationGuid = RequestContext.GetPageParameter( PageParameterKey.Area ).AsGuidOrNull();

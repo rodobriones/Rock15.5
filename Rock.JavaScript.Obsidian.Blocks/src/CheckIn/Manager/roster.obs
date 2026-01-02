@@ -280,6 +280,10 @@
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
     const errorMessage = computed((): string | null => {
+        if (config.errorMessage) {
+            return config.errorMessage;
+        }
+
         if (!campus.value) {
             return "Please select a campus to view the roster.";
         }
