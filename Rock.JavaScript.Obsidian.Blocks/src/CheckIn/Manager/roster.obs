@@ -471,6 +471,14 @@
     }
 
     function updateDurations(): void {
+        // Update the source of truth data so when we refresh the UI it has
+        // the correct values.
+        if (gridData.value) {
+            for (const record of gridData.value) {
+                record.checkInDuration = calculateDuration(record.checkInTime);
+            }
+        }
+
         // Modify the grid data directly so we don't have to reload the entire grid.
         if (gridDataSource.value && "rows" in gridDataSource.value && gridDataSource.value.rows) {
             (gridDataSource.value.rows as RosterAttendanceRecord[]).forEach(row => {
