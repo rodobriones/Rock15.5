@@ -4,12 +4,19 @@
         {{ errorMessage }}
     </NotificationBox>
 
-    <MultiScheduleGrid v-else
+    <MultiScheduleGrid v-else-if="!schedule"
                        :config="config"
                        :source="gridDataSource"
                        :data="gridData ?? []"
                        @rosterModeChanged="onRosterModeChanged"
                        @updateGridDataSource="updateGridDataSource" />
+
+    <SingleScheduleGrid v-else
+                        :config="config"
+                        :source="gridDataSource"
+                        :data="gridData ?? []"
+                        @rosterModeChanged="onRosterModeChanged"
+                        @updateGridDataSource="updateGridDataSource" />
 
     <CheckoutModal ref="checkoutModal" />
     <CheckoutAllModal ref="checkoutAllModal" />
@@ -42,6 +49,7 @@
     import CheckoutModal from "./Roster/checkoutModal.partial.obs";
     import MultiScheduleGrid from "./Roster/multiScheduleGrid.partial.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import SingleScheduleGrid from "./Roster/singleScheduleGrid.partial.obs";
     import StayingModal from "./Roster/stayingModal.partial.obs";
     import { useContextEntities } from "@Obsidian/Core/Utilities/contextEntity";
     import { ContextEntityChangedData, Message } from "@Obsidian/Types/Utility/browserBus";
@@ -90,6 +98,7 @@
     const checkoutAllModal = ref<InstanceType<typeof CheckoutAllModal>>();
     const stayingModal = ref<InstanceType<typeof StayingModal>>();
 
+    let isUnloading = false;
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
     const errorMessage = computed((): string | null => {
@@ -188,11 +197,11 @@
                     records: a.toArray()
                 }))
                 .orderBy(a => {
-                    if (!col || col === "attendee") {
-                        return a.attendee.fullName;
+                    if (col === "details") {
+                        return Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds());
                     }
                     else {
-                        return Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds());
+                        return a.attendee.fullName;
                     }
                 })
                 .toArray();
@@ -206,7 +215,31 @@
         else {
             const filteredRows = Enumerable.from(gridData.value)
                 .where(a => statusMatchesMode(a.status, rosterMode.value))
-                .orderBy(a => !col || col === "attendee" ? a.attendee.fullName : RockDateTime.parseISO(a.checkInTime)!.toMilliseconds())
+                .orderBy(a => {
+                    if (col === "tag") {
+                        return a.code;
+                    }
+                    else if (col === "group") {
+                        return a.group.text;
+                    }
+                    else if (col === "status") {
+                        return a.status;
+                    }
+                    else if (col === "duration") {
+                        if (rosterMode.value === RosterViewMode.Present) {
+                            return a.presentDuration;
+                        }
+                        else if (rosterMode.value === RosterViewMode.CheckedOut) {
+                            return a.checkoutDuration;
+                        }
+                        else {
+                            return a.checkInDuration;
+                        }
+                    }
+                    else {
+                        return a.attendee.fullName;
+                    }
+                })
                 .toArray();
 
             // Clone so that when we make live changes to the grid data it
@@ -223,12 +256,16 @@
         if (gridData.value) {
             for (const record of gridData.value) {
                 record.checkInDuration = calculateDuration(record.checkInTime);
+                record.presentDuration = calculateDuration(record.presentTime);
+                record.checkoutDuration = calculateDuration(record.checkoutTime);
             }
         }
 
         // Modify the grid data directly so we don't have to reload the entire grid.
         getFlatGridRows().forEach(row => {
             row.checkInDuration = calculateDuration(row.checkInTime);
+            row.presentDuration = calculateDuration(row.presentTime);
+            row.checkoutDuration = calculateDuration(row.checkoutTime);
         });
     }
 
@@ -400,6 +437,7 @@
 
         if (message.data.entityType === "Rock.Model.Schedule") {
             schedule.value = await contextEntities.get("Rock.Model.Schedule");
+            updateGridDataSource();
         }
 
         if (message.data.entityType === "Rock.Model.Location" || message.data.entityType === "Rock.Model.Schedule") {
@@ -428,6 +466,13 @@
     function onRosterModeChanged(mode: RosterViewMode): void {
         rosterMode.value = mode;
         updateGridDataSource();
+    }
+
+    /**
+     * Handles the beforeunload event to mark that the window is unloading.
+     */
+    function onWindowBeforeUnload(): void {
+        isUnloading = true;
     }
 
     // #endregion
@@ -621,6 +666,12 @@
     }
 
     async function onRealTimeDisconnected(): Promise<void> {
+        // If the page is unloading, such as navigating away or from a manual
+        // refresh, then don't do anything.
+        if (isUnloading) {
+            return;
+        }
+
         await alert("The connection to the server has been lost. The page must be refreshed to continue.");
 
         window.location.assign(window.location.href);
@@ -629,10 +680,13 @@
     // #endregion
 
     onMounted(() => {
+        window.addEventListener("beforeunload", onWindowBeforeUnload);
         durationUpdateTimer = window.setInterval(updateDurations, 10000);
     });
 
     onBeforeUnmount(() => {
+        window.removeEventListener("beforeunload", onWindowBeforeUnload);
+
         if (durationUpdateTimer !== undefined) {
             window.clearInterval(durationUpdateTimer);
             durationUpdateTimer = undefined;

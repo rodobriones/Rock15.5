@@ -32,6 +32,8 @@ export type RosterAttendanceBag = {
 
     checkInTime?: string | null;
 
+    checkoutTime?: string | null;
+
     code?: string | null;
 
     group?: ListItemBag | null;
@@ -41,6 +43,8 @@ export type RosterAttendanceBag = {
     isCheckoutSupported: boolean;
 
     isPresenceSupported: boolean;
+
+    presentTime?: string | null;
 
     schedule?: ListItemBag | null;
 

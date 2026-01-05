@@ -198,6 +198,8 @@ namespace Rock.CheckIn.v2
                 IdKey = attendance.IdKey,
                 Attendee = GetAttendeeBag( attendance.PersonAlias.Person, attributeBadgeIds ),
                 CheckInTime = attendance.StartDateTime.ToRockDateTimeOffset(),
+                PresentTime = attendance.PresentDateTime.HasValue ? attendance.PresentDateTime.Value.ToRockDateTimeOffset() : ( DateTimeOffset? ) null,
+                CheckoutTime = attendance.EndDateTime.HasValue ? attendance.EndDateTime.Value.ToRockDateTimeOffset() : ( DateTimeOffset? ) null,
                 Code = attendance.AttendanceCode?.Code,
                 Schedule = new ListItemBag
                 {

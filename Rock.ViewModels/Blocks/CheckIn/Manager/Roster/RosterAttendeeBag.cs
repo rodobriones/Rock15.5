@@ -31,6 +31,10 @@ namespace Rock.ViewModels.Blocks.CheckIn.Manager.Roster
 
         public DateTimeOffset CheckInTime { get; set; }
 
+        public DateTimeOffset? PresentTime { get; set; }
+
+        public DateTimeOffset? CheckoutTime { get; set; }
+
         public ListItemBag Schedule { get; set; }
 
         public ListItemBag Group { get; set; }

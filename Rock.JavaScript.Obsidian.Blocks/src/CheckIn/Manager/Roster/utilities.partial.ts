@@ -38,7 +38,11 @@ export function useRosterContext(): RosterContext {
  *
  * @returns The number of minutes since the check-in happened.
  */
-export function calculateDuration(checkInTime: string): number {
+export function calculateDuration(checkInTime: string | undefined): number {
+    if (!checkInTime) {
+        return 0;
+    }
+
     const date = RockDateTime.parseISO(checkInTime);
 
     if (!date) {
@@ -82,6 +86,8 @@ export function statusMatchesMode(status: CheckInStatus, mode: RosterViewMode): 
 export function updateSingleGridAttendanceRecord(attendance: RosterAttendanceBag, record: RosterSingleAttendanceRecord): void {
     record.attendee = attendance.attendee!;
     record.checkInTime = attendance.checkInTime!;
+    record.presentTime = attendance.presentTime ?? undefined;
+    record.checkoutTime = attendance.checkoutTime ?? undefined;
     record.code = attendance.code!;
     record.schedule = attendance.schedule!;
     record.group = attendance.group!;
@@ -91,6 +97,8 @@ export function updateSingleGridAttendanceRecord(attendance: RosterAttendanceBag
     record.isPresenceSupported = attendance.isPresenceSupported;
 
     record.checkInDuration = calculateDuration(record.checkInTime);
+    record.presentDuration = calculateDuration(record.presentTime);
+    record.checkoutDuration = calculateDuration(record.checkoutTime);
 }
 
 /**
@@ -134,3 +142,42 @@ export function getGridRowClass(row: Record<string, unknown>): string {
 
     return "";
 }
+
+/**
+ * Gets the HTML string for a status badge based on the check-in status.
+ *
+ * @param status The enum value of the check-in status.
+ *
+ * @returns A string that contains the HTML to render the badge.
+ */
+export function getStatusBadgeHtml(status: CheckInStatus): string {
+    if (status === CheckInStatus.NotPresent) {
+        return "<span class='badge badge-warning'>Checked-in</span>";
+    }
+    else if (status === CheckInStatus.Present) {
+        return "<span class='badge badge-success'>Present</span>";
+    }
+    else {
+        return "<span class='badge badge-checked-out'>Checked-out</span>";
+    }
+}
+
+/**
+ * Formats a duration in seconds into a string representing the duration in
+ * hours and minutes.
+ *
+ * @param duration The duration in seconds.
+ *
+ * @returns A formatted string representing the duration in hours and minutes.
+ */
+export function getDurationText(duration: number): string {
+    if (duration >= 60) {
+        const hours = Math.floor(duration / 60);
+        const minutes = duration % 60;
+        return `${hours}h ${minutes}m`;
+    }
+    else {
+        return `${duration}m`;
+    }
+}
+

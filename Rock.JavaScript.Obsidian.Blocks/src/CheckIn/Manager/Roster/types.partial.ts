@@ -20,6 +20,14 @@ export type RosterSingleAttendanceRecord = {
 
     checkInDuration: number;
 
+    presentTime?: string;
+
+    presentDuration: number;
+
+    checkoutTime?: string;
+
+    checkoutDuration: number;
+
     code: string;
 
     schedule: ListItemBag;

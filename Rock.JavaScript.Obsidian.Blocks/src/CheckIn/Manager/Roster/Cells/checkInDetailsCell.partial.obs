@@ -23,21 +23,8 @@
             <div v-if="getStateVisible(record)"
                  style="text-align: center;"
                  :style="getStateStyle(record)"
-                 :class="getAdditionalClassesForRecord(record)">
-                <span v-if="record.status === CheckInStatus.NotPresent"
-                      class="badge badge-warning">
-                    Checked-in
-                </span>
-
-                <span v-else-if="record.status === CheckInStatus.Present"
-                      class="badge badge-success">
-                    Present
-                </span>
-
-                <span v-else
-                      class="badge badge-checked-out">
-                    Checked-out
-                </span>
+                 :class="getAdditionalClassesForRecord(record)"
+                 v-html="getStatusBadgeHtml(record.status)">
             </div>
 
             <div v-if="context.mode.value !== RosterViewMode.All"
@@ -76,8 +63,7 @@
     import { computed, CSSProperties } from "vue";
     import { standardCellProps } from "@Obsidian/Core/Controls/grid";
     import { RosterSingleAttendanceRecord, RosterViewMode } from "../types.partial";
-    import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
-    import { useRosterContext } from "../utilities.partial";
+    import { getDurationText, getStatusBadgeHtml, useRosterContext } from "../utilities.partial";
 
     const props = defineProps(standardCellProps);
     const context = useRosterContext();
@@ -133,17 +119,6 @@
             gridRowEnd: index + height + 1,
             gridColumnStart: 4,
         };
-    }
-
-    function getDurationText(duration: number): string {
-        if (duration >= 60) {
-            const hours = Math.floor(duration / 60);
-            const minutes = duration % 60;
-            return `${hours}h ${minutes}m`;
-        }
-        else {
-            return `${duration}m`;
-        }
     }
 
     function getAdditionalClassesForRecord(record: RosterSingleAttendanceRecord): string[] {
