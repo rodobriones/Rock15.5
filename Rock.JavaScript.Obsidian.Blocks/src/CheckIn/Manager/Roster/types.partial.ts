@@ -67,7 +67,7 @@ export type RosterContext = {
 
     onSelectItem: (key: string) => void;
 
-    onAttendancePresentClick: (row: RosterAttendanceRecord) => Promise<void>;
+    onAttendancePresentClick: (rows: RosterAttendanceRecord[]) => Promise<void>;
 
     onAttendanceCheckoutClick: (row: RosterAttendanceRecord) => Promise<void>;
 

@@ -3,7 +3,7 @@
     <RockButton :btnType="props.column.props.active ? 'success' : 'default'"
                 autoDisable
                 :disabled="!getSingleAttendanceRecords(record).some(a => a.isPresenceSupported) && !rosterContext.config.isPresentButtonEnabled"
-                @click.stop="rosterContext.onAttendancePresentClick(record)">
+                @click.stop="rosterContext.onAttendancePresentClick([record])">
         <i class="ti ti-user-plus"></i> Present
     </RockButton>
 </template>

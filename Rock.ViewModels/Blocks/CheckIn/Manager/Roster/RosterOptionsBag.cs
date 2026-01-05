@@ -39,6 +39,11 @@ namespace Rock.ViewModels.Blocks.CheckIn.Manager.Roster
         public bool IsCheckoutAllEnabled { get; set; }
 
         /// <summary>
+        /// Determines if the "mark all present" button should be displayed.
+        /// </summary>
+        public bool IsMarkAllPresentEnabled { get; set; }
+
+        /// <summary>
         /// Determines if the "staying for service" button should be displayed.
         /// </summary>
         public bool IsStayingButtonEnabled { get; set; }

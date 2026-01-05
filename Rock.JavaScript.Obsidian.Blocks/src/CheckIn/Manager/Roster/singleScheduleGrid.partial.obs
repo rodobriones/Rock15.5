@@ -127,6 +127,7 @@
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { RosterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterOptionsBag";
+    import { confirm } from "@Obsidian/Utility/dialogs";
 
     const props = defineProps({
         config: {
@@ -182,6 +183,31 @@
                         .toArray();
 
                     rosterContext.onAttendanceCheckoutAllClick(records);
+                },
+            });
+        }
+
+        if (props.config.isMarkAllPresentEnabled && rosterMode.value === RosterViewMode.CheckedIn) {
+            const checkedInCount = Enumerable.from(props.data)
+                .where(a => a.status === CheckInStatus.NotPresent)
+                .count();
+
+            actions.push({
+                title: "Mark All as Present",
+                iconCssClass: "ti ti-user-plus",
+                isPrimary: true,
+                disabled: checkedInCount === 0,
+                handler: async (grid) => {
+                    const records = Enumerable.from(grid.filteredRows as RosterAttendanceRecord[])
+                        .selectMany(a => getSingleAttendanceRecords(a))
+                        .where(a => a.status === CheckInStatus.NotPresent && !a.isRemoved)
+                        .toArray();
+
+                    if (!(await confirm(`Are you sure you want to mark all ${records.length} checked-in attendances as present?`))) {
+                        return;
+                    }
+
+                    await rosterContext.onAttendancePresentClick(records);
                 },
             });
         }

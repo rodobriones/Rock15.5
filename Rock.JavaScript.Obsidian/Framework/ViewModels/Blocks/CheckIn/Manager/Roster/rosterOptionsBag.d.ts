@@ -44,6 +44,9 @@ export type RosterOptionsBag = {
      */
     isGroupColumnEnabled: boolean;
 
+    /** Determines if the "mark all present" button should be displayed. */
+    isMarkAllPresentEnabled: boolean;
+
     /**
      * Determines if the "not present" button should be displayed to mark
      * attendees that are present as no longer present.

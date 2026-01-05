@@ -111,6 +111,13 @@ namespace Rock.Blocks.CheckIn.Manager
         DefaultBooleanValue = false,
         Order = 9 )]
 
+    [BooleanField(
+        "Enable Mark All as Present",
+        Key = AttributeKey.EnableMarkAllAsPresentButton,
+        Description = "Controls whether a 'Mark All as Present' button appears in the 'Checked-in' view, allowing all rostered individuals to be marked as present at once.",
+        DefaultBooleanValue = false,
+        Order = 10 )]
+
     [AttributeCategoryField(
         "Check-in Roster Alert Icon Category",
         Description = "The Person Attribute category to get the Alert Icon attributes from",
@@ -118,7 +125,7 @@ namespace Rock.Blocks.CheckIn.Manager
         DefaultValue = Rock.SystemGuid.Category.PERSON_ATTRIBUTES_CHECK_IN_ROSTER_ALERT_ICON,
         EntityType = typeof( Rock.Model.Person ),
         AllowMultiple = false,
-        Order = 10
+        Order = 11
         )]
 
     #endregion
@@ -151,6 +158,7 @@ namespace Rock.Blocks.CheckIn.Manager
             public const string EnableStayingButton = "EnableStayingButton";
             public const string EnableNotPresentButton = "EnableNotPresentButton";
             public const string EnableMarkPresentButton = "EnableMarkPresentButton";
+            public const string EnableMarkAllAsPresentButton = "EnableMarkAllAsPresentButton";
 
             public const string CheckInRosterAlertIconCategory = "CheckInRosterAlertIconCategory";
         }
@@ -189,6 +197,7 @@ namespace Rock.Blocks.CheckIn.Manager
                 IsGroupColumnEnabled = GetAttributeValue( AttributeKey.EnableGroupColumn ).AsBoolean(),
                 IsNotPresentButtonEnabled = GetAttributeValue( AttributeKey.EnableNotPresentButton ).AsBoolean(),
                 IsPresentButtonEnabled = GetAttributeValue( AttributeKey.EnableMarkPresentButton ).AsBoolean(),
+                IsMarkAllPresentEnabled = GetAttributeValue( AttributeKey.EnableMarkAllAsPresentButton ).AsBoolean(),
                 IsStayingButtonEnabled = GetAttributeValue( AttributeKey.EnableStayingButton ).AsBoolean(),
                 IsDeleteButtonEnabled = BlockCache.IsAuthorized( Authorization.DELETE_ATTENDANCE, RequestContext.CurrentPerson ),
                 PersonPageUrl = this.GetLinkedPageUrl( AttributeKey.PersonPage, new Dictionary<string, string>

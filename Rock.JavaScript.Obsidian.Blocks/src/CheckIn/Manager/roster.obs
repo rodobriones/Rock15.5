@@ -583,9 +583,12 @@
         }
     }
 
-    async function onAttendancePresentClick(row: RosterAttendanceRecord): Promise<void> {
+    async function onAttendancePresentClick(rows: RosterAttendanceRecord[]): Promise<void> {
         const data = {
-            idKeys: getSingleAttendanceRecords(row).map(a => a.idKey)
+            idKeys: Enumerable.from(rows)
+                .selectMany(r => getSingleAttendanceRecords(r))
+                .select(a => a.idKey)
+                .toArray()
         };
 
         const result = await invokeBlockAction<RosterAttendanceBag[]>("MarkAsPresent", data);
