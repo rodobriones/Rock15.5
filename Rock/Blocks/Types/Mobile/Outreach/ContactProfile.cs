@@ -76,6 +76,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             var contactProfile = new ContactProfileBag
             {
+                ContactId = contact.Id,
                 FirstName = contact.FirstName,
                 LastName = contact.LastName,
                 PhotoUrl = photoUrl,
@@ -325,6 +326,29 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 SystemNote = reminderNote,
             };
             contactTouchpointService.Add( reminderTouchpoint );
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
+        /// <summary>
+        /// Stops the contact touchpoint.
+        /// </summary>
+        /// <param name="contactId"></param>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult StopContactTouchpoint( int contactId )
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var contact = contactService.Get( contactId );
+            if (contact == null)
+            {
+                return ActionBadRequest("Contact not found.");
+            }
+
+            contact.PrayerCadence = Enums.Outreach.OutreachCadence.Paused;
+            contact.ConnectionCadence = Enums.Outreach.OutreachCadence.Paused;
+
             RockContext.SaveChanges();
 
             return ActionOk();

@@ -290,6 +290,36 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return ActionOk( touchpointHistoryBag );
         }
 
+        /// <summary>
+        /// Stops all touchpoints.
+        /// </summary>
+        /// <returns></returns>
+        [BlockAction]
+        public BlockActionResult StopAllTouchpoints()
+        {
+            ContactService contactService = new ContactService( RockContext );
+            var person = RequestContext.CurrentPerson;
+            if ( person == null )
+            {
+                return ActionBadRequest( "Current person not found." );
+            }
+
+            var personContactIds = contactService
+                .Queryable()
+                .Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId )
+                .ToList();
+
+            foreach ( var contact in personContactIds )
+            {
+                contact.PrayerCadence = OutreachCadence.Paused;
+                contact.ConnectionCadence = OutreachCadence.Paused;
+            }
+
+            RockContext.SaveChanges();
+
+            return ActionOk();
+        }
+
         #endregion
 
         /// <inheritdoc/>
