@@ -198,6 +198,7 @@ namespace Rock.CheckIn.v2
                 IdKey = attendance.IdKey,
                 Attendee = GetAttendeeBag( attendance.PersonAlias.Person, attributeBadgeIds ),
                 CheckInTime = attendance.StartDateTime.ToRockDateTimeOffset(),
+                Code = attendance.AttendanceCode?.Code,
                 Schedule = new ListItemBag
                 {
                     Value = schedule.Guid.ToString(),
