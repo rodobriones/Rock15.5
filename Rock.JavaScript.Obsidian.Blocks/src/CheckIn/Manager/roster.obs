@@ -226,65 +226,102 @@
         }
 
         if (!schedule.value) {
-            const filteredRows = Enumerable.from(gridData.value)
+            let filteredRows = Enumerable.from(gridData.value)
                 .where(a => statusMatchesMode(a.status, rosterMode.value))
                 .groupBy(a => a.attendee.idKey!)
                 .select(a => (<RosterCompoundAttendanceRecord>{
                     idKey: a.key,
                     attendee: a.first().attendee,
                     records: a.toArray()
-                }))
-                .orderBy(a => {
-                    if (col === "details") {
-                        return Enumerable.from(a.records).min(r => RockDateTime.parseISO(r.checkInTime)!.toMilliseconds());
-                    }
-                    else {
-                        return a.attendee.fullName;
-                    }
-                })
-                .toArray();
+                }));
+
+            if (col === "details") {
+                filteredRows = filteredRows
+                    .orderBy(a => Math.min(...a.records.map(r => r.checkInDuration)));
+            }
+            else if (col === "attendee") {
+                filteredRows = filteredRows.orderBy(a => a.attendee.fullName);
+            }
+            else {
+                filteredRows = applyDefaultSortOrder(filteredRows);
+            }
 
             // Clone so that when we make live changes to the grid data it
             // doesn't affect the original data.
             gridDataSource.value = {
-                rows: clone(filteredRows)
+                rows: clone(filteredRows.toArray())
             };
         }
         else {
-            const filteredRows = Enumerable.from(gridData.value)
-                .where(a => statusMatchesMode(a.status, rosterMode.value))
-                .orderBy(a => {
-                    if (col === "tag") {
-                        return a.code;
-                    }
-                    else if (col === "group") {
-                        return a.group.text;
-                    }
-                    else if (col === "status") {
-                        return a.status;
-                    }
-                    else if (col === "duration") {
-                        if (rosterMode.value === RosterViewMode.Present) {
-                            return a.presentDuration;
-                        }
-                        else if (rosterMode.value === RosterViewMode.CheckedOut) {
-                            return a.checkoutDuration;
-                        }
-                        else {
-                            return a.checkInDuration;
-                        }
-                    }
-                    else {
-                        return a.attendee.fullName;
-                    }
-                })
-                .toArray();
+            let filteredRows = Enumerable.from(gridData.value)
+                .where(a => statusMatchesMode(a.status, rosterMode.value));
+
+
+            if (col === "tag") {
+                filteredRows = filteredRows.orderBy(a => a.code);
+            }
+            else if (col === "group") {
+                filteredRows = filteredRows.orderBy(a => a.group.text);
+            }
+            else if (col === "status") {
+                filteredRows = filteredRows.orderBy(a => a.status);
+            }
+            else if (col === "duration") {
+                if (rosterMode.value === RosterViewMode.Present) {
+                    filteredRows = filteredRows.orderBy(a => a.presentDuration);
+                }
+                else if (rosterMode.value === RosterViewMode.CheckedOut) {
+                    filteredRows = filteredRows.orderBy(a => a.checkoutDuration);
+                }
+                else {
+                    filteredRows = filteredRows.orderBy(a => a.checkInDuration);
+                }
+            }
+            else if (col === "attendee") {
+                filteredRows = filteredRows.orderBy(a => a.attendee.fullName);
+            }
+            else {
+                filteredRows = applyDefaultSortOrder(filteredRows);
+            }
 
             // Clone so that when we make live changes to the grid data it
             // doesn't affect the original data.
             gridDataSource.value = {
-                rows: clone(filteredRows)
+                rows: clone(filteredRows.toArray())
             };
+        }
+    }
+
+    /**
+     * Applies the default sort order for the current roster mode.
+     *
+     * @param rows The rows to be sorted.
+     *
+     * @returns The sorted rows.
+     */
+    function applyDefaultSortOrder<T extends RosterAttendanceRecord>(rows: Enumerable<T>): Enumerable<T> {
+        if (rosterMode.value === RosterViewMode.All) {
+            // Default sort is by most recent check-in first.
+            return rows
+                .orderBy(a => Math.min(...getSingleAttendanceRecords(a).map(r => r.checkInDuration)));
+        }
+        else if (rosterMode.value === RosterViewMode.CheckedIn) {
+            // Default sort is by oldest check-in first.
+            return rows
+                .orderByDescending(a => Math.min(...getSingleAttendanceRecords(a).map(r => r.checkInDuration)));
+        }
+        else if (rosterMode.value === RosterViewMode.Present) {
+            // Default sort is by first name ascending.
+            return rows
+                .orderBy(a => a.attendee.fullName);
+        }
+        else if (rosterMode.value === RosterViewMode.CheckedOut) {
+            // Default sort is by most recent checkout first.
+            return rows
+                .orderBy(a => Math.min(...getSingleAttendanceRecords(a).map(r => r.checkoutDuration)));
+        }
+        else {
+            return rows;
         }
     }
 
