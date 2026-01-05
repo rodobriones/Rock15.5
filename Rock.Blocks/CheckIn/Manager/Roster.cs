@@ -55,23 +55,23 @@ namespace Rock.Blocks.CheckIn.Manager
         Order = 1 )]
 
     [BooleanField(
-        "Show All Areas",
-        Key = AttributeKey.ShowAllAreas,
+        "Show All Configurations",
+        Key = AttributeKey.ShowAllConfigurations,
         Description = "If enabled, all Check-in Areas will be shown. This setting will be ignored if a specific area is specified in the URL.",
         DefaultBooleanValue = true,
         Order = 2 )]
 
     [LinkedPage(
-        "Area Select Page",
-        Key = AttributeKey.AreaSelectPage,
-        Description = "If Show All Areas is not enabled, the page to redirect user to if a Check-in Area has not been configured or selected.",
+        "Configuration Select Page",
+        Key = AttributeKey.ConfigurationSelectPage,
+        Description = "If Show All Configurations is not enabled, the page to redirect user to if a Check-in Configuration has not been configured or selected.",
         IsRequired = false,
         Order = 3 )]
 
     [GroupTypeField(
-        "Check-in Area",
-        Key = AttributeKey.CheckInAreaGuid,
-        Description = "If Show All Areas is not enabled, the Check-in Area for the rooms to be managed by this Block.",
+        "Check-in Configuration",
+        Key = AttributeKey.CheckInConfigurationGuid,
+        Description = "If Show All Configurations is not enabled, the Check-in Configuration for the rooms to be managed by this Block.",
         IsRequired = false,
         GroupTypePurposeValueGuid = Rock.SystemGuid.DefinedValue.GROUPTYPE_PURPOSE_CHECKIN_TEMPLATE,
         Order = 4 )]
@@ -137,14 +137,14 @@ namespace Rock.Blocks.CheckIn.Manager
         private class AttributeKey
         {
             public const string PersonPage = "PersonPage";
-            public const string ShowAllAreas = "ShowAllAreas";
-            public const string AreaSelectPage = "AreaSelectPage";
+            public const string ShowAllConfigurations = "ShowAllAreas";
+            public const string ConfigurationSelectPage = "AreaSelectPage";
 
             /// <summary>
             /// Gets or sets the current 'Check-in Configuration' Guid (which is a <see cref="Rock.Model.GroupType" /> Guid).
             /// For example "Weekly Service Check-in".
             /// </summary>
-            public const string CheckInAreaGuid = "CheckInAreaGuid";
+            public const string CheckInConfigurationGuid = "CheckInAreaGuid";
 
             public const string EnableGroupColumn = "EnableGroupColumn";
             public const string EnableCheckoutAll = "EnableCheckoutAll";
@@ -197,19 +197,19 @@ namespace Rock.Blocks.CheckIn.Manager
                 } ),
             };
 
-            if ( !GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean() )
+            if ( !GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean() )
             {
-                var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
-                var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+                var showAllAreas = GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean();
+                var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInConfigurationGuid ).AsGuidOrNull();
                 var manager = new CheckInManager( RockContext, RequestContext );
 
                 var areaFilter = manager.GetCheckInAreaFilter( showAllAreas, checkInAreaGuid );
 
                 if ( areaFilter == null )
                 {
-                    if ( GetAttributeValue( AttributeKey.AreaSelectPage ).IsNotNullOrWhiteSpace() )
+                    if ( GetAttributeValue( AttributeKey.ConfigurationSelectPage ).IsNotNullOrWhiteSpace() )
                     {
-                        RequestContext.Response.RedirectToUrl( this.GetLinkedPageUrl( AttributeKey.AreaSelectPage ) );
+                        RequestContext.Response.RedirectToUrl( this.GetLinkedPageUrl( AttributeKey.ConfigurationSelectPage ) );
                     }
 
                     bag.ErrorMessage = "The 'Area Select Page' block setting must be defined when 'Show All Areas' is not enabled.";
@@ -244,8 +244,8 @@ namespace Rock.Blocks.CheckIn.Manager
         public BlockActionResult GetAttendanceData()
         {
             var badgeAttributeIds = GetBadgeAttributeIds();
-            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
-            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInConfigurationGuid ).AsGuidOrNull();
             var manager = new CheckInManager( RockContext, RequestContext );
             var items = manager.GetAttendanceList( showAllAreas, checkInAreaGuid );
 
@@ -270,8 +270,8 @@ namespace Rock.Blocks.CheckIn.Manager
         public BlockActionResult GetSingleAttendance( string key )
         {
             var badgeAttributeIds = GetBadgeAttributeIds();
-            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
-            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInConfigurationGuid ).AsGuidOrNull();
             var manager = new CheckInManager( RockContext, RequestContext );
             var attendanceId = IdHasher.Instance.GetId( key );
 
@@ -418,8 +418,8 @@ namespace Rock.Blocks.CheckIn.Manager
         [BlockAction]
         public BlockActionResult GetPossibleStayingSchedules( string key )
         {
-            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
-            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInConfigurationGuid ).AsGuidOrNull();
             var manager = new CheckInManager( RockContext, RequestContext );
             var attendanceId = IdHasher.Instance.GetId( key );
 
@@ -452,8 +452,8 @@ namespace Rock.Blocks.CheckIn.Manager
         public BlockActionResult StayForService( string attendanceKey, string scheduleKey )
         {
             var badgeAttributeIds = GetBadgeAttributeIds();
-            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllAreas ).AsBoolean();
-            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInAreaGuid ).AsGuidOrNull();
+            var showAllAreas = GetAttributeValue( AttributeKey.ShowAllConfigurations ).AsBoolean();
+            var checkInAreaGuid = GetAttributeValue( AttributeKey.CheckInConfigurationGuid ).AsGuidOrNull();
             var manager = new CheckInManager( RockContext, RequestContext );
             var attendanceId = IdHasher.Instance.GetId( attendanceKey );
             var scheduleId = IdHasher.Instance.GetId( scheduleKey );
