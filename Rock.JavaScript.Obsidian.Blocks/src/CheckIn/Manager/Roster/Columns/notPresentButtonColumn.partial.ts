@@ -17,11 +17,11 @@
 
 import { standardColumnProps } from "@Obsidian/Core/Controls/grid";
 import { Component, defineComponent, PropType } from "vue";
-import ActionButtonCell from "../Cells/actionButtonCell.partial.obs";
+import NotPresentButtonCell from "../Cells/notPresentButtonCell.partial.obs";
 import GenericButtonSkeletonCell from "../Cells/genericButtonSkeletonCell.partial.obs";
 
 /**
- * Displays a button cell for the present button.
+ * Displays a button cell for the not present button.
  */
 export default defineComponent({
     props: {
@@ -29,12 +29,12 @@ export default defineComponent({
 
         name: {
             type: String as PropType<string>,
-            default: "actionButton"
+            default: "notPresentButton"
         },
 
         formatComponent: {
             type: Object as PropType<Component>,
-            default: ActionButtonCell
+            default: NotPresentButtonCell
         },
 
         skeletonComponent: {
@@ -44,7 +44,7 @@ export default defineComponent({
 
         columnType: {
             type: String as PropType<string>,
-            default: "action-button"
+            default: "not-present-button"
         },
 
         headerClass: {
@@ -64,7 +64,7 @@ export default defineComponent({
 
         visiblePriority: {
             type: String as PropType<"xs" | "sm" | "md" | "lg" | "xl">,
-            default: "sm"
+            default: "xs"
         },
     }
 });

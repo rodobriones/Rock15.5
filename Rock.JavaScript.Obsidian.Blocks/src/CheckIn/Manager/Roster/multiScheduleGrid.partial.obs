@@ -33,52 +33,18 @@
                         width="40%"
                         visiblePriority="xs" />
 
-        <CheckInDetailsColumn v-if="!schedule"
-                              name="details"
+        <CheckInDetailsColumn name="details"
                               title="Check-in Details"
                               field="records"
                               width="60%"
                               visiblePriority="md"
                               :mode="rosterMode" />
 
-        <TextColumn v-if="schedule"
-                    name="tag"
-                    title="Tag"
-                    field="code"
-                    visiblePriority="xs" />
-
         <ActionButtonColumn v-if="rosterMode === RosterViewMode.CheckedIn && config.isDeleteButtonEnabled" />
 
-        <Column v-if="rosterMode === RosterViewMode.Present && config.isStayingButtonEnabled"
-                name="stayingAction"
-                width="60px"
-                headerClass="grid-rostercommand"
-                itemClass="grid-rostercommand"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            @click.stop="rosterContext.onAttendanceStayingClick(row)">
-                    <i class="ti ti-user-down"></i>
-                </RockButton>
-            </template>
-        </Column>
+        <StayingButtonColumn v-if="rosterMode === RosterViewMode.Present && config.isStayingButtonEnabled" />
 
-        <Column v-if="rosterMode === RosterViewMode.Present && config.isNotPresentButtonEnabled"
-                name="notPresentAction"
-                width="60px"
-                headerClass="grid-rostercommand"
-                itemClass="grid-rostercommand"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported)"
-                            @click.stop="rosterContext.onAttendanceNotPresentClick(row)">
-                    <i class="ti ti-user-off"></i>
-                </RockButton>
-            </template>
-        </Column>
+        <NotPresentButtonColumn v-if="rosterMode === RosterViewMode.Present && config.isNotPresentButtonEnabled" />
 
         <ActionButtonColumn v-if="rosterMode === RosterViewMode.Present && config.isDeleteButtonEnabled" />
 
@@ -91,10 +57,11 @@
     import AttendeeColumn from "./Columns/attendeeColumn.partial";
     import CheckInDetailsColumn from "./Columns/checkInDetailsColumn.partial";
     import CheckoutButtonColumn from "./Columns/checkoutButtonColumn.partial";
-    import Grid, { Column, TextColumn } from "@Obsidian/Controls/grid";
+    import Grid from "@Obsidian/Controls/grid";
+    import NotPresentButtonColumn from "./Columns/notPresentButtonColumn.partial";
     import PresentButtonColumn from "./Columns/presentButtonColumn.partial";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RosterMenu from "./rosterMenu.partial.obs";
+    import StayingButtonColumn from "./Columns/stayingButtonColumn.partial";
     import { GridAction } from "@Obsidian/Types/Controls/grid";
     import { GridDataBag } from "@Obsidian/ViewModels/Core/Grid/gridDataBag";
     import { computed, PropType } from "vue";
@@ -104,7 +71,6 @@
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { RosterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterOptionsBag";
-    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
     const props = defineProps({
         config: {
@@ -134,10 +100,6 @@
 
     const rosterMode = computed((): RosterViewMode => {
         return rosterContext.mode.value;
-    });
-
-    const schedule = computed((): ListItemBag | undefined => {
-        return rosterContext.schedule.value;
     });
 
     const loadingRowCount = computed((): number | undefined => {
