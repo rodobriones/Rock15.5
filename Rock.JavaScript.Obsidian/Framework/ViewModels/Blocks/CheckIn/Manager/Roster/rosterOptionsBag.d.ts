@@ -21,20 +21,45 @@
 // </copyright>
 //
 
+/** The initialization options for the Roster block. */
 export type RosterOptionsBag = {
+    /**
+     * The error message to display. If this is set, then the block should
+     * not attempt to load any other data.
+     */
     errorMessage?: string | null;
 
+    /** Determines if the checkout all button should be displayed. */
     isCheckoutAllEnabled: boolean;
 
+    /**
+     * Determines if the "delete" button should be displayed to allow
+     * deleting an attendance record entirely.
+     */
     isDeleteButtonEnabled: boolean;
 
+    /**
+     * Determines if the group column should be displayed when a single
+     * schedule is selected.
+     */
     isGroupColumnEnabled: boolean;
 
+    /**
+     * Determines if the "not present" button should be displayed to mark
+     * attendees that are present as no longer present.
+     */
     isNotPresentButtonEnabled: boolean;
 
+    /**
+     * Determines if the "present" button should be displayed on the
+     * checked-out roster view. The button will always be displayed on the
+     * checked-in roster view.
+     */
     isPresentButtonEnabled: boolean;
 
+    /** Determines if the "staying for service" button should be displayed. */
     isStayingButtonEnabled: boolean;
 
+    /** The URL template to use for person profile links. */
     personPageUrl?: string | null;
 };

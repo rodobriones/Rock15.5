@@ -20,7 +20,6 @@ import { Component, defineComponent, PropType } from "vue";
 import CheckInDetailsCell from "../Cells/checkInDetailsCell.partial.obs";
 import CheckInDetailsSkeletonCell from "../Cells/checkInDetailsSkeletonCell.partial.obs";
 import { ColumnDefinition, ExportValueFunction, QuickFilterValueFunction, SortValueFunction } from "@Obsidian/Types/Controls/grid";
-import { RosterViewMode } from "../types.partial";
 
 /**
  * Gets the value to use when displaying a cell of this column.
@@ -73,11 +72,6 @@ export default defineComponent({
         columnType: {
             type: String as PropType<string>,
             default: "check-in-details"
-        },
-
-        mode: {
-            type: Number as PropType<RosterViewMode>,
-            required: true
         },
     }
 });

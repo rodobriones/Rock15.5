@@ -81,26 +81,42 @@
     const suspense = useSuspense();
     const bus = useBlockBrowserBus();
 
+    // #region Values
+
     const rosterMode = ref<RosterViewMode>(RosterViewMode.All);
     const gridData = ref<RosterSingleAttendanceRecord[]>();
     const gridDataPendingPromise = new Promise<GridDataBag>(() => { });
+    const gridDataSource = ref<Promise<GridDataBag> | GridDataBag>(gridDataPendingPromise);
     const loadingRowCount = ref<number>();
+
     const campus = ref<ListItemBag>();
     const location = ref<ListItemBag>();
     const schedule = ref<ListItemBag>();
-    let durationUpdateTimer: number | undefined;
 
+    /**
+     * A map of cancellation tokens for attendance record requests. This helps
+     * us ensure that if multiple updates come in for the same record in a short
+     * period of time, we only process the latest one.
+     */
     const getAttendanceRecordCancellationTokens = new Map<string, CancellationTokenSource>();
-
-    const gridDataSource = ref<Promise<GridDataBag> | GridDataBag>(gridDataPendingPromise);
 
     const checkoutModal = ref<InstanceType<typeof CheckoutModal>>();
     const checkoutAllModal = ref<InstanceType<typeof CheckoutAllModal>>();
     const stayingModal = ref<InstanceType<typeof StayingModal>>();
 
     let isUnloading = false;
+    let durationUpdateTimer: number | undefined;
+
     let entityUpdatedTopic: ITopic | undefined = undefined;
 
+    // #endregion
+
+    // #region Computed Values
+
+    /**
+     * The error message to display instead of the roster, or null if there
+     * is no error.
+     */
     const errorMessage = computed((): string | null => {
         if (config.errorMessage) {
             return config.errorMessage;
@@ -117,6 +133,14 @@
         return null;
     });
 
+    // #endregion
+
+    // #region Functions
+
+    /**
+     * Initialize the block by loading the context entities and setting up
+     * real-time monitoring.
+     */
     async function initialize(): Promise<void> {
         campus.value = await contextEntities.get("Rock.Model.Campus");
         location.value = await contextEntities.get("Rock.Model.Location");
@@ -153,7 +177,12 @@
         }
     }
 
+    /**
+     * Loads the attendance data for the roster grid.
+     */
     async function loadGridData(): Promise<void> {
+        // If we already have data, set the loading row count so the UI
+        // shows a loading indicator with the same number of rows.
         if (gridData.value && gridData.value.length > 0) {
             loadingRowCount.value = gridData.value.length;
         }
@@ -161,7 +190,10 @@
             loadingRowCount.value = undefined;
         }
 
+        // Clear out any existing data. This also causes the grid to show the
+        // loading/skeleton rows.
         gridData.value = undefined;
+        updateGridDataSource();
 
         const result = await invokeBlockAction<RosterAttendanceBag[]>("GetAttendanceData");
 
@@ -181,6 +213,12 @@
         }
     }
 
+    /**
+     * Updates the data source for the roster grid based on the current
+     * roster mode and sort column.
+     *
+     * @param col The column that is being sorted, if any.
+     */
     function updateGridDataSource(col?: string): void {
         if (!gridData.value) {
             gridDataSource.value = gridDataPendingPromise;
@@ -250,6 +288,9 @@
         }
     }
 
+    /**
+     * Updates the duration fields for all attendance records in the grid.
+     */
     function updateDurations(): void {
         // Update the source of truth data so when we refresh the UI it has
         // the correct values.
@@ -269,7 +310,15 @@
         });
     }
 
+    /**
+     * Updates the attendance records in the grid with the provided
+     * attendance data. If any attendance records are not found then they will
+     * be added to the bottom of the grid.
+     *
+     * @param updatedAttendances The attendance records to update.
+     */
     function updateAttendance(updatedAttendances: RosterAttendanceBag[]): void {
+        // Update the currently displayed grid rows.
         updateGridAttendance(updatedAttendances);
 
         // Also update the underlying data so that if we switch modes we
@@ -293,6 +342,12 @@
         updateMissingGridAttendances();
     }
 
+    /**
+     * Updates the grid to mark any attendances that are no longer
+     * present in the data as removed. We do this so that real-time updates
+     * to attendance records can be reflected in the UI without removing
+     * rows that would cause the UI to jump around.
+     */
     function updateMissingGridAttendances(): void {
         const rows = getFlatGridRows();
         const attendances = gridData.value ?? [];
@@ -304,6 +359,13 @@
         }
     }
 
+    /**
+     * Updates the grid data source with the provided attendance records.
+     * If any attendance records are not found then they will be added
+     * to the bottom of the grid.
+     *
+     * @param updatedAttendances The attendance records to update.
+     */
     function updateGridAttendance(updatedAttendances: RosterAttendanceBag[]): void {
         const rows = getFlatGridRows();
 
@@ -354,6 +416,12 @@
         }
     }
 
+    /**
+     * Gets a flat list of all attendance records in the grid, regardless
+     * of whether the grid is in single or multi-schedule mode.
+     *
+     * @returns The flattened list of attendance records.
+     */
     function getFlatGridRows(): RosterSingleAttendanceRecord[] {
         if (!gridDataSource.value || !("rows" in gridDataSource.value) || !gridDataSource.value.rows) {
             return [];
@@ -371,6 +439,11 @@
         return flatten(nestedRows);
     }
 
+    /**
+     * Performs the checkout operation for the provided attendance records.
+     *
+     * @param idKeys The unique identifiers of the attendance records to check out.
+     */
     async function performCheckout(idKeys: string[]): Promise<void> {
         const data = {
             idKeys: idKeys
@@ -387,6 +460,12 @@
         }
     }
 
+    /**
+     * Updates a single attendance record by retrieving the latest data
+     * from the server.
+     *
+     * @param attendanceIdKey The unique identifier of the attendance record.
+     */
     async function updateSingleAttendanceRecord(attendanceIdKey: string): Promise<void> {
         // Cancel any existing request for this attendance record.
         const existingCancellationToken = getAttendanceRecordCancellationTokens.get(attendanceIdKey);
@@ -406,6 +485,12 @@
         }
     }
 
+    /**
+     * Checks in an attendee to stay for an additional service.
+     *
+     * @param attendanceIdKey The unique identifier of the original attendance record.
+     * @param scheduleKey The unique identifier of the schedule to check in for.
+     */
     async function stayForService(attendanceIdKey: string, scheduleKey: string): Promise<void> {
         const data = {
             attendanceKey: attendanceIdKey,
@@ -422,6 +507,8 @@
             await alert(result.errorMessage || "An unknown error occurred while checking in for the new schedule.");
         }
     }
+
+    // #endregion
 
     // #region Event Handlers
 
@@ -463,6 +550,11 @@
         }
     }
 
+    /**
+     * Handles when the roster mode has changed.
+     *
+     * @param mode The new roster mode.
+     */
     function onRosterModeChanged(mode: RosterViewMode): void {
         rosterMode.value = mode;
         updateGridDataSource();
@@ -635,17 +727,16 @@
      * @param attendance The details about the attendance record.
      */
     function onAttendanceUpdated(attendance: AttendanceUpdatedMessageBag): void {
-        if (!location.value) {
+        if (!location.value || !attendance.attendanceIdKey) {
             return;
         }
 
+        // Only track attendances for the currently selected location.
         if (!areEqual(attendance.locationGuid, location.value.value)) {
             return;
         }
 
-        if (attendance.attendanceIdKey) {
-            updateSingleAttendanceRecord(attendance.attendanceIdKey);
-        }
+        updateSingleAttendanceRecord(attendance.attendanceIdKey);
     }
 
     /**
@@ -665,6 +756,9 @@
         updateMissingGridAttendances();
     }
 
+    /**
+     * Called when the real-time connection has been disconnected.
+     */
     async function onRealTimeDisconnected(): Promise<void> {
         // If the page is unloading, such as navigating away or from a manual
         // refresh, then don't do anything.

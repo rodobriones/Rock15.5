@@ -37,8 +37,7 @@
                               title="Check-in Details"
                               field="records"
                               width="60%"
-                              visiblePriority="md"
-                              :mode="rosterMode" />
+                              visiblePriority="md" />
 
         <ActionButtonColumn v-if="rosterMode === RosterViewMode.CheckedIn && config.isDeleteButtonEnabled" />
 

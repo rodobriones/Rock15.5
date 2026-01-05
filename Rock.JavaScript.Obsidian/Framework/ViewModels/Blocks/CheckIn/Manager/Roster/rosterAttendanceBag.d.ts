@@ -25,28 +25,44 @@ import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
 import { RosterAttendeeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBag";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
+/** Represents a single attendance record on the roster. */
 export type RosterAttendanceBag = {
+    /** The name and identifier of the area the individual checked in to. */
     area?: ListItemBag | null;
 
+    /** The attendee associated with this attendance record. */
     attendee?: RosterAttendeeBag | null;
 
+    /** The date and time the individual checked in. */
     checkInTime?: string | null;
 
+    /** The date and time the individual was checked out. */
     checkoutTime?: string | null;
 
+    /** The security code included on the individual's nametag. */
     code?: string | null;
 
+    /** The name and identifier of the group the individual checked in to. */
     group?: ListItemBag | null;
 
+    /** The encoded identifier for the attendance record. */
     idKey?: string | null;
 
+    /** Determines if checkout is supported for this attendance record. */
     isCheckoutSupported: boolean;
 
+    /**
+     * Determines if presence tracking is supported for this attendance
+     * record.
+     */
     isPresenceSupported: boolean;
 
+    /** The date and time the individual was marked as present in the room. */
     presentTime?: string | null;
 
+    /** The name and identifier of the schedule the individual checked in to. */
     schedule?: ListItemBag | null;
 
+    /** The current status of the attendance record. */
     status: CheckInStatus;
 };

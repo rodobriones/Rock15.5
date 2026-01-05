@@ -23,7 +23,6 @@ using System.Linq;
 using Rock.Data;
 using Rock.Model;
 using Rock.Net;
-using Rock.Utility;
 using Rock.ViewModels.Blocks.CheckIn.Manager.Roster;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;

@@ -32,6 +32,19 @@
     const props = defineProps(standardCellProps);
     const rosterContext = useRosterContext();
 
+
+    // #region Values
+
+    const btnGroupElement = ref<HTMLElement>();
+    const dropDownMenuElement = ref<HTMLElement>();
+    const popupTarget = ref<Element>();
+    const isPopupOpen = ref(false);
+    const popupStyle = ref({});
+
+    // #endregion
+
+    // #region Computed Values
+
     const record = computed((): RosterAttendanceRecord => {
         return props.row as RosterAttendanceRecord;
     });
@@ -40,11 +53,9 @@
         return rosterContext.config.isDeleteButtonEnabled;
     });
 
-    const btnGroupElement = ref<HTMLElement>();
-    const dropDownMenuElement = ref<HTMLElement>();
-    const popupTarget = ref<Element>();
-    const isPopupOpen = ref(false);
-    const popupStyle = ref({});
+    // #endregion
+
+    // #region Functions
 
     /**
      * Updates the position of the popup based on the current scroll position
@@ -62,6 +73,10 @@
         }
 
     }
+
+    // #endregion
+
+    // #region Event Handlers
 
     /**
      * Called when the ellipsis button is clicked. Open or close the popup.
@@ -114,6 +129,8 @@
     function onDocumentScroll(): void {
         updatePopupPosition();
     }
+
+    // #endregion
 
     // Whenever the popup is open, register our event listeners on the
     // whole document. When the popup closes, remove the listeners.

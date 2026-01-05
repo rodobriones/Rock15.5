@@ -24,16 +24,23 @@
 import { Guid } from "@Obsidian/Types";
 import { RosterAttendeeBadgeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBadgeBag";
 
+/** Represents an attendee on the attendance record. */
 export type RosterAttendeeBag = {
+    /** The collection of badges that should be displayed for the attendee. */
     badges?: RosterAttendeeBadgeBag[] | null;
 
+    /** The person's full name. */
     fullName?: string | null;
 
+    /** The unique identifier for the person. */
     guid: Guid;
 
+    /** The encoded identifier for the person. */
     idKey?: string | null;
 
+    /** The name of the person's parents. */
     parents?: string | null;
 
+    /** The URL that points to the person's photo. */
     photoUrl?: string | null;
 };

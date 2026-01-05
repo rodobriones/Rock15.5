@@ -39,7 +39,8 @@
                      width="115px"
                      :visiblePriority="rosterMode === RosterViewMode.All ? 'sm' : 'md'" />
 
-        <HighlightDetailColumn name="group"
+        <HighlightDetailColumn v-if="rosterContext.config.isGroupColumnEnabled"
+                               name="group"
                                title="Group"
                                field="group.text"
                                detailField="area.text"

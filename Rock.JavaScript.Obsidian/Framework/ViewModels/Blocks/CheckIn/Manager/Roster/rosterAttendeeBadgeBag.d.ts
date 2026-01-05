@@ -21,10 +21,17 @@
 // </copyright>
 //
 
+/**
+ * A custom badge for a roster attendee. This is typically used to show
+ * special statuses based on attributes or data view membership.
+ */
 export type RosterAttendeeBadgeBag = {
+    /** The CSS color for the badge. */
     color?: string | null;
 
+    /** The CSS class for the icon to display in the badge. */
     iconCssClass?: string | null;
 
+    /** The tooltip text that will describe the details of the badge. */
     text?: string | null;
 };

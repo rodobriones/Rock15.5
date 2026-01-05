@@ -24,14 +24,20 @@
 
     const props = defineProps(standardCellProps);
 
+    // #region Computed Values
+
+    /** The encoded identifier of the person. */
     const idKey = computed((): string | undefined => {
         if (!props.column.field) {
             return undefined;
         }
+
         const value = props.row[props.column.field] as RosterAttendeeBag;
+
         if (typeof value?.idKey === "string") {
             return value.idKey;
         }
+
         return undefined;
     });
 
@@ -95,6 +101,15 @@
         return value.badges ?? [];
     });
 
+    // #endregion
+
+    // #region Functions
+
+    /**
+     * Gets the style attribute value for the badge.
+     *
+     * @param badge The badge to be displayed.
+     */
     function getBadgeStyle(badge: RosterAttendeeBadgeBag): Record<string, string> {
         const styles: Record<string, string> = {};
 
@@ -104,4 +119,6 @@
 
         return styles;
     }
+
+    // #endregion
 </script>

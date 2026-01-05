@@ -31,6 +31,9 @@
         (e: "update:modelValue", value: RosterViewMode): void;
     }>();
 
+    // #region Computed Values
+
+    /** The menu items for the roster view modes. */
     const menuItems = computed((): { text: string, class: string, count: number, mode: RosterViewMode }[] => {
         const items: { text: string, class: string, count: number, mode: RosterViewMode }[] = [
             {
@@ -62,6 +65,17 @@
         return items;
     });
 
+    // #endregion
+
+    // #region Functions
+
+    /**
+     * Gets the count of unique attendees for the given check-in status.
+     *
+     * @param state The check-in status to be matched.
+     *
+     * @returns The count of unique attendees.
+     */
     function getAttendanceCount(state: CheckInStatus | undefined): number {
         if (state === undefined) {
             return Enumerable.from(props.attendances)
@@ -75,6 +89,12 @@
             .count();
     }
 
+    /**
+     * Handles when a menu item is clicked.
+     *
+     * @param event The mouse event.
+     * @param mode The roster view mode to switch to.
+     */
     function onClick(event: MouseEvent, mode: RosterViewMode): void {
         if (event.target instanceof HTMLElement) {
             event.target.blur();
@@ -82,4 +102,6 @@
 
         emit("update:modelValue", mode);
     }
+
+    // #endregion
 </script>
