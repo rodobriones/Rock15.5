@@ -227,6 +227,43 @@ namespace Rock.CheckIn.v2
                 person.LoadAttributes( RockContext );
             }
 
+            var badges = person.AttributeValues
+                .OrderBy( av => person.Attributes[av.Key].Order )
+                .Where( av => attributeBadgeIds.Contains( person.Attributes[av.Key].Id ) && av.Value.Value.IsNotNullOrWhiteSpace() )
+                .Select( av => new RosterAttendeeBadgeBag
+                {
+                    IconCssClass = person.Attributes[av.Key].IconCssClass.IfEmpty( "ti ti-square" ),
+                    Color = person.Attributes[av.Key].AttributeColor,
+                    Text = av.Value.Value,
+                } )
+                .ToList();
+
+            var daysToBirthdayOrNull = person.DaysToBirthdayOrNull;
+            if ( daysToBirthdayOrNull.HasValue && daysToBirthdayOrNull.Value < 7 )
+            {
+                string birthdayText;
+
+                if (daysToBirthdayOrNull.Value == 0 )
+                {
+                    birthdayText = "Birthday: Today";
+                }
+                else if (daysToBirthdayOrNull.Value == 1)
+                {
+                    birthdayText = "Birthday: Tomorrow";
+                }
+                else
+                {
+                    birthdayText = $"On {RockDateTime.Today.AddDays( daysToBirthdayOrNull.Value ):dddd}";
+                }
+
+                badges.Add( new RosterAttendeeBadgeBag
+                {
+                    IconCssClass = "ti ti-cake",
+                    Color = "#2f855a",
+                    Text = birthdayText,
+                } );
+            }
+
             return new RosterAttendeeBag
             {
                 IdKey = person.IdKey,
@@ -234,15 +271,7 @@ namespace Rock.CheckIn.v2
                 FullName = person.FullName,
                 PhotoUrl = person.PhotoUrl,
                 Parents = person.PrimaryFamily.GroupSalutation,
-                Badges = person.AttributeValues
-                    .Where( av => attributeBadgeIds.Contains( person.Attributes[av.Key].Id ) && av.Value.Value.IsNotNullOrWhiteSpace() )
-                    .Select( av => new RosterAttendeeBadgeBag
-                    {
-                        IconCssClass = person.Attributes[av.Key].IconCssClass,
-                        Color = person.Attributes[av.Key].AttributeColor,
-                        Text = av.Value.Value,
-                    } )
-                    .ToList()
+                Badges = badges,
             };
         }
 
