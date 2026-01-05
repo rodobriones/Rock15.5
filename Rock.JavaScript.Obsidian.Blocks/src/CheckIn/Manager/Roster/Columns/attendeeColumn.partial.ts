@@ -17,8 +17,8 @@
 
 import { standardColumnProps } from "@Obsidian/Core/Controls/grid";
 import { Component, defineComponent, PropType } from "vue";
-import AttendeeCell from "./attendeeCell.partial.obs";
-import AttendeeSkeletonCell from "./attendeeSkeletonCell.partial.obs";
+import AttendeeCell from "../Cells/attendeeCell.partial.obs";
+import AttendeeSkeletonCell from "../Cells/attendeeSkeletonCell.partial.obs";
 import { ColumnDefinition, ExportValueFunction, QuickFilterValueFunction, SortValueFunction } from "@Obsidian/Types/Controls/grid";
 import { RosterAttendeeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBag";
 

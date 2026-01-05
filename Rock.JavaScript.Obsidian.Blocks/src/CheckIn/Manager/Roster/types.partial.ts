@@ -1,5 +1,6 @@
 import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
 import { RosterAttendeeBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterAttendeeBag";
+import { RosterOptionsBag } from "@Obsidian/ViewModels/Blocks/CheckIn/Manager/Roster/rosterOptionsBag";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { Ref } from "vue";
 
@@ -48,6 +49,8 @@ export type RosterCompoundAttendanceRecord = {
 export type RosterAttendanceRecord = RosterSingleAttendanceRecord | RosterCompoundAttendanceRecord;
 
 export type RosterContext = {
+    config: RosterOptionsBag;
+
     loadingRowCount: Ref<number | undefined>;
 
     mode: Ref<RosterViewMode>;

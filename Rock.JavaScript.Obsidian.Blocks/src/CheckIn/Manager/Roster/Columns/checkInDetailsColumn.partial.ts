@@ -17,10 +17,10 @@
 
 import { standardColumnProps } from "@Obsidian/Core/Controls/grid";
 import { Component, defineComponent, PropType } from "vue";
-import CheckInDetailsCell from "./checkInDetailsCell.partial.obs";
-import CheckInDetailsSkeletonCell from "./checkInDetailsSkeletonCell.partial.obs";
+import CheckInDetailsCell from "../Cells/checkInDetailsCell.partial.obs";
+import CheckInDetailsSkeletonCell from "../Cells/checkInDetailsSkeletonCell.partial.obs";
 import { ColumnDefinition, ExportValueFunction, QuickFilterValueFunction, SortValueFunction } from "@Obsidian/Types/Controls/grid";
-import { RosterViewMode } from "./types.partial";
+import { RosterViewMode } from "../types.partial";
 
 /**
  * Gets the value to use when displaying a cell of this column.

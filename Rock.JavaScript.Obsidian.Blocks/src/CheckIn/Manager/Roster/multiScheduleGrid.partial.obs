@@ -22,33 +22,10 @@
                         @update:modelValue="emit('rosterModeChanged', $event)" />
         </template>
 
-        <Column v-if="rosterMode === RosterViewMode.CheckedIn"
-                name="presentAction"
-                width="155px"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <RockButton btnType="success"
-                            autoDisable
-                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isPresenceSupported) && !config.isPresentButtonEnabled"
-                            @click.stop="rosterContext.onAttendancePresentClick(row)">
-                    <i class="ti ti-user-plus"></i> Present
-                </RockButton>
-            </template>
-        </Column>
+        <PresentButtonColumn v-if="rosterMode === RosterViewMode.CheckedIn"
+                             active />
 
-        <Column v-if="rosterMode === RosterViewMode.Present"
-                name="checkoutAction"
-                width="155px"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            :disabled="!getSingleAttendanceRecords(row).some(a => a.isCheckoutSupported)"
-                            @click.stop="rosterContext.onAttendanceCheckoutClick(row)">
-                    <i class="ti ti-user-minus"></i> Check Out
-                </RockButton>
-            </template>
-        </Column>
+        <CheckoutButtonColumn v-if="rosterMode === RosterViewMode.Present" />
 
         <AttendeeColumn name="attendee"
                         title="Name"
@@ -70,17 +47,7 @@
                     field="code"
                     visiblePriority="xs" />
 
-        <Column v-if="rosterMode === RosterViewMode.CheckedIn && config.isDeleteButtonEnabled"
-                name="actions"
-                width="60px"
-                headerClass="grid-rostercommand"
-                itemClass="grid-rostercommand"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <PopupMenuButton showDelete
-                                 @delete="rosterContext.onAttendanceDeleteClick(row)" />
-            </template>
-        </Column>
+        <ActionButtonColumn v-if="rosterMode === RosterViewMode.CheckedIn && config.isDeleteButtonEnabled" />
 
         <Column v-if="rosterMode === RosterViewMode.Present && config.isStayingButtonEnabled"
                 name="stayingAction"
@@ -113,38 +80,19 @@
             </template>
         </Column>
 
-        <Column v-if="rosterMode === RosterViewMode.Present && config.isDeleteButtonEnabled"
-                name="actions"
-                width="60px"
-                headerClass="grid-rostercommand"
-                itemClass="grid-rostercommand"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <PopupMenuButton showDelete
-                                 @delete="rosterContext.onAttendanceDeleteClick(row)" />
-            </template>
-        </Column>
+        <ActionButtonColumn v-if="rosterMode === RosterViewMode.Present && config.isDeleteButtonEnabled" />
 
-        <Column v-if="rosterMode === RosterViewMode.CheckedOut && config.isPresentButtonEnabled"
-                name="presentAction"
-                width="155px"
-                visiblePriority="xs">
-            <template #format="{ row }: { row: RosterAttendanceRecord }">
-                <RockButton btnType="default"
-                            autoDisable
-                            @click.stop="rosterContext.onAttendancePresentClick(row)">
-                    <i class="ti ti-user-plus"></i> Present
-                </RockButton>
-            </template>
-        </Column>
+        <PresentButtonColumn v-if="rosterMode === RosterViewMode.CheckedOut && config.isPresentButtonEnabled" />
     </Grid>
 </template>
 
 <script setup lang="ts">
-    import AttendeeColumn from "./attendeeColumn.partial";
-    import CheckInDetailsColumn from "./checkInDetailsColumn.partial";
+    import ActionButtonColumn from "./Columns/actionButtonColumn.partial";
+    import AttendeeColumn from "./Columns/attendeeColumn.partial";
+    import CheckInDetailsColumn from "./Columns/checkInDetailsColumn.partial";
+    import CheckoutButtonColumn from "./Columns/checkoutButtonColumn.partial";
     import Grid, { Column, TextColumn } from "@Obsidian/Controls/grid";
-    import PopupMenuButton from "./popupMenuButton.partial.obs";
+    import PresentButtonColumn from "./Columns/presentButtonColumn.partial";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RosterMenu from "./rosterMenu.partial.obs";
     import { GridAction } from "@Obsidian/Types/Controls/grid";

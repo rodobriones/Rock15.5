@@ -24,18 +24,21 @@
 </template>
 
 <script setup lang="ts">
-    import { onBeforeUnmount, PropType, ref, watch } from "vue";
+    import { computed, onBeforeUnmount, ref, watch } from "vue";
+    import { standardCellProps } from "@Obsidian/Core/Controls/grid";
+    import { useRosterContext } from "../utilities.partial";
+    import { RosterAttendanceRecord } from "../types.partial";
 
-    defineProps({
-        showDelete: {
-            type: Boolean as PropType<boolean>,
-            default: false
-        },
+    const props = defineProps(standardCellProps);
+    const rosterContext = useRosterContext();
+
+    const record = computed((): RosterAttendanceRecord => {
+        return props.row as RosterAttendanceRecord;
     });
 
-    const emit = defineEmits<{
-        (e: "delete"): void;
-    }>();
+    const showDelete = computed((): boolean => {
+        return rosterContext.config.isDeleteButtonEnabled;
+    });
 
     const btnGroupElement = ref<HTMLElement>();
     const dropDownMenuElement = ref<HTMLElement>();
@@ -79,9 +82,9 @@
     /**
      * Called when the delete menu item is clicked.
      */
-    function onDeleteClick(): void {
-        emit("delete");
+    async function onDeleteClick(): Promise<void> {
         isPopupOpen.value = false;
+        await rosterContext.onAttendanceDeleteClick(record.value);
     }
 
     /**

@@ -75,9 +75,9 @@
 <script setup lang="ts">
     import { computed, CSSProperties } from "vue";
     import { standardCellProps } from "@Obsidian/Core/Controls/grid";
-    import { RosterSingleAttendanceRecord, RosterViewMode } from "./types.partial";
+    import { RosterSingleAttendanceRecord, RosterViewMode } from "../types.partial";
     import { CheckInStatus } from "@Obsidian/Enums/Event/checkInStatus";
-    import { useRosterContext } from "./utilities.partial";
+    import { useRosterContext } from "../utilities.partial";
 
     const props = defineProps(standardCellProps);
     const context = useRosterContext();

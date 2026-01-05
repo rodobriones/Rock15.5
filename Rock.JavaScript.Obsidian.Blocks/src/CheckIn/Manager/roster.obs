@@ -640,6 +640,7 @@
     });
 
     provideRosterContext({
+        config,
         loadingRowCount,
         mode: rosterMode,
         onAttendancePresentClick,

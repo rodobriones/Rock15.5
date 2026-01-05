@@ -2,7 +2,7 @@
 <template>
     <div class="d-flex flex-fill align-items-center">
         <div class="mr-2 flex-shrink-0 skeleton skeleton-avatar"
-             style="width: 24px; height: 24px;" />
+             style="width: 51px; height: 51px;" />
         <div class="skeleton skeleton-text flex-grow-1" />
     </div>
 </template>
