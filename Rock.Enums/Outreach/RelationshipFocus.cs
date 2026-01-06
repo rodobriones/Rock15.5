@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
-//
 
 namespace Rock.Enums.Outreach
 {
     /// <summary>
     /// Relationship Focus for contact
     /// </summary>
-    [EnumDomain( "Outreach" )]
     public enum RelationshipFocus
     {
         /// <summary>

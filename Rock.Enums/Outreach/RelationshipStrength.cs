@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
-//
 
 namespace Rock.Enums.Outreach
 {
     /// <summary>
     /// The strength of a relationship.
     /// </summary>
-    [EnumDomain( "Outreach" )]
     public enum RelationshipStrength
     {
         /// <summary>
