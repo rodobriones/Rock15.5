@@ -1,4 +1,4 @@
-// <copyright>
+﻿// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -15,14 +15,21 @@
 // </copyright>
 //
 
-export type GetHtmlRequest = {
-    onSuccess: (response: GetHtmlResponse) => void;
-    onError?: ((error: string) => void) | null | undefined;
-};
+namespace Rock.ViewModels.Blocks.Cms.PageMap
+{
+    /// <summary>
+    /// A bag that contains the data needed to render the Page Map block.
+    /// </summary>
+    public class PageMapBag
+    {
+        /// <summary>
+        /// Gets or sets the tree list containing the tree structure.
+        /// </summary>
+        public PageMapTreeListBag TreeList { get; set; }
 
-export type GetHtmlResponse = {
-    html: string;
-    bodyWidth?: number | null | undefined;
-};
-
-export type UsageType = "template" | "email";
+        /// <summary>
+        /// Gets or sets the error message to be displayed to the current person, if any.
+        /// </summary>
+        public string ErrorMessage { get; set; }
+    }
+}

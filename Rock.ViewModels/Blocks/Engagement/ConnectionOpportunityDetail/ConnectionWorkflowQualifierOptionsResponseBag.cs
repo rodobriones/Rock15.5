@@ -21,6 +21,9 @@ using Rock.ViewModels.Utility;
 
 namespace Rock.ViewModels.Blocks.Engagement.ConnectionOpportunityDetail
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public class ConnectionWorkflowQualifierOptionsResponseBag
     {
         /// <summary>
