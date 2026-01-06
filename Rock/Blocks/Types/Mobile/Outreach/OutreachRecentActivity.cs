@@ -42,8 +42,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             var personContactIds = contactService
                 .Queryable()
                 .Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId )
-                .Select( c => c.Id )
-                .ToList();
+                .Select( c => c.Id );
 
             var recentActivities = touchpointService
                 .Queryable()
@@ -51,16 +50,23 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 .Where( tp => tp.CompletedDateTime != null )
                 .OrderByDescending( tp => tp.CompletedDateTime )
                 .Take( 5 )
-                .AsEnumerable()
+                .Select( tp => new
+                {
+                    tp.Contact.PhotoId,
+                    tp.Contact.FirstName,
+                    tp.Type,
+                    tp.CompletedDateTime
+                } )
+                .ToList()
                 .Select( tp =>
                 {
-                    var profileURL = tp.Contact.PhotoId.HasValue
-                        ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( tp.Contact.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) )
+                    var profileURL = tp.PhotoId.HasValue
+                        ? MobileHelper.BuildPublicApplicationRootUrl( FileUrlHelper.GetImageUrl( tp.PhotoId.Value, new GetImageUrlOptions { Width = 256, Height = 256 } ) )
                         : "";
                     return new RecentActivity
                     {
                         ProfileURL = profileURL,
-                        contactName = tp.Contact.FirstName,
+                        contactName = tp.FirstName,
                         TouchpointType = tp.Type.ToMobile(),
                         CompletedDate = tp.CompletedDateTime.Value
                     };
