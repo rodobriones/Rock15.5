@@ -16,6 +16,7 @@
 //
 
 using Rock.Data;
+using Rock.Enums.Core;
 using Rock.Enums.Crm;
 using Rock.Enums.Outreach;
 using Rock.Lava;
@@ -760,7 +761,7 @@ namespace Rock.Model
         /// Gets or sets the outreach schedule.
         /// </summary>
         [DataMember]
-        public DayOfWeekFlag OutreachTouchpointSchedule { get; set; }
+        public DaysOfWeekFlags OutreachTouchpointSchedule { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether outreach notification is enable.

@@ -13,7 +13,7 @@ namespace Rock.Migrations
         
         string IMigrationMetadata.Id
         {
-            get { return "202512221643095_TempOutreachModel"; }
+            get { return "202601061949124_TempOutreachModel"; }
         }
         
         string IMigrationMetadata.Source

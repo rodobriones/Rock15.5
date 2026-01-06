@@ -8,6 +8,7 @@ using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
+using Rock.Enums.Core;
 using Rock.Enums.Outreach;
 using Rock.Mobile;
 using Rock.Model;
@@ -243,7 +244,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
 
             PersonService personService = new PersonService( RockContext );
             person = personService.Get( person.Id );
-            person.OutreachTouchpointSchedule = ( Rock.Utility.Enums.DayOfWeekFlag ) ( ( int ) savePreferenceBag.DayOfWeek );
+            person.OutreachTouchpointSchedule = ( DaysOfWeekFlags ) ( ( int ) savePreferenceBag.DayOfWeek );
             person.OutreachEnableDailyNotification = savePreferenceBag.DailyNotificationsEnabled;
             person.OutreachNotificationTimeOfDay = savePreferenceBag.DailyNotificationsEnabled ? ( Enums.Outreach.OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay : null; // Clear out time of day if daily notifications are disabled
             person.OutreachEnableSpecialEventsNotification = savePreferenceBag.SpecialEventNotificationsEnabled;

@@ -3,6 +3,7 @@
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Common.Mobile.ViewModel;
+using Rock.Enums.Core;
 using Rock.Mobile;
 using Rock.Model;
 
@@ -70,7 +71,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionBadRequest( "Could not find the current person." );
             }
 
-            person.OutreachTouchpointSchedule = ( Utility.Enums.DayOfWeekFlag ) option.DayOfWeekFlags;
+            person.OutreachTouchpointSchedule = ( DaysOfWeekFlags ) option.DayOfWeekFlags;
             person.OutreachTouchpointNotificationsEnabled = option.DailyNotificationsEnabled || option.SpecialEventNotificationsEnabled;
             person.OutreachEnableDailyNotification = option.DailyNotificationsEnabled;
             person.OutreachNotificationTimeOfDay = option.DailyNotificationsEnabled ? option.NotificationTime?.ToNative() : null; // Clear out time if daily notifications are not enabled
