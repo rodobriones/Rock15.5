@@ -93,16 +93,17 @@
     color: var(--color-interface-medium);
 }
 
+:deep(.panel-header-actions .dropdown-menu) {
+    min-width: 170px;
+}
+
+/* TreeList Item Hover and Selected Styles */
 :deep(.panel-body .rocktree span:hover) {
     background-color: var(--base-interface-softer);
 }
 
 :deep(.panel-body .rocktree .rocktree-name.selected) {
     background-color: var(--color-info-soft);
-}
-
-:deep(.panel-header-actions .dropdown-menu) {
-    min-width: 170px;
 }
 
 /* Scrollbar Missing Fix - Copied from CategoryTree */
