@@ -49,7 +49,8 @@ namespace Rock.Blocks.Event
     #endregion
 
     [Rock.SystemGuid.EntityTypeGuid( "4E9F4E79-56E0-41F8-A43F-F06277E2A780" )]
-    [Rock.SystemGuid.BlockTypeGuid( "E4437A42-C396-45C8-A657-57BE658DC319" )]
+    [Rock.SystemGuid.BlockTypeGuid( "D341EF12-406B-477D-8A85-16EBDDF2B04B" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "E4437A42-C396-45C8-A657-57BE658DC319" )]
     public class RegistrationInstanceLinkageDetail : RockDetailBlockType
     {
         #region Properties
