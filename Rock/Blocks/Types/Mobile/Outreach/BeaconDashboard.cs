@@ -208,6 +208,11 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 ? 0
                 : ( int ) Math.Round( ( double ) finishedOnTime / totalCompleted * 100 );
 
+            // Get the average number of touchpoints generated per day.
+            var contacts = contactService.Queryable().Where( c => c.OwnerPersonAliasId == person.PrimaryAliasId );
+            var numberOfTouchpointDays = person.OutreachTouchpointSchedule.AsDayOfWeekList().Count;
+            var count = ContactTouchpointService.GetDailyTouchpointCount( contacts, TouchpointType.Prayer, numberOfTouchpointDays );
+            count += ContactTouchpointService.GetDailyTouchpointCount( contacts, TouchpointType.Connection, numberOfTouchpointDays );
 
             var data = new InitialDataBag
             {
@@ -224,7 +229,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 SpecialEventNotificationsEnabled = person.OutreachEnableSpecialEventsNotification,
                 dayOfWeekFlag = ( Common.Mobile.Enums.DayOfWeekFlag ) ( ( int ) person.OutreachTouchpointSchedule ),
                 OutreachNotificationTimeOfDay = ( Common.Mobile.Enums.OutreachNotificationTimeOfDay? ) person.OutreachNotificationTimeOfDay,
-                PersonProfileUrl = MobileHelper.BuildPublicApplicationRootUrl( GetCurrentPerson().PhotoUrl )
+                PersonProfileUrl = MobileHelper.BuildPublicApplicationRootUrl( GetCurrentPerson().PhotoUrl ),
+                NumberOfTouchpointsGeneratedPerDay = ( int ) Math.Round( count ),
             };
 
             return ActionOk( data );
