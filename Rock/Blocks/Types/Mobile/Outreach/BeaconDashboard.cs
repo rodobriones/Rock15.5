@@ -224,6 +224,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 SpecialEventNotificationsEnabled = person.OutreachEnableSpecialEventsNotification,
                 dayOfWeekFlag = ( Common.Mobile.Enums.DayOfWeekFlag ) ( ( int ) person.OutreachTouchpointSchedule ),
                 OutreachNotificationTimeOfDay = ( Common.Mobile.Enums.OutreachNotificationTimeOfDay? ) person.OutreachNotificationTimeOfDay,
+                PersonProfileUrl = MobileHelper.BuildPublicApplicationRootUrl( GetCurrentPerson().PhotoUrl )
             };
 
             return ActionOk( data );
