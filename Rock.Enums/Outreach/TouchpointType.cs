@@ -22,47 +22,54 @@ namespace Rock.Enums.Outreach
     public enum TouchpointType
     {
         /// <summary>
-        /// Prayer
+        /// The contact should be prayed for by the individual.
         /// </summary>
         Prayer = 0,
 
         /// <summary>
-        /// Connection
+        /// The contact should be reached out to by the individual.
         /// </summary>
         Connection = 1,
 
         /// <summary>
-        /// Reminder
+        /// A personal reminder for the individual to do something with the
+        /// contact. The details of what the something is should be stored
+        /// in the touchpoint note.
         /// </summary>
         Reminder = 2,
 
         /// <summary>
-        /// Pulse
+        /// The individual should be asked how their relationship with the
+        /// contact is going and if there have been any changes.
         /// </summary>
         Pulse = 3,
 
         /// <summary>
-        /// Birthday
+        /// The contact has a birthday that should be recognized by the
+        /// individual.
         /// </summary>
         Birthday = 4,
 
         /// <summary>
-        /// Share
+        /// Share - not used currently, we think these are being handled by interactions instead.
         /// </summary>
         Share = 5,
 
         /// <summary>
-        /// Wedding Anniversary
+        /// The contact has a wedding anniversary that should be recognized by
+        /// the individual.
         /// </summary>
         WeddingAnniversary = 6,
 
         /// <summary>
-        /// Baptism Anniversary
+        /// The contact has a baptism anniversary that should be recognized by
+        /// the individual.
         /// </summary>
         BaptismAnniversary = 7,
 
         /// <summary>
-        /// Salvation Anniversary
+        /// The contact has a salvation anniversary that should be recognized by
+        /// the individual.
         /// </summary>
         SalvationAnniversary = 8,
     }
