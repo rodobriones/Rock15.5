@@ -68,7 +68,7 @@ namespace Rock.Rest.v2.Models.Actions
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
-        [SystemGuid.RestActionGuid( "802af5c2-c880-42d4-8043-33a43ad27965" )]
+        [SystemGuid.RestActionGuid( "5ba11dbf-6342-4a80-a27d-ae6d893607e3" )]
         public IActionResult PostSearchMy( [FromBody] ContactSearchOptions option )
         {
             using ( var rockContext = new RockContext() )
