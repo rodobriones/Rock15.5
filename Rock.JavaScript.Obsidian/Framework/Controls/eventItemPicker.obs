@@ -3,16 +3,18 @@
     <BaseAsyncPicker v-model="internalValue"
                      v-bind="standardProps"
                      :items="actualItems"
-                     :grouped="true" />
+                     :grouped="!props.rootCalendar" />
 </template>
 
 <script setup lang="ts">
+    import { computed, PropType, ref, watch } from "vue";
+    import BaseAsyncPicker from "./baseAsyncPicker.obs";
     import { standardAsyncPickerProps, useStandardAsyncPickerProps, useVModelPassthrough } from "@Obsidian/Utility/component";
     import { useHttp } from "@Obsidian/Utility/http";
     import { EventItemPickerGetEventItemsOptionsBag } from "@Obsidian/ViewModels/Rest/Controls/eventItemPickerGetEventItemsOptionsBag";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
-    import { computed, PropType, ref, watch } from "vue";
-    import BaseAsyncPicker from "./baseAsyncPicker.obs";
+    import { Guid } from "@Obsidian/Types";
+    import { emptyGuid, toGuidOrNull } from "@Obsidian/Utility/guid";
 
     const props = defineProps({
         modelValue: {
@@ -25,11 +27,17 @@
             default: false
         },
 
+        rootCalendar: {
+            type: String as PropType<Guid>,
+            default: null
+        },
+
         ...standardAsyncPickerProps
     });
 
     const emit = defineEmits<{
         (e: "update:modelValue", value: ListItemBag | ListItemBag[] | null): void;
+        (e: "update:items", value: ListItemBag[] | null): void;
     }>();
 
     // #region Values
@@ -47,8 +55,16 @@
      * The actual items to make available to the picker. This allows us to do any
      * post-processing, such as adding additional items, and still be lazy loaded as well.
      */
-    const actualItems = computed((): ListItemBag[] | (() => Promise<ListItemBag[]>) => {
-        return loadedItems.value || loadOptions;
+    const actualItems = computed<ListItemBag[]>(() => {
+        if (!loadedItems.value) {
+            // Trigger async load but return empty array for now
+            loadOptions().then(items => {
+                emit("update:items", items);
+            });
+            return [];
+        }
+        emit("update:items", loadedItems.value);
+        return loadedItems.value;
     });
 
     // #endregion
@@ -60,7 +76,8 @@
      */
     const loadOptions = async (): Promise<ListItemBag[]> => {
         const options: EventItemPickerGetEventItemsOptionsBag = {
-            includeInactive: props.includeInactive
+            includeInactive: props.includeInactive,
+            rootCalendar: toGuidOrNull(props.rootCalendar) ?? emptyGuid,
         };
         const result = await http.post<ListItemBag[]>("/api/v2/Controls/EventItemPickerGetEventItems", undefined, options);
 
@@ -80,6 +97,11 @@
     // #region Watchers
 
     watch(() => props.includeInactive, () => {
+        loadedItems.value = null;
+    });
+
+    watch(() => props.rootCalendar, () => {
+        internalValue.value = null;
         loadedItems.value = null;
     });
 

@@ -5330,6 +5330,7 @@ namespace Rock.Rest.v2
             {
                 var eventItems = new EventCalendarItemService( rockContext ).Queryable()
                     .Include( eci => eci.EventCalendar )
+                    .Where( i => options.RootCalendar != Guid.Empty ? i.EventCalendar.Guid == options.RootCalendar : true )
                     .Where( i => options.IncludeInactive ? true : i.EventItem.IsActive )
                     .ToList()
                     .Where( eci => eci.EventCalendar.IsAuthorized( Authorization.VIEW, RockRequestContext.CurrentPerson ) )
