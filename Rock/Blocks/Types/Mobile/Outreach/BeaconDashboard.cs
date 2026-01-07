@@ -35,6 +35,12 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         Key = AttributeKeys.DetailPage,
         Order = 1 )]
 
+    [LinkedPage( "My Contact Page",
+        Description = "The page to link to when user taps on a contact button",
+        IsRequired = false,
+        Key = AttributeKeys.MyContact,
+        Order = 2 )]
+
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.MOBILE_OUTREACH_BEACON_DASHBOARD_BLOCK_TYPE )]
     [SystemGuid.BlockTypeGuid( SystemGuid.BlockType.MOBILE_OUTREACH_BEACON_DASHBOARD )]
     public class BeaconDashboard : RockBlockType
@@ -45,6 +51,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         {
             public const string BaptismInfo = "BaptismInfo";
             public const string DetailPage = "DetailPage";
+            public const string MyContact = "MyContact";
         }
 
         #endregion
@@ -336,7 +343,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             return new Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard.Configuration
             {
                 DetailPage = GetAttributeValue( AttributeKeys.DetailPage ).AsGuidOrNull(),
-                BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) )
+                BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) ),
+                MyContactPage = GetAttributeValue( AttributeKeys.MyContact ).AsGuidOrNull()
             };
         }
     }
