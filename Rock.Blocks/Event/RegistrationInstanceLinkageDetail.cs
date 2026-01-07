@@ -208,38 +208,46 @@ namespace Rock.Blocks.Event
         /// <returns>A <see cref="RegistrationInstanceLinkageDetailBag"/> that represents the entity.</returns>
         private RegistrationInstanceLinkageDetailBag GetEntityBagForEdit( EventItemOccurrenceGroupMap entity )
         {
+            var bag = new RegistrationInstanceLinkageDetailBag();
+
+            // Prepare context first in case no entity exists
+            bag.Context = new RegistrationInstanceLinkageContextBag
+            {
+                RegistrationInstanceGroupTypeGuid = RegistrationInstanceService.Get(
+                    PageParameter( PageParameterKey.RegistrationInstanceId ),
+                    !PageCache.Layout.Site.DisablePredictableIds
+                )
+                ?.RegistrationTemplate
+                ?.GroupType
+                ?.Guid,
+            };
+
             if ( entity == null )
             {
-                return null;
+                return bag;
             }
 
-            var bag = new RegistrationInstanceLinkageDetailBag
+            // Prepare remainder of bag from existing entity
+            bag.IdKey = entity.IdKey;
+            bag.CalendarItem = new RegistrationInstanceLinkageDetailCalendarItemBag
             {
-                IdKey = entity.IdKey,
-                CalendarItem = new RegistrationInstanceLinkageDetailCalendarItemBag
-                {
-                    SelectedCalendarItem = entity.EventItemOccurrence != null && entity.EventItemOccurrence.EventItem != null ?
-                        new ListItemBag
-                        {
-                            Text = entity.EventItemOccurrence.EventItem.Name,
-                            Value = entity.EventItemOccurrence.EventItem.Guid.ToString()
-                        } :
-                        new ListItemBag(),
-                    SelectedOccurrence = new ListItemBag
+                SelectedCalendarItem = entity.EventItemOccurrence != null && entity.EventItemOccurrence.EventItem != null ?
+                    new ListItemBag
                     {
-                        Text = entity.EventItemOccurrence != null ? entity.EventItemOccurrence.ToString() : string.Empty,
-                        Value = entity.EventItemOccurrence != null ? entity.EventItemOccurrence.Guid.ToString() : string.Empty
-                    },
-                },
-                Group = entity.Group != null ? new ListItemBag { Text = entity.Group.Name, Value = entity.Group.Guid.ToString() } : new ListItemBag(),
-                Campus = entity.Campus != null ? new ListItemBag { Text = entity.Campus.Name, Value = entity.Campus.Guid.ToString() } : new ListItemBag(),
-                UrlSlug = entity.UrlSlug,
-                PublicName = entity.PublicName,
-                Context = new RegistrationInstanceLinkageContextBag
+                        Text = entity.EventItemOccurrence.EventItem.Name,
+                        Value = entity.EventItemOccurrence.EventItem.Guid.ToString()
+                    } :
+                    new ListItemBag(),
+                SelectedOccurrence = new ListItemBag
                 {
-                    RegistrationInstanceGuid = entity.RegistrationInstance != null ? entity.RegistrationInstance.Guid : ( Guid? ) null,
+                    Text = entity.EventItemOccurrence != null ? entity.EventItemOccurrence.ToString() : string.Empty,
+                    Value = entity.EventItemOccurrence != null ? entity.EventItemOccurrence.Guid.ToString() : string.Empty
                 },
             };
+            bag.Group = entity.Group != null ? new ListItemBag { Text = entity.Group.Name, Value = entity.Group.Guid.ToString() } : new ListItemBag();
+            bag.Campus = entity.Campus != null ? new ListItemBag { Text = entity.Campus.Name, Value = entity.Campus.Guid.ToString() } : new ListItemBag();
+            bag.UrlSlug = entity.UrlSlug;
+            bag.PublicName = entity.PublicName;
 
             return bag;
         }
@@ -370,6 +378,24 @@ namespace Rock.Blocks.Event
             } );
 
             return ActionOk( box.NavigationUrls[NavigationUrlKey.ParentPage] );
+        }
+
+        [BlockAction]
+        public BlockActionResult FetchGroupType( Guid groupGuid )
+        {
+            if ( !IsCurrentPersonAuthorized )
+            {
+                return ActionBadRequest( EditModeMessage.NotAuthorizedToEdit( FriendlyTypeName ) );
+            }
+
+            var group = GroupCache.Get( groupGuid );
+
+            if ( group != null && group.GroupType != null )
+            {
+                return ActionOk( group.GroupType.Guid );
+            }
+
+            return ActionBadRequest( "Group not found or has no group type." );
         }
 
         #endregion

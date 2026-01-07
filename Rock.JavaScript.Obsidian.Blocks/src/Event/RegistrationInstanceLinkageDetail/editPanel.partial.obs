@@ -135,7 +135,7 @@
     import EventItemOccurrencePicker from "@Obsidian/Controls/eventItemOccurrencePicker.obs";
     import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { BtnSize } from "@Obsidian/Enums/Controls/btnSize";
-    import { watchPropertyChanges } from "@Obsidian/Utility/block";
+    import { watchPropertyChanges, useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
     import { RegistrationInstanceLinkageDetailBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationInstanceLinkageDetail/registrationInstanceLinkageDetailBag";
     import { RegistrationInstanceLinkageDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationInstanceLinkageDetail/registrationInstanceLinkageDetailOptionsBag";
@@ -143,7 +143,10 @@
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
     import { DateRangeParts } from "@Obsidian/Types/Controls/dateRangePicker";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
+    import { Guid } from "@Obsidian/Types";
+    import { toGuidOrNull } from "@Obsidian/Utility/guid";
 
+    const invokeBlockAction = useInvokeBlockAction();
 
     const props = defineProps({
         modelValue: {
@@ -175,7 +178,7 @@
     const calendarItem = propertyRef(props.modelValue.calendarItem ?? {}, "CalendarItem");
     const publicName = propertyRef(props.modelValue.publicName ?? "", "PublicName");
 
-    const registrationInstanceGuid = props.modelValue.context?.registrationInstanceGuid;
+    const registrationInstanceGroupTypeGuid = props.modelValue.context?.registrationInstanceGroupTypeGuid;
     checkGroupCompatibility(group.value.value ? group.value : null);
 
     const addRemoveButtonSize = ref<BtnSize>(BtnSize.ExtraSmall);
@@ -259,7 +262,7 @@
      * @param selectedGroup The selected group.
      */
     function checkGroupCompatibility(selectedGroup: ListItemBag | null): void {
-        if (!registrationInstanceGuid) {
+        if (!registrationInstanceGroupTypeGuid) {
             groupError.value = "";
             return;
         }
@@ -269,13 +272,23 @@
             return;
         }
 
-        if (registrationInstanceGuid !== selectedGroup.value) {
-            groupError.value = "Warning: The group type of the selected group is different than the group type of the registration template. " +
-                "This could prevent registrants from getting added to the group.";
-        }
-        else {
-            groupError.value = "";
-        }
+        fetchGroupType(selectedGroup.value).then((fetched) => {
+
+            const selectedGroupTypeGuid = toGuidOrNull(fetched);
+
+            if (!selectedGroupTypeGuid) {
+                groupError.value = fetched;
+                return;
+            }
+
+            if (registrationInstanceGroupTypeGuid !== selectedGroupTypeGuid) {
+                groupError.value = "Warning: The group type of the selected group is different than the group type of the registration template. " +
+                    "This could prevent registrants from getting added to the group.";
+            }
+            else {
+                groupError.value = "";
+            }
+        });
     }
 
     // #endregion Functions
@@ -447,6 +460,26 @@
     }
 
     // #endregion Event Handlers
+
+    // #region Block Actions
+
+    async function fetchGroupType(guid: Guid): Promise<Guid> {
+        const result = await invokeBlockAction<Guid | string | null>("FetchGroupType", {
+            groupGuid: guid
+        });
+
+        if (result.isSuccess && result.data) {
+            return result.data;
+        }
+        else if (result.errorMessage) {
+            return result.errorMessage;
+        }
+        else {
+            return "Unknown error while trying to fetch group type.";
+        }
+    }
+
+    // #endregion Block Actions
 
     watch(() => !!modalSelectedCalendarItem.value && !!modalSelectedCalendarItemOccurrence.value, () => {
         activateModalPrimaryButton();

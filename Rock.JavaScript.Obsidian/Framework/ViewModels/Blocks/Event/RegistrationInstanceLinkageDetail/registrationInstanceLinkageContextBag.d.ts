@@ -26,5 +26,5 @@ import { Guid } from "@Obsidian/Types";
 /** Contains additional context information needed by the Registration Instance Linkage Detail block. */
 export type RegistrationInstanceLinkageContextBag = {
     /** Gets or sets the unique identifier of the registration instance. */
-    registrationInstanceGuid?: Guid | null;
+    registrationInstanceGroupTypeGuid?: Guid | null;
 };

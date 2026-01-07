@@ -29,6 +29,6 @@ namespace Rock.ViewModels.Blocks.Event.RegistrationInstanceLinkageDetail
         /// <summary>
         /// Gets or sets the unique identifier of the registration instance.
         /// </summary>
-        public Guid? RegistrationInstanceGuid { get; set; }
+        public Guid? RegistrationInstanceGroupTypeGuid { get; set; }
     }
 }
