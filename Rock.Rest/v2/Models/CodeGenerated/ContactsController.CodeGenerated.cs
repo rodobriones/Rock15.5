@@ -155,6 +155,30 @@ namespace Rock.Rest.v2.Models
         }
 
         /// <summary>
+        /// Deletes a single item from the database.
+        /// </summary>
+        /// <param name="id">The identifier as either an Id, Guid or IdKey value.</param>
+        /// <returns>An empty response.</returns>
+        [HttpDelete]
+        [Route( "{id}" )]
+        [Authenticate]
+        [Secured( Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
+        [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_READ )]
+        [ProducesResponse( HttpStatusCode.NoContent )]
+        [ProducesResponse( HttpStatusCode.BadRequest )]
+        [ProducesResponse( HttpStatusCode.NotFound )]
+        [ProducesResponse( HttpStatusCode.Unauthorized )]
+        [SystemGuid.RestActionGuid( "4105f3df-29dc-5f84-9753-05890932290a" )]
+        public IActionResult DeleteItem( string id )
+        {
+            var helper = new CrudEndpointHelper<Rock.Model.Contact, Rock.Model.ContactService>( this );
+
+            helper.IsSecurityIgnored = true;
+
+            return helper.Delete( id );
+        }
+
+        /// <summary>
         /// Gets all the attribute values for the specified item.
         /// </summary>
         /// <param name="id">The identifier as either an Id, Guid or IdKey value.</param>
