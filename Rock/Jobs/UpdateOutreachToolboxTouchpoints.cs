@@ -43,38 +43,55 @@ namespace Rock.Jobs
         Description = "The hour during which morning touchpoint notifications will be sent.",
         IsRequired = false,
         DefaultIntegerValue = 7,
-        Order = 0,
-        Key = AttributeKey.MorningNotificationHour )]
+        Key = AttributeKey.MorningNotificationHour,
+        Order = 0 )]
 
     [IntegerField( "Afternoon Notification Hour",
         Description = "The hour during which afternoon touchpoint notifications will be sent.",
         IsRequired = false,
         DefaultIntegerValue = 13,
-        Order = 1,
-        Key = AttributeKey.AfternoonNotificationHour )]
+        Key = AttributeKey.AfternoonNotificationHour,
+        Order = 1 )]
 
     [IntegerField( "Evening Notification Hour",
         Description = "The hour during which evening touchpoint notifications will be sent.",
         IsRequired = false,
         DefaultIntegerValue = 18,
-        Order = 2,
-        Key = AttributeKey.EveningNotificationHour )]
+        Key = AttributeKey.EveningNotificationHour,
+        Order = 2 )]
+
+    [IntegerField( "Relationship Pulse Interval in Days",
+        Description = "The number of days between relationship pulse touchpoints. These are used to ask the individual if there have been any changes in their relationship.",
+        IsRequired = false,
+        DefaultIntegerValue = 120,
+        Key = AttributeKey.RelationshipPulseIntervalInDays,
+        Order = 3 )]
 
     [IntegerField(
         "Command Timeout",
-        Key = AttributeKey.CommandTimeout,
         Description = "Maximum amount of time (in seconds) to wait for the sql operations to complete.",
         IsRequired = false,
         DefaultIntegerValue = 60 * 5,
-        Order = 3 )]
+        Key = AttributeKey.CommandTimeout,
+        Order = 4 )]
 
     #endregion Job Attributes
 
     public class UpdateOutreachToolboxTouchpoints : RockJob
     {
-#warning TOOD: Logic for Pulse (not sure on pattern).
+        #region Fields
 
+        /// <summary>
+        /// The random number generator used by the job.
+        /// </summary>
         private readonly Random _random = new Random();
+
+        /// <summary>
+        /// The size of each batch when processing people.
+        /// </summary>
+        private readonly int _batchSize = 100;
+
+        #endregion
 
         #region Keys
 
@@ -83,6 +100,7 @@ namespace Rock.Jobs
             public const string MorningNotificationHour = "MorningNotificationHour";
             public const string AfternoonNotificationHour = "AfternoonNotificationHour";
             public const string EveningNotificationHour = "EveningNotificationHour";
+            public const string RelationshipPulseIntervalInDays = "RelationshipPulseIntervalInDays";
             public const string CommandTimeout = "CommandTimeout";
         }
 
@@ -218,6 +236,13 @@ namespace Rock.Jobs
             {
                 ProcessReminderTouchpoints( rockContext, runContext, timeOfDay );
             }
+
+            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} pulse touchpoints." );
+
+            using ( var rockContext = CreateRockContext() )
+            {
+                ProcessPulseTouchpoints( rockContext, runContext, timeOfDay );
+            }
         }
 
         /// <summary>
@@ -289,7 +314,7 @@ namespace Rock.Jobs
             var processingContext = new GeneralProcessingContext( runContext, touchpointType, rockContext );
             var touchpointCount = 0;
 
-            foreach ( var peopleChunk in peopleToProcess.Chunk( runContext.BatchSize ) )
+            foreach ( var peopleChunk in peopleToProcess.Chunk( _batchSize ) )
             {
                 ProcessPeople( rockContext, runContext, peopleChunk.ToList(), ( person, personContacts ) =>
                 {
@@ -460,7 +485,7 @@ namespace Rock.Jobs
             var processingContext = new AnnualProcessingContext( runContext, rockContext );
             var touchpointCount = 0;
 
-            foreach ( var peopleChunk in peopleToProcess.Chunk( runContext.BatchSize ) )
+            foreach ( var peopleChunk in peopleToProcess.Chunk( _batchSize ) )
             {
                 ProcessPeople( rockContext, runContext, peopleChunk.ToList(), ( person, personContacts ) =>
                 {
@@ -498,7 +523,7 @@ namespace Rock.Jobs
             var contactsQry = new ContactService( rockContext ).Queryable();
 
             // Include people:
-            // - Whose notification day(s) includes today
+            // - Who have special event notifications enabled
             // - Whose notification time of day matches the current run
             // - Who have at least one contact
             // - Who do not have touchpoints created today
@@ -643,7 +668,8 @@ namespace Rock.Jobs
         #region Reminder Touchpoint Processing
 
         /// <summary>
-        /// Processes all annual touchpoints that need to be created for today.
+        /// Processes all reminder touchpoints that were previously created by
+        /// the individual. These are simply added to the notification queue.
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="runContext">The current job run context information.</param>
@@ -680,6 +706,116 @@ namespace Rock.Jobs
 
         #endregion
 
+        #region Pulse Touchpoint Processing
+
+        /// <summary>
+        /// Processes all pulse touchpoints that need to be created for today.
+        /// </summary>
+        /// <param name="rockContext">The context to use when accessing the database.</param>
+        /// <param name="runContext">The current job run context information.</param>
+        /// <param name="timeOfDay">The time period to process.</param>
+        private void ProcessPulseTouchpoints( RockContext rockContext, RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
+        {
+            var contactsToProcess = GetContactsToProcessForPulseTouchpoints( rockContext, runContext.ProcessingDateTime, timeOfDay );
+
+            foreach ( var result in contactsToProcess )
+            {
+                runContext.Notifications.AddContact( result.PersonId, result.Contact );
+            }
+
+            runContext.Messages.Add( $"Created {contactsToProcess.Count:N0} touchpoints for {timeOfDay.ToString().ToLower()} pulse notifications." );
+        }
+
+        /// <summary>
+        /// Gets the set of contacts that need to be processed for the current
+        /// run.
+        /// </summary>
+        /// <param name="rockContext">The context to use when accessing the database.</param>
+        /// <param name="touchpointDate">The run date that will be used when checking existing touchpoints.</param>
+        /// <param name="timeOfDay">The time of day being processed.</param>
+        /// <returns>A set of people that need to be processed.</returns>
+        private List<(int PersonId, Contact Contact)> GetContactsToProcessForPulseTouchpoints( RockContext rockContext, DateTime touchpointDate, OutreachNotificationTimeOfDay timeOfDay )
+        {
+            var targetLastPulseDate = touchpointDate.AddDays( -GetAttributeValue( AttributeKey.RelationshipPulseIntervalInDays ).AsInteger() );
+            var nearTargetLastPulseDate = targetLastPulseDate.AddDays( 7 );
+
+            var activeTouchpointsQry = new ContactTouchpointService( rockContext )
+                .Queryable()
+                .Where( t => t.Type == TouchpointType.Pulse
+                    && !t.CompletedDateTime.HasValue );
+
+            // Pre-loading the touchpoints details all at once is much
+            // faster than individual queries. With 5,000 contacts, this query
+            // only adds 5MB to the heap.
+            var latestTouchpoints = new ContactTouchpointService( rockContext )
+                .Queryable()
+                .Where( t => t.Type == TouchpointType.Pulse
+                    && t.CompletedDateTime.HasValue )
+                .GroupBy( t => t.ContactId )
+                .Select( g => new
+                {
+                    ContactId = g.Key,
+                    LatestCompletedDateTime = g.Max( t => t.CompletedDateTime.Value )
+                } )
+                .ToDictionary( k => k.ContactId, v => v.LatestCompletedDateTime );
+
+            var dayOfWeekFlag = touchpointDate.DayOfWeek.AsFlags();
+            var contactsQry = new ContactService( rockContext ).Queryable();
+
+            // Include contacts:
+            // - Whose notification day(s) includes today
+            // - Whose notification time of day matches the current run
+            // - Who do not have an active pulse touchpoint already
+            // - Who have not had a pulse touchpoint created recently
+            var contacts = new ContactService( rockContext )
+                .Queryable()
+                .AsNoTracking()
+                .Where( c => ( c.OwnerPersonAlias.Person.OutreachTouchpointSchedule & dayOfWeekFlag ) != 0
+                    && c.OwnerPersonAlias.Person.OutreachNotificationTimeOfDay == timeOfDay
+                    && !activeTouchpointsQry.Any( t => t.Contact.OwnerPersonAlias.PersonId == c.OwnerPersonAlias.PersonId ) )
+                .Select( c => new
+                {
+                    c.OwnerPersonAlias.PersonId,
+                    Contact = c,
+                } )
+                .AsEnumerable()
+                .Where( c =>
+                {
+                    // Logic for recent pulses.
+                    DateTime lastPulseDate = DateTime.MinValue;
+
+                    if ( latestTouchpoints.TryGetValue( c.Contact.Id, out var latestCompletedDateTime ) )
+                    {
+                        lastPulseDate = latestCompletedDateTime.Date;
+                    }
+                    else if ( c.Contact.CreatedDateTime.HasValue )
+                    {
+                        lastPulseDate = c.Contact.CreatedDateTime.Value.Date;
+                    }
+
+                    // If we are getting close to reaching the target date for
+                    // a new pulse to be sent, then add +/- up to one week of
+                    // randomness so not all pulses go out on the exact same
+                    // day when an individual added a number of contacts at
+                    // the same time.
+                    //
+                    // This means a pulse might go out a week early, or a week
+                    // late.
+                    if ( lastPulseDate != DateTime.MinValue && lastPulseDate <= nearTargetLastPulseDate )
+                    {
+                        lastPulseDate = lastPulseDate.AddDays( 7 - _random.Next( 14 ) );
+                    }
+
+                    return lastPulseDate <= targetLastPulseDate;
+                } );
+
+            return contacts
+                .Select( c => ( c.PersonId, c.Contact ) )
+                .ToList();
+        }
+
+        #endregion
+
         #region Notification Processing
 
         /// <summary>
@@ -698,7 +834,7 @@ namespace Rock.Jobs
 
             var sentCount = 0;
 
-            foreach ( var batch in runContext.Notifications.Chunk( runContext.BatchSize ) )
+            foreach ( var batch in runContext.Notifications.Chunk( _batchSize ) )
             {
                 using ( var rockContext = CreateRockContext() )
                 {
@@ -891,11 +1027,6 @@ namespace Rock.Jobs
             /// we don't want the confusion that might bring.
             /// </summary>
             public DateTime ProcessingDateTime { get; }
-
-            /// <summary>
-            /// The batch size when processing records.
-            /// </summary>
-            public int BatchSize { get; } = 100;
 
             /// <summary>
             /// The dictionary of records that need notifications to be sent.
