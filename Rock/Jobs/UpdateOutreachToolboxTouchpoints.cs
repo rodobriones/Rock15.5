@@ -72,7 +72,6 @@ namespace Rock.Jobs
 
     public class UpdateOutreachToolboxTouchpoints : RockJob
     {
-#warning TODO: Logic for Reminder (check existing touchpoints).
 #warning TOOD: Logic for Pulse (not sure on pattern).
 
         private readonly Random _random = new Random();
@@ -212,6 +211,13 @@ namespace Rock.Jobs
             {
                 ProcessAnnualTouchpoints( rockContext, runContext, timeOfDay );
             }
+
+            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} reminder touchpoints." );
+
+            using ( var rockContext = CreateRockContext() )
+            {
+                ProcessReminderTouchpoints( rockContext, runContext, timeOfDay );
+            }
         }
 
         /// <summary>
@@ -291,7 +297,7 @@ namespace Rock.Jobs
                 } );
             }
 
-            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay} {touchpointType.ToString().ToLower()} notifications." );
+            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay.ToString().ToLower()} {touchpointType.ToString().ToLower()} notifications." );
         }
 
         /// <summary>
@@ -462,7 +468,7 @@ namespace Rock.Jobs
                 } );
             }
 
-            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay} annual notifications." );
+            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay.ToString().ToLower()} annual notifications." );
         }
 
         /// <summary>
@@ -630,6 +636,46 @@ namespace Rock.Jobs
             }
 
             return newTouchpoints;
+        }
+
+        #endregion
+
+        #region Reminder Touchpoint Processing
+
+        /// <summary>
+        /// Processes all annual touchpoints that need to be created for today.
+        /// </summary>
+        /// <param name="rockContext">The context to use when accessing the database.</param>
+        /// <param name="runContext">The current job run context information.</param>
+        /// <param name="timeOfDay">The time period to process.</param>
+        private void ProcessReminderTouchpoints( RockContext rockContext, RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
+        {
+            var today = runContext.ProcessingDateTime.Date;
+            var tomorrow = runContext.ProcessingDateTime.Date.AddDays( 1 );
+            var count = 0;
+
+            // Touchpoints that were created on or after today but before
+            // tomorrow. This is faster then checking for touchpoints created
+            // "today" because it can use an index on ScheduledDateTime.
+            var contactsQry = new ContactTouchpointService( rockContext )
+                .Queryable()
+                .Where( t => t.ScheduledDateTime >= today
+                    && t.ScheduledDateTime < tomorrow
+                    && t.Type == TouchpointType.Reminder
+                    && t.Contact.OwnerPersonAlias.Person.OutreachNotificationTimeOfDay == timeOfDay )
+                .Select( t => new
+                {
+                    t.Contact.OwnerPersonAlias.PersonId,
+                    t.Contact
+                } );
+
+            foreach ( var result in contactsQry )
+            {
+                runContext.Notifications.AddContact( result.PersonId, result.Contact );
+                count++;
+            }
+
+            runContext.Messages.Add( $"Processed {count:N0} touchpoints for {timeOfDay.ToString().ToLower()} reminder notifications." );
         }
 
         #endregion
