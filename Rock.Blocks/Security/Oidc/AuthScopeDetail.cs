@@ -49,6 +49,12 @@ namespace Rock.Blocks.Security.Oidc
     [SystemGuid.BlockTypeGuid( "1a2520f9-4990-485a-8a4d-38cf1440d71d" )]
     public class AuthScopeDetail : RockEntityDetailBlockType<AuthScope, AuthScopeBag>
     {
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        #endregion Properties
+
         #region Keys
 
         private static class PageParameterKey
@@ -323,6 +329,9 @@ namespace Rock.Blocks.Security.Oidc
         {
             var entityService = new AuthScopeService( RockContext );
 
+            // Store the original entity before it is modified for comparison later.
+            var originalEntity = entityService.GetNoTracking( box.Bag.IdKey, IsAllowingPredictableIds );
+
             if ( !TryGetEntityForEditAction( box.Bag.IdKey, out var entity, out var actionError ) )
             {
                 return actionError;
@@ -342,19 +351,17 @@ namespace Rock.Blocks.Security.Oidc
 
             var isNew = entity.Id == 0;
 
-            if ( entity.IsSystem )
+            if ( !isNew )
             {
-                var originalEntity = entityService.Get( entity.Id );
                 if ( originalEntity != null )
                 {
-                    // If it is a system entity, override all values with original except Public Name.
-                    entity.Name = originalEntity.Name;
-                    entity.IsActive = originalEntity.IsActive;
-                    entity.IsSystem = true;
-                }
-                else
-                {
-                    return ActionBadRequest( "An error occured while retrieving the original system scope. Preventing save to prevent data corruption." );
+                    if ( originalEntity.IsSystem )
+                    {
+                        // If it is a system entity, override all values with original except Public Name.
+                        entity.Name = originalEntity.Name;
+                        entity.IsActive = true;
+                        entity.IsSystem = true;
+                    }
                 }
             }
 
