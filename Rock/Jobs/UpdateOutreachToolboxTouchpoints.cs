@@ -153,7 +153,7 @@ namespace Rock.Jobs
 
             if ( !processedAnything )
             {
-                Result = "Nothing to process.";
+                Result = "<i class='ti ti-circle-filled text-success'></i> Nothing to process.";
                 return;
             }
 
@@ -164,13 +164,17 @@ namespace Rock.Jobs
 
             SendNotifications( runContext );
 
-            Result = string.Join( "\n", runContext.Messages );
+            if ( runContext.Errors.Count > 0 )
+            {
+                runContext.Warning( "Some steps have errors. See exception log for details." );
+            }
+
+            Result = "Summary\n\n" + string.Join( "\n", runContext.Messages );
 
             if ( runContext.Errors.Count > 0 )
             {
-                Result += $"\nCompleted with {runContext.Errors.Count:N0} errors, see exception log for details.";
-
                 var exception = new AggregateException( runContext.Errors );
+
                 throw new RockJobWarningException( $"{GetType().Name.SplitCase()} job completed with errors.", exception );
             }
         }
@@ -322,7 +326,7 @@ namespace Rock.Jobs
                 } );
             }
 
-            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay.ToString().ToLower()} {touchpointType.ToString().ToLower()} notifications." );
+            runContext.Success( $"{touchpointCount:N0} {timeOfDay} {touchpointType} {"Touchpoint".PluralizeIf( touchpointCount != 1 )} Created For {peopleToProcess.Count:N0} People" );
         }
 
         /// <summary>
@@ -493,7 +497,7 @@ namespace Rock.Jobs
                 } );
             }
 
-            runContext.Messages.Add( $"Processed {peopleToProcess.Count:N0} people and created {touchpointCount:N0} touchpoints for {timeOfDay.ToString().ToLower()} annual notifications." );
+            runContext.Success( $"{touchpointCount:N0} {timeOfDay} Annual {"Touchpoint".PluralizeIf( touchpointCount != 1 )} Created For {peopleToProcess.Count:N0} People" );
         }
 
         /// <summary>
@@ -701,7 +705,7 @@ namespace Rock.Jobs
                 count++;
             }
 
-            runContext.Messages.Add( $"Processed {count:N0} touchpoints for {timeOfDay.ToString().ToLower()} reminder notifications." );
+            runContext.Success( $"{count:N0} {timeOfDay} Reminder {"Touchpoint".PluralizeIf( count != 1 )} Processed" );
         }
 
         #endregion
@@ -718,12 +722,36 @@ namespace Rock.Jobs
         {
             var contactsToProcess = GetContactsToProcessForPulseTouchpoints( rockContext, runContext.ProcessingDateTime, timeOfDay );
 
+            try
+            {
+                using ( var saveRockContext = CreateRockContext() )
+                {
+                    var service = new ContactTouchpointService( saveRockContext );
+                    var touchpoints = contactsToProcess
+                        .Select( c => new ContactTouchpoint
+                        {
+                            ContactId = c.Contact.Id,
+                            Type = TouchpointType.Birthday,
+                            ScheduledDateTime = runContext.ProcessingDateTime,
+                        } );
+
+                    service.AddRange( touchpoints );
+
+                    saveRockContext.SaveChanges();
+                }
+            }
+            catch ( Exception ex )
+            {
+                runContext.Errors.Add( new Exception( "Error creating pulse touchpoints.", ex ) );
+                return;
+            }
+
             foreach ( var result in contactsToProcess )
             {
                 runContext.Notifications.AddContact( result.PersonId, result.Contact );
             }
 
-            runContext.Messages.Add( $"Created {contactsToProcess.Count:N0} touchpoints for {timeOfDay.ToString().ToLower()} pulse notifications." );
+            runContext.Success( $"{contactsToProcess.Count:N0} Pulse {"Touchpoint".PluralizeIf( contactsToProcess.Count != 1 )} Created" );
         }
 
         /// <summary>
@@ -810,7 +838,7 @@ namespace Rock.Jobs
                 } );
 
             return contacts
-                .Select( c => ( c.PersonId, c.Contact ) )
+                .Select( c => (c.PersonId, c.Contact) )
                 .ToList();
         }
 
@@ -826,7 +854,7 @@ namespace Rock.Jobs
         {
             if ( !MediumContainer.HasActivePushTransport() )
             {
-                runContext.Messages.Add( "No active push notification transport found; skipping push notifications." );
+                runContext.Warning( "No Push Notification Transport Configured; Notifications Not Sent" );
                 return;
             }
 
@@ -851,7 +879,7 @@ namespace Rock.Jobs
                 }
             }
 
-            runContext.Messages.Add( $"Sent {sentCount:N0} notifications." );
+            runContext.Success( $"{sentCount:N0} Notifications Sent." );
         }
 
         /// <summary>
@@ -905,7 +933,7 @@ namespace Rock.Jobs
             var sentCount = 0;
 
             foreach ( var touchpoint in notifications.AnnualTouchpoints )
-            { 
+            {
                 var pushMessage = GetAnnualNotificationMessage( touchpoint );
 
                 if ( pushMessage == null )
@@ -1050,6 +1078,24 @@ namespace Rock.Jobs
             public RunContext( DateTime processingDateTime )
             {
                 ProcessingDateTime = processingDateTime;
+            }
+
+            /// <summary>
+            /// Add a successful message to the messages list.
+            /// </summary>
+            /// <param name="message">The message text.</param>
+            public void Success( string message )
+            {
+                Messages.Add( $"<i class='ti ti-circle-filled text-success'></i> {message}" );
+            }
+
+            /// <summary>
+            /// Add a warning message to the messages list.
+            /// </summary>
+            /// <param name="message">The message text.</param>
+            public void Warning( string message )
+            {
+                Messages.Add( $"<i class='ti ti-circle-filled text-warning'></i> {message}" );
             }
         }
 
