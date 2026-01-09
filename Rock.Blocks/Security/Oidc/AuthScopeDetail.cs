@@ -40,13 +40,15 @@ namespace Rock.Blocks.Security.Oidc
     [Category( "Security > OIDC" )]
     [Description( "Displays the details of the given OpenID Connect Scope." )]
     [IconCssClass( "fa fa-question" )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
 
     #endregion
 
     [SystemGuid.EntityTypeGuid( "6fa3255d-bc1d-43ac-b34a-1e4f4b40eab6" )]
-    [SystemGuid.BlockTypeGuid( "1a2520f9-4990-485a-8a4d-38cf1440d71d" )]
+    [Rock.SystemGuid.BlockTypeGuid( "AA4368BD-00FA-4AB9-9591-CFD64BE6C9EA" )]
+    // was [SystemGuid.BlockTypeGuid( "1a2520f9-4990-485a-8a4d-38cf1440d71d" )]
     public class AuthScopeDetail : RockEntityDetailBlockType<AuthScope, AuthScopeBag>
     {
         #region Properties
