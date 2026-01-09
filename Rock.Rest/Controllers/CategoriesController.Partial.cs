@@ -251,23 +251,20 @@ namespace Rock.Rest.Controllers
                 // if id is zero and we have a rootCategory, show the children of that rootCategory (but don't show the rootCategory)
                 int parentItemId = id == 0 ? rootCategoryId : id;
 
-                var itemsQry = GetCategorizedItems<ICategorized>( serviceInstance, parentItemId, showUnnamedEntityItems, excludeInactiveItems, itemFilterPropertyName, itemFilterPropertyValue );
-                if ( itemsQry != null )
+                var items = GetCategorizedItems<ICategorized>( serviceInstance, parentItemId, showUnnamedEntityItems, excludeInactiveItems, itemFilterPropertyName, itemFilterPropertyValue );
+                if ( items != null )
                 {
-                    // do a ToList to load from database prior to ordering by name, just in case Name is a virtual property
-                    List<ICategorized> itemsList = itemsQry.ToList();
-
                     List<ICategorized> sortedItemsList;
 
                     bool isSchedule = cachedEntityType.Id == EntityTypeCache.GetId<Rock.Model.Schedule>();
 
-                    if ( isSchedule && itemsList.OfType<Rock.Model.Schedule>() != null )
+                    if ( isSchedule && items.OfType<Rock.Model.Schedule>() != null )
                     {
-                        sortedItemsList = itemsList.OfType<Rock.Model.Schedule>().ToList().OrderByOrderAndNextScheduledDateTime().OfType<ICategorized>().ToList();
+                        sortedItemsList = items.OfType<Rock.Model.Schedule>().ToList().OrderByOrderAndNextScheduledDateTime().OfType<ICategorized>().ToList();
                     }
                     else
                     {
-                        sortedItemsList = itemsList.OrderBy( i => i.Name ).ToList();
+                        sortedItemsList = items.OrderBy( i => i.Name ).ToList();
                     }
 
                     foreach ( var categorizedItem in sortedItemsList )
@@ -508,18 +505,15 @@ namespace Rock.Rest.Controllers
                 // if id is zero and we have a rootCategory, show the children of that rootCategory (but don't show the rootCategory)
                 int parentItemId = id == 0 ? rootCategoryId : id;
 
-                var itemsQry = GetCategorizedItems<DataView>( serviceInstance, parentItemId, showUnnamedEntityItems, excludeInactiveItems, itemFilterPropertyName, itemFilterPropertyValue );
-                if ( itemsQry != null )
+                var items = GetCategorizedItems<DataView>( serviceInstance, parentItemId, showUnnamedEntityItems, excludeInactiveItems, itemFilterPropertyName, itemFilterPropertyValue );
+                if ( items != null )
                 {
-                    // do a ToList to load from database prior to ordering by name, just in case Name is a virtual property
-                    List<DataView> itemsList = itemsQry.ToList();
-
                     if ( displayPersistedOnly )
                     {
-                        itemsList = itemsList.Where( i => i.IsPersisted() ).ToList();
+                        items = items.Where( i => i.IsPersisted() ).ToList();
                     }
 
-                    List<DataView> sortedItemsList = itemsList.OrderBy( i => i.Name ).ToList();
+                    List<DataView> sortedItemsList = items.OrderBy( i => i.Name ).ToList();
 
                     foreach ( var categorizedItem in sortedItemsList )
                     {
@@ -741,7 +735,7 @@ namespace Rock.Rest.Controllers
         /// <param name="itemFilterPropertyName">(Advanced) Property to FilterBy on the Item Query</param>
         /// <param name="itemFilterPropertyValue">(Advanced) Property Value to FilterBy on the Item Query</param>
         /// <returns></returns>
-        private IQueryable<T> GetCategorizedItems<T>( IService serviceInstance, int categoryId, bool showUnnamedEntityItems, bool excludeInactiveItems, string itemFilterPropertyName = null, string itemFilterPropertyValue = null ) where T : ICategorized
+        private IEnumerable<T> GetCategorizedItems<T>( IService serviceInstance, int categoryId, bool showUnnamedEntityItems, bool excludeInactiveItems, string itemFilterPropertyName = null, string itemFilterPropertyValue = null ) where T : ICategorized
         {
             if ( serviceInstance != null )
             {
@@ -801,12 +795,24 @@ namespace Rock.Rest.Controllers
 
                     result = getMethod.Invoke( serviceInstance, new object[] { paramExpression, whereExpression } ) as IQueryable<ICategorized>;
 
+                    /*
+                         1/9/2026 - DJS
+
+                         We intentionally materialize the entity earlier in the process so its virtual Name
+                         property is available. This prevents null reference exceptions when working with
+                         entities that do not implement the ICategorized interface.
+
+                         Reason: Avoid null reference errors by ensuring the Name property exists before access.
+                    */
+
+                    IEnumerable<ICategorized> materializedResult = result.ToList();
+
                     if ( !showUnnamedEntityItems )
                     {
-                        result = result.Where( a => a.Name != null && a.Name != string.Empty );
+                        materializedResult = materializedResult.Where( a => a.Name != null && a.Name != string.Empty );
                     }
 
-                    return ( IQueryable<T> ) result;
+                    return ( IEnumerable<T> ) materializedResult;
                 }
             }
 
