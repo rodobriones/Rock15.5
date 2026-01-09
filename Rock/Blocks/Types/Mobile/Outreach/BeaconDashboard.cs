@@ -221,6 +221,28 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             var count = ContactTouchpointService.GetDailyTouchpointCount( contacts, TouchpointType.Prayer, numberOfTouchpointDays );
             count += ContactTouchpointService.GetDailyTouchpointCount( contacts, TouchpointType.Connection, numberOfTouchpointDays );
 
+            // Get weekly touchpoints completed
+            var startWeek = now.StartOfWeek( RockDateTime.FirstDayOfWeek ).Date;
+            var startWeekDt = startWeek;
+            var startNextWeekDt = startWeekDt.AddDays( 7 );
+
+            var weeklyCompletedTouchpoint = touchpointService.Queryable()
+                    .Where( tp => personContactIds.Contains( tp.ContactId ) )
+                    .Where( tp => tp.CompletedDateTime != null )
+                    .Where( tp => tp.CompletedDateTime.Value >= startWeekDt
+                                && tp.CompletedDateTime.Value < startNextWeekDt )
+                    .Select( tp => new
+                    {
+                        tp.CompletedDateTime
+                    } )
+                    .AsEnumerable()
+                    .GroupBy( tp => tp.CompletedDateTime.Value.DayOfWeek )
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Count()
+                    );
+
+            // Build the POCO to send out.
             var data = new InitialDataBag
             {
                 ContactCount = personContactIds.Count(),
@@ -238,6 +260,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 OutreachNotificationTimeOfDay = ( Common.Mobile.Enums.OutreachNotificationTimeOfDay? ) person.OutreachNotificationTimeOfDay,
                 PersonProfileUrl = MobileHelper.BuildPublicApplicationRootUrl( GetCurrentPerson().PhotoUrl ),
                 NumberOfTouchpointsGeneratedPerDay = ( int ) Math.Round( count ),
+                TouchpointCountCompletedDayOfWeek = weeklyCompletedTouchpoint,
             };
 
             return ActionOk( data );
