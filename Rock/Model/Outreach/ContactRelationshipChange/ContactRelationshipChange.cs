@@ -20,6 +20,7 @@ using System.Runtime.Serialization;
 
 using Rock.Data;
 using Rock.Enums.Outreach;
+using Rock.Utility;
 
 namespace Rock.Model
 {
@@ -30,7 +31,7 @@ namespace Rock.Model
     [Table( "ContactRelationshipChange" )]
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]
-    [Analytics( true, true )]
+    [CodeGenExclude( CodeGenFeature.DefaultRestController )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_STRENGTH_CHANGES )]
     public partial class ContactRelationshipChange : Entity<ContactRelationshipChange>
     {

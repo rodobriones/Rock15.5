@@ -22,6 +22,7 @@ using System.Runtime.Serialization;
 
 using Rock.Data;
 using Rock.Enums.Outreach;
+using Rock.Utility;
 
 namespace Rock.Model
 {
@@ -32,7 +33,7 @@ namespace Rock.Model
     [Table( "ContactTouchpoint" )]
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]
-    [Analytics( true, true )]
+    [CodeGenExclude( CodeGenFeature.DefaultRestController )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_TOUCHPOINT )]
     public partial class ContactTouchpoint : Entity<ContactTouchpoint>
     {

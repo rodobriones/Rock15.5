@@ -21,6 +21,7 @@ using System.Runtime.Serialization;
 
 using Rock.Data;
 using Rock.Enums.Outreach;
+using Rock.Utility;
 
 namespace Rock.Model
 {
@@ -31,7 +32,7 @@ namespace Rock.Model
     [Table( "Contact" )]
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]
-    [Analytics( true, true )]
+    [CodeGenExclude( CodeGenFeature.DefaultRestController )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT )]
     public partial class Contact : Model<Contact>
     {
