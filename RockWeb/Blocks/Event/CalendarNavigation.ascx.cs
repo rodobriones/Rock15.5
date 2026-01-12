@@ -17,10 +17,8 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Web.UI;
 
-using Rock;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
@@ -42,12 +40,19 @@ namespace RockWeb.Blocks.Event
 
         #region Properties
 
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
         private int? EventCalendarId { get; set; }
         private int? EventItemId { get; set; }
         private int? EventItemOccurrenceId { get; set; }
         private int? ContentItemId { get; set; }
 
         private int? PageNumber { get; set; }
+
+        private ContentChannelItemService ContentChannelItemService => new ContentChannelItemService( new RockContext() );
+        private EventItemOccurrenceService EventItemOccurrenceService => new EventItemOccurrenceService( new RockContext() );
+        private EventItemService EventItemService => new EventItemService( new RockContext() );
+        private EventCalendarService EventCalendarService => new EventCalendarService( new RockContext() );
 
         #endregion
 
@@ -78,10 +83,10 @@ namespace RockWeb.Blocks.Event
             if ( !Page.IsPostBack )
             {
                 // Get any querystring variables
-                ContentItemId = PageParameter( "ContentItemId" ).AsIntegerOrNull();
-                EventItemOccurrenceId = PageParameter( "EventItemOccurrenceId" ).AsIntegerOrNull();
-                EventItemId = PageParameter( "EventItemId" ).AsIntegerOrNull();
-                EventCalendarId = PageParameter( "EventCalendarId" ).AsIntegerOrNull();
+                ContentItemId = ContentChannelItemService.Get( PageParameter( "ContentItemId" ), IsAllowingPredictableIds)?.Id;
+                EventItemOccurrenceId = EventItemOccurrenceService.Get( PageParameter( "EventItemOccurrenceId" ), IsAllowingPredictableIds)?.Id;
+                EventItemId = EventItemService.Get( PageParameter( "EventItemId" ), IsAllowingPredictableIds )?.Id;
+                EventCalendarId = EventCalendarService.Get( PageParameter( "EventCalendarId" ), IsAllowingPredictableIds )?.Id;
 
                 // Load objects necessary to display names
                 using ( var rockContext = new RockContext() )
