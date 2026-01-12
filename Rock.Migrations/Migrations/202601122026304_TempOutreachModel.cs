@@ -157,7 +157,7 @@ INCLUDE ([ContactId])" );
             // Outreach Toolbox will use.
             Sql( @"
 DECLARE @MediumValueId INT = (SELECT [Id] FROM [DefinedValue] WHERE [Guid] = '5919214F-9C59-4913-BE4E-0DFB6A05F528')
-DECLARE @ContactEntityTypeId INT = (SELECT [Id] FROM [Contact] WHERE [Guid] = 'A2FBB846-2511-4760-B912-928775BFC6D6')
+DECLARE @ContactEntityTypeId INT = (SELECT [Id] FROM [EntityType] WHERE [Guid] = 'A2FBB846-2511-4760-B912-928775BFC6D6')
 
 INSERT INTO [InteractionChannel] (
     [Name],
