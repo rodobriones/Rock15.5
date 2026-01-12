@@ -26,8 +26,11 @@ using Rock.Attribute;
 using Rock.Communication;
 using Rock.Configuration;
 using Rock.Data;
+using Rock.Enums.Cms;
 using Rock.Enums.Outreach;
+using Rock.Mobile;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Jobs
 {
@@ -74,18 +77,42 @@ namespace Rock.Jobs
         Key = AttributeKey.MaximumActivePulseTouchpoints,
         Order = 4 )]
 
+    [SiteField( "Mobile Application",
+        Description = "The mobile application to use when sending push notifications. If not set, then the first active application will be used.",
+        SiteTypes = SiteTypeFlags.Mobile,
+        IsRequired = false,
+        Key = AttributeKey.MobileApplication,
+        Order = 5 )]
+
     [IntegerField(
         "Command Timeout",
         Description = "Maximum amount of time (in seconds) to wait for the sql operations to complete.",
         IsRequired = false,
         DefaultIntegerValue = 60 * 5,
         Key = AttributeKey.CommandTimeout,
-        Order = 5 )]
+        Order = 6 )]
 
     #endregion Job Attributes
 
     public class UpdateOutreachToolboxTouchpoints : RockJob
     {
+        #region Constants
+
+        /// <summary>
+        /// The daily notification messages that are randomly selected
+        /// when sending the push notification.
+        /// </summary>
+        private static readonly string[] DailyNotificationMessages = new[]
+        {
+            "on your connection list today. Take a moment to reach out.",
+            "ready for a check in today. Small moments matter.",
+            "on today’s lineup. One message can make a difference.",
+            "waiting for a touchpoint today.",
+            "on your list today. Keep the connection going."
+        };
+
+        #endregion
+
         #region Fields
 
         /// <summary>
@@ -109,6 +136,7 @@ namespace Rock.Jobs
             public const string EveningNotificationHour = "EveningNotificationHour";
             public const string RelationshipPulseIntervalInDays = "RelationshipPulseIntervalInDays";
             public const string MaximumActivePulseTouchpoints = "MaximumActivePulseTouchpoints";
+            public const string MobileApplication = "MobileApplication";
             public const string CommandTimeout = "CommandTimeout";
         }
 
@@ -728,6 +756,7 @@ namespace Rock.Jobs
             var contactsToProcess = GetContactsToProcessForPulseTouchpoints( rockContext, runContext.ProcessingDateTime );
             var existingPulseCounts = GetExistingPulseTouchpointCounts( rockContext );
             var maxActivePulseTouchpoints = GetAttributeValue( AttributeKey.MaximumActivePulseTouchpoints ).AsInteger();
+            int touchpointsCreated = 0;
 
             try
             {
@@ -756,11 +785,13 @@ namespace Rock.Jobs
                         .Select( c => new ContactTouchpoint
                         {
                             ContactId = c.Contact.Id,
-                            Type = TouchpointType.Birthday,
+                            Type = TouchpointType.Pulse,
                             ScheduledDateTime = runContext.ProcessingDateTime,
-                        } );
+                        } )
+                        .ToList();
 
                     service.AddRange( touchpoints );
+                    touchpointsCreated = touchpoints.Count;
 
                     saveRockContext.SaveChanges();
                 }
@@ -776,7 +807,7 @@ namespace Rock.Jobs
                 runContext.Notifications.AddContact( result.PersonId, result.Contact );
             }
 
-            runContext.Success( $"{contactsToProcess.Count:N0} Pulse {"Touchpoint".PluralizeIf( contactsToProcess.Count != 1 )} Created" );
+            runContext.Success( $"{touchpointsCreated:N0} Pulse {"Touchpoint".PluralizeIf( touchpointsCreated != 1 )} Created" );
         }
 
         /// <summary>
@@ -816,7 +847,6 @@ namespace Rock.Jobs
 
             // Include contacts:
             // - Whose notification day(s) includes today
-            // - Whose notification time of day matches the current run
             // - Who do not have an active pulse touchpoint already
             // - Who have not had a pulse touchpoint created recently
             var contacts = new ContactService( rockContext )
@@ -890,9 +920,17 @@ namespace Rock.Jobs
         /// <param name="runContext">The job run context information.</param>
         private void SendNotifications( RunContext runContext )
         {
+            var (siteId, notificationPage) = GetNotificationSiteAndPageId();
+
             if ( !MediumContainer.HasActivePushTransport() )
             {
                 runContext.Warning( "No Push Notification Transport Configured; Notifications Not Sent" );
+                return;
+            }
+
+            if ( !siteId.HasValue )
+            {
+                runContext.Warning( "Unable To Find Mobile Application; Notifications Not Sent" );
                 return;
             }
 
@@ -909,15 +947,56 @@ namespace Rock.Jobs
                         .Queryable()
                         .Where( pd => personIds.Contains( pd.PersonAlias.PersonId )
                             && pd.NotificationsEnabled
+                            && pd.SiteId == siteId.Value
                             && !string.IsNullOrEmpty( pd.DeviceRegistrationId ) )
                         .GroupBy( pd => pd.PersonAlias.PersonId )
                         .ToDictionary( g => g.Key, g => g.Select( pd => pd.DeviceRegistrationId ).ToList() );
 
-                    sentCount += SendNotificationsBatch( runContext, rockContext, batch, personalDeviceRegistrationIds );
+                    sentCount += SendNotificationsBatch( runContext, rockContext, batch, personalDeviceRegistrationIds, notificationPage );
                 }
             }
 
             runContext.Success( $"{sentCount:N0} Notifications Sent." );
+        }
+
+        /// <summary>
+        /// Get the site and page identifier to use for sending notifications.
+        /// </summary>
+        /// <returns>A tuple that contains the site and page identifiers.</returns>
+        private (int? SiteId, PageCache Page) GetNotificationSiteAndPageId()
+        {
+            using ( var rockContext = CreateRockContext() )
+            {
+                // If they specified the app in the job settings then use that.
+                var siteGuid = GetAttributeValue( AttributeKey.MobileApplication ).AsGuidOrNull();
+
+                if ( siteGuid.HasValue )
+                {
+                    var site = SiteCache.Get( siteGuid.Value, rockContext );
+                    var settings = site?.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>();
+                    var pageId = settings?.OutreachToolboxTouchpointPageId;
+                    var page = pageId.HasValue ? PageCache.Get( pageId.Value, rockContext ) : null;
+
+                    if ( site != null )
+                    {
+                        return (site.Id, page);
+                    }
+                }
+
+                // Try getting the first active mobile app that has a notification
+                // page configured.
+                return SiteCache.All( rockContext )
+                    .Where( s => s.IsActive
+                        && s.SiteType == SiteType.Mobile )
+                    .OrderBy( s => s.Id )
+                    .Select( s => new
+                    {
+                        s.Id,
+                        PageId = s.AdditionalSettings.FromJsonOrNull<AdditionalSiteSettings>()?.OutreachToolboxTouchpointPageId
+                    } )
+                    .Select( s => (s.Id, s.PageId.HasValue ? PageCache.Get( s.PageId.Value, rockContext ) : null ) )
+                    .FirstOrDefault();
+            }
         }
 
         /// <summary>
@@ -927,8 +1006,9 @@ namespace Rock.Jobs
         /// <param name="rockContext">The context to use if access to the database is required.</param>
         /// <param name="batch">The batch of person identifier keys and notification data.</param>
         /// <param name="personalDeviceRegistrationIds">The dictionary of person identifiers and personal device registration identifiers.</param>
+        /// <param name="notificationPage">The notification page.</param>
         /// <returns>The number of notifications that were sent for this batch.</returns>
-        private int SendNotificationsBatch( RunContext runContext, RockContext rockContext, IEnumerable<KeyValuePair<int, TouchpointNotifications>> batch, Dictionary<int, List<string>> personalDeviceRegistrationIds )
+        private int SendNotificationsBatch( RunContext runContext, RockContext rockContext, IEnumerable<KeyValuePair<int, TouchpointNotifications>> batch, Dictionary<int, List<string>> personalDeviceRegistrationIds, PageCache notificationPage )
         {
             var sentCount = 0;
 
@@ -944,7 +1024,7 @@ namespace Rock.Jobs
 
                 try
                 {
-                    sentCount += SendPersonNotifications( registrationIds, notifications );
+                    sentCount += SendPersonNotifications( registrationIds, notifications, notificationPage );
                 }
                 catch ( Exception ex )
                 {
@@ -963,8 +1043,9 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="deviceRegistrationIds">The device identifiers that will receive the notifications.</param>
         /// <param name="notifications">The object containing the information about which notifications to send.</param>
+        /// <param name="notificationPage">The notification page.</param>
         /// <returns>The number of notifications that were sent.</returns>
-        private static int SendPersonNotifications( List<string> deviceRegistrationIds, TouchpointNotifications notifications )
+        private int SendPersonNotifications( List<string> deviceRegistrationIds, TouchpointNotifications notifications, PageCache notificationPage )
         {
             var mergeFields = new Dictionary<string, object>();
             var recipient = RockPushMessageRecipient.CreateAnonymous( string.Join( ",", deviceRegistrationIds ), mergeFields );
@@ -977,6 +1058,19 @@ namespace Rock.Jobs
                 if ( pushMessage == null )
                 {
                     continue;
+                }
+
+                if ( notificationPage != null )
+                {
+                    pushMessage.OpenAction = Utility.PushOpenAction.LinkToMobilePage;
+                    pushMessage.Data = new PushData
+                    {
+                        MobilePageId = notificationPage.Id,
+                        MobilePageQueryString = new Dictionary<string, string>
+                        {
+                            { "TouchpointIdKeys", touchpoint.IdKey }
+                        }
+                    };
                 }
 
                 pushMessage.AddRecipient( recipient );
@@ -1002,12 +1096,24 @@ namespace Rock.Jobs
                     prefix = $"{notifications.Contacts[0].FirstName}, {notifications.Contacts[1].FirstName}, and {notifications.Contacts.Count - 2} others are";
                 }
 
+
+                var messageIndex = _random.Next( 0, DailyNotificationMessages.Length );
+
                 var pushMessage = new RockPushMessage
                 {
                     Title = "Keep the connection going!",
-                    Message = $"{prefix} up for today's connection - every reach out matters!",
+                    Message = $"{prefix} {DailyNotificationMessages[messageIndex]}",
                     Data = new PushData()
                 };
+
+                if ( notificationPage != null )
+                {
+                    pushMessage.OpenAction = Utility.PushOpenAction.LinkToMobilePage;
+                    pushMessage.Data = new PushData
+                    {
+                        MobilePageId = notificationPage.Id,
+                    };
+                }
 
                 pushMessage.AddRecipient( recipient );
                 pushMessage.Send();
