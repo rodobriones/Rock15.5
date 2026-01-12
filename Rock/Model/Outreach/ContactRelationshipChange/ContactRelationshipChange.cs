@@ -32,7 +32,7 @@ namespace Rock.Model
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]
     [CodeGenExclude( CodeGenFeature.DefaultRestController )]
-    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_STRENGTH_CHANGES )]
+    [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_CHANGE )]
     public partial class ContactRelationshipChange : Entity<ContactRelationshipChange>
     {
         #region Entity Properties

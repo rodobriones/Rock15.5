@@ -149,14 +149,20 @@ INCLUDE ([ContactId])" );
             AddColumn( "dbo.Person", "OutreachEnableSpecialEventsNotification", c => c.Boolean( nullable: false, defaultValue: false ) );
             AddColumn( "dbo.Person", "OutreachNotificationTimeOfDay", c => c.Int() );
 
+            RockMigrationHelper.AddOrUpdateEntityType( "Rock.Model.Contact", SystemGuid.EntityType.CONTACT, true, true );
+            RockMigrationHelper.AddOrUpdateEntityType( "Rock.Model.ContactRelationshipChange", SystemGuid.EntityType.CONTACT_RELATIONSHIP_CHANGE, true, true );
+            RockMigrationHelper.AddOrUpdateEntityType( "Rock.Model.ContactTouchpoint", SystemGuid.EntityType.CONTACT_TOUCHPOINT, true, true );
+
             // Add the Interaction Channel that all Share actions from the
             // Outreach Toolbox will use.
             Sql( @"
 DECLARE @MediumValueId INT = (SELECT [Id] FROM [DefinedValue] WHERE [Guid] = '5919214F-9C59-4913-BE4E-0DFB6A05F528')
+DECLARE @ContactEntityTypeId INT = (SELECT [Id] FROM [Contact] WHERE [Guid] = 'A2FBB846-2511-4760-B912-928775BFC6D6')
 
 INSERT INTO [InteractionChannel] (
     [Name],
     [ChannelTypeMediumValueId],
+    [InteractionEntityTypeId],
     [Guid],
     [UsesSession],
     [IsActive]
@@ -164,10 +170,37 @@ INSERT INTO [InteractionChannel] (
 VALUES (
     'Outreach Toolbox Events',
     @MediumValueId,
+    @ContactEntityTypeId,
     '456E9DC7-7AA2-4327-8592-60CC83D114A4',
     0,
     1
 )" );
+
+            var jobClass = "Rock.Jobs.UpdateOutreachToolboxTouchpoints";
+            var cronSchedule = "0 10 * * * ? *"; // 10 minutes after every hour.
+
+            Sql( $@"
+            IF NOT EXISTS( SELECT [Id] FROM [ServiceJob] WHERE [Guid] = '{SystemGuid.ServiceJob.UPDATE_OUTREACH_TOOLBOX_TOUCHPOINTS}' )
+            BEGIN
+                INSERT INTO [ServiceJob] (
+                    [IsSystem],
+                    [IsActive],
+                    [Name],
+                    [Description],
+                    [Class],
+                    [CronExpression],
+                    [NotificationStatus],
+                    [Guid] )
+                VALUES (
+                    1,
+                    1,
+                    'Update Outreach Toolbox Touchpoints',
+                    'Updates touchpoints for people using the outreach toolbox and sends any required notifications.',
+                    '{jobClass}',
+                    '{cronSchedule}',
+                    1,
+                    '{SystemGuid.ServiceJob.UPDATE_OUTREACH_TOOLBOX_TOUCHPOINTS}' );
+            END" );
         }
 
         /// <summary>
@@ -175,6 +208,8 @@ VALUES (
         /// </summary>
         public override void Down()
         {
+            Sql( $"DELETE FROM [ServiceJob] WHERE [Guid] = '{SystemGuid.ServiceJob.UPDATE_OUTREACH_TOOLBOX_TOUCHPOINTS}'" );
+
             Sql( "DELETE FROM [InteractionChannel] WHERE [Guid] = '456E9DC7-7AA2-4327-8592-60CC83D114A4'" );
 
             DropForeignKey( "dbo.ContactTouchpoint", "ContactId", "dbo.Contact" );

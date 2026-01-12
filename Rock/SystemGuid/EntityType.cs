@@ -234,9 +234,9 @@ namespace Rock.SystemGuid
         public const string CONTACT_TOUCHPOINT = "1068B648-FEE4-44E7-BF43-607371871367";
 
         /// <summary>
-        /// The guid for the Rock.Model.ContactRelationshipStrengthChanges entity
+        /// The guid for the Rock.Model.ContactRelationshipChange entity
         /// </summary>
-        public const string CONTACT_RELATIONSHIP_STRENGTH_CHANGES = "0397D69F-1E9E-4202-BCB8-9DEEDAA554C9";
+        public const string CONTACT_RELATIONSHIP_CHANGE = "0397D69F-1E9E-4202-BCB8-9DEEDAA554C9";
 
         /// <summary>
         /// The guid for the Rock.Model.ContentCollection entity
