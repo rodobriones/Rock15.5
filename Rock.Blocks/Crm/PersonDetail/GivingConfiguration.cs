@@ -20,7 +20,7 @@ namespace Rock.Blocks.Crm.PersonDetail
     [DisplayName( "Giving Configuration" )]
     [Category( "CRM > Person Detail" )]
     [Description( "Block used to view the scheduled transactions, saved accounts and pledges of a person." )]
-    // [SupportedSiteTypes( Model.SiteType.Web )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
 
@@ -87,7 +87,8 @@ namespace Rock.Blocks.Crm.PersonDetail
 
     [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "6B977F51-4B33-44F3-A6FF-89FCC9D1AE08" )]
-    [Rock.SystemGuid.BlockTypeGuid( "BBA3A660-9A8B-4707-A553-D314C21B0A12" )]
+    [Rock.SystemGuid.BlockTypeGuid( "486E470A-DBD8-48D6-9A97-5B1B490A401E" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "BBA3A660-9A8B-4707-A553-D314C21B0A12" )]
     public partial class GivingConfiguration : RockBlockType
     {
         #region Properties
