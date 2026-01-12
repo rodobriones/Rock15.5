@@ -28,15 +28,15 @@ using Rock.Data;
 namespace Rock.Model
 {
     /// <summary>
-    /// ContactRelationshipChanges Service class
+    /// ContactRelationshipChange Service class
     /// </summary>
-    public partial class ContactRelationshipChangesService : Service<ContactRelationshipChanges>
+    public partial class ContactRelationshipChangeService : Service<ContactRelationshipChange>
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="ContactRelationshipChangesService"/> class
+        /// Initializes a new instance of the <see cref="ContactRelationshipChangeService"/> class
         /// </summary>
         /// <param name="context">The context.</param>
-        public ContactRelationshipChangesService(RockContext context) : base(context)
+        public ContactRelationshipChangeService(RockContext context) : base(context)
         {
         }
 
@@ -48,7 +48,7 @@ namespace Rock.Model
         /// <returns>
         ///   <c>true</c> if this instance can delete the specified item; otherwise, <c>false</c>.
         /// </returns>
-        public bool CanDelete( ContactRelationshipChanges item, out string errorMessage )
+        public bool CanDelete( ContactRelationshipChange item, out string errorMessage )
         {
             errorMessage = string.Empty;
             return true;
@@ -58,36 +58,36 @@ namespace Rock.Model
     /// <summary>
     /// Generated Extension Methods
     /// </summary>
-    public static partial class ContactRelationshipChangesExtensionMethods
+    public static partial class ContactRelationshipChangeExtensionMethods
     {
         /// <summary>
-        /// Clones this ContactRelationshipChanges object to a new ContactRelationshipChanges object
+        /// Clones this ContactRelationshipChange object to a new ContactRelationshipChange object
         /// </summary>
         /// <param name="source">The source.</param>
         /// <param name="deepCopy">if set to <c>true</c> a deep copy is made. If false, only the basic entity properties are copied.</param>
         /// <returns></returns>
-        public static ContactRelationshipChanges Clone( this ContactRelationshipChanges source, bool deepCopy )
+        public static ContactRelationshipChange Clone( this ContactRelationshipChange source, bool deepCopy )
         {
             if (deepCopy)
             {
-                return source.Clone() as ContactRelationshipChanges;
+                return source.Clone() as ContactRelationshipChange;
             }
             else
             {
-                var target = new ContactRelationshipChanges();
+                var target = new ContactRelationshipChange();
                 target.CopyPropertiesFrom( source );
                 return target;
             }
         }
 
         /// <summary>
-        /// Clones this ContactRelationshipChanges object to a new ContactRelationshipChanges object with default values for the properties in the Entity and Model base classes.
+        /// Clones this ContactRelationshipChange object to a new ContactRelationshipChange object with default values for the properties in the Entity and Model base classes.
         /// </summary>
         /// <param name="source">The source.</param>
         /// <returns></returns>
-        public static ContactRelationshipChanges CloneWithoutIdentity( this ContactRelationshipChanges source )
+        public static ContactRelationshipChange CloneWithoutIdentity( this ContactRelationshipChange source )
         {
-            var target = new ContactRelationshipChanges();
+            var target = new ContactRelationshipChange();
             target.CopyPropertiesFrom( source );
 
             target.Id = 0;
@@ -100,11 +100,11 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Copies the properties from another ContactRelationshipChanges object to this ContactRelationshipChanges object
+        /// Copies the properties from another ContactRelationshipChange object to this ContactRelationshipChange object
         /// </summary>
         /// <param name="target">The target.</param>
         /// <param name="source">The source.</param>
-        public static void CopyPropertiesFrom( this ContactRelationshipChanges target, ContactRelationshipChanges source )
+        public static void CopyPropertiesFrom( this ContactRelationshipChange target, ContactRelationshipChange source )
         {
             target.Id = source.Id;
             target.ContactId = source.ContactId;

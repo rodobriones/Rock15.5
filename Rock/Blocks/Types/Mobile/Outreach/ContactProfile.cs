@@ -89,9 +89,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BirthDay = contact.BirthDay,
                 BirthMonth = contact.BirthMonth,
                 BirthYear = contact.BirthYear,
-                AnniversaryDay = contact.WeddingAnniversaryDay,
-                AnniversaryMonth = contact.WeddingAnniversaryMonth,
-                AnniversaryYear = contact.WeddingAnniversaryYear,
+                AnniversaryDay = contact.WeddingDay,
+                AnniversaryMonth = contact.WeddingMonth,
+                AnniversaryYear = contact.WeddingYear,
                 SalvationDay = contact.SalvationDay,
                 SalvationMonth = contact.SalvationMonth,
                 SalvationYear = contact.SalvationYear,
@@ -181,8 +181,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 // If the relationship strength has changed, create a new ContactRelationshipStrengthChanges record.
                 if ( contact.RelationshipStrength != newRelationshipStrength )
                 {
-                    ContactRelationshipChangesService contactRelationshipChangesService = new ContactRelationshipChangesService( RockContext );
-                    var contactRelationshipChange = new ContactRelationshipChanges
+                    ContactRelationshipChangeService contactRelationshipChangesService = new ContactRelationshipChangeService( RockContext );
+                    var contactRelationshipChange = new ContactRelationshipChange
                     {
                         ContactId = contact.Id,
                         PreviousRelationshipStrength = contact.RelationshipStrength,
@@ -200,9 +200,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 contact.BirthDay = contactProfileBag.BirthDay;
                 contact.BirthMonth = contactProfileBag.BirthMonth;
                 contact.BirthYear = contactProfileBag.BirthYear;
-                contact.WeddingAnniversaryDay = contactProfileBag.AnniversaryDay;
-                contact.WeddingAnniversaryMonth = contactProfileBag.AnniversaryMonth;
-                contact.WeddingAnniversaryYear = contactProfileBag.AnniversaryYear;
+                contact.WeddingDay = contactProfileBag.AnniversaryDay;
+                contact.WeddingMonth = contactProfileBag.AnniversaryMonth;
+                contact.WeddingYear = contactProfileBag.AnniversaryYear;
                 contact.SalvationDay = contactProfileBag.SalvationDay;
                 contact.SalvationMonth = contactProfileBag.SalvationMonth;
                 contact.SalvationYear = contactProfileBag.SalvationYear;

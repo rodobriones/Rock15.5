@@ -52,18 +52,6 @@ namespace Rock.Model
         public bool CanDelete( Contact item, out string errorMessage )
         {
             errorMessage = string.Empty;
-
-            if ( new Service<ContactRelationshipChanges>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
-            {
-                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactRelationshipChanges.FriendlyTypeName );
-                return false;
-            }
-
-            if ( new Service<ContactTouchpoint>( Context ).Queryable().Any( a => a.ContactId == item.Id ) )
-            {
-                errorMessage = string.Format( "This {0} is assigned to a {1}.", Contact.FriendlyTypeName, ContactTouchpoint.FriendlyTypeName );
-                return false;
-            }
             return true;
         }
     }
@@ -142,7 +130,6 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Contact target, Contact source )
         {
             target.Id = source.Id;
-            target.AdditionalNote = source.AdditionalNote;
             target.BaptismDay = source.BaptismDay;
             target.BaptismMonth = source.BaptismMonth;
             target.BaptismYear = source.BaptismYear;
@@ -161,11 +148,8 @@ namespace Rock.Model
             target.HasBeenBaptized = source.HasBeenBaptized;
             target.InstagramProfileUrl = source.InstagramProfileUrl;
             target.LastName = source.LastName;
-            target.LastRelationshipCheckin = source.LastRelationshipCheckin;
             target.LinkedInProfileUrl = source.LinkedInProfileUrl;
             target.MobilePhone = source.MobilePhone;
-            target.NextConnectionDate = source.NextConnectionDate;
-            target.NextPrayerDate = source.NextPrayerDate;
             target.OwnerPersonAliasId = source.OwnerPersonAliasId;
             target.PhotoId = source.PhotoId;
             target.PrayerCadence = source.PrayerCadence;
@@ -176,9 +160,9 @@ namespace Rock.Model
             target.SalvationMonth = source.SalvationMonth;
             target.SalvationYear = source.SalvationYear;
             target.TikTokProfileUrl = source.TikTokProfileUrl;
-            target.WeddingAnniversaryDay = source.WeddingAnniversaryDay;
-            target.WeddingAnniversaryMonth = source.WeddingAnniversaryMonth;
-            target.WeddingAnniversaryYear = source.WeddingAnniversaryYear;
+            target.WeddingDay = source.WeddingDay;
+            target.WeddingMonth = source.WeddingMonth;
+            target.WeddingYear = source.WeddingYear;
             target.XProfileUrl = source.XProfileUrl;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;

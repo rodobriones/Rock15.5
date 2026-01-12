@@ -569,8 +569,6 @@ namespace Rock.Mobile
                     return Enums.Outreach.TouchpointType.Pulse;
                 case Rock.Common.Mobile.Enums.TouchpointType.Birthday:
                     return Enums.Outreach.TouchpointType.Birthday;
-                case Rock.Common.Mobile.Enums.TouchpointType.Share:
-                    return Enums.Outreach.TouchpointType.Share;
                 case Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary:
                     return Enums.Outreach.TouchpointType.WeddingAnniversary;
                 case Rock.Common.Mobile.Enums.TouchpointType.BaptismAnniversary:
@@ -601,8 +599,6 @@ namespace Rock.Mobile
                     return Rock.Common.Mobile.Enums.TouchpointType.Pulse;
                 case Enums.Outreach.TouchpointType.Birthday:
                     return Rock.Common.Mobile.Enums.TouchpointType.Birthday;
-                case Enums.Outreach.TouchpointType.Share:
-                    return Rock.Common.Mobile.Enums.TouchpointType.Share;
                 case Enums.Outreach.TouchpointType.WeddingAnniversary:
                     return Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary;
                 case Enums.Outreach.TouchpointType.BaptismAnniversary:

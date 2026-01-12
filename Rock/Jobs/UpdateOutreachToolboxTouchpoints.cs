@@ -67,13 +67,20 @@ namespace Rock.Jobs
         Key = AttributeKey.RelationshipPulseIntervalInDays,
         Order = 3 )]
 
+    [IntegerField( "Maximum Active Pulse Touchpoints",
+        Description = "The maximum number of active relationship pulse touchpoints that can exist for a person at any given time.",
+        IsRequired = false,
+        DefaultIntegerValue = 3,
+        Key = AttributeKey.MaximumActivePulseTouchpoints,
+        Order = 4 )]
+
     [IntegerField(
         "Command Timeout",
         Description = "Maximum amount of time (in seconds) to wait for the sql operations to complete.",
         IsRequired = false,
         DefaultIntegerValue = 60 * 5,
         Key = AttributeKey.CommandTimeout,
-        Order = 4 )]
+        Order = 5 )]
 
     #endregion Job Attributes
 
@@ -101,6 +108,7 @@ namespace Rock.Jobs
             public const string AfternoonNotificationHour = "AfternoonNotificationHour";
             public const string EveningNotificationHour = "EveningNotificationHour";
             public const string RelationshipPulseIntervalInDays = "RelationshipPulseIntervalInDays";
+            public const string MaximumActivePulseTouchpoints = "MaximumActivePulseTouchpoints";
             public const string CommandTimeout = "CommandTimeout";
         }
 
@@ -213,39 +221,43 @@ namespace Rock.Jobs
         /// <param name="timeOfDay">The time of day period to process.</param>
         private void ExecuteForTimeOfDay( RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
         {
-            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} prayer touchpoints." );
+            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} prayer touchpoints..." );
 
             using ( var rockContext = CreateRockContext() )
             {
                 ProcessGeneralTouchpoints( rockContext, runContext, timeOfDay, TouchpointType.Prayer );
             }
 
-            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} connection touchpoints." );
+            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} connection touchpoints..." );
 
             using ( var rockContext = CreateRockContext() )
             {
                 ProcessGeneralTouchpoints( rockContext, runContext, timeOfDay, TouchpointType.Connection );
             }
 
-            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} annual touchpoints." );
-
-            using ( var rockContext = CreateRockContext() )
+            // These are only processed in the morning.
+            if ( timeOfDay == OutreachNotificationTimeOfDay.Morning )
             {
-                ProcessAnnualTouchpoints( rockContext, runContext, timeOfDay );
-            }
+                UpdateLastStatusMessage( $"Processing annual touchpoints..." );
 
-            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} reminder touchpoints." );
+                using ( var rockContext = CreateRockContext() )
+                {
+                    ProcessAnnualTouchpoints( rockContext, runContext );
+                }
 
-            using ( var rockContext = CreateRockContext() )
-            {
-                ProcessReminderTouchpoints( rockContext, runContext, timeOfDay );
-            }
+                UpdateLastStatusMessage( $"Processing reminder touchpoints..." );
 
-            UpdateLastStatusMessage( $"Processing {timeOfDay.ToString().ToLower()} pulse touchpoints." );
+                using ( var rockContext = CreateRockContext() )
+                {
+                    ProcessReminderTouchpoints( rockContext, runContext );
+                }
 
-            using ( var rockContext = CreateRockContext() )
-            {
-                ProcessPulseTouchpoints( rockContext, runContext, timeOfDay );
+                UpdateLastStatusMessage( $"Processing pulse touchpoints..." );
+
+                using ( var rockContext = CreateRockContext() )
+                {
+                    ProcessPulseTouchpoints( rockContext, runContext );
+                }
             }
         }
 
@@ -482,10 +494,9 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="runContext">The current job run context information.</param>
-        /// <param name="timeOfDay">The time period to process.</param>
-        private void ProcessAnnualTouchpoints( RockContext rockContext, RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
+        private void ProcessAnnualTouchpoints( RockContext rockContext, RunContext runContext )
         {
-            var peopleToProcess = GetPeopleToProcessForAnnualTouchpoints( rockContext, runContext.ProcessingDateTime, timeOfDay );
+            var peopleToProcess = GetPeopleToProcessForAnnualTouchpoints( rockContext, runContext.ProcessingDateTime );
             var processingContext = new AnnualProcessingContext( runContext, rockContext );
             var touchpointCount = 0;
 
@@ -497,7 +508,7 @@ namespace Rock.Jobs
                 } );
             }
 
-            runContext.Success( $"{touchpointCount:N0} {timeOfDay} Annual {"Touchpoint".PluralizeIf( touchpointCount != 1 )} Created For {peopleToProcess.Count:N0} People" );
+            runContext.Success( $"{touchpointCount:N0} Annual {"Touchpoint".PluralizeIf( touchpointCount != 1 )} Created For {peopleToProcess.Count:N0} People" );
         }
 
         /// <summary>
@@ -506,9 +517,8 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="touchpointDate">The run date that will be used when checking existing touchpoints.</param>
-        /// <param name="timeOfDay">The time of day being processed.</param>
         /// <returns>A set of people that need to be processed.</returns>
-        private List<Person> GetPeopleToProcessForAnnualTouchpoints( RockContext rockContext, DateTime touchpointDate, OutreachNotificationTimeOfDay timeOfDay )
+        private List<Person> GetPeopleToProcessForAnnualTouchpoints( RockContext rockContext, DateTime touchpointDate )
         {
             var date = touchpointDate.Date;
 
@@ -528,14 +538,12 @@ namespace Rock.Jobs
 
             // Include people:
             // - Who have special event notifications enabled
-            // - Whose notification time of day matches the current run
             // - Who have at least one contact
             // - Who do not have touchpoints created today
             return new PersonService( rockContext )
                 .Queryable()
                 .AsNoTracking()
                 .Where( p => p.OutreachEnableSpecialEventsNotification
-                    && p.OutreachNotificationTimeOfDay == timeOfDay
                     && contactsQry.Any( c => c.OwnerPersonAlias.PersonId == p.Id )
                     && !touchpointsQry.Any( t => t.Contact.OwnerPersonAlias.PersonId == p.Id ) )
                 .ToList();
@@ -624,7 +632,7 @@ namespace Rock.Jobs
                     }
                 }
 
-                if ( contact.WeddingAnniversaryDay == date.Day && contact.WeddingAnniversaryMonth == date.Month )
+                if ( contact.WeddingDay == date.Day && contact.WeddingMonth == date.Month )
                 {
                     if ( activeTouchpoints == null || !activeTouchpoints.Any( t => t.Type == TouchpointType.WeddingAnniversary ) )
                     {
@@ -677,8 +685,7 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="runContext">The current job run context information.</param>
-        /// <param name="timeOfDay">The time period to process.</param>
-        private void ProcessReminderTouchpoints( RockContext rockContext, RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
+        private void ProcessReminderTouchpoints( RockContext rockContext, RunContext runContext )
         {
             var today = runContext.ProcessingDateTime.Date;
             var tomorrow = runContext.ProcessingDateTime.Date.AddDays( 1 );
@@ -691,8 +698,7 @@ namespace Rock.Jobs
                 .Queryable()
                 .Where( t => t.ScheduledDateTime >= today
                     && t.ScheduledDateTime < tomorrow
-                    && t.Type == TouchpointType.Reminder
-                    && t.Contact.OwnerPersonAlias.Person.OutreachNotificationTimeOfDay == timeOfDay )
+                    && t.Type == TouchpointType.Reminder )
                 .Select( t => new
                 {
                     t.Contact.OwnerPersonAlias.PersonId,
@@ -705,7 +711,7 @@ namespace Rock.Jobs
                 count++;
             }
 
-            runContext.Success( $"{count:N0} {timeOfDay} Reminder {"Touchpoint".PluralizeIf( count != 1 )} Processed" );
+            runContext.Success( $"{count:N0} Reminder {"Touchpoint".PluralizeIf( count != 1 )} Processed" );
         }
 
         #endregion
@@ -717,10 +723,11 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="runContext">The current job run context information.</param>
-        /// <param name="timeOfDay">The time period to process.</param>
-        private void ProcessPulseTouchpoints( RockContext rockContext, RunContext runContext, OutreachNotificationTimeOfDay timeOfDay )
+        private void ProcessPulseTouchpoints( RockContext rockContext, RunContext runContext )
         {
-            var contactsToProcess = GetContactsToProcessForPulseTouchpoints( rockContext, runContext.ProcessingDateTime, timeOfDay );
+            var contactsToProcess = GetContactsToProcessForPulseTouchpoints( rockContext, runContext.ProcessingDateTime );
+            var existingPulseCounts = GetExistingPulseTouchpointCounts( rockContext );
+            var maxActivePulseTouchpoints = GetAttributeValue( AttributeKey.MaximumActivePulseTouchpoints ).AsInteger();
 
             try
             {
@@ -728,6 +735,24 @@ namespace Rock.Jobs
                 {
                     var service = new ContactTouchpointService( saveRockContext );
                     var touchpoints = contactsToProcess
+                        .Where( c =>
+                        {
+                            if ( existingPulseCounts.TryGetValue( c.PersonId, out var activeCount ) )
+                            {
+                                if ( activeCount >= maxActivePulseTouchpoints )
+                                {
+                                    return false;
+                                }
+
+                                existingPulseCounts[c.PersonId] = activeCount + 1;
+                            }
+                            else
+                            {
+                                existingPulseCounts[c.PersonId] = 1;
+                            }
+
+                            return true;
+                        } )
                         .Select( c => new ContactTouchpoint
                         {
                             ContactId = c.Contact.Id,
@@ -760,9 +785,8 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="rockContext">The context to use when accessing the database.</param>
         /// <param name="touchpointDate">The run date that will be used when checking existing touchpoints.</param>
-        /// <param name="timeOfDay">The time of day being processed.</param>
         /// <returns>A set of people that need to be processed.</returns>
-        private List<(int PersonId, Contact Contact)> GetContactsToProcessForPulseTouchpoints( RockContext rockContext, DateTime touchpointDate, OutreachNotificationTimeOfDay timeOfDay )
+        private List<(int PersonId, Contact Contact)> GetContactsToProcessForPulseTouchpoints( RockContext rockContext, DateTime touchpointDate )
         {
             var targetLastPulseDate = touchpointDate.AddDays( -GetAttributeValue( AttributeKey.RelationshipPulseIntervalInDays ).AsInteger() );
             var nearTargetLastPulseDate = targetLastPulseDate.AddDays( 7 );
@@ -799,7 +823,6 @@ namespace Rock.Jobs
                 .Queryable()
                 .AsNoTracking()
                 .Where( c => ( c.OwnerPersonAlias.Person.OutreachTouchpointSchedule & dayOfWeekFlag ) != 0
-                    && c.OwnerPersonAlias.Person.OutreachNotificationTimeOfDay == timeOfDay
                     && !activeTouchpointsQry.Any( t => t.Contact.OwnerPersonAlias.PersonId == c.OwnerPersonAlias.PersonId ) )
                 .Select( c => new
                 {
@@ -842,6 +865,21 @@ namespace Rock.Jobs
                 .ToList();
         }
 
+        /// <summary>
+        /// Gets the number of existing active pulse touchpoints per person.
+        /// </summary>
+        /// <param name="rockContext">The context to use when querying the database.</param>
+        /// <returns>A dictionary of person identifier keys and active pulse touchpoint count values.</returns>
+        private Dictionary<int, int> GetExistingPulseTouchpointCounts( RockContext rockContext )
+        {
+            return new ContactTouchpointService( rockContext )
+                .Queryable()
+                .Where( t => t.Type == TouchpointType.Pulse
+                    && !t.CompletedDateTime.HasValue )
+                .GroupBy( t => t.Contact.OwnerPersonAlias.PersonId )
+                .ToDictionary( g => g.Key, g => g.Count() );
+        }
+
         #endregion
 
         #region Notification Processing
@@ -858,7 +896,7 @@ namespace Rock.Jobs
                 return;
             }
 
-            UpdateLastStatusMessage( "Sending notifications." );
+            UpdateLastStatusMessage( "Sending notifications..." );
 
             var sentCount = 0;
 

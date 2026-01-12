@@ -30,11 +30,11 @@ namespace Rock.Rest.Controllers
     /// ContactRelationshipChanges REST API
     /// </summary>
     [RestControllerGuid( "EE67DC05-29E1-474F-8B17-9D5B3FEDC184" )]
-    public partial class ContactRelationshipChangesController : Rock.Rest.ApiController<Rock.Model.ContactRelationshipChanges>
+    public partial class ContactRelationshipChangesController : Rock.Rest.ApiController<Rock.Model.ContactRelationshipChange>
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="ContactRelationshipChangesController"/> class.
         /// </summary>
-        public ContactRelationshipChangesController() : base( new Rock.Model.ContactRelationshipChangesService( new Rock.Data.RockContext() ) ) { } 
+        public ContactRelationshipChangesController() : base( new Rock.Model.ContactRelationshipChangeService( new Rock.Data.RockContext() ) ) { } 
     }
 }

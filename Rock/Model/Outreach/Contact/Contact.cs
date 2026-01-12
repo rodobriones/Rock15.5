@@ -14,7 +14,6 @@
 // limitations under the License.
 // </copyright>
 
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
@@ -109,22 +108,22 @@ namespace Rock.Model
         public RelationshipStrength RelationshipStrength { get; set; }
 
         /// <summary>
-        /// Gets or sets the wedding anniversary Day.
+        /// Gets or sets the wedding Day.
         /// </summary>
         [DataMember]
-        public int? WeddingAnniversaryDay { get; set; }
+        public int? WeddingDay { get; set; }
 
         /// <summary>
-        /// Gets or sets the wedding anniversary month.
+        /// Gets or sets the wedding month.
         /// </summary>
         [DataMember]
-        public int? WeddingAnniversaryMonth { get; set; }
+        public int? WeddingMonth { get; set; }
 
         /// <summary>
-        /// Gets or sets the wedding anniversary year.
+        /// Gets or sets the wedding year.
         /// </summary>
         [DataMember]
-        public int? WeddingAnniversaryYear { get; set; }
+        public int? WeddingYear { get; set; }
 
         /// <summary>
         /// Gets or sets the prayer cadence.
@@ -133,22 +132,10 @@ namespace Rock.Model
         public OutreachCadence PrayerCadence { get; set; }
 
         /// <summary>
-        /// Gets or sets the next prayer date.
-        /// </summary>
-        [DataMember]
-        public DateTime? NextPrayerDate { get; set; }
-
-        /// <summary>
         /// Gets or sets the connection cadence.
         /// </summary>
         [DataMember]
         public OutreachCadence ConnectionCadence { get; set; }
-
-        /// <summary>
-        /// Gets or sets the next connection date.
-        /// </summary>
-        [DataMember]
-        public DateTime? NextConnectionDate { get; set; }
 
         /// <summary>
         /// Gets or sets the relationship focus.
@@ -169,13 +156,6 @@ namespace Rock.Model
         [MaxLength( 500 )]
         [DataMember]
         public string PrayerNote { get; set; }
-
-        /// <summary>
-        /// Gets or sets the additional note.
-        /// </summary>
-        [MaxLength( 500 )]
-        [DataMember]
-        public string AdditionalNote { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether this contact has accepted Jesus as their personal savior.
@@ -224,12 +204,6 @@ namespace Rock.Model
         /// </summary>
         [DataMember]
         public int? BaptismYear { get; set; }
-
-        /// <summary>
-        /// Gets or sets the date/time of the last relationship check-in.
-        /// </summary>
-        [DataMember]
-        public DateTime? LastRelationshipCheckin { get; set; }
 
         /// <summary>
         /// Gets or sets the Instagram profile URL.

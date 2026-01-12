@@ -64,14 +64,14 @@ namespace Rock.Rest.v2.Models
         [Authenticate]
         [Secured( Security.Authorization.EXECUTE_UNRESTRICTED_READ )]
         [ExcludeSecurityActions( Security.Authorization.EXECUTE_READ, Security.Authorization.EXECUTE_WRITE, Security.Authorization.EXECUTE_UNRESTRICTED_WRITE )]
-        [ProducesResponse( HttpStatusCode.OK, Type = typeof( Rock.Model.ContactRelationshipChanges ) )]
+        [ProducesResponse( HttpStatusCode.OK, Type = typeof( Rock.Model.ContactRelationshipChange ) )]
         [ProducesResponse( HttpStatusCode.BadRequest )]
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
         [SystemGuid.RestActionGuid( "932ab157-8cff-5328-a4cc-8a1ee9378fdc" )]
         public IActionResult GetItem( string id )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -93,9 +93,9 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
         [SystemGuid.RestActionGuid( "ddfcbbf7-bea2-54f2-8105-42999f1c57bc" )]
-        public IActionResult PostItem( [FromBody] Rock.Model.ContactRelationshipChanges value )
+        public IActionResult PostItem( [FromBody] Rock.Model.ContactRelationshipChange value )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -119,9 +119,9 @@ namespace Rock.Rest.v2.Models
         [ProducesResponse( HttpStatusCode.NotFound )]
         [ProducesResponse( HttpStatusCode.Unauthorized )]
         [SystemGuid.RestActionGuid( "d6f494fa-2f30-5749-91f9-3dbd74a39996" )]
-        public IActionResult PutItem( string id, [FromBody] Rock.Model.ContactRelationshipChanges value )
+        public IActionResult PutItem( string id, [FromBody] Rock.Model.ContactRelationshipChange value )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -147,7 +147,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "73eda6d0-884f-5d2b-8af8-1c754598876f" )]
         public IActionResult PatchItem( string id, [FromBody] Dictionary<string, object> values )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -171,7 +171,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "f03a1dfc-d18c-51ed-bfc7-c4eb6a320181" )]
         public IActionResult DeleteItem( string id )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -195,7 +195,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "88b1ff39-0b12-564b-82d7-d9d32da51c18" )]
         public IActionResult GetAttributeValues( string id )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -221,7 +221,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "1166b05d-7c72-57bc-aee3-3042551e588f" )]
         public IActionResult PatchAttributeValues( string id, [FromBody] Dictionary<string, string> values )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = true;
 
@@ -242,7 +242,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "a911ee0b-9bea-5abf-80ae-ee02aa3a2434" )]
         public IActionResult PostSearch( [FromBody] EntitySearchQueryBag query )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             return helper.Search( query );
         }
@@ -263,7 +263,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "806cccac-554a-5e97-b557-5e2b30d3c448" )]
         public IActionResult GetSearchByKey( string searchKey )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = IsCurrentPersonAuthorized( Security.Authorization.EXECUTE_UNRESTRICTED_READ );
 
@@ -288,7 +288,7 @@ namespace Rock.Rest.v2.Models
         [SystemGuid.RestActionGuid( "a849d9d5-0aed-58dd-b61a-e18c5161933d" )]
         public IActionResult PostSearchByKey( string searchKey, [FromBody] EntitySearchQueryBag query )
         {
-            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChanges, Rock.Model.ContactRelationshipChangesService>( this );
+            var helper = new CrudEndpointHelper<Rock.Model.ContactRelationshipChange, Rock.Model.ContactRelationshipChangeService>( this );
 
             helper.IsSecurityIgnored = IsCurrentPersonAuthorized( Security.Authorization.EXECUTE_UNRESTRICTED_READ );
 

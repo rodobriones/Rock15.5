@@ -15,35 +15,25 @@
 // </copyright>
 //
 using System.Collections.Generic;
-using System.Net;
-
-using Rock.Data;
-using Rock.Rest.Filters;
-using Rock.ViewModels.Rest.Models;
-using Rock.Security;
-using Rock.Common.Mobile.Blocks.Outreach.MyContact;
-using Rock.Model;
-
-using System.Linq;
-
 using System.Data.Entity;
+using System.Linq;
+using System.Net;
+using System.Web.Http;
+
+using Rock.Common.Mobile.Blocks.Outreach.MyContact;
+using Rock.Data;
+using Rock.Model;
+using Rock.Rest.Filters;
+using Rock.Security;
+using Rock.ViewModels.Rest.Models;
 
 using Rock.Mobile;
 using Rock.Utility;
-
-using System.Web.Http;
-
-
-
-
-
-
 
 #if WEBFORMS
 using IActionResult = System.Web.Http.IHttpActionResult;
 using RoutePrefixAttribute = System.Web.Http.RoutePrefixAttribute;
 using RouteAttribute = System.Web.Http.RouteAttribute;
-using HttpGetAttribute = System.Web.Http.HttpGetAttribute;
 #endif
 
 namespace Rock.Rest.v2.Models.Actions

@@ -42,17 +42,14 @@ namespace Rock.Migrations
                     Email = c.String( maxLength: 75 ),
                     MobilePhone = c.String( maxLength: 20 ),
                     RelationshipStrength = c.Int( nullable: false ),
-                    WeddingAnniversaryDay = c.Int(),
-                    WeddingAnniversaryMonth = c.Int(),
-                    WeddingAnniversaryYear = c.Int(),
+                    WeddingDay = c.Int(),
+                    WeddingMonth = c.Int(),
+                    WeddingYear = c.Int(),
                     PrayerCadence = c.Int( nullable: false ),
-                    NextPrayerDate = c.DateTime(),
                     ConnectionCadence = c.Int( nullable: false ),
-                    NextConnectionDate = c.DateTime(),
                     RelationshipFocus = c.Int( nullable: false ),
                     ConnectionNote = c.String( maxLength: 500 ),
                     PrayerNote = c.String( maxLength: 500 ),
-                    AdditionalNote = c.String( maxLength: 500 ),
                     HasAcceptedJesus = c.Boolean(),
                     SalvationDay = c.Int(),
                     SalvationMonth = c.Int(),
@@ -61,7 +58,6 @@ namespace Rock.Migrations
                     BaptismDay = c.Int(),
                     BaptismMonth = c.Int(),
                     BaptismYear = c.Int(),
-                    LastRelationshipCheckin = c.DateTime(),
                     InstagramProfileUrl = c.String( maxLength: 75 ),
                     FacebookProfileUrl = c.String( maxLength: 75 ),
                     LinkedInProfileUrl = c.String( maxLength: 75 ),
@@ -131,11 +127,47 @@ namespace Rock.Migrations
                 .Index( t => t.ContactId )
                 .Index( t => t.Guid, unique: true );
 
-            AddColumn( "dbo.Person", "OutreachTouchpointSchedule", c => c.Int( nullable: false ) );
-            AddColumn( "dbo.Person", "OutreachTouchpointNotificationsEnabled", c => c.Boolean( nullable: false ) );
-            AddColumn( "dbo.Person", "OutreachEnableDailyNotification", c => c.Boolean( nullable: false ) );
-            AddColumn( "dbo.Person", "OutreachEnableSpecialEventsNotification", c => c.Boolean( nullable: false ) );
+            Sql( @"
+CREATE NONCLUSTERED INDEX [IX_Type_ScheduledDateTime] ON [dbo].[ContactTouchpoint]
+(
+    [Type] ASC,
+    [ScheduledDateTime] ASC
+)
+INCLUDE ([ContactId])" );
+
+            Sql( @"
+CREATE NONCLUSTERED INDEX [IX_CompletedDateTime_Type] ON [dbo].[ContactTouchpoint]
+(
+    [CompletedDateTime] ASC,
+    [Type] ASC
+)
+INCLUDE ([ContactId])" );
+
+            AddColumn( "dbo.Person", "OutreachTouchpointSchedule", c => c.Int( nullable: false, defaultValue: 0 ) );
+            AddColumn( "dbo.Person", "OutreachTouchpointNotificationsEnabled", c => c.Boolean( nullable: false, defaultValue: false ) );
+            AddColumn( "dbo.Person", "OutreachEnableDailyNotification", c => c.Boolean( nullable: false, defaultValue: false ) );
+            AddColumn( "dbo.Person", "OutreachEnableSpecialEventsNotification", c => c.Boolean( nullable: false, defaultValue: false ) );
             AddColumn( "dbo.Person", "OutreachNotificationTimeOfDay", c => c.Int() );
+
+            // Add the Interaction Channel that all Share actions from the
+            // Outreach Toolbox will use.
+            Sql( @"
+DECLARE @MediumValueId INT = (SELECT [Id] FROM [DefinedValue] WHERE [Guid] = '5919214F-9C59-4913-BE4E-0DFB6A05F528')
+
+INSERT INTO [InteractionChannel] (
+    [Name],
+    [ChannelTypeMediumValueId],
+    [Guid],
+    [UsesSession],
+    [IsActive]
+)
+VALUES (
+    'Outreach Toolbox Events',
+    @MediumValueId,
+    '456E9DC7-7AA2-4327-8592-60CC83D114A4',
+    0,
+    1
+)" );
         }
 
         /// <summary>
@@ -143,12 +175,16 @@ namespace Rock.Migrations
         /// </summary>
         public override void Down()
         {
+            Sql( "DELETE FROM [InteractionChannel] WHERE [Guid] = '456E9DC7-7AA2-4327-8592-60CC83D114A4'" );
+
             DropForeignKey( "dbo.ContactTouchpoint", "ContactId", "dbo.Contact" );
             DropForeignKey( "dbo.ContactRelationshipChanges", "ContactId", "dbo.Contact" );
             DropForeignKey( "dbo.Contact", "PhotoId", "dbo.BinaryFile" );
             DropForeignKey( "dbo.Contact", "OwnerPersonAliasId", "dbo.PersonAlias" );
             DropForeignKey( "dbo.Contact", "ModifiedByPersonAliasId", "dbo.PersonAlias" );
             DropForeignKey( "dbo.Contact", "CreatedByPersonAliasId", "dbo.PersonAlias" );
+            DropIndex( "dbo.ContactTouchpoint", new[] { "Type", "ScheduledDateTime" } );
+            DropIndex( "dbo.ContactTouchpoint", new[] { "CompletedDateTime", "Type" } );
             DropIndex( "dbo.ContactTouchpoint", new[] { "Guid" } );
             DropIndex( "dbo.ContactTouchpoint", new[] { "ContactId" } );
             DropIndex( "dbo.ContactRelationshipChanges", new[] { "Guid" } );

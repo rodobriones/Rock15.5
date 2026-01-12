@@ -155,13 +155,6 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                         Title = "Salvation Anniversary",
                         InformationText = $"Celebrate {genderedPronoun} decision",
                     };
-                case TouchpointType.Share:
-                    return new TouchpointViewBag
-                    {
-                        IconSource = "resource://Rock.Mobile.Resources.outreach-share.png",
-                        Title = "Share",
-                        InformationText = $"Share your faith with {contact.FirstName}.",
-                    };
                 default:
                     return new TouchpointViewBag
                     {
@@ -240,9 +233,9 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 BirthDay = contact.BirthDay,
                 BirthMonth = contact.BirthMonth,
                 BirthYear = contact.BirthYear,
-                AnniversaryDay = contact.WeddingAnniversaryDay,
-                AnniversaryMonth = contact.WeddingAnniversaryMonth,
-                AnniversaryYear = contact.WeddingAnniversaryYear,
+                AnniversaryDay = contact.WeddingDay,
+                AnniversaryMonth = contact.WeddingMonth,
+                AnniversaryYear = contact.WeddingYear,
                 HasAcceptedJesus = contact.HasAcceptedJesus,
                 SalvationDay = contact.SalvationDay,
                 SalvationMonth = contact.SalvationMonth,
@@ -410,7 +403,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
         {
             ContactTouchpointService contactTouchpointService = new ContactTouchpointService( RockContext );
             ContactService contactService = new ContactService( RockContext );
-            var contactRelationshipChangesService = new ContactRelationshipChangesService( RockContext );
+            var contactRelationshipChangesService = new ContactRelationshipChangeService( RockContext );
 
             var touchpoint = contactTouchpointService.Get( bag.IdKey );
             var contact = contactService.Get( touchpoint.ContactId );
@@ -421,7 +414,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 || contact.HasAcceptedJesus != bag.hasAcceptedJesus
                 || contact.HasBeenBaptized != bag.Baptized )
             {
-                var newRelationshipChange = new ContactRelationshipChanges();
+                var newRelationshipChange = new ContactRelationshipChange();
                 newRelationshipChange.ContactId = contact.Id;
                 newRelationshipChange.PreviousRelationshipStrength = contact.RelationshipStrength;
                 newRelationshipChange.NewRelationshipStrength = bag.RelationshipStrength.ToNative();

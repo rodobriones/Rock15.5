@@ -24,15 +24,15 @@ using Rock.Enums.Outreach;
 namespace Rock.Model
 {
     /// <summary>
-    /// Represents changes in relationship strength for a <see cref="Rock.Model.Contact"/>.
+    /// Represents a change in relationship strength for a <see cref="Rock.Model.Contact"/>.
     /// </summary>
     [RockDomain( "Outreach" )]
-    [Table( "ContactRelationshipChanges" )]
+    [Table( "ContactRelationshipChange" )]
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]
     [Analytics( true, true )]
     [SystemGuid.EntityTypeGuid( SystemGuid.EntityType.CONTACT_RELATIONSHIP_STRENGTH_CHANGES )]
-    public partial class ContactRelationshipChanges : Entity<ContactRelationshipChanges>
+    public partial class ContactRelationshipChange : Entity<ContactRelationshipChange>
     {
         #region Entity Properties
 
@@ -95,7 +95,7 @@ namespace Rock.Model
         /// <summary>
         /// ContactRelationshipStrengthChanges Configuration class.
         /// </summary>
-        public partial class ContactRelationshipChangesConfiguration : EntityTypeConfiguration<ContactRelationshipChanges>
+        public partial class ContactRelationshipChangesConfiguration : EntityTypeConfiguration<ContactRelationshipChange>
         {
             /// <summary>
             /// Initializes a new instance of the <see cref="ContactRelationshipChangesConfiguration"/> class.

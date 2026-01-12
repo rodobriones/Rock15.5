@@ -51,26 +51,21 @@ namespace Rock.Enums.Outreach
         Birthday = 4,
 
         /// <summary>
-        /// Share - not used currently, we think these are being handled by interactions instead.
-        /// </summary>
-        Share = 5,
-
-        /// <summary>
         /// The contact has a wedding anniversary that should be recognized by
         /// the individual.
         /// </summary>
-        WeddingAnniversary = 6,
+        WeddingAnniversary = 5,
 
         /// <summary>
         /// The contact has a baptism anniversary that should be recognized by
         /// the individual.
         /// </summary>
-        BaptismAnniversary = 7,
+        BaptismAnniversary = 6,
 
         /// <summary>
         /// The contact has a salvation anniversary that should be recognized by
         /// the individual.
         /// </summary>
-        SalvationAnniversary = 8,
+        SalvationAnniversary = 7,
     }
 }
