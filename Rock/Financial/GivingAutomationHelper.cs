@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
@@ -659,9 +660,9 @@ namespace Rock.Financial
     internal sealed class AttributeUpdate
     {
         /// <summary>
-        /// Gets or sets the attribute Guid to update.
+        /// Gets or sets the attribute Id to update.
         /// </summary>
-        public Guid AttributeGuid { get; set; }
+        public int AttributeId { get; set; }
 
         /// <summary>
         /// Gets or sets the raw attribute value to persist.
@@ -671,6 +672,8 @@ namespace Rock.Financial
 
     internal static class GivingAttributeUpdate
     {
+        private static readonly ConcurrentDictionary<Guid, int> _attributeIdCache = new ConcurrentDictionary<Guid, int>();
+
         /// <summary>
         /// Creates an <see cref="AttributeUpdate"/> with a date/time value.
         /// </summary>
@@ -700,9 +703,20 @@ namespace Rock.Financial
         /// </summary>
         internal static AttributeUpdate Create( Guid attributeGuid, string value )
         {
+            var attributeId = _attributeIdCache.GetOrAdd( attributeGuid, guid =>
+            {
+                var attribute = AttributeCache.Get( guid );
+                return attribute?.Id ?? 0;
+            } );
+
+            if ( attributeId == 0 )
+            {
+                return new AttributeUpdate { AttributeId = 0, Value = value };
+            }
+
             return new AttributeUpdate
             {
-                AttributeGuid = attributeGuid,
+                AttributeId = attributeId,
                 Value = value
             };
         }

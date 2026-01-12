@@ -19,7 +19,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
 using System.Data.Entity;
+using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -133,11 +135,6 @@ namespace Rock.Jobs
 
                 var jobStartDateTime = context.Now;
 
-                // Progress tracking (modeled after OldGivingAutomation, but thread-safe).
-                var progressStopwatch = Stopwatch.StartNew();
-                long lastGivingClassificationProgressUpdateTicks = DateTime.MinValue.Ticks;
-                const long progressUpdateIntervalTicks = TimeSpan.TicksPerSecond * 3;
-
                 context.CommandTimeout = GetAttributeValue( AttributeKey.CommandTimeout ).AsIntegerOrNull() ?? AttributeDefaultValue.CommandTimeout;
 
                 var fallback = context.Now.AddDays( -( GetAttributeValue( AttributeKey.MaxDaysSinceLastGift ).AsIntegerOrNull() ?? AttributeDefaultValue.MaxDaysSinceLastGift ) );
@@ -199,10 +196,9 @@ namespace Rock.Jobs
                     }
                 }
 
-                this.UpdateLastStatusMessage( $"Processing classifications and alerts for {dirtyGivingIdsCount} Giving Units..." );
+                this.UpdateLastStatusMessage( "Processing Giving Classifications and Alerts..." );
 
-                int batchSize = dirtyGivingIdsCount <= context.UseOneBatchThreshold ? dirtyGivingIdsCount : context.BatchSize;
-
+                int batchSize = context.BatchSize;
                 for ( int i = 0; i < dirtyGivingIdsCount; i += batchSize )
                 {
                     int currentBatchSize = Math.Min( batchSize, dirtyGivingIdsCount - i );
@@ -211,6 +207,9 @@ namespace Rock.Jobs
                     var twelveMonthsTransactionsByGivingId = GetTransactionsForBatch( context, batchIds );
                     var twelveMonthsAlertsByGivingId = GetAlertsForBatch( context, batchIds );
                     var eligibleGivingIdsByDataViewId = GetEligibleGivingIdsByDataViewIdForBatch( context, batchIds );
+                    var personsByGivingId = GetPersonsForBatch( context, batchIds );
+
+                    var batchSw = Stopwatch.StartNew();
 
                     var parallelOptions = new ParallelOptions
                     {
@@ -218,12 +217,14 @@ namespace Rock.Jobs
                         MaxDegreeOfParallelism = Environment.ProcessorCount > 4 ? Environment.ProcessorCount / 2 : 1
                     };
 
+                    var batchedUpdates = new ConcurrentBag<GivingUnitUpdate>();
+
                     Parallel.ForEach( batchIds, parallelOptions, givingId =>
                     {
-                        Stopwatch sw = null;
+                        Stopwatch threadSw = null;
                         if ( context.DebugModeEnabled )
                         {
-                            sw = Stopwatch.StartNew();
+                            threadSw = Stopwatch.StartNew();
                         }
 
                         try
@@ -239,15 +240,52 @@ namespace Rock.Jobs
                                 // qualifying transactions in the last 12 months.
                                 if ( filtersChanged && isClassificationUpdateDay )
                                 {
-                                    List<Person> personsForGivingId = IdentifyPersonsOfGivingId( context, givingId, out _, out _ );
+                                    var personsForGivingId = personsByGivingId.GetValueOrNull( givingId ) ?? new List<Person>();
                                     var attributeUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-                                    SaveAttributesPerGivingId( context, personsForGivingId, attributeUpdates );
+
+                                    batchedUpdates.Add( new GivingUnitUpdate
+                                    {
+                                        Persons = personsForGivingId,
+                                        AttributeUpdates = attributeUpdates
+                                    } );
                                 }
 
                                 return;
                             }
 
-                            List<Person> persons = IdentifyPersonsOfGivingId( context, givingId, out var firstGiftDate, out var lastClassifiedDate );
+                            var persons = personsByGivingId.GetValueOrNull( givingId );
+                            if ( persons == null || !persons.Any() )
+                            {
+                                return;
+                            }
+
+                            var firstGiftDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE ).AsDateTime();
+                             // Fetch lastClassifiedDate here as it is used in both classification logic and alert logic
+                            var lastClassifiedDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE ).AsDateTime() ?? DateTime.MinValue;
+
+                            if ( !firstGiftDate.HasValue )
+                            {
+                                using ( var rockContext = new RockContext() )
+                                {
+                                    firstGiftDate = new FinancialTransactionService( rockContext )
+                                        .GetGivingAutomationSourceTransactionQueryByGivingId( givingId )
+                                        .Where( t => t.TransactionDateTime.HasValue )
+                                        .Min( t => t.TransactionDateTime );
+
+                                    // If first gift date was missing but now identified, persist it.
+                                    if ( firstGiftDate.HasValue )
+                                    {
+                                        batchedUpdates.Add( new GivingUnitUpdate
+                                        {
+                                            Persons = persons,
+                                            AttributeUpdates = new List<AttributeUpdate>
+                                            {
+                                                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE.AsGuid(), firstGiftDate )
+                                            }
+                                        } );
+                                    }
+                                }
+                            }
 
                             // If the first gift date was less than 12 months ago and there are less than 5 gifts,
                             // there is not enough data to develop any meaningful insights.
@@ -270,7 +308,12 @@ namespace Rock.Jobs
                                 {
                                     // Since they don't have enough data for meaningful stats, clear their stale classification attributes.
                                     var clearedAttributeUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-                                    SaveAttributesPerGivingId( context, persons, clearedAttributeUpdates );
+
+                                    batchedUpdates.Add( new GivingUnitUpdate
+                                    {
+                                        Persons = persons,
+                                        AttributeUpdates = clearedAttributeUpdates
+                                    } );
                                 }
 
                                 return;
@@ -288,16 +331,23 @@ namespace Rock.Jobs
                             {
                                 var attributeUpdates = CalculateAttributesPerGivingId( context, twelveMonthsTransactions );
 
-                                SaveAttributesPerGivingId( context, persons, attributeUpdates );
-
-                                GivingUnitWasClassifiedMessage.Publish( persons.Select( p => p.Id ) );
+                                batchedUpdates.Add( new GivingUnitUpdate
+                                {
+                                    Persons = persons,
+                                    AttributeUpdates = attributeUpdates
+                                } );
                             }
                             else if ( filtersChanged && isClassificationUpdateDay && !hasEnoughDataForClassification )
                             {
                                 // During a filter-change refresh, clear stale analytics attributes for giving units that do not have enough
                                 // qualifying transactions to calculate meaningful statistics.
                                 var clearedUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-                                SaveAttributesPerGivingId( context, persons, clearedUpdates );
+
+                                batchedUpdates.Add( new GivingUnitUpdate
+                                {
+                                    Persons = persons,
+                                    AttributeUpdates = clearedUpdates
+                                } );
                             }
 
                             // ALERT GENERATION
@@ -326,41 +376,33 @@ namespace Rock.Jobs
                         }
                         finally
                         {
-                            var givingUnitsProcessed = Interlocked.Increment( ref context.GivingUnitsProcessed );
+                            Interlocked.Increment( ref context.GivingUnitsProcessed );
 
-                            var nowTicks = RockDateTime.Now.Ticks;
-                            var previousTicks = Interlocked.Read( ref lastGivingClassificationProgressUpdateTicks );
-                            if ( nowTicks - previousTicks >= progressUpdateIntervalTicks )
+                            if ( threadSw != null )
                             {
-                                // Only one thread should win the right to publish the progress update for this interval.
-                                if ( Interlocked.CompareExchange( ref lastGivingClassificationProgressUpdateTicks, nowTicks, previousTicks ) == previousTicks )
-                                {
-                                    var minutes = progressStopwatch.Elapsed.TotalMinutes;
-                                    var perMinute = minutes > 0 ? givingUnitsProcessed / minutes : 0d;
-
-                                    if ( context.DebugModeEnabled )
-                                    {
-                                        Debug.WriteLine( $"\tGiving Automation Progress: {givingUnitsProcessed}/{dirtyGivingIdsCount}, progressCount/minute:{perMinute:0.0}" );
-                                    }
-
-                                    try
-                                    {
-                                        this.UpdateLastStatusMessage( $"Processing Giving Classifications and Alerts: {givingUnitsProcessed}/{dirtyGivingIdsCount}" );
-                                    }
-                                    catch ( Exception ex )
-                                    {
-                                        AddError( context, "Error updating LastStatusMessage for progress loop.", ex );
-                                    }
-                                }
-                            }
-
-                            if ( sw != null )
-                            {
-                                sw.Stop();
-                                DebugHelper.RecordProcessed( sw.ElapsedMilliseconds );
+                                threadSw.Stop();
+                                DebugHelper.RecordProcessed( threadSw.ElapsedMilliseconds );
                             }
                         }
                     } );
+
+                    SaveAttributeValuesForBatch( context, batchedUpdates );
+
+                    foreach ( var update in batchedUpdates )
+                    {
+                        if ( update.Persons != null && update.Persons.Any() )
+                        {
+                            GivingUnitWasClassifiedMessage.Publish( update.Persons.Select( p => p.Id ) );
+                        }
+                    }
+
+                    batchSw.Stop();
+                    if ( context.DebugModeEnabled )
+                    {
+                        DebugHelper.Write( $"Processed batch {( i / batchSize ) + 1} of {Math.Ceiling( ( double ) dirtyGivingIdsCount / batchSize )} in {batchSw.ElapsedMilliseconds} ms" );
+                    }
+
+                    this.UpdateLastStatusMessage( $"Processing Giving Classifications and Alerts... {i + currentBatchSize}/{dirtyGivingIdsCount}" );
                 }
 
                 if ( hasAlertTypes )
@@ -476,16 +518,16 @@ namespace Rock.Jobs
         }
 
         /// <summary>
-        /// Loads all people in the specified giving unit and returns basic attribute-derived values needed for processing.
+        /// Gets the people for a batch of GivingIds, with attributes pre-loaded.
         /// </summary>
         /// <param name="context">The current job context.</param>
-        /// <param name="givingId">The giving id to load people for.</param>
-        /// <param name="firstGiftDate">Outputs the giving unit's first gift date.</param>
-        /// <param name="lastClassifiedDate">Outputs the giving unit's last classification date.</param>
-        private static List<Person> IdentifyPersonsOfGivingId( GivingAutomationContext context, string givingId, out DateTime? firstGiftDate, out DateTime? lastClassifiedDate )
+        /// <param name="givingIds">The giving ids to query.</param>
+        private static Dictionary<string, List<Person>> GetPersonsForBatch( GivingAutomationContext context, List<string> givingIds )
         {
-            firstGiftDate = null;
-            lastClassifiedDate = null;
+            if ( givingIds == null || givingIds.Count == 0 )
+            {
+                return new Dictionary<string, List<Person>>();
+            }
 
             using ( var rockContext = new RockContext() )
             {
@@ -501,29 +543,15 @@ namespace Rock.Jobs
                 };
 
                 var persons = new PersonService( rockContext ).Queryable( personQueryOptions )
-                    .Where( p => p.GivingId == givingId )
+                    .Where( p => givingIds.Contains( p.GivingId ) )
+                    .AsNoTracking()
                     .ToList();
 
                 persons.LoadAttributes( rockContext );
 
-                firstGiftDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE ).AsDateTime();
-                lastClassifiedDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE ).AsDateTime() ?? DateTime.MinValue;
-
-                if ( !firstGiftDate.HasValue )
-                {
-                    firstGiftDate = new FinancialTransactionService( rockContext )
-                        .GetGivingAutomationSourceTransactionQueryByGivingId( givingId )
-                        .Where( t => t.TransactionDateTime.HasValue )
-                        .Min( t => t.TransactionDateTime );
-
-                    // If first gift date was missing but now identified, persist it.
-                    if ( firstGiftDate.HasValue )
-                    {
-                        PersistFirstGaveAttribute( context, persons, firstGiftDate );
-                    }
-                }
-
-                return persons;
+                return persons
+                    .GroupBy( p => p.GivingId )
+                    .ToDictionary( g => g.Key, g => g.ToList() );
             }
         }
 
@@ -824,14 +852,13 @@ namespace Rock.Jobs
         }
 
         /// <summary>
-        /// Persists attribute updates for all people in a giving unit.
+        /// Processes a batch of attribute updates by merging them into the database in a single transaction.
         /// </summary>
-        /// <param name="context">The current job context.</param>
-        /// <param name="persons">The people in the giving unit.</param>
-        /// <param name="attributeUpdates">The attribute updates to apply.</param>
-        private static void SaveAttributesPerGivingId( GivingAutomationContext context, List<Person> persons, List<AttributeUpdate> attributeUpdates )
+        /// <param name="context">The job context.</param>
+        /// <param name="batchedUpdates">The collection of updates to process.</param>
+        private static void SaveAttributeValuesForBatch( GivingAutomationContext context, IEnumerable<GivingUnitUpdate> batchedUpdates )
         {
-            if ( !persons.Any() || attributeUpdates == null || attributeUpdates.Count == 0 )
+            if ( batchedUpdates == null || !batchedUpdates.Any() )
             {
                 return;
             }
@@ -840,23 +867,54 @@ namespace Rock.Jobs
             {
                 rockContext.Database.SetCommandTimeout( context.CommandTimeout );
 
-                // persons.LoadAttributes() has already been called via IdentifyPersonsOfGivingId().
+                var dataTable = new DataTable();
+                dataTable.Columns.Add( "EntityId", typeof( int ) );
+                dataTable.Columns.Add( "AttributeId", typeof( int ) );
+                dataTable.Columns.Add( "Value", typeof( string ) );
 
-                foreach ( var person in persons )
+                foreach ( var givingUnitUpdate in batchedUpdates )
                 {
-                    foreach ( var attr in attributeUpdates )
+                    if ( givingUnitUpdate.AttributeUpdates == null || !givingUnitUpdate.AttributeUpdates.Any() )
                     {
-                        var attributeCache = AttributeCache.Get( attr.AttributeGuid );
-                        if ( attributeCache == null )
-                        {
-                            continue;
-                        }
-
-                        person.SetAttributeValue( attributeCache.Key, attr.Value );
+                        continue;
                     }
 
-                    person.SaveAttributeValues( rockContext );
+                    foreach ( var person in givingUnitUpdate.Persons )
+                    {
+                        foreach ( var update in givingUnitUpdate.AttributeUpdates )
+                        {
+                            if ( update.AttributeId <= 0 )
+                            {
+                                continue;
+                            }
+
+                            dataTable.Rows.Add( person.Id, update.AttributeId, update.Value ?? string.Empty );
+                        }
+                    }
                 }
+
+                if ( dataTable.Rows.Count == 0 )
+                {
+                    return;
+                }
+
+                var parameters = new SqlParameter( "@GivingUnitUpdates", SqlDbType.Structured )
+                {
+                    TypeName = "dbo.AttributeValueUpdates",
+                    Value = dataTable
+                };
+
+                rockContext.Database.ExecuteSqlCommand( @"
+MERGE INTO [AttributeValue] AS [Target]
+USING @GivingUnitUpdates AS [Source]
+ON [Target].[AttributeId] = [Source].[AttributeId] AND [Target].[EntityId] = [Source].[EntityId]
+WHEN MATCHED THEN
+    UPDATE SET 
+        [Value] = [Source].[Value],
+        [ModifiedDateTime] = SYSDATETIME()
+WHEN NOT MATCHED THEN
+    INSERT ([IsSystem], [AttributeId], [EntityId], [Value], [Guid], [CreatedDateTime], [ModifiedDateTime])
+    VALUES (0, [Source].[AttributeId], [Source].[EntityId], [Source].[Value], NEWID(), SYSDATETIME(), SYSDATETIME());", parameters );
             }
         }
 
@@ -1794,28 +1852,6 @@ namespace Rock.Jobs
         }
 
         /// <summary>
-        /// Persists the first-gave attribute value for a giving unit.
-        /// </summary>
-        /// <param name="context">The current job context.</param>
-        /// <param name="persons">The people in the giving unit.</param>
-        /// <param name="firstGiftDate">The first gift date to store.</param>
-        private static void PersistFirstGaveAttribute( GivingAutomationContext context, List<Person> persons, DateTime? firstGiftDate )
-        {
-            if ( !persons.Any() )
-            {
-                return;
-            }
-
-            SaveAttributesPerGivingId(
-                context,
-                persons,
-                new List<AttributeUpdate>
-                {
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE.AsGuid(), firstGiftDate )
-                } );
-        }
-
-        /// <summary>
         /// Adds an error message to the job context and logs the exception (if provided).
         /// </summary>
         /// <param name="context">The current job context.</param>
@@ -1837,6 +1873,22 @@ namespace Rock.Jobs
         #endregion Helper Methods
 
         #region DTOs
+
+        /// <summary>
+        /// Represents a batch of updates to be applied to a single giving unit (GivingId).
+        /// </summary>
+        private sealed class GivingUnitUpdate
+        {
+            /// <summary>
+            /// Gets or sets the people in the giving unit.
+            /// </summary>
+            public List<Person> Persons { get; set; }
+
+            /// <summary>
+            /// Gets or sets the attribute updates to apply to the people in the giving unit.
+            /// </summary>
+            public List<AttributeUpdate> AttributeUpdates { get; set; }
+        }
 
         /// <summary>
         /// Holds job-scoped state and configuration values used while executing the Giving Automation processing run.
@@ -1879,14 +1931,9 @@ namespace Rock.Jobs
             public bool DebugModeEnabled { get; set; }
 
             /// <summary>
-            /// Gets or sets the threshold under which the job will process all giving ids in a single batch.
-            /// </summary>
-            public int UseOneBatchThreshold { get; set; } = 500;
-
-            /// <summary>
             /// Gets or sets the number of giving ids to process per batch.
             /// </summary>
-            public int BatchSize { get; set; } = 300;
+            public int BatchSize { get; set; } = 100;
 
             /// <summary>
             /// Tracks the number of alerts created during this run (updated via <see cref="System.Threading.Interlocked"/>).
@@ -2016,7 +2063,7 @@ namespace Rock.Jobs
                 Write( $"Summary: total={totalCount}, processed={processedCount}, failed={failedCount}, errors={errorCount}, elapsedMs={TotalStopwatch.ElapsedMilliseconds}, avgMsPerGivingUnit={avg:0.0}" );
             }
 
-            private static void Write( string message )
+            internal static void Write( string message )
             {
                 if ( IsEnabled && System.Web.Hosting.HostingEnvironment.IsDevelopmentEnvironment )
                 {

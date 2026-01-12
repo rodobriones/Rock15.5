@@ -24,6 +24,7 @@ BEGIN
     DECLARE @RecordTypeId_Nameless INT = (SELECT TOP 1 Id FROM DefinedValue WHERE [Guid] = '721300ED-1267-4DA0-B4F2-6C6B5B17B1C5'); -- PERSON_RECORD_TYPE_NAMELESS
     DECLARE @RecordTypeId_RestUser INT = (SELECT TOP 1 Id FROM DefinedValue WHERE [Guid] = 'E2261A84-831D-4234-9BE0-4D628BBE751E'); -- PERSON_RECORD_TYPE_RESTUSER
     DECLARE @GiverAnonymousGuid UNIQUEIDENTIFIER = '802235DC-3CA5-94B0-4326-AACE71180F48'; -- GIVER_ANONYMOUS
+    DECLARE @AnonymousVisitorGuid UNIQUEIDENTIFIER = '7EBC167B-512D-4683-9D80-98B6BB02E1B9'; -- ANONYMOUS_VISITOR
 
     -- =============================================
     -- CALCULATIONS
@@ -38,6 +39,7 @@ BEGIN
             AND (@RecordTypeId_Nameless IS NULL OR p.RecordTypeValueId <> @RecordTypeId_Nameless)
             AND (@RecordTypeId_RestUser IS NULL OR p.RecordTypeValueId <> @RecordTypeId_RestUser)
             AND p.[Guid] <> @GiverAnonymousGuid
+            AND p.[Guid] <> @AnonymousVisitorGuid
     ),
 
     EligibleGivingIds AS (
