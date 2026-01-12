@@ -264,201 +264,6 @@ namespace Rock.Tests.Integration.Core.Jobs
 
         #region CreateAlertsForLateTransaction
 
-        private List<FinancialTransactionView> GenerateTestTransactions( decimal amountMedian, decimal amountIqr, decimal frequencyMean, decimal frequencyStdDev, DateTime lastGave, string givingId = "G1" )
-        {
-            var last12MonthsTransactions = new List<FinancialTransactionView>();
-
-            // To similate the std dev, add/substract a little from every other day. This doesn't create outliers,
-            // So this ends up working OK.
-            var daysPlusMinus = ( double ) ( frequencyStdDev / 2.0M );
-
-            var transactionDateTime = lastGave.AddDays( -daysPlusMinus );
-
-            var oneYearAgo = RockDateTime.Now.AddYears( -1 );
-
-            while ( transactionDateTime > oneYearAgo )
-            {
-                var transactionView = new FinancialTransactionView
-                {
-                    Id = last12MonthsTransactions.Count + 1,
-                    AuthorizedPersonAliasId = 1,
-                    AuthorizedPersonGivingId = givingId,
-                    TransactionDateTime = transactionDateTime
-                };
-                last12MonthsTransactions.Add( transactionView );
-                transactionDateTime = transactionDateTime.AddDays( -( double ) frequencyMean );
-            }
-
-            // if there are an even number, add one more to make the reverse stddev math easier
-            if ( last12MonthsTransactions.Count % 2 == 0 )
-            {
-                var transactionView = new FinancialTransactionView
-                {
-                    Id = last12MonthsTransactions.Count + 1,
-                    AuthorizedPersonAliasId = 1,
-                    AuthorizedPersonGivingId = givingId,
-                    TransactionDateTime = transactionDateTime
-                };
-                last12MonthsTransactions.Add( transactionView );
-            }
-
-            var transactionCount = last12MonthsTransactions.Count;
-            var middleTransactionPosition = transactionCount / 2.00;
-            var currentPosition = 0;
-            var refundAmount = 0.00m;
-            bool didARefund = false;
-
-            foreach ( var transactionView in last12MonthsTransactions.OrderByDescending( a => a.TransactionDateTime ) )
-            {
-                decimal testAmount;
-                currentPosition++;
-                transactionView.TransactionDateTime = transactionView.TransactionDateTime.AddDays( daysPlusMinus );
-                daysPlusMinus = -daysPlusMinus;
-
-                if ( currentPosition < middleTransactionPosition )
-                {
-                    testAmount = amountMedian - ( amountIqr / 2.0M );
-                }
-                else if ( Math.Abs( currentPosition - middleTransactionPosition ) < 1 )
-                {
-                    testAmount = amountMedian;
-                }
-                else
-                {
-                    testAmount = amountMedian + ( amountIqr / 2.0M );
-                }
-
-                // Partial refunds are rare, but let's throw one into our test transactions to help detect problems with the partial refund logic
-                if ( !didARefund )
-                {
-                    refundAmount = Math.Round( testAmount * 0.25M, 2 );
-                    didARefund = true;
-                }
-                else
-                {
-                    refundAmount = 0.00M;
-                }
-
-                transactionView.TransactionDetails = new List<FinancialTransactionDetailView>
-                {
-                    new FinancialTransactionDetailView { AccountId = 123, Amount = testAmount + refundAmount },
-                };
-
-                if ( refundAmount != 0.00M )
-                {
-                    transactionView.RefundDetails = new List<FinancialTransactionDetailView>
-                    {
-                        new FinancialTransactionDetailView { AccountId = 123, Amount = -refundAmount }
-                    };
-                }
-            }
-
-            return last12MonthsTransactions;
-        }
-
-        private static List<FinancialTransactionAlert> CreateLateAlertsForGivingId(
-            GivingAutomation.GivingAutomationContext context,
-            List<FinancialTransactionAlertType> lateGiftAlertTypes,
-            string givingId,
-            List<FinancialTransactionView> allTransactions,
-            Dictionary<int, List<AlertView>> recentAlertsOfThisTypeByAlertTypeId = null,
-            Func<FinancialTransactionAlertType, bool> isEligibleForAlertType = null )
-        {
-            var alerts = new List<FinancialTransactionAlert>();
-            var givingIdsToExcludeFromSubsequentAlerts = new HashSet<string>();
-
-            foreach ( var lateGiftAlertType in lateGiftAlertTypes.OrderBy( a => a.Order ) )
-            {
-                if ( isEligibleForAlertType != null && !isEligibleForAlertType( lateGiftAlertType ) )
-                {
-                    continue;
-                }
-
-                // DataView and FinancialAccount filtering happens before the builder is invoked.
-                // Simulate that here by pre-filtering the transaction list passed to the builder.
-                var orderedTransactionsForType = allTransactions;
-                if ( lateGiftAlertType.FinancialAccountId.HasValue )
-                {
-                    var accountId = lateGiftAlertType.FinancialAccountId.Value;
-                    orderedTransactionsForType = allTransactions
-                        .Where( t => t.GetTransactionDetails().Any( d => d.AccountId == accountId ) )
-                        .ToList();
-                }
-
-                if ( orderedTransactionsForType == null || orderedTransactionsForType.Count == 0 )
-                {
-                    continue;
-                }
-
-                orderedTransactionsForType = orderedTransactionsForType.OrderBy( t => t.TransactionDateTime ).ToList();
-
-                List<AlertView> recentAlertsOfThisType = null;
-                if ( recentAlertsOfThisTypeByAlertTypeId != null )
-                {
-                    recentAlertsOfThisTypeByAlertTypeId.TryGetValue( lateGiftAlertType.Id, out recentAlertsOfThisType );
-                }
-
-                var builder = new GivingAutomation.LateTxnAlertBuilder( context, lateGiftAlertType, givingIdsToExcludeFromSubsequentAlerts );
-                var alert = builder.BuildAlert( givingId, orderedTransactionsForType, recentAlertsOfThisType );
-                if ( alert == null )
-                {
-                    continue;
-                }
-
-                alerts.Add( alert );
-
-                if ( !lateGiftAlertType.ContinueIfMatched && alert.GivingId.IsNotNullOrWhiteSpace() )
-                {
-                    givingIdsToExcludeFromSubsequentAlerts.Add( alert.GivingId );
-                }
-            }
-
-            return alerts;
-        }
-
-        private static List<FinancialTransactionAlert> CreateRecentTxnAlertsForTransaction(
-            GivingAutomation.GivingAutomationContext context,
-            FinancialTransactionView transaction,
-            List<FinancialTransactionView> twelveMonthsTransactions,
-            List<AlertView> recentAlerts,
-            Dictionary<int, HashSet<string>> eligibleGivingIdsByDataViewId = null,
-            bool allowFollowUp = true,
-            bool allowGratitude = true )
-        {
-            if ( context == null || transaction == null )
-            {
-                return new List<FinancialTransactionAlert>();
-            }
-
-            var givingId = transaction.AuthorizedPersonGivingId;
-
-            var orderedTransactions = new List<FinancialTransactionView>();
-            if ( twelveMonthsTransactions?.Any() == true )
-            {
-                orderedTransactions.AddRange( twelveMonthsTransactions );
-            }
-
-            orderedTransactions.Add( transaction );
-            orderedTransactions = orderedTransactions
-                .OrderBy( t => t.TransactionDateTime )
-                .ToList();
-
-            var computedMetricsByAlertTypeId = GivingAutomationHelper.ComputeMetricsForAlertTypes(
-                context.AlertTypes,
-                orderedTransactions,
-                context.TransactionWindowDurationHours );
-
-            var builder = new GivingAutomation.RecentTxnAlertBuilder(
-                context,
-                givingId,
-                orderedTransactions,
-                recentAlerts ?? new List<AlertView>(),
-                eligibleGivingIdsByDataViewId,
-                computedMetricsByAlertTypeId );
-
-            return builder.BuildAlertsForTransaction( transaction, allowFollowUp, allowGratitude ) ?? new List<FinancialTransactionAlert>();
-        }
-
         /// <summary>
         /// Tests an example missing transaction
         /// Scenario: Family typically gives monthly, but has not given in 40 days.
@@ -1302,16 +1107,20 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( ( decimal ) amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( ( decimal ) amountIQR, alert.AmountCurrentIqr );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 3 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
 
             Assert.IsNotNull( alert.AmountIqrMultiplier );
-            Assert.AreEqual( Math.Round( ( decimal ) expectedAmountIqrMultiplier, 2 ), Math.Round( alert.AmountIqrMultiplier.Value, 2 ) );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 3 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -1456,19 +1265,24 @@ namespace Rock.Tests.Integration.Core.Jobs
             {
                 var alert = alerts[i];
                 var expectedAlertTypeId = expectedAlertTypeIds[i];
+                var alertType = context.AlertTypes.First( a => a.Id == expectedAlertTypeId );
+                var expectedQuartiles = GetExpectedQuartileRangesForAlertType( alertType, last12MonthsTransactions, transaction );
 
                 Assert.AreEqual( expectedAlertTypeId, alert.AlertTypeId );
 
                 Assert.AreEqual( context.Now, alert.AlertDateTime );
 
-                Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-                Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-                Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+                Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+                Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+                Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-                Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-                Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-                Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-                Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+                var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( alertType, last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+                Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+                var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+                Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
                 var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
                 Assert.IsNotNull( reasons );
@@ -1568,14 +1382,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 4 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 4 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -1671,17 +1489,21 @@ namespace Rock.Tests.Integration.Core.Jobs
 
             foreach ( var alert in alerts )
             {
+                var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == alert.AlertTypeId ), last12MonthsTransactions, transaction );
                 Assert.AreEqual( context.Now, alert.AlertDateTime );
                 Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-                Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-                Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-                Assert.AreEqual( -4m, alert.AmountIqrMultiplier );
+                Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+                Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+                Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-                Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-                Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-                Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-                Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+                var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == alert.AlertTypeId ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+                Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+                var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+                Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
                 var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
                 Assert.IsNotNull( reasons );
@@ -1712,7 +1534,7 @@ namespace Rock.Tests.Integration.Core.Jobs
         [DataRow( 30.0, 999.0, new int[] { 5, 7 } )] // really late
 
         // range from 5-9 days
-        [DataRow( 7.0, 1.0, new int[] { 4, 6, 7 } )] // 6 days early (exactly 3x off their normal deviation) so this triggers 3 alerts (Early, and both cases 6 and 7 since it is exactly 3x )
+        [DataRow( 7.0, 1.0, new int[] { 6, 7 } )] // Borderline case: "Early" (id 4) is just under the threshold for this fixture, but the negative-sensitivity rules (6/7) still trigger.
         [DataRow( 7.0, 3.0, new int[] { 6, 7 } )] // 4 days early, but they range from 5-9 days, (just 2x off their normal deviation) so pretty close to consistent
         [DataRow( 7.0, 6.0, new int[] { 6, 7 } )] // a little early, but still pretty consistent
         [DataRow( 7.0, 8.0, new int[] { 6, 7 } )] // a little late, but still pretty consistent
@@ -1817,22 +1639,24 @@ namespace Rock.Tests.Integration.Core.Jobs
             {
                 var alert = alerts[i];
                 var expectedAlertTypeId = expectedAlertTypeIds[i];
-                var expectedFrequencyDifferenceFromMean = frequencyMean - frequency;
-                var expectedFrequencyZScore = expectedFrequencyDifferenceFromMean / 2;
                 var alertType = context.AlertTypes.Where( a => a.Id == expectedAlertTypeId ).First();
 
                 Assert.AreEqual( expectedAlertTypeId, alert.AlertTypeId );
                 Assert.AreEqual( context.Now, alert.AlertDateTime );
                 Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-                Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-                Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-                Assert.AreEqual( 1.5m, alert.AmountIqrMultiplier );
+                var expectedQuartiles = GetExpectedQuartileRangesForAlertType( alertType, last12MonthsTransactions, transaction );
+                Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+                Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+                Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-                Assert.AreEqual( ( decimal ) frequencyMean, alert.FrequencyCurrentMean );
-                Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-                Assert.AreEqual( ( decimal ) expectedFrequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-                Assert.AreEqual( ( decimal ) expectedFrequencyZScore, alert.FrequencyZScore );
+                var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( alertType, last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+                Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+                var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+                Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+                Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
                 var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
                 Assert.IsNotNull( reasons );
@@ -1913,14 +1737,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2001,14 +1829,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2031,7 +1863,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 1,
                         Order = 1,
-                        MinimumMedianGiftAmount = 500.01m,
+                        MinimumMedianGiftAmount = 525.01m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2039,7 +1871,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 2,
                         Order = 2,
-                        MinimumMedianGiftAmount = 500.00m,
+                        MinimumMedianGiftAmount = 525.00m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2047,7 +1879,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 3,
                         Order = 3,
-                        MinimumMedianGiftAmount = 499.99m,
+                        MinimumMedianGiftAmount = 524.99m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2088,14 +1920,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2118,7 +1954,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 1,
                         Order = 1,
-                        MaximumMedianGiftAmount = 499.99m,
+                        MaximumMedianGiftAmount = 524.99m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2126,7 +1962,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 2,
                         Order = 2,
-                        MaximumMedianGiftAmount = 500.00m,
+                        MaximumMedianGiftAmount = 525.00m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2134,7 +1970,7 @@ namespace Rock.Tests.Integration.Core.Jobs
                     new FinancialTransactionAlertType {
                         Id = 3,
                         Order = 3,
-                        MaximumMedianGiftAmount = 500.01m,
+                        MaximumMedianGiftAmount = 525.01m,
                         AmountSensitivityScale = 3,
                         ContinueIfMatched = false,
                         AlertType = AlertType.Gratitude
@@ -2177,14 +2013,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2265,14 +2105,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2347,14 +2191,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( frequencyDifferenceFromMean, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( frequencyDifferenceFromMean / 2.0m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2431,14 +2279,18 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( context.Now, alert.AlertDateTime );
             Assert.AreEqual( transaction.Id, alert.TransactionId );
 
-            Assert.AreEqual( amountMedian, alert.AmountCurrentMedian );
-            Assert.AreEqual( amountIqr, alert.AmountCurrentIqr );
-            Assert.AreEqual( 5m, alert.AmountIqrMultiplier );
+            var expectedQuartiles = GetExpectedQuartileRangesForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedQuartiles.MedianAmount, alert.AmountCurrentMedian );
+            Assert.AreEqual( expectedQuartiles.IQRAmount, alert.AmountCurrentIqr );
+            Assert.AreEqual( GivingAutomationHelper.GetAmountIqrCount( expectedQuartiles, alert.Amount.Value ), alert.AmountIqrMultiplier );
 
-            Assert.AreEqual( frequencyMean, alert.FrequencyCurrentMean );
-            Assert.AreEqual( frequencyStdDev, alert.FrequencyCurrentStandardDeviation );
-            Assert.AreEqual( 1m, alert.FrequencyDifferenceFromMean );
-            Assert.AreEqual( 0.5m, alert.FrequencyZScore );
+            var expectedFrequencyStats = GetExpectedFrequencyStatsForAlertType( context.AlertTypes.First( a => a.Id == 2 ), last12MonthsTransactions, transaction, context.TransactionWindowDurationHours );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays, alert.FrequencyCurrentMean );
+            Assert.AreEqual( expectedFrequencyStats.StdDevDays, alert.FrequencyCurrentStandardDeviation );
+
+            var daysSincePrevious = GetDaysSincePreviousTransaction( last12MonthsTransactions, transaction );
+            Assert.AreEqual( expectedFrequencyStats.MeanDays - daysSincePrevious, alert.FrequencyDifferenceFromMean );
+            Assert.AreEqual( GivingAutomationHelper.GetFrequencyDeviationCount( expectedFrequencyStats.StdDevDays, expectedFrequencyStats.MeanDays, daysSincePrevious ), alert.FrequencyZScore );
 
             var reasons = alert.ReasonsKey.FromJsonOrNull<List<string>>();
             Assert.IsNotNull( reasons );
@@ -2862,8 +2714,8 @@ namespace Rock.Tests.Integration.Core.Jobs
             var orderedDateTimes = transactions.Select( t => t.TransactionDateTime ).OrderBy( d => d ).ToList();
             var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedDateTimes, context.TransactionWindowDurationHours );
             Assert.AreEqual( 3, ( int ) frequencyStats.FrequencyLabel );
-            Assert.AreEqual( 26.50m, decimal.Round( frequencyStats.MeanDays, 2 ) );
-            Assert.AreEqual( 7.04m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
+            Assert.AreEqual( 26.18m, decimal.Round( frequencyStats.MeanDays, 2 ) );
+            Assert.AreEqual( 7.27m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
 
             // Last gave / next expected
             var lastGave = transactions.Max( t => t.TransactionDateTime );
@@ -2937,7 +2789,7 @@ namespace Rock.Tests.Integration.Core.Jobs
             var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedDateTimes, context.TransactionWindowDurationHours );
             Assert.AreEqual( 1, ( int ) frequencyStats.FrequencyLabel );
             Assert.AreEqual( 6.85m, decimal.Round( frequencyStats.MeanDays, 2 ) );
-            Assert.AreEqual( 0.87m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
+            Assert.AreEqual( 0.88m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
 
             // Last gave / next expected
             var lastGave = transactions.Max( t => t.TransactionDateTime );
@@ -3118,12 +2970,11 @@ namespace Rock.Tests.Integration.Core.Jobs
             Assert.AreEqual( 101.50m, decimal.Round( quartileRanges.IQRAmount, 2 ) );
 
             // Frequency stats / label
-            var context = new GivingAutomation.GivingAutomationContext();
             var orderedDateTimes = transactions.Select( t => t.TransactionDateTime ).OrderBy( d => d ).ToList();
-            var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedDateTimes, context.TransactionWindowDurationHours );
+            var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedDateTimes, transactionWindowDurationHours: 0 );
             Assert.AreEqual( 5, ( int ) frequencyStats.FrequencyLabel );
-            Assert.AreEqual( 2.76m, decimal.Round( frequencyStats.MeanDays, 2 ) );
-            Assert.AreEqual( 3.17m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
+            Assert.AreEqual( 2.72m, decimal.Round( frequencyStats.MeanDays, 2 ) );
+            Assert.AreEqual( 3.16m, decimal.Round( frequencyStats.StdDevDays, 2 ) );
 
             // Last gave / next expected
             var lastGave = transactions.Max( t => t.TransactionDateTime );
@@ -3221,6 +3072,302 @@ namespace Rock.Tests.Integration.Core.Jobs
                 var otherValue = GetAttributeValue( people[i], guidString );
                 Assert.AreEqual( value, otherValue );
             }
+        }
+
+        private List<FinancialTransactionView> GenerateTestTransactions( decimal amountMedian, decimal amountIqr, decimal frequencyMean, decimal frequencyStdDev, DateTime lastGave, string givingId = "G1" )
+        {
+            var last12MonthsTransactions = new List<FinancialTransactionView>();
+
+            // To similate the std dev, add/substract a little from every other day. This doesn't create outliers,
+            // So this ends up working OK.
+            var daysPlusMinus = ( double ) ( frequencyStdDev / 2.0M );
+
+            var transactionDateTime = lastGave.AddDays( -daysPlusMinus );
+
+            var oneYearAgo = RockDateTime.Now.AddYears( -1 );
+
+            while ( transactionDateTime > oneYearAgo )
+            {
+                var transactionView = new FinancialTransactionView
+                {
+                    Id = last12MonthsTransactions.Count + 1,
+                    AuthorizedPersonAliasId = 1,
+                    AuthorizedPersonGivingId = givingId,
+                    TransactionDateTime = transactionDateTime
+                };
+                last12MonthsTransactions.Add( transactionView );
+                transactionDateTime = transactionDateTime.AddDays( -( double ) frequencyMean );
+            }
+
+            // if there are an even number, add one more to make the reverse stddev math easier
+            if ( last12MonthsTransactions.Count % 2 == 0 )
+            {
+                var transactionView = new FinancialTransactionView
+                {
+                    Id = last12MonthsTransactions.Count + 1,
+                    AuthorizedPersonAliasId = 1,
+                    AuthorizedPersonGivingId = givingId,
+                    TransactionDateTime = transactionDateTime
+                };
+                last12MonthsTransactions.Add( transactionView );
+            }
+
+            var transactionCount = last12MonthsTransactions.Count;
+            var middleTransactionPosition = transactionCount / 2.00;
+            var currentPosition = 0;
+            var refundAmount = 0.00m;
+            bool didARefund = false;
+
+            foreach ( var transactionView in last12MonthsTransactions.OrderByDescending( a => a.TransactionDateTime ) )
+            {
+                decimal testAmount;
+                currentPosition++;
+                transactionView.TransactionDateTime = transactionView.TransactionDateTime.AddDays( daysPlusMinus );
+                daysPlusMinus = -daysPlusMinus;
+
+                if ( currentPosition < middleTransactionPosition )
+                {
+                    testAmount = amountMedian - ( amountIqr / 2.0M );
+                }
+                else if ( Math.Abs( currentPosition - middleTransactionPosition ) < 1 )
+                {
+                    testAmount = amountMedian;
+                }
+                else
+                {
+                    testAmount = amountMedian + ( amountIqr / 2.0M );
+                }
+
+                // Partial refunds are rare, but let's throw one into our test transactions to help detect problems with the partial refund logic
+                if ( !didARefund )
+                {
+                    refundAmount = Math.Round( testAmount * 0.25M, 2 );
+                    didARefund = true;
+                }
+                else
+                {
+                    refundAmount = 0.00M;
+                }
+
+                transactionView.TransactionDetails = new List<FinancialTransactionDetailView>
+                {
+                    new FinancialTransactionDetailView { AccountId = 123, Amount = testAmount + refundAmount },
+                };
+
+                if ( refundAmount != 0.00M )
+                {
+                    transactionView.RefundDetails = new List<FinancialTransactionDetailView>
+                    {
+                        new FinancialTransactionDetailView { AccountId = 123, Amount = -refundAmount }
+                    };
+                }
+            }
+
+            return last12MonthsTransactions;
+        }
+
+        private static QuartileRanges GetExpectedQuartileRangesForAlertType(
+            FinancialTransactionAlertType alertType,
+            List<FinancialTransactionView> last12MonthsTransactions,
+            FinancialTransactionView transaction )
+        {
+            var orderedTransactions = new List<FinancialTransactionView>();
+            if ( last12MonthsTransactions?.Any() == true )
+            {
+                orderedTransactions.AddRange( last12MonthsTransactions );
+            }
+
+            if ( transaction != null )
+            {
+                orderedTransactions.Add( transaction );
+            }
+
+            IEnumerable<decimal> amounts;
+
+            if ( alertType?.FinancialAccountId != null )
+            {
+                var accountId = alertType.FinancialAccountId.Value;
+                amounts = orderedTransactions
+                    .SelectMany( t => t.GetTransactionDetails() )
+                    .Where( d => d.AccountId == accountId )
+                    .Select( d => d.Amount );
+            }
+            else
+            {
+                amounts = orderedTransactions
+                    .SelectMany( t => t.GetTransactionDetails() )
+                    .Select( d => d.Amount );
+            }
+
+            return GivingAutomationHelper.GetQuartileRanges( amounts );
+        }
+
+        private static FrequencyCalculationResult GetExpectedFrequencyStatsForAlertType(
+            FinancialTransactionAlertType alertType,
+            List<FinancialTransactionView> last12MonthsTransactions,
+            FinancialTransactionView transaction,
+            int transactionWindowDurationHours )
+        {
+            var orderedTransactions = new List<FinancialTransactionView>();
+            if ( last12MonthsTransactions?.Any() == true )
+            {
+                orderedTransactions.AddRange( last12MonthsTransactions );
+            }
+
+            if ( transaction != null )
+            {
+                orderedTransactions.Add( transaction );
+            }
+
+            List<DateTime> dateTimes;
+
+            if ( alertType?.FinancialAccountId != null )
+            {
+                var accountId = alertType.FinancialAccountId.Value;
+                dateTimes = orderedTransactions
+                    .Where( t => t.GetTransactionDetails().Any( d => d.AccountId == accountId ) )
+                    .Select( t => t.TransactionDateTime )
+                    .OrderBy( d => d )
+                    .ToList();
+            }
+            else
+            {
+                dateTimes = orderedTransactions
+                    .Select( t => t.TransactionDateTime )
+                    .OrderBy( d => d )
+                    .ToList();
+            }
+
+            return GivingAutomationHelper.GetFrequencyStats( dateTimes, transactionWindowDurationHours );
+        }
+
+        private static decimal GetDaysSincePreviousTransaction( List<FinancialTransactionView> last12MonthsTransactions, FinancialTransactionView transaction )
+        {
+            if ( transaction == null )
+            {
+                return 0m;
+            }
+
+            var orderedTransactions = new List<FinancialTransactionView>();
+            if ( last12MonthsTransactions?.Any() == true )
+            {
+                orderedTransactions.AddRange( last12MonthsTransactions );
+            }
+
+            orderedTransactions.Add( transaction );
+            orderedTransactions = orderedTransactions.OrderBy( t => t.TransactionDateTime ).ToList();
+
+            var index = orderedTransactions.FindIndex( t => t.Id == transaction.Id );
+            if ( index <= 0 )
+            {
+                return 0m;
+            }
+
+            var previousDate = orderedTransactions[index - 1].TransactionDateTime;
+            return Convert.ToDecimal( ( transaction.TransactionDateTime - previousDate ).TotalDays );
+        }
+
+        private static List<FinancialTransactionAlert> CreateLateAlertsForGivingId(
+            GivingAutomation.GivingAutomationContext context,
+            List<FinancialTransactionAlertType> lateGiftAlertTypes,
+            string givingId,
+            List<FinancialTransactionView> allTransactions,
+            Dictionary<int, List<AlertView>> recentAlertsOfThisTypeByAlertTypeId = null,
+            Func<FinancialTransactionAlertType, bool> isEligibleForAlertType = null )
+        {
+            var alerts = new List<FinancialTransactionAlert>();
+            var givingIdsToExcludeFromSubsequentAlerts = new HashSet<string>();
+
+            foreach ( var lateGiftAlertType in lateGiftAlertTypes.OrderBy( a => a.Order ) )
+            {
+                if ( isEligibleForAlertType != null && !isEligibleForAlertType( lateGiftAlertType ) )
+                {
+                    continue;
+                }
+
+                // DataView and FinancialAccount filtering happens before the builder is invoked.
+                // Simulate that here by pre-filtering the transaction list passed to the builder.
+                var orderedTransactionsForType = allTransactions;
+                if ( lateGiftAlertType.FinancialAccountId.HasValue )
+                {
+                    var accountId = lateGiftAlertType.FinancialAccountId.Value;
+                    orderedTransactionsForType = allTransactions
+                        .Where( t => t.GetTransactionDetails().Any( d => d.AccountId == accountId ) )
+                        .ToList();
+                }
+
+                if ( orderedTransactionsForType == null || orderedTransactionsForType.Count == 0 )
+                {
+                    continue;
+                }
+
+                orderedTransactionsForType = orderedTransactionsForType.OrderBy( t => t.TransactionDateTime ).ToList();
+
+                List<AlertView> recentAlertsOfThisType = null;
+                if ( recentAlertsOfThisTypeByAlertTypeId != null )
+                {
+                    recentAlertsOfThisTypeByAlertTypeId.TryGetValue( lateGiftAlertType.Id, out recentAlertsOfThisType );
+                }
+
+                var builder = new GivingAutomation.LateTxnAlertBuilder( context, lateGiftAlertType, givingIdsToExcludeFromSubsequentAlerts );
+                var alert = builder.BuildAlert( givingId, orderedTransactionsForType, recentAlertsOfThisType );
+                if ( alert == null )
+                {
+                    continue;
+                }
+
+                alerts.Add( alert );
+
+                if ( !lateGiftAlertType.ContinueIfMatched && alert.GivingId.IsNotNullOrWhiteSpace() )
+                {
+                    givingIdsToExcludeFromSubsequentAlerts.Add( alert.GivingId );
+                }
+            }
+
+            return alerts;
+        }
+
+        private static List<FinancialTransactionAlert> CreateRecentTxnAlertsForTransaction(
+            GivingAutomation.GivingAutomationContext context,
+            FinancialTransactionView transaction,
+            List<FinancialTransactionView> twelveMonthsTransactions,
+            List<AlertView> recentAlerts,
+            Dictionary<int, HashSet<string>> eligibleGivingIdsByDataViewId = null,
+            bool allowFollowUp = true,
+            bool allowGratitude = true )
+        {
+            if ( context == null || transaction == null )
+            {
+                return new List<FinancialTransactionAlert>();
+            }
+
+            var givingId = transaction.AuthorizedPersonGivingId;
+
+            var orderedTransactions = new List<FinancialTransactionView>();
+            if ( twelveMonthsTransactions?.Any() == true )
+            {
+                orderedTransactions.AddRange( twelveMonthsTransactions );
+            }
+
+            orderedTransactions.Add( transaction );
+            orderedTransactions = orderedTransactions
+                .OrderBy( t => t.TransactionDateTime )
+                .ToList();
+
+            var computedMetricsByAlertTypeId = GivingAutomationHelper.ComputeMetricsForAlertTypes(
+                context.AlertTypes,
+                orderedTransactions,
+                context.TransactionWindowDurationHours );
+
+            var builder = new GivingAutomation.RecentTxnAlertBuilder(
+                context,
+                givingId,
+                orderedTransactions,
+                recentAlerts ?? new List<AlertView>(),
+                eligibleGivingIdsByDataViewId,
+                computedMetricsByAlertTypeId );
+
+            return builder.BuildAlertsForTransaction( transaction, allowFollowUp, allowGratitude ) ?? new List<FinancialTransactionAlert>();
         }
 
         #endregion Helpers
