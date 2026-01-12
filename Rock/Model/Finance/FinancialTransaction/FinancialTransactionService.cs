@@ -366,6 +366,50 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Gets the giving automation source transaction query filtered by a batch of giving identifiers and an optional minimum transaction date/time.
+        /// Negative transactions are excluded.
+        /// </summary>
+        /// <param name="givingIds">The giving identifiers to include.</param>
+        /// <param name="startDateTime">The minimum transaction date/time to include (inclusive). If null, no date filter is applied.</param>
+        /// <returns>An IQueryable of FinancialTransaction filtered to the specified giving identifiers and start date.</returns>
+        public IQueryable<FinancialTransaction> GetGivingAutomationSourceTransactionQueryByGivingIds( List<string> givingIds, DateTime? startDateTime )
+        {
+            return GetGivingAutomationSourceTransactionQueryByGivingIds( givingIds, startDateTime, false );
+        }
+
+        /// <summary>
+        /// Gets the giving automation source transaction query filtered by a batch of giving identifiers and optional minimum transaction date/time.
+        /// </summary>
+        /// <param name="givingIds">The giving identifiers to include.</param>
+        /// <param name="startDateTime">The minimum transaction date/time to include (inclusive). If null, no date filter is applied.</param>
+        /// <param name="includeNegativeTransactions">True to include negative transactions; otherwise false.</param>
+        /// <returns>An IQueryable of FinancialTransaction filtered per the specified parameters.</returns>
+        public IQueryable<FinancialTransaction> GetGivingAutomationSourceTransactionQueryByGivingIds( List<string> givingIds, DateTime? startDateTime, bool includeNegativeTransactions )
+        {
+            // If no giving ids provided, return an empty query
+            if ( givingIds == null || !givingIds.Any() )
+            {
+                return Queryable().Where( t => false );
+            }
+
+            var baseQuery = GetGivingAutomationSourceTransactionQuery( includeNegativeTransactions );
+
+            var qry = baseQuery.Where( t =>
+                t.AuthorizedPersonAliasId.HasValue &&
+                t.AuthorizedPersonAlias.Person.GivingId != null &&
+                t.AuthorizedPersonAlias.Person.GivingId.Length > 0 &&
+                // We process in batches of no more than 500, so we don't have to worry about SQL parameter limits here.
+                givingIds.Contains( t.AuthorizedPersonAlias.Person.GivingId ) );
+
+            if ( startDateTime.HasValue )
+            {
+                qry = qry.Where( t => t.TransactionDateTime.HasValue && t.TransactionDateTime >= startDateTime.Value );
+            }
+
+            return qry;
+        }
+
+        /// <summary>
         /// Gets the giving automation source transaction query (without negative transactions).
         /// This is used by <see cref="Rock.Jobs.GivingAutomation"/>.
         /// </summary>
@@ -399,12 +443,11 @@ namespace Rock.Model
             var giverAnonymousPersonAliasIds = new PersonAliasService( rockContext ).Queryable().Where( a => a.Person.Guid == giverAnonymousPersonGuid ).Select( a => a.Id );
             query = query.Where( a => a.AuthorizedPersonAliasId.HasValue && !giverAnonymousPersonAliasIds.Contains( a.AuthorizedPersonAliasId.Value ) );
 
-            var settings = GivingAutomationSettings.LoadGivingAutomationSettings();
+            // Get the filter IDs computed from settings (already includes child accounts if configured)
+            var ( transactionTypeIds, accountIds ) = GetGivingAutomationFilterIds();
 
             // Filter by transaction type (defaults to contributions only)
-            var transactionTypeIds = settings.TransactionTypeGuids.Select( DefinedValueCache.Get ).Select( dv => dv.Id ).ToList();
-
-            if ( transactionTypeIds.Count() == 1 )
+            if ( transactionTypeIds.Count == 1 )
             {
                 var transactionTypeId = transactionTypeIds[0];
                 query = query.Where( t => t.TransactionTypeValueId == transactionTypeId );
@@ -414,48 +457,15 @@ namespace Rock.Model
                 query = query.Where( t => transactionTypeIds.Contains( t.TransactionTypeValueId ) );
             }
 
-            List<int> accountIds;
-            if ( settings.FinancialAccountGuids?.Any() == true )
+            // Filter by account
+            if ( accountIds.Count == 1 )
             {
-                accountIds = FinancialAccountCache.GetByGuids( settings.FinancialAccountGuids ).Select( a => a.Id ).ToList();
+                var accountId = accountIds[0];
+                query = query.Where( t => t.TransactionDetails.Any( td => td.AccountId == accountId ) );
             }
             else
             {
-                accountIds = new FinancialAccountService( rockContext ).Queryable()
-                    .Where( a => a.IsTaxDeductible )
-                    .Select( a => a.Id )
-                    .ToList();
-            }
-
-            if ( settings.AreChildAccountsIncluded == true )
-            {
-                var selectedAccountIds = accountIds.ToList();
-                var childAccountsIds = FinancialAccountCache.GetByIds( accountIds ).SelectMany( a => a.GetDescendentFinancialAccountIds() ).ToList();
-                selectedAccountIds.AddRange( childAccountsIds );
-                selectedAccountIds = selectedAccountIds.Distinct().ToList();
-
-                if ( selectedAccountIds.Count() == 1 )
-                {
-                    var accountId = selectedAccountIds[0];
-                    query = query.Where( t => t.TransactionDetails.Any( td => td.AccountId == accountId ) );
-
-                }
-                else
-                {
-                    query = query.Where( t => t.TransactionDetails.Any( td => selectedAccountIds.Contains( td.AccountId ) ) );
-                }
-            }
-            else
-            {
-                if ( accountIds.Count() == 1 )
-                {
-                    var accountId = accountIds[0];
-                    query = query.Where( t => t.TransactionDetails.Any( td => accountId == td.AccountId ) );
-                }
-                else
-                {
-                    query = query.Where( t => t.TransactionDetails.Any( td => accountIds.Contains( td.AccountId ) ) );
-                }
+                query = query.Where( t => t.TransactionDetails.Any( td => accountIds.Contains( td.AccountId ) ) );
             }
 
             // We'll need to factor in partial amount refunds...
@@ -496,6 +506,52 @@ namespace Rock.Model
             }
 
             return query;
+        }
+
+        /// <summary>
+        /// Computes the TransactionTypeIds and FinancialAccountIds used by Giving Automation filters.
+        /// </summary>
+        /// <returns></returns>
+        public ( List<int> TransactionTypeIds, List<int> FinancialAccountIds ) GetGivingAutomationFilterIds()
+        {
+            var settings = GivingAutomationSettings.LoadGivingAutomationSettings();
+            var rockContext = this.Context as RockContext;
+
+            // Transaction types from defined values in settings
+            var transactionTypeIds = settings.TransactionTypeGuids
+                .Select( DefinedValueCache.Get )
+                .Where( dv => dv != null )
+                .Select( dv => dv.Id )
+                .ToList();
+
+            // Account Ids from settings or fallback to tax-deductible
+            List<int> accountIds;
+            if ( settings.FinancialAccountGuids?.Any() == true )
+            {
+                accountIds = FinancialAccountCache.GetByGuids( settings.FinancialAccountGuids )
+                    .Select( a => a.Id )
+                    .ToList();
+            }
+            else
+            {
+                accountIds = new FinancialAccountService( rockContext ).Queryable()
+                    .AsNoTracking()
+                    .Where( a => a.IsTaxDeductible )
+                    .Select( a => a.Id )
+                    .ToList();
+            }
+
+            if ( settings.AreChildAccountsIncluded == true )
+            {
+                var childIds = FinancialAccountCache
+                    .GetByIds( accountIds )
+                    .SelectMany( a => a.GetDescendentFinancialAccountIds() )
+                    .ToList();
+                accountIds.AddRange( childIds );
+                accountIds = accountIds.Distinct().ToList();
+            }
+
+            return ( transactionTypeIds, accountIds );
         }
 
         /// <summary>
