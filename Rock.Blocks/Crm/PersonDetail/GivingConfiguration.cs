@@ -90,6 +90,14 @@ namespace Rock.Blocks.Crm.PersonDetail
     [Rock.SystemGuid.BlockTypeGuid( "BBA3A660-9A8B-4707-A553-D314C21B0A12" )]
     public partial class GivingConfiguration : RockBlockType
     {
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        private PersonService PersonService => new PersonService( RockContext );
+
+        #endregion Properties
+
         #region Attribute Keys
 
         private static class AttributeKey
@@ -125,6 +133,7 @@ namespace Rock.Blocks.Crm.PersonDetail
             public const string AutoEdit = "autoEdit";
             public const string ReturnUrl = "returnUrl";
             public const string PersonId = "PersonId";
+            public const string BusinessId = "BusinessId";
         }
 
         protected bool IsVisible { get; set; }
@@ -328,13 +337,21 @@ namespace Rock.Blocks.Crm.PersonDetail
 
         private int? GetInitialEntity()
         {
-            var personId = PageParameter( "PersonId" ).AsIntegerOrNull();
+            var personId = PersonService.GetNoTracking(
+                PageParameter( PageParameterKey.PersonId ),
+                IsAllowingPredictableIds
+            )?.Id;
+
             if ( personId.HasValue )
             {
                 return personId;
             }
 
-            var businessId = PageParameter( "BusinessId" ).AsIntegerOrNull();
+            var businessId = PersonService.GetNoTracking(
+                PageParameter( PageParameterKey.BusinessId ),
+                IsAllowingPredictableIds
+            )?.Id;
+
             if ( businessId.HasValue )
             {
                 return businessId;
