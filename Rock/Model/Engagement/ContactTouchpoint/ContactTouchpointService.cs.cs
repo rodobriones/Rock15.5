@@ -72,6 +72,11 @@ namespace Rock.Model
         {
             var count = 0;
 
+            if ( enabledDaysOfWeek <= 0 )
+            {
+                return 0;
+            }
+
             foreach ( var contact in contacts )
             {
                 var cadence = OutreachCadence.Paused;
