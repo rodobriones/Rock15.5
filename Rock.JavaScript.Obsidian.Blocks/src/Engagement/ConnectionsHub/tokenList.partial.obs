@@ -4,7 +4,7 @@
             <div
                  ref="containerRef"
                  class="token-row"
-                 v-show="!isExpanded">
+                 v-show="!isExpanded && !isCollapsing">
                 <template v-for="(item, index) in visibleItems" :key="index">
                     <slot name="item" :item="item" :index="index">
                         <Token>{{ item }}</Token>
@@ -14,20 +14,22 @@
                 <div
                      ref="overflowRef"
                      class="overflow-indicator"
-                     v-show="showOverflowIndicator">
+                     v-show="isOverflowIndicatorShown">
                     <Token>
                         {{ items.length - visibleItems.length }} more
                     </Token>
                 </div>
             </div>
 
-            <div v-if="isExpanded" class="expanded-list">
-                <template v-for="(item, index) in items" :key="index">
-                    <slot name="item" :item="item" :index="index">
-                        <Token>{{ item }}</Token>
-                    </slot>
-                </template>
-            </div>
+            <TransitionVerticalCollapse @transitionStart="isExpandCollapsing = true" @transitionEnd="isExpandCollapsing = false">
+                <div v-show="isExpanded" class="expanded-list">
+                    <template v-for="(item, index) in items" :key="index">
+                        <slot name="item" :item="item" :index="index">
+                            <Token>{{ item }}</Token>
+                        </slot>
+                    </template>
+                </div>
+            </TransitionVerticalCollapse>
         </div>
 
         <div ref="controlRef" class="token-list-control">
@@ -77,6 +79,7 @@
 .token-list-control button {
     color: var(--color-interface-strongest);
 }
+
 .token-row {
     display: flex;
     flex-wrap: nowrap;
@@ -116,6 +119,7 @@
     import { computed, nextTick, onMounted, onBeforeUnmount, PropType, ref, watch } from "vue";
     import Token from "./token.partial.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import TransitionVerticalCollapse from "@Obsidian/Controls/transitionVerticalCollapse.obs";
 
     const props = defineProps({
         /**
@@ -130,7 +134,7 @@
          * Whether the button to expand/collapse should be shown
          * to allow the user to expand the list to show all items.
          */
-        expandable: {
+        isExpandable: {
             type: Boolean as PropType<boolean>,
             default: false
         }
@@ -155,26 +159,25 @@
     const visibleCount = ref<number>(props.items.length);
 
     let resizeObserver: ResizeObserver | undefined;
+    let resizeRafId: number | null = null;
+
+    const isExpandCollapsing = ref<boolean>(false);
 
     // #region Computed Values
 
-    const isExpandable = computed<boolean>(() => {
-        return props.expandable ?? true;
-    });
-
-    const visibleItems = computed(() =>
+    const visibleItems = computed<T[]>(() =>
         props.items.slice(0, visibleCount.value)
     );
 
-    const hiddenCount = computed(() =>
+    const hiddenCount = computed<number>(() =>
         props.items.length - visibleItems.value.length
     );
 
-    const showOverflowIndicator = computed(() =>
-        isExpandable.value && !isExpanded.value && hiddenCount.value > 0
-    );
+    const isOverflowIndicatorShown = computed<boolean>(() => {
+        return !isExpanded.value && hiddenCount.value > 0;
+    });
 
-    const measureItems = computed(() => {
+    const measureItems = computed<T[]>(() => {
         if (props.items.length <= MEASURE_SAMPLE_SIZE) {
             return props.items;
         }
@@ -183,12 +186,20 @@
         }
     });
 
+    const isCollapsing = computed<boolean>(() => {
+        if (!isExpandCollapsing.value) {
+            return false;
+        }
+
+        return !isExpanded.value;
+    });
+
     // #endregion Computed Values
 
     // #region Functions
 
     function calculateVisibleItems(): void {
-        if (isExpanded.value || !isExpandable.value) {
+        if (isExpanded.value) {
             visibleCount.value = props.items.length;
             return;
         }
@@ -197,7 +208,7 @@
         const measure = measureRef.value;
         if (!container || !measure) return;
 
-        const indicatorWidth = showOverflowIndicator.value
+        const indicatorWidth = isOverflowIndicatorShown.value
             ? overflowRef.value?.offsetWidth ?? 0
             : 0;
 
@@ -216,7 +227,7 @@
             if (used + w > availableWidth) {
                 break;
             }
-            
+
             used += w;
             count++;
         }
@@ -259,7 +270,17 @@
 
     onMounted(async () => {
         resizeObserver = new ResizeObserver(() => {
-            calculateVisibleItems();
+            if (resizeRafId !== null) {
+                // requestAnimationFrame is already a debounce mechanism,
+                // but cancel here just in case.
+                cancelAnimationFrame(resizeRafId);
+                resizeRafId = null;
+            }
+
+            resizeRafId = requestAnimationFrame(() => {
+                resizeRafId = null;
+                calculateVisibleItems();
+            });
         });
 
         if (containerRef.value) {
@@ -271,6 +292,11 @@
     });
 
     onBeforeUnmount(() => {
+        if (resizeRafId !== null) {
+            cancelAnimationFrame(resizeRafId);
+            resizeRafId = null;
+        }
+
         resizeObserver?.disconnect();
     });
 

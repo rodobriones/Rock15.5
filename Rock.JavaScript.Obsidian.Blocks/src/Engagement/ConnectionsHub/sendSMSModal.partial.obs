@@ -3,7 +3,7 @@
     <Modal v-model="isVisible"
            title="Send SMS"
            saveText="Save">
-        <TokenList expandable
+        <TokenList isExpandable
                    :items="communicationRecipients ?? []">
             <template #item="{ item }">
                 <Token>
