@@ -14,31 +14,36 @@
 // limitations under the License.
 // </copyright>
 
-namespace Rock.Enums.Outreach
+namespace Rock.Enums.Engagement
 {
     /// <summary>
-    /// Relationship Focus for contact
+    /// The strength of a relationship.
     /// </summary>
-    public enum RelationshipFocus
+    public enum RelationshipStrength
     {
         /// <summary>
-        /// Invitation to Faith
+        /// Getting to know them.
         /// </summary>
-        InvitationToFaith = 0,
+        GettingToKnowThem = 0,
 
         /// <summary>
-        /// Deepening Faith
+        /// Casual acquaintance.
         /// </summary>
-        DeepeningFaith = 1,
+        CasualAcquaintance = 1,
 
         /// <summary>
-        /// Encouragement and Care
+        /// Growing connection.
         /// </summary>
-        EncouragementAndCare = 2,
+        GrowingConnection = 2,
 
         /// <summary>
-        /// Restoration and Healing
+        /// Trusted relationship.
         /// </summary>
-        RestorationAndHealing = 3,
+        TrustedRelationship = 3,
+
+        /// <summary>
+        /// Deep and meaningful connection.
+        /// </summary>
+        DeepAndMeaningfulConnection = 4
     }
 }

@@ -1,30 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
+﻿// <copyright>
+// Copyright by the Spark Development Network
+//
+// Licensed under the Rock Community License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.rockrms.com/license
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+
+using System;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
-
-using CSScriptLibrary;
-
-using OfficeOpenXml.FormulaParsing.Excel.Functions.Information;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
 using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
 using Rock.Enums.Core;
-using Rock.Enums.Outreach;
+using Rock.Enums.Engagement;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
 
-namespace Rock.Blocks.Types.Mobile.Outreach
+namespace Rock.Blocks.Types.Mobile.Engagement
 {
     /// <summary>
-    /// Beacon Dashboard for Outreach.
+    /// Beacon dashboard allows you to view your touchpoint statistic and as well as start connecting with your contact.
     /// </summary>
     [DisplayName( "Beacon Dashboard" )]
-    [Category( "Mobile > Outreach" )]
+    [Category( "Engagement" )]
     [IconCssClass( "ti ti-device-desktop" )]
     [Description( "Beacon dashboard allows you to view your touchpoint statistic and as well as start connecting with your contact." )]
     [SupportedSiteTypes( SiteType.Mobile )]
@@ -283,7 +294,7 @@ namespace Rock.Blocks.Types.Mobile.Outreach
             person = personService.Get( person.Id );
             person.OutreachTouchpointSchedule = ( DaysOfWeekFlags ) ( ( int ) savePreferenceBag.DayOfWeek );
             person.OutreachEnableDailyNotification = savePreferenceBag.DailyNotificationsEnabled;
-            person.OutreachNotificationTimeOfDay = savePreferenceBag.DailyNotificationsEnabled ? ( Enums.Outreach.OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay : null; // Clear out time of day if daily notifications are disabled
+            person.OutreachNotificationTimeOfDay = savePreferenceBag.DailyNotificationsEnabled ? ( OutreachNotificationTimeOfDay? ) savePreferenceBag.TimeOfDay : null; // Clear out time of day if daily notifications are disabled
             person.OutreachEnableSpecialEventsNotification = savePreferenceBag.SpecialEventNotificationsEnabled;
             person.OutreachTouchpointNotificationsEnabled = savePreferenceBag.DailyNotificationsEnabled || savePreferenceBag.SpecialEventNotificationsEnabled;
 

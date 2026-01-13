@@ -1,25 +1,42 @@
-﻿using System;
+﻿// <copyright>
+// Copyright by the Spark Development Network
+//
+// Licensed under the Rock Community License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.rockrms.com/license
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+
+using System;
 using System.ComponentModel;
 using System.Linq;
 
 using Rock.Attribute;
 using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Enums.Engagement;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
 
 using Gender = Rock.Model.Gender;
-using RelationshipFocus = Rock.Enums.Outreach.RelationshipFocus;
-using RelationshipStrength = Rock.Enums.Outreach.RelationshipStrength;
-using TouchpointType = Rock.Enums.Outreach.TouchpointType;
+using RelationshipFocus = Rock.Enums.Engagement.RelationshipFocus;
+using RelationshipStrength = Rock.Enums.Engagement.RelationshipStrength;
+using TouchpointType = Rock.Enums.Engagement.TouchpointType;
 
-namespace Rock.Blocks.Types.Mobile.Outreach
+namespace Rock.Blocks.Types.Mobile.Engagement
 {
     /// <summary>
     /// Allow you to view the contact detail.
     /// </summary>
     [DisplayName( "Contact Profile" )]
-    [Category( "Mobile > Outreach" )]
+    [Category( "Engagement" )]
     [IconCssClass( "ti ti-address-book" )]
     [Description( "Allow you to view the contact detail." )]
     [SupportedSiteTypes( SiteType.Mobile )]
@@ -346,8 +363,8 @@ namespace Rock.Blocks.Types.Mobile.Outreach
                 return ActionBadRequest("Contact not found.");
             }
 
-            contact.PrayerCadence = Enums.Outreach.OutreachCadence.Paused;
-            contact.ConnectionCadence = Enums.Outreach.OutreachCadence.Paused;
+            contact.PrayerCadence = OutreachCadence.Paused;
+            contact.ConnectionCadence = OutreachCadence.Paused;
 
             RockContext.SaveChanges();
 

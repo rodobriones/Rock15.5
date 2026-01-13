@@ -21,7 +21,7 @@ using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Rock.Data;
-using Rock.Enums.Outreach;
+using Rock.Enums.Engagement;
 using Rock.Utility;
 
 namespace Rock.Model
@@ -29,7 +29,7 @@ namespace Rock.Model
     /// <summary>
     /// Represents a touchpoint with for a <see cref="Rock.Model.Contact"/>.
     /// </summary>
-    [RockDomain( "Outreach" )]
+    [RockDomain( "Engagement" )]
     [Table( "ContactTouchpoint" )]
     [DataContract]
     [CodeGenerateRest( DisableEntitySecurity = true )]

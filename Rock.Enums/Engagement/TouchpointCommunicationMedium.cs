@@ -14,26 +14,31 @@
 // limitations under the License.
 // </copyright>
 
-namespace Rock.Enums.Outreach
+namespace Rock.Enums.Engagement
 {
     /// <summary>
-    /// Represents the notification time.
+    /// The communication medium used for a touchpoint.
     /// </summary>
-    public enum OutreachNotificationTimeOfDay
+    public enum TouchpointCommunicationMedium
     {
         /// <summary>
-        /// Morning notification time.
+        /// Call (phone call, video call, etc.)
         /// </summary>
-        Morning = 0,
+        Call = 0,
 
         /// <summary>
-        /// Afternoon notification time.
+        /// Text (SMS, instant message, etc.)
         /// </summary>
-        Afternoon = 1,
+        Text = 1,
 
         /// <summary>
-        /// Evening notification time.
+        /// Email
         /// </summary>
-        Evening = 2,
+        Email = 2,
+
+        /// <summary>
+        /// In Person
+        /// </summary>
+        InPerson = 3,
     }
 }

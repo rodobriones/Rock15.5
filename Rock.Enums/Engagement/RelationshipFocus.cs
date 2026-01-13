@@ -14,32 +14,31 @@
 // limitations under the License.
 // </copyright>
 
-namespace Rock.Enums.Outreach
+namespace Rock.Enums.Engagement
 {
     /// <summary>
-    /// The communication medium used for a touchpoint.
+    /// Relationship Focus for contact
     /// </summary>
-    [EnumDomain( "Outreach" )]
-    public enum TouchpointCommunicationMedium
+    public enum RelationshipFocus
     {
         /// <summary>
-        /// Call (phone call, video call, etc.)
+        /// Invitation to Faith
         /// </summary>
-        Call = 0,
+        InvitationToFaith = 0,
 
         /// <summary>
-        /// Text (SMS, instant message, etc.)
+        /// Deepening Faith
         /// </summary>
-        Text = 1,
+        DeepeningFaith = 1,
 
         /// <summary>
-        /// Email
+        /// Encouragement and Care
         /// </summary>
-        Email = 2,
+        EncouragementAndCare = 2,
 
         /// <summary>
-        /// In Person
+        /// Restoration and Healing
         /// </summary>
-        InPerson = 3,
+        RestorationAndHealing = 3,
     }
 }

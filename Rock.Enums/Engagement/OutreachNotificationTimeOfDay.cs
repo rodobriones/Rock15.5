@@ -14,36 +14,26 @@
 // limitations under the License.
 // </copyright>
 
-namespace Rock.Enums.Outreach
+namespace Rock.Enums.Engagement
 {
     /// <summary>
-    /// The strength of a relationship.
+    /// Represents the notification time.
     /// </summary>
-    public enum RelationshipStrength
+    public enum OutreachNotificationTimeOfDay
     {
         /// <summary>
-        /// Getting to know them.
+        /// Morning notification time.
         /// </summary>
-        GettingToKnowThem = 0,
+        Morning = 0,
 
         /// <summary>
-        /// Casual acquaintance.
+        /// Afternoon notification time.
         /// </summary>
-        CasualAcquaintance = 1,
+        Afternoon = 1,
 
         /// <summary>
-        /// Growing connection.
+        /// Evening notification time.
         /// </summary>
-        GrowingConnection = 2,
-
-        /// <summary>
-        /// Trusted relationship.
-        /// </summary>
-        TrustedRelationship = 3,
-
-        /// <summary>
-        /// Deep and meaningful connection.
-        /// </summary>
-        DeepAndMeaningfulConnection = 4
+        Evening = 2,
     }
 }

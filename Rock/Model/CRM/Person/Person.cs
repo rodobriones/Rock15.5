@@ -18,7 +18,7 @@
 using Rock.Data;
 using Rock.Enums.Core;
 using Rock.Enums.Crm;
-using Rock.Enums.Outreach;
+using Rock.Enums.Engagement;
 using Rock.Lava;
 using Rock.UniversalSearch;
 using Rock.Utility.Enums;

@@ -27,7 +27,7 @@ using Rock.Communication;
 using Rock.Configuration;
 using Rock.Data;
 using Rock.Enums.Cms;
-using Rock.Enums.Outreach;
+using Rock.Enums.Engagement;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Web.Cache;

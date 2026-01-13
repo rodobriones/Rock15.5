@@ -14,7 +14,7 @@
 // limitations under the License.
 // </copyright>
 
-namespace Rock.Enums.Outreach
+namespace Rock.Enums.Engagement
 {
     /// <summary>
     /// The type of touchpoint.

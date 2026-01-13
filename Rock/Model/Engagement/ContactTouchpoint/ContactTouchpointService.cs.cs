@@ -17,7 +17,7 @@
 using System;
 using System.Collections.Generic;
 
-using Rock.Enums.Outreach;
+using Rock.Enums.Engagement;
 
 namespace Rock.Model
 {

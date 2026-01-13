@@ -388,47 +388,47 @@ namespace Rock.Mobile
     public static class MobileExtensionRelationshipStrength
     {
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
+        /// Converts a web native <see cref="Enums.Engagement.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
         /// </summary>
         /// <param name="strength"></param>
         /// <returns></returns>
-        public static Enums.Outreach.RelationshipStrength ToNative( this Rock.Common.Mobile.Enums.RelationshipStrength strength )
+        public static Enums.Engagement.RelationshipStrength ToNative( this Rock.Common.Mobile.Enums.RelationshipStrength strength )
         {
             switch ( strength )
             {
                 case Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem:
-                    return Enums.Outreach.RelationshipStrength.GettingToKnowThem;
+                    return Enums.Engagement.RelationshipStrength.GettingToKnowThem;
                 case Rock.Common.Mobile.Enums.RelationshipStrength.CasualAcquaintance:
-                    return Enums.Outreach.RelationshipStrength.CasualAcquaintance;
+                    return Enums.Engagement.RelationshipStrength.CasualAcquaintance;
                 case Rock.Common.Mobile.Enums.RelationshipStrength.GrowingConnection:
-                    return Enums.Outreach.RelationshipStrength.GrowingConnection;
+                    return Enums.Engagement.RelationshipStrength.GrowingConnection;
                 case Rock.Common.Mobile.Enums.RelationshipStrength.TrustedRelationship:
-                    return Enums.Outreach.RelationshipStrength.TrustedRelationship;
+                    return Enums.Engagement.RelationshipStrength.TrustedRelationship;
                 case Rock.Common.Mobile.Enums.RelationshipStrength.DeepAndMeaningfulConnection:
-                    return Enums.Outreach.RelationshipStrength.DeepAndMeaningfulConnection;
+                    return Enums.Engagement.RelationshipStrength.DeepAndMeaningfulConnection;
                 default:
-                    return Enums.Outreach.RelationshipStrength.GettingToKnowThem;
+                    return Enums.Engagement.RelationshipStrength.GettingToKnowThem;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
+        /// Converts a web native <see cref="Enums.Engagement.RelationshipStrength"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipStrength"/>.
         /// </summary>
         /// <param name="strength"></param>
         /// <returns></returns>
-        public static Rock.Common.Mobile.Enums.RelationshipStrength ToMobile( this Enums.Outreach.RelationshipStrength strength )
+        public static Rock.Common.Mobile.Enums.RelationshipStrength ToMobile( this Enums.Engagement.RelationshipStrength strength )
         {
             switch ( strength )
             {
-                case Enums.Outreach.RelationshipStrength.GettingToKnowThem:
+                case Enums.Engagement.RelationshipStrength.GettingToKnowThem:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem;
-                case Enums.Outreach.RelationshipStrength.CasualAcquaintance:
+                case Enums.Engagement.RelationshipStrength.CasualAcquaintance:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.CasualAcquaintance;
-                case Enums.Outreach.RelationshipStrength.GrowingConnection:
+                case Enums.Engagement.RelationshipStrength.GrowingConnection:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.GrowingConnection;
-                case Enums.Outreach.RelationshipStrength.TrustedRelationship:
+                case Enums.Engagement.RelationshipStrength.TrustedRelationship:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.TrustedRelationship;
-                case Enums.Outreach.RelationshipStrength.DeepAndMeaningfulConnection:
+                case Enums.Engagement.RelationshipStrength.DeepAndMeaningfulConnection:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.DeepAndMeaningfulConnection;
                 default:
                     return Rock.Common.Mobile.Enums.RelationshipStrength.GettingToKnowThem;
@@ -442,43 +442,43 @@ namespace Rock.Mobile
     public static class MobileExtensionRelationShipFocus
     {
         /// <summary>
-        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/> to a web native <see cref="Enums.Outreach.RelationshipFocus"/>.
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/> to a web native <see cref="Enums.Engagement.RelationshipFocus"/>.
         /// </summary>
         /// <param name="focus"></param>
         /// <returns></returns>
-        public static Enums.Outreach.RelationshipFocus ToNative( this Rock.Common.Mobile.Enums.RelationshipFocus focus )
+        public static Enums.Engagement.RelationshipFocus ToNative( this Rock.Common.Mobile.Enums.RelationshipFocus focus )
         {
             switch ( focus )
             {
                 case Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith:
-                    return Enums.Outreach.RelationshipFocus.InvitationToFaith;
+                    return Enums.Engagement.RelationshipFocus.InvitationToFaith;
                 case Rock.Common.Mobile.Enums.RelationshipFocus.DeepeningFaith:
-                    return Enums.Outreach.RelationshipFocus.DeepeningFaith;
+                    return Enums.Engagement.RelationshipFocus.DeepeningFaith;
                 case Rock.Common.Mobile.Enums.RelationshipFocus.EncouragementAndCare:
-                    return Enums.Outreach.RelationshipFocus.EncouragementAndCare;
+                    return Enums.Engagement.RelationshipFocus.EncouragementAndCare;
                 case Rock.Common.Mobile.Enums.RelationshipFocus.RestorationAndHealing:
-                    return Enums.Outreach.RelationshipFocus.RestorationAndHealing;
+                    return Enums.Engagement.RelationshipFocus.RestorationAndHealing;
                 default:
-                    return Enums.Outreach.RelationshipFocus.InvitationToFaith;
+                    return Enums.Engagement.RelationshipFocus.InvitationToFaith;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.RelationshipFocus"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/>.
+        /// Converts a web native <see cref="Enums.Engagement.RelationshipFocus"/> to a mobile <see cref="Rock.Common.Mobile.Enums.RelationshipFocus"/>.
         /// </summary>
         /// <param name="focus"></param>
         /// <returns></returns>
-        public static Rock.Common.Mobile.Enums.RelationshipFocus ToMobile( this Enums.Outreach.RelationshipFocus focus )
+        public static Rock.Common.Mobile.Enums.RelationshipFocus ToMobile( this Enums.Engagement.RelationshipFocus focus )
         {
             switch ( focus )
             {
-                case Enums.Outreach.RelationshipFocus.InvitationToFaith:
+                case Enums.Engagement.RelationshipFocus.InvitationToFaith:
                     return Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith;
-                case Enums.Outreach.RelationshipFocus.DeepeningFaith:
+                case Enums.Engagement.RelationshipFocus.DeepeningFaith:
                     return Rock.Common.Mobile.Enums.RelationshipFocus.DeepeningFaith;
-                case Enums.Outreach.RelationshipFocus.EncouragementAndCare:
+                case Enums.Engagement.RelationshipFocus.EncouragementAndCare:
                     return Rock.Common.Mobile.Enums.RelationshipFocus.EncouragementAndCare;
-                case Enums.Outreach.RelationshipFocus.RestorationAndHealing:
+                case Enums.Engagement.RelationshipFocus.RestorationAndHealing:
                     return Rock.Common.Mobile.Enums.RelationshipFocus.RestorationAndHealing;
                 default:
                     return Rock.Common.Mobile.Enums.RelationshipFocus.InvitationToFaith;
@@ -492,51 +492,51 @@ namespace Rock.Mobile
     public static class MobileExtensionOutreachCadence
     {
         /// <summary>
-        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/> to a web native <see cref="Enums.Outreach.OutreachCadence"/>.
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/> to a web native <see cref="Enums.Engagement.OutreachCadence"/>.
         /// </summary>
         /// <param name="cadence"></param>
         /// <returns></returns>
-        public static Enums.Outreach.OutreachCadence ToNative( this Rock.Common.Mobile.Enums.OutreachCadence cadence )
+        public static Enums.Engagement.OutreachCadence ToNative( this Rock.Common.Mobile.Enums.OutreachCadence cadence )
         {
             switch ( cadence )
             {
                 case Rock.Common.Mobile.Enums.OutreachCadence.Weekly:
-                    return Enums.Outreach.OutreachCadence.Weekly;
+                    return Enums.Engagement.OutreachCadence.Weekly;
                 case Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek:
-                    return Enums.Outreach.OutreachCadence.EveryOtherWeek;
+                    return Enums.Engagement.OutreachCadence.EveryOtherWeek;
                 case Rock.Common.Mobile.Enums.OutreachCadence.Monthly:
-                    return Enums.Outreach.OutreachCadence.Monthly;
+                    return Enums.Engagement.OutreachCadence.Monthly;
                 case Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherMonth:
-                    return Enums.Outreach.OutreachCadence.EveryOtherMonth;
+                    return Enums.Engagement.OutreachCadence.EveryOtherMonth;
                 case Rock.Common.Mobile.Enums.OutreachCadence.Quarterly:
-                    return Enums.Outreach.OutreachCadence.Quarterly;
+                    return Enums.Engagement.OutreachCadence.Quarterly;
                 case Rock.Common.Mobile.Enums.OutreachCadence.Paused:
-                    return Enums.Outreach.OutreachCadence.Paused;
+                    return Enums.Engagement.OutreachCadence.Paused;
                 default:
-                    return Enums.Outreach.OutreachCadence.EveryOtherWeek;
+                    return Enums.Engagement.OutreachCadence.EveryOtherWeek;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.OutreachCadence"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/>.
+        /// Converts a web native <see cref="Enums.Engagement.OutreachCadence"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachCadence"/>.
         /// </summary>
         /// <param name="cadence"></param>
         /// <returns></returns>
-        public static Rock.Common.Mobile.Enums.OutreachCadence ToMobile( this Enums.Outreach.OutreachCadence cadence )
+        public static Rock.Common.Mobile.Enums.OutreachCadence ToMobile( this Enums.Engagement.OutreachCadence cadence )
         {
             switch ( cadence )
             {
-                case Enums.Outreach.OutreachCadence.Weekly:
+                case Enums.Engagement.OutreachCadence.Weekly:
                     return Rock.Common.Mobile.Enums.OutreachCadence.Weekly;
-                case Enums.Outreach.OutreachCadence.EveryOtherWeek:
+                case Enums.Engagement.OutreachCadence.EveryOtherWeek:
                     return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek;
-                case Enums.Outreach.OutreachCadence.Monthly:
+                case Enums.Engagement.OutreachCadence.Monthly:
                     return Rock.Common.Mobile.Enums.OutreachCadence.Monthly;
-                case Enums.Outreach.OutreachCadence.EveryOtherMonth:
+                case Enums.Engagement.OutreachCadence.EveryOtherMonth:
                     return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherMonth;
-                case Enums.Outreach.OutreachCadence.Quarterly:
+                case Enums.Engagement.OutreachCadence.Quarterly:
                     return Rock.Common.Mobile.Enums.OutreachCadence.Quarterly;
-                case Enums.Outreach.OutreachCadence.Paused:
+                case Enums.Engagement.OutreachCadence.Paused:
                     return Rock.Common.Mobile.Enums.OutreachCadence.Paused;
                 default:
                     return Rock.Common.Mobile.Enums.OutreachCadence.EveryOtherWeek;
@@ -551,59 +551,59 @@ namespace Rock.Mobile
     public static class MobileExtensionTouchpointType
     {
         /// <summary>
-        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/> to a web native <see cref="Enums.Outreach.TouchpointType"/>.
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/> to a web native <see cref="Enums.Engagement.TouchpointType"/>.
         /// </summary>
         /// <param name="touchpointType"></param>
         /// <returns></returns>
-        public static Enums.Outreach.TouchpointType ToNative( this Rock.Common.Mobile.Enums.TouchpointType touchpointType )
+        public static Enums.Engagement.TouchpointType ToNative( this Rock.Common.Mobile.Enums.TouchpointType touchpointType )
         {
             switch ( touchpointType )
             {
                 case Rock.Common.Mobile.Enums.TouchpointType.Prayer:
-                    return Enums.Outreach.TouchpointType.Prayer;
+                    return Enums.Engagement.TouchpointType.Prayer;
                 case Rock.Common.Mobile.Enums.TouchpointType.Connection:
-                    return Enums.Outreach.TouchpointType.Connection;
+                    return Enums.Engagement.TouchpointType.Connection;
                 case Rock.Common.Mobile.Enums.TouchpointType.Reminder:
-                    return Enums.Outreach.TouchpointType.Reminder;
+                    return Enums.Engagement.TouchpointType.Reminder;
                 case Rock.Common.Mobile.Enums.TouchpointType.Pulse:
-                    return Enums.Outreach.TouchpointType.Pulse;
+                    return Enums.Engagement.TouchpointType.Pulse;
                 case Rock.Common.Mobile.Enums.TouchpointType.Birthday:
-                    return Enums.Outreach.TouchpointType.Birthday;
+                    return Enums.Engagement.TouchpointType.Birthday;
                 case Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary:
-                    return Enums.Outreach.TouchpointType.WeddingAnniversary;
+                    return Enums.Engagement.TouchpointType.WeddingAnniversary;
                 case Rock.Common.Mobile.Enums.TouchpointType.BaptismAnniversary:
-                    return Enums.Outreach.TouchpointType.BaptismAnniversary;
+                    return Enums.Engagement.TouchpointType.BaptismAnniversary;
                 case Rock.Common.Mobile.Enums.TouchpointType.SalvationAnniversary:
-                    return Enums.Outreach.TouchpointType.SalvationAnniversary;
+                    return Enums.Engagement.TouchpointType.SalvationAnniversary;
                 default:
-                    return Enums.Outreach.TouchpointType.Prayer;
+                    return Enums.Engagement.TouchpointType.Prayer;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.TouchpointType"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/>.
+        /// Converts a web native <see cref="Enums.Engagement.TouchpointType"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointType"/>.
         /// </summary>
         /// <param name="touchpointType"></param>
         /// <returns></returns>
-        public static Rock.Common.Mobile.Enums.TouchpointType ToMobile( this Enums.Outreach.TouchpointType touchpointType )
+        public static Rock.Common.Mobile.Enums.TouchpointType ToMobile( this Enums.Engagement.TouchpointType touchpointType )
         {
             switch ( touchpointType )
             {
-                case Enums.Outreach.TouchpointType.Prayer:
+                case Enums.Engagement.TouchpointType.Prayer:
                     return Rock.Common.Mobile.Enums.TouchpointType.Prayer;
-                case Enums.Outreach.TouchpointType.Connection:
+                case Enums.Engagement.TouchpointType.Connection:
                     return Rock.Common.Mobile.Enums.TouchpointType.Connection;
-                case Enums.Outreach.TouchpointType.Reminder:
+                case Enums.Engagement.TouchpointType.Reminder:
                     return Rock.Common.Mobile.Enums.TouchpointType.Reminder;
-                case Enums.Outreach.TouchpointType.Pulse:
+                case Enums.Engagement.TouchpointType.Pulse:
                     return Rock.Common.Mobile.Enums.TouchpointType.Pulse;
-                case Enums.Outreach.TouchpointType.Birthday:
+                case Enums.Engagement.TouchpointType.Birthday:
                     return Rock.Common.Mobile.Enums.TouchpointType.Birthday;
-                case Enums.Outreach.TouchpointType.WeddingAnniversary:
+                case Enums.Engagement.TouchpointType.WeddingAnniversary:
                     return Rock.Common.Mobile.Enums.TouchpointType.WeddingAnniversary;
-                case Enums.Outreach.TouchpointType.BaptismAnniversary:
+                case Enums.Engagement.TouchpointType.BaptismAnniversary:
                     return Rock.Common.Mobile.Enums.TouchpointType.BaptismAnniversary;
-                case Enums.Outreach.TouchpointType.SalvationAnniversary:
+                case Enums.Engagement.TouchpointType.SalvationAnniversary:
                     return Rock.Common.Mobile.Enums.TouchpointType.SalvationAnniversary;
                 default:
                     return Rock.Common.Mobile.Enums.TouchpointType.Prayer;
@@ -617,43 +617,43 @@ namespace Rock.Mobile
     public static class MobileExtensionTouchpointCommuncationMedium
     {
         /// <summary>
-        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/> to a web native <see cref="Enums.Outreach.TouchpointCommunicationMedium"/>.
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/> to a web native <see cref="Enums.Engagement.TouchpointCommunicationMedium"/>.
         /// </summary>
         /// <param name="medium"></param>
         /// <returns></returns>
-        public static Enums.Outreach.TouchpointCommunicationMedium ToNative( this Rock.Common.Mobile.Enums.TouchpointCommunicationMedium medium )
+        public static Enums.Engagement.TouchpointCommunicationMedium ToNative( this Rock.Common.Mobile.Enums.TouchpointCommunicationMedium medium )
         {
             switch ( medium )
             {
                 case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call:
-                    return Enums.Outreach.TouchpointCommunicationMedium.Call;
+                    return Enums.Engagement.TouchpointCommunicationMedium.Call;
                 case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Text:
-                    return Enums.Outreach.TouchpointCommunicationMedium.Text;
+                    return Enums.Engagement.TouchpointCommunicationMedium.Text;
                 case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Email:
-                    return Enums.Outreach.TouchpointCommunicationMedium.Email;
+                    return Enums.Engagement.TouchpointCommunicationMedium.Email;
                 case Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.InPerson:
-                    return Enums.Outreach.TouchpointCommunicationMedium.InPerson;
+                    return Enums.Engagement.TouchpointCommunicationMedium.InPerson;
                 default:
-                    return Enums.Outreach.TouchpointCommunicationMedium.Call;
+                    return Enums.Engagement.TouchpointCommunicationMedium.Call;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.TouchpointCommunicationMedium"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/>.
+        /// Converts a web native <see cref="Enums.Engagement.TouchpointCommunicationMedium"/> to a mobile <see cref="Rock.Common.Mobile.Enums.TouchpointCommunicationMedium"/>.
         /// </summary>
         /// <param name="medium"></param>
         /// <returns></returns>
-        public static Common.Mobile.Enums.TouchpointCommunicationMedium ToMobile( this Enums.Outreach.TouchpointCommunicationMedium medium )
+        public static Common.Mobile.Enums.TouchpointCommunicationMedium ToMobile( this Enums.Engagement.TouchpointCommunicationMedium medium )
         {
             switch ( medium )
             {
-                case Enums.Outreach.TouchpointCommunicationMedium.Call:
+                case Enums.Engagement.TouchpointCommunicationMedium.Call:
                     return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call;
-                case Enums.Outreach.TouchpointCommunicationMedium.Text:
+                case Enums.Engagement.TouchpointCommunicationMedium.Text:
                     return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Text;
-                case Enums.Outreach.TouchpointCommunicationMedium.Email:
+                case Enums.Engagement.TouchpointCommunicationMedium.Email:
                     return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Email;
-                case Enums.Outreach.TouchpointCommunicationMedium.InPerson:
+                case Enums.Engagement.TouchpointCommunicationMedium.InPerson:
                     return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.InPerson;
                 default:
                     return Rock.Common.Mobile.Enums.TouchpointCommunicationMedium.Call;
@@ -667,39 +667,39 @@ namespace Rock.Mobile
     public static class MobileExtensionOutreachNotificationTimeOfDay
     {
         /// <summary>
-        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/> to a web native <see cref="Enums.Outreach.OutreachNotificationTimeOfDay"/>.
+        /// Converts a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/> to a web native <see cref="Enums.Engagement.OutreachNotificationTimeOfDay"/>.
         /// </summary>
         /// <param name="timeOfDay"></param>
         /// <returns></returns>
-        public static Enums.Outreach.OutreachNotificationTimeOfDay ToNative( this Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay timeOfDay )
+        public static Enums.Engagement.OutreachNotificationTimeOfDay ToNative( this Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay timeOfDay )
         {
             switch ( timeOfDay )
             {
                 case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning:
-                    return Enums.Outreach.OutreachNotificationTimeOfDay.Morning;
+                    return Enums.Engagement.OutreachNotificationTimeOfDay.Morning;
                 case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Afternoon:
-                    return Enums.Outreach.OutreachNotificationTimeOfDay.Afternoon;
+                    return Enums.Engagement.OutreachNotificationTimeOfDay.Afternoon;
                 case Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Evening:
-                    return Enums.Outreach.OutreachNotificationTimeOfDay.Evening;
+                    return Enums.Engagement.OutreachNotificationTimeOfDay.Evening;
                 default:
-                    return Enums.Outreach.OutreachNotificationTimeOfDay.Morning;
+                    return Enums.Engagement.OutreachNotificationTimeOfDay.Morning;
             }
         }
 
         /// <summary>
-        /// Converts a web native <see cref="Enums.Outreach.OutreachNotificationTimeOfDay"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/>.
+        /// Converts a web native <see cref="Enums.Engagement.OutreachNotificationTimeOfDay"/> to a mobile <see cref="Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay"/>.
         /// </summary>
         /// <param name="timeOfDay"></param>
         /// <returns></returns>
-        public static Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay ToMobile( this Enums.Outreach.OutreachNotificationTimeOfDay timeOfDay )
+        public static Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay ToMobile( this Enums.Engagement.OutreachNotificationTimeOfDay timeOfDay )
         {
             switch ( timeOfDay )
             {
-                case Enums.Outreach.OutreachNotificationTimeOfDay.Morning:
+                case Enums.Engagement.OutreachNotificationTimeOfDay.Morning:
                     return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning;
-                case Enums.Outreach.OutreachNotificationTimeOfDay.Afternoon:
+                case Enums.Engagement.OutreachNotificationTimeOfDay.Afternoon:
                     return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Afternoon;
-                case Enums.Outreach.OutreachNotificationTimeOfDay.Evening:
+                case Enums.Engagement.OutreachNotificationTimeOfDay.Evening:
                     return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Evening;
                 default:
                     return Rock.Common.Mobile.Enums.OutreachNotificationTimeOfDay.Morning;
