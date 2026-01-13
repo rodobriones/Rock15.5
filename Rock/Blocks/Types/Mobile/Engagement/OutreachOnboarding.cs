@@ -17,7 +17,7 @@
 using System.ComponentModel;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
+using Rock.Common.Mobile.Blocks.Engagement.OutreachOnboarding.cs;
 using Rock.Common.Mobile.ViewModel;
 using Rock.Enums.Core;
 using Rock.Mobile;
@@ -105,7 +105,7 @@ namespace Rock.Blocks.Types.Mobile.Engagement
         /// <inheritdoc />
         public override object GetMobileConfigurationValues()
         {
-            return new Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.Configuration
+            return new Rock.Common.Mobile.Blocks.Engagement.OutreachOnboarding.Configuration
             {
                 AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull(),
                 AfterFinishAction = GetAttributeValue( AttributeKey.AfterFinishAction ).FromJsonOrNull<MobileNavigationActionViewModel>() ?? new MobileNavigationActionViewModel()

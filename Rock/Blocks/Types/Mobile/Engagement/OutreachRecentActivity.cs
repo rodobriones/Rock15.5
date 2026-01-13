@@ -18,7 +18,7 @@ using System.ComponentModel;
 using System.Linq;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.OutreachRecentActivity;
+using Rock.Common.Mobile.Blocks.Engagement.OutreachRecentActivity;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;

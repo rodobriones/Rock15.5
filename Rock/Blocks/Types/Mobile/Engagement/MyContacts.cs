@@ -19,7 +19,7 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.MyContact;
+using Rock.Common.Mobile.Blocks.Engagement.MyContact;
 using Rock.Mobile;
 using Rock.Model;
 using Rock.Utility;
@@ -128,7 +128,7 @@ namespace Rock.Blocks.Types.Mobile.Engagement
         /// <inheritdoc />
         public override object GetMobileConfigurationValues()
         {
-            return new Rock.Common.Mobile.Blocks.Outreach.MyContact.Configuration
+            return new Rock.Common.Mobile.Blocks.Engagement.MyContact.Configuration
             {
                 AddContactPageGuid = GetAttributeValue( AttributeKey.AddContact ).AsGuidOrNull(),
                 ContactProfileGuid = GetAttributeValue( AttributeKey.ContactProfil ).AsGuidOrNull()

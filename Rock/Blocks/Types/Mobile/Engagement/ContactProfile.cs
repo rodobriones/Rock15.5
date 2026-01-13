@@ -19,7 +19,7 @@ using System.ComponentModel;
 using System.Linq;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
+using Rock.Common.Mobile.Blocks.Engagement.ContactProfile;
 using Rock.Enums.Engagement;
 using Rock.Mobile;
 using Rock.Model;

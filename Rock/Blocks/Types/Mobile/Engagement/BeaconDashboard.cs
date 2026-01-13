@@ -20,9 +20,9 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
-using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Common.Mobile.Blocks.Outreach.OutreachOnboarding.cs;
+using Rock.Common.Mobile.Blocks.Engagement.BeaconDashboard;
+using Rock.Common.Mobile.Blocks.Engagement.ContactProfile;
+using Rock.Common.Mobile.Blocks.Engagement.OutreachOnboarding.cs;
 using Rock.Enums.Core;
 using Rock.Enums.Engagement;
 using Rock.Mobile;
@@ -374,7 +374,7 @@ namespace Rock.Blocks.Types.Mobile.Engagement
         /// <inheritdoc/>
         public override object GetMobileConfigurationValues()
         {
-            return new Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard.Configuration
+            return new Rock.Common.Mobile.Blocks.Engagement.BeaconDashboard.Configuration
             {
                 DetailPage = GetAttributeValue( AttributeKeys.DetailPage ).AsGuidOrNull(),
                 BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) ),

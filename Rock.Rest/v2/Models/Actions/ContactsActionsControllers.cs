@@ -20,7 +20,7 @@ using System.Linq;
 using System.Net;
 using System.Web.Http;
 
-using Rock.Common.Mobile.Blocks.Outreach.MyContact;
+using Rock.Common.Mobile.Blocks.Engagement.MyContact;
 using Rock.Data;
 using Rock.Model;
 using Rock.Rest.Filters;

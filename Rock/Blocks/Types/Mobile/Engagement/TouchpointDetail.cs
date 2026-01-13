@@ -21,9 +21,9 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.BeaconDashboard;
-using Rock.Common.Mobile.Blocks.Outreach.ContactProfile;
-using Rock.Common.Mobile.Blocks.Outreach.TouchpointDetail;
+using Rock.Common.Mobile.Blocks.Engagement.BeaconDashboard;
+using Rock.Common.Mobile.Blocks.Engagement.ContactProfile;
+using Rock.Common.Mobile.Blocks.Engagement.TouchpointDetail;
 using Rock.Enums.Engagement;
 using Rock.Mobile;
 using Rock.Model;
@@ -499,7 +499,7 @@ namespace Rock.Blocks.Types.Mobile.Engagement
         /// <inheritdoc/>
         public override object GetMobileConfigurationValues()
         {
-            return new Rock.Common.Mobile.Blocks.Outreach.TouchpointDetail.Configuration
+            return new Rock.Common.Mobile.Blocks.Engagement.TouchpointDetail.Configuration
             {
                 BaptismInfoUrl = ResolveURL( GetAttributeValue( AttributeKeys.BaptismInfo ) )
             };

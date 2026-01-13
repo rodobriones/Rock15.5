@@ -17,7 +17,7 @@
 using System.ComponentModel;
 
 using Rock.Attribute;
-using Rock.Common.Mobile.Blocks.Outreach.AddContact;
+using Rock.Common.Mobile.Blocks.Engagement.AddContact;
 using Rock.Common.Mobile.ViewModel;
 using Rock.Communication;
 using Rock.Data;
@@ -137,7 +137,7 @@ namespace Rock.Blocks.Types.Mobile.Engagement
         /// <inheritdoc/>
         public override object GetMobileConfigurationValues()
         {
-            return new Rock.Common.Mobile.Blocks.Outreach.AddContact.Configuration
+            return new Rock.Common.Mobile.Blocks.Engagement.AddContact.Configuration
             {
                 PostSave = GetAttributeValue( AttributeKey.PostSave ).FromJsonOrNull<MobileNavigationActionViewModel>() ?? new MobileNavigationActionViewModel(),
             };
