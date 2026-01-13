@@ -833,6 +833,68 @@ namespace Rock.Blocks.Engagement
             return ActionOk();
         }
 
+        [BlockAction]
+        public BlockActionResult GetCommunicationRecipients( GetCommunicationRecipientsRequestBag bag )
+        {
+            if ( bag == null )
+            {
+                return ActionBadRequest( "Request is required" );
+            }
+
+            if ( bag.ConnectionRequestIdKeys == null )
+            {
+                return ActionBadRequest( "Connection Request Ids are required" );
+            }
+
+            // Convert the connection request id keys to ids so we can query them.
+            var connectionRequestIds = bag.ConnectionRequestIdKeys
+                .Select( idKey => IdHasher.Instance.GetId( idKey ) )
+                .Where( id => id.HasValue )
+                .Select( id => id.Value )
+                .ToList();
+
+            var connectionRequestService = new ConnectionRequestService( RockContext );
+            var mobilePhoneDefinedValueId = DefinedValueCache.GetId( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid() );
+            var personalDeviceQuery = new PersonalDeviceService( RockContext ).Queryable().AsNoTracking();
+
+            var communicationRecipients = connectionRequestService
+                .GetByIds( connectionRequestIds )
+                .AsNoTracking()
+                .Select( cr => new
+                {
+                    PersonAliasGuid = cr.PersonAlias.Guid,
+                    cr.PersonAlias.Person,
+                    MobilePhone = cr
+                        .PersonAlias
+                        .Person
+                        .PhoneNumbers
+                        .FirstOrDefault( pn => pn.NumberTypeValueId == mobilePhoneDefinedValueId ),
+                } )
+                .ToList() // materialize query before projecting because some properties require the full Person entity.
+                .Select( cr => new CommunicationRecipientBag
+                {
+                    Email = cr.Person.Email,
+                    EmailPreference = cr.Person.EmailPreference,
+                    IsEmailAllowed = cr.Person.CanReceiveEmail( isBulk: false ),
+                    IsEmailActive = cr.Person.IsEmailActive, // Used for customized error messages.
+                    IsDeceased = cr.Person.IsDeceased,
+                    IsSmsAllowed = cr.MobilePhone != null
+                        && cr.MobilePhone.Number.IsNotNullOrWhiteSpace() == true
+                        && cr.MobilePhone.IsMessagingEnabled
+                        && !cr.MobilePhone.IsMessagingOptedOut,
+                    Name = cr.Person.FullName,
+                    PersonAliasGuid = cr.PersonAliasGuid,
+                    PhotoUrl = cr.Person.PhotoUrl,
+                    SmsNumber = cr.MobilePhone?.NumberFormatted
+                } )
+                .ToList();
+
+            return ActionOk( new GetCommunicationRecipientsResponseBag
+            {
+                CommunicationRecipients = communicationRecipients
+            } );
+        }
+
         #endregion Block Actions
 
         /// <summary>

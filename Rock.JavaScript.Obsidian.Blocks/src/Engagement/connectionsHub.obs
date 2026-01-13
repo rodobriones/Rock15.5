@@ -218,7 +218,7 @@
                                @fetchPlacementGroupDetails="fetchPlacementGroupDetails" />
 
     <SendSMSModal v-model:visible="isSendSMSModalVisible"
-                  :selectedKeys="allSelectedKeys" />
+                  :communicationRecipients="communicationRecipients" />
     <SendEmailModal v-model:visible="isSendEmailModalVisible"
                     :selectedKeys="allSelectedKeys" />
 </template>
@@ -309,13 +309,17 @@
     import { PageMessages } from "@Obsidian/Utility/browserBus";
     import { areEqual, toGuidOrNull } from "@Obsidian/Utility/guid";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
+    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
     import { ConnectionRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/connectionRequestBag";
     import { ConnectionOpportunityDetailBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/connectionOpportunityDetailBag";
+    import { GetCommunicationRecipientsRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getCommunicationRecipientsRequestBag";
+    import { GetCommunicationRecipientsResponseBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getCommunicationRecipientsResponseBag";
     import { PlacementGroupDetailsBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/placementGroupDetailsBag";
     import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
     import { PreferenceKey } from "./ConnectionsHub/types.partial";
     import { IGridState } from "@Obsidian/Types/Controls/grid";
+    import { HttpResult } from "@Obsidian/Types/Utility/http";
     import RockLabel from "@Obsidian/Controls/rockLabel.obs";
     import Badge from "@Obsidian/Controls/badge.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
@@ -356,6 +360,8 @@
 
     const assignTo = ref();
     const allPossibleConnectors = ref(box.options?.allPossibleConnectors ?? []);
+
+    const communicationRecipients = ref<CommunicationRecipientBag[] | null | undefined>();
 
     // TODO Change items based on sequential mode.
     const actionItems = [
@@ -559,11 +565,34 @@
         selectedKeys.value[key] = [...state.selectedKeys];
     }
 
-    function showSMSModal(): void {
-        isSendSMSModalVisible.value = true;
+    async function getCommunicationRecipients(): Promise<HttpResult<GetCommunicationRecipientsResponseBag>> {
+        const bag: GetCommunicationRecipientsRequestBag = {
+            connectionRequestIdKeys: allSelectedKeys.value
+        };
+
+        const result = await invokeBlockAction<GetCommunicationRecipientsResponseBag>("GetCommunicationRecipients", {
+            bag
+        });
+
+        return result;
     }
 
-    function showEmailModal(): void {
+    async function showSMSModal(): Promise<void> {
+        const result = await getCommunicationRecipients();
+
+        if (result.isSuccess && result.data?.communicationRecipients?.length) {
+            communicationRecipients.value = result.data.communicationRecipients;
+            isSendSMSModalVisible.value = true;
+        }
+        else {
+            console.error(result.errorMessage);
+            // TODO - Show error message to user
+            communicationRecipients.value = null;
+            isSendSMSModalVisible.value = false;
+        }
+    }
+
+    async function showEmailModal(): Promise<void> {
         isSendEmailModalVisible.value = true;
     }
 
