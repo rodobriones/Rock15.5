@@ -14,14 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using System.Web.UI;
-using System.Web.UI.HtmlControls;
-using System.Web.UI.WebControls;
-
 using Newtonsoft.Json;
 
 using Rock;
@@ -33,27 +25,56 @@ using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
 
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
+using System.Web.UI;
+using System.Web.UI.HtmlControls;
+using System.Web.UI.WebControls;
+
 namespace RockWeb.Blocks.Event
 {
     /// <summary>
     /// 
     /// </summary>
-    [DisplayName("Calendar Item Occurrence Content Channel Item List")]
-    [Category("Event")]
-    [Description("Lists the content channel items associated to a particular calendar item occurrence.")]
+    [DisplayName( "Calendar Item Occurrence Content Channel Item List" )]
+    [Category( "Event" )]
+    [Description( "Lists the content channel items associated to a particular calendar item occurrence." )]
 
-    [LinkedPage("Detail Page")]
+    [LinkedPage( "Detail Page" )]
     [Rock.SystemGuid.BlockTypeGuid( "8418C3B8-5E87-469F-BAE9-E15C32873FBD" )]
     public partial class CalendarContentChannelItemList : RockBlock, ISecondaryBlock
     {
 
         #region Properties
 
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
         private int? OccurrenceId { get; set; }
         private List<ContentChannel> ContentChannels { get; set; }
         private List<int> ExpandedPanels { get; set; }
 
-        #endregion
+        private EventCalendarService EventCalendarService => new EventCalendarService( new RockContext() );
+        private EventItemService EventItemService => new EventItemService( new RockContext() );
+        private EventItemOccurrenceService EventItemOccurrenceService => new EventItemOccurrenceService( new RockContext() );
+        private ContentChannelService ContentChannelService => new ContentChannelService( new RockContext() );
+        private ContentChannelItemService ContentChannelItemService => new ContentChannelItemService( new RockContext() );
+
+        #endregion Properties
+
+        #region Keys
+
+        private class PageParameterKey
+        {
+            public const string EventCalendarId = "EventCalendarId";
+            public const string EventItemId = "EventItemId";
+            public const string EventItemOccurrenceId = "EventItemOccurrenceId";
+            public const string ContentItemId = "ContentItemId";
+            public const string ContentChannelId = "ContentChannelId";
+        }
+
+        #endregion Keys
 
         #region Control Methods
 
@@ -106,7 +127,13 @@ namespace RockWeb.Blocks.Event
             {
                 var rockContext = new RockContext();
 
-                OccurrenceId = PageParameter( "EventItemOccurrenceId" ).AsIntegerOrNull();
+                OccurrenceId = EventItemOccurrenceService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.EventItemOccurrenceId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( io => io.Id )
+                .FirstOrDefault();
+
                 ContentChannels = new List<ContentChannel>();
                 ExpandedPanels = new List<int>();
 
@@ -130,7 +157,7 @@ namespace RockWeb.Blocks.Event
                             .ToList();
                     }
 
-                    foreach( var channel in channels )
+                    foreach ( var channel in channels )
                     {
                         if ( channel.Value.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
                         {
@@ -172,7 +199,7 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gItems_Add( object sender, EventArgs e )
         {
-            var grid = ( (Control)sender ).DataKeysContainer;
+            var grid = ( ( Control ) sender ).DataKeysContainer;
             if ( grid != null )
             {
                 int contentChannelId = grid.ID.Substring( 7 ).AsInteger();
@@ -355,7 +382,7 @@ namespace RockWeb.Blocks.Event
                     {
                         iconClass = contentChannel.IconCssClass;
                     }
-                                        
+
                     var pwItems = new PanelWidget();
                     phContentChannelGrids.Controls.Add( pwItems );
                     pwItems.ID = string.Format( "pwItems_{0}", contentChannel.Id );
@@ -448,7 +475,7 @@ namespace RockWeb.Blocks.Event
                     // Add attribute columns
                     int entityTypeId = EntityTypeCache.Get( typeof( Rock.Model.ContentChannelItem ) ).Id;
                     string qualifier = contentChannel.ContentChannelTypeId.ToString();
-                    foreach ( var attributeCache in new AttributeService( rockContext ).GetByEntityTypeQualifier(entityTypeId, "ContentChannelTypeId", qualifier, false )
+                    foreach ( var attributeCache in new AttributeService( rockContext ).GetByEntityTypeQualifier( entityTypeId, "ContentChannelTypeId", qualifier, false )
                         .Where( a => a.IsGridColumn )
                         .OrderBy( a => a.Order )
                         .ThenBy( a => a.Name ).ToAttributeCacheList() )
@@ -461,7 +488,7 @@ namespace RockWeb.Blocks.Event
                             boundField.DataField = dataFieldExpression;
                             boundField.AttributeId = attributeCache.Id;
                             boundField.HeaderText = attributeCache.Name;
-                            
+
                             if ( attributeCache != null )
                             {
                                 boundField.ItemStyle.HorizontalAlign = attributeCache.FieldType.Field.AlignValue;
@@ -554,7 +581,7 @@ namespace RockWeb.Blocks.Event
             }
         }
 
-        private string DisplayStatus (ContentChannelItemStatus contentItemStatus)
+        private string DisplayStatus( ContentChannelItemStatus contentItemStatus )
         {
             string labelType = "default";
             if ( contentItemStatus == ContentChannelItemStatus.Approved )
@@ -572,15 +599,57 @@ namespace RockWeb.Blocks.Event
         private void NavigateToDetailPage( int contentItemId, int? contentChannelId = null )
         {
             var qryParams = new Dictionary<string, string>();
-            qryParams.Add( "EventCalendarId", PageParameter( "EventCalendarId" ) );
-            qryParams.Add( "EventItemId", PageParameter( "EventItemId" ) );
-            qryParams.Add( "EventItemOccurrenceId", PageParameter( "EventItemOccurrenceId" ) );
-            qryParams.Add( "ContentItemId", contentItemId.ToString() );
-            if ( contentChannelId.HasValue )
+
+            var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                PageParameter( PageParameterKey.EventCalendarId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
             {
-                qryParams.Add( "ContentChannelId", contentChannelId.Value.ToString() );
+                qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
             }
-            
+
+            var eventItemIdKey = EventItemService.GetNoTracking(
+                PageParameter( PageParameterKey.EventItemId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventItemIdKey ) )
+            {
+                qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+            }
+
+            var eventItemOccurrenceIdKey = EventItemService.GetNoTracking(
+                PageParameter( PageParameterKey.EventItemOccurrenceId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventItemOccurrenceIdKey ) )
+            {
+                qryParams[PageParameterKey.EventItemOccurrenceId] = eventItemOccurrenceIdKey;
+            }
+
+            var contentItemIdKey = ContentChannelItemService.GetNoTracking(
+                contentItemId.ToString(),
+                true
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( contentItemIdKey ) )
+            {
+                qryParams[PageParameterKey.ContentItemId] = contentItemIdKey;
+            }
+
+            var contentChannelIdKey = ContentChannelService.GetNoTracking(
+                contentChannelId?.ToString(),
+                true
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( contentChannelIdKey ) )
+            {
+                qryParams[PageParameterKey.ContentChannelId] = contentChannelIdKey;
+            }
+
             NavigateToLinkedPage( "DetailPage", qryParams );
         }
 
