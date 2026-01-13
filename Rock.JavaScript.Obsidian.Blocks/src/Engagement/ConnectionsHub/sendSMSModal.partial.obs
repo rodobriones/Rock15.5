@@ -3,17 +3,25 @@
     <Modal v-model="isVisible"
            title="Send SMS"
            saveText="Save">
-        <div v-for="cr in communicationRecipients" :key="cr.personAliasGuid">
-            {{ cr.name }} - {{ cr.email }} - {{ cr.smsNumber }}
-        </div>
+        <TokenList expandable
+                   :items="communicationRecipients ?? []">
+            <template #item="{ item }">
+                <Token>
+                    <img :src="item?.photoUrl ?? undefined" style="border-radius: 24px; width: 24px; height: 24px" />
+                    <span class="item-content">{{ item.name }}</span>
+                </Token>
+            </template>
+        </TokenList>
     </Modal>
 </template>
 
 <script setup lang="ts">
     import { ref, PropType, watch } from "vue";
-    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
     import Modal from "@Obsidian/Controls/modal.obs";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
+    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+    import Token from "./token.partial.obs";
+    import TokenList from "./tokenList.partial.obs";
 
     const props = defineProps({
         visible: {

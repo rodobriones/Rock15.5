@@ -1,0 +1,102 @@
+<template>
+    <div class="token"
+         :class="{
+            'is-removable': removable,
+            'is-disabled': disabled
+        }"
+         role="listitem"
+         @click="onClick">
+        <div class="token-content">
+            <slot />
+        </div>
+
+        <button v-if="removable"
+                class="token-remove"
+                type="button"
+                aria-label="Remove"
+                @click.stop="onRemove">
+            <slot name="remove-icon">
+                ×
+            </slot>
+        </button>
+    </div>
+</template>
+
+<style scoped>
+.token {
+    display: inline-flex;
+    align-items: center;
+    /* Don't allow a single token from getting truncated in the list */
+    max-width: 100%;
+    padding: var(--spacing-tiny) var(--spacing-xsmall);
+    border-radius: 100px;
+    border: 1px solid var(--color-interface-soft);
+    background: var(--color-interface-softer);
+    gap: var(--spacing-xsmall);
+    white-space: nowrap;
+    /* Don't allow shrinking or growing so the parent TokenList can calculate widths correctly. */
+    flex: 0 0 auto;
+
+}
+
+.token-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xsmall);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.token-remove {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.875rem;
+    line-height: 1;
+}
+
+.token.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+</style>
+
+<script setup lang="ts">
+    const props = defineProps({
+        removable: {
+            type: Boolean,
+            default: false
+        },
+        disabled: {
+            type: Boolean,
+            default: false
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "remove"): void
+        (e: "click"): void
+    }>();
+
+    // #region Event Handlers
+
+    function onRemove(): void {
+        if (props.disabled) {
+            return;
+        }
+
+        emit("remove");
+    }
+
+    function onClick(): void {
+        if (props.disabled) {
+            return;
+        }
+
+        emit("click");
+    }
+
+    // #endregion Event Handlers
+</script>
