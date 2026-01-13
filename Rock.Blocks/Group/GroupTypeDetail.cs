@@ -21,6 +21,7 @@ using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 
+using Rock;
 using Rock.Attribute;
 using Rock.Constants;
 using Rock.Data;
@@ -280,13 +281,6 @@ namespace Rock.Blocks.Group
 
             var bag = GetCommonEntityBag( entity );
 
-            if ( entity.Attributes == null )
-            {
-                entity.LoadAttributes( RockContext );
-            }
-
-            bag.LoadAttributesAndValuesForPublicView( entity, RequestContext.CurrentPerson, enforceSecurity: true );
-
             return bag;
         }
 
@@ -300,12 +294,23 @@ namespace Rock.Blocks.Group
 
             var bag = GetCommonEntityBag( entity );
 
-            if ( entity.Attributes == null )
-            {
-                entity.LoadAttributes( RockContext );
-            }
+            /*
+                1/5/2026 - MSE
 
-            bag.LoadAttributesAndValuesForPublicEdit( entity, RequestContext.CurrentPerson, enforceSecurity: true );
+                We are intentionally NOT loading entity attributes (bag.Attributes / bag.AttributeValues) here. 
+
+                This data is now handled via the `GetAttributesForAllEntityTypes` block action.
+                This is because we are also including the Attributes/AttributeValues for the complete hierarchy chain of
+                group types associated with the InheritedGroupType property. This data must be refreshed and sent to the UI
+                whenever this property is modified, meaning new Attributes/AttributeValues would need to be included.
+
+                if ( entity.Attributes == null )
+                {
+                    entity.LoadAttributes( RockContext );
+                }
+
+                bag.LoadAttributesAndValuesForPublicEdit( entity, RequestContext.CurrentPerson, enforceSecurity: true );
+            */
 
             return bag;
         }
@@ -1257,6 +1262,172 @@ namespace Rock.Blocks.Group
             }
 
             return ActionOk( new GroupTypeGroupRoleResponseBag { CanDelete = true, ErrorMessage = string.Empty } );
+        }
+
+        /// <summary>
+        /// Gets Group, GroupType and GroupMember attributes scoped to the current group type being edited as well as any
+        /// inherited attributes for the selected inherited group type chain (parent/grandparent/etc).
+        /// </summary>
+        /// <param name="inheritedGroupTypeGuid">The inherited group type Guid selected in the UI.</param>
+        [BlockAction]
+        public BlockActionResult GetAttributesForAllEntityTypes( Guid inheritedGroupTypeGuid )
+        {
+            var currentGroupType = GetInitialEntity();
+
+            if ( currentGroupType == null )
+            {
+                return ActionBadRequest( $"{GroupType.FriendlyTypeName} not found." );
+            }
+
+            var responseBag = new GroupTypeGetAttributesResponseBag
+            {
+                GroupAttributes = new List<PublicEditableAttributeBag>(),
+                InheritedGroupAttributes = new List<GroupTypeInheritedAttributeBag>(),
+                GroupMemberAttributes = new List<PublicEditableAttributeBag>(),
+                InheritedGroupMemberAttributes = new List<GroupTypeInheritedAttributeBag>(),
+                GroupTypeAttributes = new List<PublicEditableAttributeBag>(),
+                InheritedGroupTypeAttributes = new List<GroupTypeInheritedAttributeBag>(),
+            };
+
+            var attributeService = new AttributeService( RockContext );
+            var groupEntityTypeId = new Rock.Model.Group().TypeId;
+            var groupMemberEntityTypeId = new GroupMember().TypeId;
+            var groupTypeEntityTypeId = new GroupType().TypeId;
+
+            // These attributes are scoped to the current group type being edited.
+            if ( currentGroupType.Id > 0 )
+            {
+                var qualifierValue = currentGroupType.Id.ToString();
+
+                // Group attributes
+                responseBag.GroupAttributes = attributeService.GetByEntityTypeId( groupEntityTypeId, true ).AsQueryable()
+                    .AsNoTracking()
+                    .Where( a =>
+                        a.EntityTypeQualifierColumn.Equals( "GroupTypeId", StringComparison.OrdinalIgnoreCase ) &&
+                        a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                    .OrderBy( a => a.Order )
+                    .ThenBy( a => a.Name )
+                    .ToList()
+                    .ConvertAll( a => PublicAttributeHelper.GetPublicEditableAttribute( a ) );
+
+                // GroupMember attributes
+                responseBag.GroupMemberAttributes = attributeService.GetByEntityTypeId( groupMemberEntityTypeId, true ).AsQueryable()
+                    .AsNoTracking()
+                    .Where( a =>
+                        a.EntityTypeQualifierColumn.Equals( "GroupTypeId", StringComparison.OrdinalIgnoreCase ) &&
+                        a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                    .OrderBy( a => a.Order )
+                    .ThenBy( a => a.Name )
+                    .ToList()
+                    .ConvertAll( a => PublicAttributeHelper.GetPublicEditableAttribute( a ) );
+
+                // GroupType attributes
+                responseBag.GroupTypeAttributes = attributeService.GetByEntityTypeId( groupTypeEntityTypeId, true ).AsQueryable()
+                    .AsNoTracking()
+                    .Where( a =>
+                        a.EntityTypeQualifierColumn.Equals( "Id", StringComparison.OrdinalIgnoreCase ) &&
+                        a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                    .OrderBy( a => a.Order )
+                    .ThenBy( a => a.Name )
+                    .ToList()
+                    .ConvertAll( a => PublicAttributeHelper.GetPublicEditableAttribute( a ) );
+            }
+
+            // Inherited attributes are scoped to the selected inherited group type from the UI,
+            // and include those from the group type hierarchy chain associated with the InheritedGroupType property.
+            if ( inheritedGroupTypeGuid != Guid.Empty )
+            {
+                var groupTypeService = new GroupTypeService( RockContext );
+                var inheritedGroupType = groupTypeService.Get( inheritedGroupTypeGuid );
+
+                if ( inheritedGroupType != null )
+                {
+                    do
+                    {
+                        var qualifierValue = inheritedGroupType.Id.ToString();
+                        var inheritedFromName = inheritedGroupType.Name;
+                        var inheritedFromUrl = $"~/GroupType/{inheritedGroupType.Id}";
+
+                        // Inherited Group attributes
+                        responseBag.InheritedGroupAttributes.AddRange(
+                            attributeService.GetByEntityTypeId( groupEntityTypeId, true ).AsQueryable()
+                                .AsNoTracking()
+                                .Where( a =>
+                                    a.EntityTypeQualifierColumn.Equals( "GroupTypeId", StringComparison.OrdinalIgnoreCase ) &&
+                                    a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                                .OrderBy( a => a.Order )
+                                .ThenBy( a => a.Name )
+                                .Select( a => new GroupTypeInheritedAttributeBag
+                                {
+                                    Name = a.Name,
+                                    Description = a.Description,
+                                    Key = a.Key,
+                                    Guid = a.Guid,
+                                    InheritedFromGroupTypeName = inheritedFromName,
+                                    InheritedFromGroupTypeUrl = inheritedFromUrl
+                                } )
+                                .ToList() );
+
+                        // Inherited GroupMember attributes
+                        responseBag.InheritedGroupMemberAttributes.AddRange(
+                            attributeService.GetByEntityTypeId( groupMemberEntityTypeId, true ).AsQueryable()
+                                .AsNoTracking()
+                                .Where( a =>
+                                    a.EntityTypeQualifierColumn.Equals( "GroupTypeId", StringComparison.OrdinalIgnoreCase ) &&
+                                    a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                                .OrderBy( a => a.Order )
+                                .ThenBy( a => a.Name )
+                                .Select( a => new GroupTypeInheritedAttributeBag
+                                {
+                                    Name = a.Name,
+                                    Description = a.Description,
+                                    Key = a.Key,
+                                    Guid = a.Guid,
+                                    InheritedFromGroupTypeName = inheritedFromName,
+                                    InheritedFromGroupTypeUrl = inheritedFromUrl
+                                } )
+                                .ToList() );
+
+                        // Inherited GroupType attributes
+                        responseBag.InheritedGroupTypeAttributes.AddRange(
+                            attributeService.GetByEntityTypeId( groupTypeEntityTypeId, true ).AsQueryable()
+                            .AsNoTracking()
+                            .Where( a =>
+                                a.EntityTypeQualifierColumn.Equals( "Id", StringComparison.OrdinalIgnoreCase ) &&
+                                a.EntityTypeQualifierValue.Equals( qualifierValue ) )
+                            .OrderBy( a => a.Order )
+                            .ThenBy( a => a.Name )
+                            .Select( a => new GroupTypeInheritedAttributeBag
+                            {
+                                Name = a.Name,
+                                Description = a.Description,
+                                Key = a.Key,
+                                Guid = a.Guid,
+                                InheritedFromGroupTypeName = inheritedFromName,
+                                InheritedFromGroupTypeUrl = inheritedFromUrl
+                            } )
+                            .ToList() );
+
+                        // Continue to walk the hierarchy chain
+                        inheritedGroupType = inheritedGroupType.InheritedGroupTypeId.HasValue
+                            ? groupTypeService.Get( inheritedGroupType.InheritedGroupTypeId.Value )
+                            : null;
+
+                    } while ( inheritedGroupType != null );
+                }
+            }
+
+            /*
+                1/5/2026 - MSE
+
+                GroupType attribute values are always stored on the current GroupType entity, including attribute values
+                for inherited attributes. For inherited attributes, the AttributeValue.EntityId still references this GroupType, 
+                even though the associated Attribute.EntityTypeQualifierValue points to the original (inherited) GroupType.
+
+                //
+            */
+
+            return ActionOk( responseBag );
         }
 
         #endregion Block Actions

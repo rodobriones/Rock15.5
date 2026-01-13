@@ -218,7 +218,7 @@
         </ContentSection>
 
         <ContentSection title="Group Attributes" icon="ti ti-users-group">
-            <GroupAttributes />
+            <GroupAttributes v-model="groupAttributes" :inheritedGroupAttributes="inheritedGroupAttributes" />
         </ContentSection>
 
         <ContentSection v-if="hasAttributes" title="Group Type Attributes" icon="ti ti-binary-tree-2">
@@ -245,7 +245,7 @@
     import { computed, PropType, ref, watch } from "vue";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
-    import { setPropertiesBoxValue, watchPropertyChanges } from "@Obsidian/Utility/block";
+    import { setPropertiesBoxValue, useInvokeBlockAction, watchPropertyChanges } from "@Obsidian/Utility/block";
     import { propertyRef, updateRefValue } from "@Obsidian/Utility/component";
     import { GroupTypeBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeBag";
     import { GroupTypeDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeDetailOptionsBag";
@@ -270,6 +270,10 @@
     import HtmlEditor from "@Obsidian/Controls/htmlEditor.obs";
     import Roles from "./roles.partial.obs";
     import GroupAttributes from "./groupAttributes.partial.obs";
+    import { PublicEditableAttributeBag } from "@Obsidian/ViewModels/Utility/publicEditableAttributeBag";
+    import { GroupTypeInheritedAttributeBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeInheritedAttributeBag";
+    import { GroupTypeGetAttributesResponseBag } from "@Obsidian/ViewModels/Blocks/Group/GroupTypeDetail/groupTypeGetAttributesResponseBag";
+    import { emptyGuid } from "@Obsidian/Utility/guid";
 
     const props = defineProps({
         modelValue: {
@@ -289,6 +293,8 @@
     }>();
 
     // #region Values
+
+    const invokeBlockAction = useInvokeBlockAction();
 
     const attributes = ref(props.modelValue.bag?.attributes ?? {});
     const attributeValues = ref(props.modelValue.bag?.attributeValues ?? {});
@@ -331,6 +337,13 @@
     const groupViewLavaTemplate = propertyRef(props.modelValue.bag?.groupViewLavaTemplate ?? "", "GroupViewLavaTemplate");
     const roles = propertyRef(props.modelValue.bag?.roles ?? [], "Roles");
     const defaultGroupRole = propertyRef(props.modelValue.bag?.defaultGroupRole ?? null, "DefaultGroupRole");
+
+    const groupAttributes = ref<PublicEditableAttributeBag[]>([]);
+    const inheritedGroupAttributes = ref<GroupTypeInheritedAttributeBag[]>([]);
+    const groupMemberAttributes = ref<PublicEditableAttributeBag[]>([]);
+    const inheritedGroupMemberAttributes = ref<GroupTypeInheritedAttributeBag[]>([]);
+    const groupTypeAttributes = ref<PublicEditableAttributeBag[]>([]);
+    const inheritedGroupTypeAttributes = ref<GroupTypeInheritedAttributeBag[]>([]);
 
     // The properties that are being edited. This should only contain
     // objects returned by propertyRef().
@@ -410,6 +423,31 @@
     // #region Functions
 
     // #endregion Functions
+
+    async function loadAttributesForGroupType(): Promise<void> {
+        const inheritedGroupTypeGuid = inheritedGroupType.value?.value ?? emptyGuid;
+
+        const result = await invokeBlockAction<GroupTypeGetAttributesResponseBag>("GetAttributesForAllEntityTypes", {
+            inheritedGroupTypeGuid
+        });
+
+        if (!result.isSuccess || !result.data) {
+            groupAttributes.value = [];
+            inheritedGroupAttributes.value = [];
+            groupTypeAttributes.value = [];
+            inheritedGroupTypeAttributes.value = [];
+            groupMemberAttributes.value = [];
+            inheritedGroupMemberAttributes.value = [];
+            return;
+        }
+
+        groupAttributes.value = result.data.groupAttributes ?? [];
+        inheritedGroupAttributes.value = result.data.inheritedGroupAttributes ?? [];
+        groupTypeAttributes.value = result.data.groupTypeAttributes ?? [];
+        inheritedGroupTypeAttributes.value = result.data.inheritedGroupTypeAttributes ?? [];
+        groupMemberAttributes.value = result.data.groupMemberAttributes ?? [];
+        inheritedGroupMemberAttributes.value = result.data.inheritedGroupMemberAttributes ?? [];
+    }
 
     // Watch for parental changes in our model value and update all our values.
     watch(() => props.modelValue, () => {
@@ -509,6 +547,10 @@
     });
 
     // #region Watchers
+
+    watch(() => inheritedGroupType.value?.value, () => {
+        loadAttributesForGroupType();
+    }, { immediate: true });
 
     // #endregion Watchers
 
