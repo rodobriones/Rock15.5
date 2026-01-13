@@ -56,6 +56,18 @@ namespace RockWeb.Blocks.Event
 
         #endregion
 
+        #region Keys
+
+        private static class PageParameterKey
+        {
+            public const string EventCalendarId = "EventCalendarId";
+            public const string EventItemId = "EventItemId";
+            public const string EventItemOccurrenceId = "EventItemOccurrenceId";
+            public const string ContentItemId = "ContentItemId";
+        }
+
+        #endregion Keys
+
         #region Control Methods
 
         /// <summary>
@@ -83,10 +95,10 @@ namespace RockWeb.Blocks.Event
             if ( !Page.IsPostBack )
             {
                 // Get any querystring variables
-                ContentItemId = ContentChannelItemService.Get( PageParameter( "ContentItemId" ), IsAllowingPredictableIds)?.Id;
-                EventItemOccurrenceId = EventItemOccurrenceService.Get( PageParameter( "EventItemOccurrenceId" ), IsAllowingPredictableIds)?.Id;
-                EventItemId = EventItemService.Get( PageParameter( "EventItemId" ), IsAllowingPredictableIds )?.Id;
-                EventCalendarId = EventCalendarService.Get( PageParameter( "EventCalendarId" ), IsAllowingPredictableIds )?.Id;
+                ContentItemId = ContentChannelItemService.Get( PageParameter( PageParameterKey.ContentItemId ), IsAllowingPredictableIds)?.Id;
+                EventItemOccurrenceId = EventItemOccurrenceService.Get( PageParameter( PageParameterKey.EventItemOccurrenceId ), IsAllowingPredictableIds)?.Id;
+                EventItemId = EventItemService.Get( PageParameter( PageParameterKey.EventItemId ), IsAllowingPredictableIds )?.Id;
+                EventCalendarId = EventCalendarService.Get( PageParameter( PageParameterKey.EventCalendarId ), IsAllowingPredictableIds )?.Id;
 
                 // Load objects necessary to display names
                 using ( var rockContext = new RockContext() )
@@ -268,15 +280,39 @@ namespace RockWeb.Blocks.Event
                     var qryParams = new Dictionary<string, string>();
                     if ( targetPage >= 2 && EventCalendarId.HasValue )
                     {
-                        qryParams.Add( "EventCalendarId", EventCalendarId.Value.ToString() );
+                        var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                            EventCalendarId.Value.ToString(),
+                            IsAllowingPredictableIds
+                        )?.IdKey;
+
+                        if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
+                        {
+                            qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
+                        }
                     }
                     if ( targetPage >= 3 && EventItemId.HasValue )
                     {
-                        qryParams.Add( "EventItemId", EventItemId.Value.ToString() );
+                        var eventItemIdKey = EventItemService.GetNoTracking(
+                            EventItemId.Value.ToString(),
+                            IsAllowingPredictableIds
+                        )?.IdKey;
+
+                        if ( !string.IsNullOrEmpty( eventItemIdKey ) )
+                        {
+                            qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+                        }
                     }
                     if ( targetPage >= 4 && EventItemOccurrenceId.HasValue )
                     {
-                        qryParams.Add( "EventItemOccurrenceId", EventItemOccurrenceId.Value.ToString() );
+                        var eventItemOccurrenceIdKey = EventItemOccurrenceService.GetNoTracking(
+                            EventItemOccurrenceId.Value.ToString(),
+                            IsAllowingPredictableIds
+                        )?.IdKey;
+
+                        if ( !string.IsNullOrEmpty( eventItemOccurrenceIdKey ) )
+                        {
+                            qryParams[PageParameterKey.EventItemOccurrenceId] = eventItemOccurrenceIdKey;
+                        }
                     }
 
                     // Find the target page
