@@ -1,39 +1,82 @@
 <template>
-    <div class="token-overflow-root">
-        <div v-if="!expanded" ref="containerRef" class="token-row">
-            <template v-for="(item, index) in visibleItems" :key="index">
-                <slot name="item" :item="item" :index="index" />
-            </template>
+    <div class="token-list-root">
+        <div class="token-list-main">
+            <div
+                 ref="containerRef"
+                 class="token-row"
+                 v-show="!isExpanded">
+                <template v-for="(item, index) in visibleItems" :key="index">
+                    <slot name="item" :item="item" :index="index">
+                        <Token>{{ item }}</Token>
+                    </slot>
+                </template>
 
-            <div v-if="showOverflowIndicator"
-                 ref="overflowRef"
-                 class="overflow-indicator">
-                <Token>{{ items.length - visibleItems.length }} more</Token>
-                <RockButton isSquare @click="expand">
-                    <i class="ti ti-chevrons-down"></i>
-                </RockButton>
+                <div
+                     ref="overflowRef"
+                     class="overflow-indicator"
+                     v-show="showOverflowIndicator">
+                    <Token>
+                        {{ items.length - visibleItems.length }} more
+                    </Token>
+                </div>
+            </div>
+
+            <div v-if="isExpanded" class="expanded-list">
+                <template v-for="(item, index) in items" :key="index">
+                    <slot name="item" :item="item" :index="index">
+                        <Token>{{ item }}</Token>
+                    </slot>
+                </template>
             </div>
         </div>
 
-        <div v-if="expanded" class="expanded-list">
-            <template v-for="(item, index) in items" :key="index">
-                <slot name="item" :item="item" :index="index" />
-            </template>
-
-            <RockButton isSquare @click="collapse">
-                <i class="ti ti-chevrons-up"></i>
+        <div ref="controlRef" class="token-list-control">
+            <RockButton v-show="isExpandable && (hiddenCount > 0 || isExpanded)"
+                        :aria-label="isExpanded ? 'Collapse' : 'Expand'"
+                        isSquare
+                        btnSize="sm"
+                        btnType="link"
+                        @click="isExpanded ? onCollapse() : onExpand()">
+                <i :class="isExpanded ? 'ti ti-chevrons-up' : 'ti ti-chevrons-down'"></i>
             </RockButton>
         </div>
 
         <div ref="measureRef" class="measure-row">
             <template v-for="(item, index) in items" :key="index">
-                <slot name="item" :item="item" :index="index" />
+                <slot name="item" :item="item" :index="index">
+                    <Token>{{ item }}</Token>
+                </slot>
             </template>
         </div>
     </div>
 </template>
 
 <style scoped>
+.token-list-root {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: var(--spacing-xsmall);
+    align-items: start;
+    width: 100%;
+
+    padding: var(--spacing-xsmall);
+    border-radius: var(--rounded-small);
+    border: 1px solid var(--input-border);
+    background: var(--color-interface-softest);
+}
+
+.token-list-main {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.token-list-control {
+    align-self: start;
+}
+
+.token-list-control button {
+    color: var(--color-interface-strongest);
+}
 .token-row {
     display: flex;
     flex-wrap: nowrap;
@@ -47,11 +90,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xsmall);
-    margin-top: var(--spacing-xsmall);
 }
 
 .overflow-indicator {
-    /* Prevent the indicator from shrinking or growing so the width can be calculated correctly. */
     flex: 0 0 auto;
     display: inline-flex;
     white-space: nowrap;
@@ -72,72 +113,50 @@
 </style>
 
 <script setup lang="ts" generic="T">
-    import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
+    import { computed, nextTick, onMounted, onBeforeUnmount, PropType, ref, watch } from "vue";
     import Token from "./token.partial.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
 
-    const props = defineProps<{
-        items: T[]
-        expandable?: boolean
-    }>();
+    const props = defineProps({
+        /**
+         * The items to display in the token list.
+         */
+        items: {
+            type: Array as PropType<T[]>,
+            required: true
+        },
 
-    const expandable = props.expandable ?? true;
+        /**
+         * Whether the button to expand/collapse should be shown
+         * to allow the user to expand the list to show all items.
+         */
+        expandable: {
+            type: Boolean as PropType<boolean>,
+            default: false
+        }
+    });
 
-    const containerRef = ref<HTMLElement>();
-    const measureRef = ref<HTMLElement>();
-    const overflowRef = ref<HTMLElement>();
 
-    const expanded = ref(false);
-    const visibleCount = ref(props.items.length);
+    // #region Values
+
+    // References to DOM elements needed for measuring available space.
+    // The available space is then used to determine how many items can be shown
+    // before needing to collapse the list.
+    const containerRef = ref<HTMLElement | undefined>();
+    const measureRef = ref<HTMLElement | undefined>();
+    const overflowRef = ref<HTMLElement | undefined>();
+    const controlRef = ref<HTMLElement | undefined>();
+
+    const isExpanded = ref<boolean>(false);
+    const visibleCount = ref<number>(props.items.length);
 
     let resizeObserver: ResizeObserver | undefined;
 
-    async function calculateVisibleItems(): Promise<void> {
-        if (expanded.value || !expandable) {
-            visibleCount.value = props.items.length;
-            return;
-        }
+    // #region Computed Values
 
-        const container = containerRef.value;
-        const measure = measureRef.value;
-        if (!container || !measure) return;
-
-        const children = Array.from(measure.children) as HTMLElement[];
-
-        const fitCountForWidth = (width: number): number => {
-            let used = 0;
-            let count = 0;
-            for (const child of children) {
-                const w = child.offsetWidth;
-                if (used + w > width) break;
-                used += w;
-                count++;
-            }
-            return count;
-        };
-
-        const containerWidth = container.clientWidth;
-
-        // Pass 1: assume no overflow indicator, see how many fit
-        const countWithoutIndicator = fitCountForWidth(containerWidth);
-
-        // If everything fits, we are done
-        if (countWithoutIndicator >= props.items.length) {
-            visibleCount.value = props.items.length;
-            return;
-        }
-
-        // Ensure the overflow indicator renders so we can measure its real width
-        visibleCount.value = countWithoutIndicator;
-        await nextTick();
-
-        const indicatorWidth = overflowRef.value?.offsetWidth ?? 0;
-        const effectiveWidth = Math.max(0, containerWidth - indicatorWidth);
-
-        // Pass 2: compute final count with the indicator width subtracted
-        visibleCount.value = fitCountForWidth(effectiveWidth);
-    }
-
+    const isExpandable = computed<boolean>(() => {
+        return props.expandable ?? true;
+    });
 
     const visibleItems = computed(() =>
         props.items.slice(0, visibleCount.value)
@@ -148,29 +167,77 @@
     );
 
     const showOverflowIndicator = computed(() =>
-        expandable && !expanded.value && hiddenCount.value > 0
+        isExpandable.value && !isExpanded.value && hiddenCount.value > 0
     );
 
-    async function expand(): Promise<void> {
-        expanded.value = true;
-        await nextTick();
-        await calculateVisibleItems();
+    // #endregion Computed Values
+
+    // #region Functions
+
+    function calculateVisibleItems(): void {
+        if (isExpanded.value || !isExpandable.value) {
+            visibleCount.value = props.items.length;
+            return;
+        }
+
+        const container = containerRef.value;
+        const measure = measureRef.value;
+        if (!container || !measure) return;
+
+        const indicatorWidth = showOverflowIndicator.value
+            ? overflowRef.value?.offsetWidth ?? 0
+            : 0;
+
+        const availableWidth = Math.max(
+            0,
+            container.clientWidth - indicatorWidth
+        );
+
+        let used = 0;
+        let count = 0;
+
+        for (const child of Array.from(measure.children) as HTMLElement[]) {
+            const w = child.offsetWidth;
+            if (used + w > availableWidth) break;
+            used += w;
+            count++;
+        }
+
+        visibleCount.value = count;
     }
 
-    async function collapse(): Promise<void> {
-        expanded.value = false;
+    // #endregion Functions
+
+    // #region Event Handlers
+
+    async function onExpand(): Promise<void> {
+        isExpanded.value = true;
         await nextTick();
-        await calculateVisibleItems();
+        calculateVisibleItems();
     }
+
+    async function onCollapse(): Promise<void> {
+        isExpanded.value = false;
+        await nextTick();
+        calculateVisibleItems();
+    }
+
+    // #endregion Event Handlers
+
+    // #region Watchers
 
     watch(
         () => props.items,
         async () => {
             await nextTick();
-            await calculateVisibleItems();
+            calculateVisibleItems();
         },
         { deep: true }
     );
+
+    // #endregion Watchers
+
+    // #region Hooks
 
     onMounted(async () => {
         resizeObserver = new ResizeObserver(() => {
@@ -180,11 +247,14 @@
         if (containerRef.value) {
             resizeObserver.observe(containerRef.value);
         }
+
         await nextTick();
-        await calculateVisibleItems();
+        calculateVisibleItems();
     });
 
     onBeforeUnmount(() => {
         resizeObserver?.disconnect();
     });
+
+    // #endregion Hooks
 </script>

@@ -7,7 +7,7 @@
          role="listitem"
          @click="onClick">
         <div class="token-content">
-            <slot />
+            <slot></slot>
         </div>
 
         <button v-if="removable"
@@ -37,6 +37,7 @@
     /* Don't allow shrinking or growing so the parent TokenList can calculate widths correctly. */
     flex: 0 0 auto;
 
+    font-size: var(--font-size-small);
 }
 
 .token-content {
