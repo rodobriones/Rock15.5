@@ -21,6 +21,7 @@ using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Newtonsoft.Json;
 
 using Rock;
@@ -68,7 +69,14 @@ namespace RockWeb.Blocks.Event
     {
         #region Properties
 
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
         protected List<EventItemOccurrenceGroupMap> LinkedRegistrationsState { get; set; }
+
+        private EventCalendarService EventCalendarService => new EventCalendarService( new RockContext() );
+        private EventItemService EventItemService => new EventItemService( new RockContext() );
+        private EventItemOccurrenceService EventItemOccurrenceService => new EventItemOccurrenceService( new RockContext() );
+
 
         #endregion Properties
 
@@ -80,6 +88,14 @@ namespace RockWeb.Blocks.Event
             public const string DefaultAccount = "DefaultAccount";
             public const string RegistrationInstancePage = "RegistrationInstancePage";
             public const string GroupDetailPage = "GroupDetailPage";
+        }
+
+        protected class PageParameterKey
+        {
+            public const string EventItemOccurrenceId = "EventItemOccurrenceId";
+            public const string EventCalendarId = "EventCalendarId";
+            public const string EventItemId = "EventItemId";
+            public const string CopyFromId = "CopyFromId";
         }
 
         #region Control Methods
@@ -156,7 +172,14 @@ namespace RockWeb.Blocks.Event
         {
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "EventItemOccurrenceId" ).AsInteger() );
+                var eventItemOccurrenceId = EventItemOccurrenceService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.EventItemOccurrenceId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( io => io.Id )
+                .FirstOrDefault();
+
+                ShowDetail( eventItemOccurrenceId );
             }
             else
             {
@@ -262,14 +285,14 @@ namespace RockWeb.Blocks.Event
 
             if ( !canEdit )
             {
-                int? calendarId = PageParameter( "EventCalendarId" ).AsIntegerOrNull();
-                if ( calendarId.HasValue )
+                var calendar = EventCalendarService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventCalendarId ),
+                    IsAllowingPredictableIds
+                );
+
+                if ( calendar != null )
                 {
-                    var calendar = new EventCalendarService( rockContext ).Get( calendarId.Value );
-                    if ( calendar != null )
-                    {
-                        canEdit = calendar.IsAuthorized( Authorization.EDIT, CurrentPerson );
-                    }
+                    canEdit = calendar.IsAuthorized( Authorization.EDIT, CurrentPerson );
                 }
             }
 
@@ -461,7 +484,12 @@ namespace RockWeb.Blocks.Event
 
             if ( eventItemOccurrence.EventItemId == 0 )
             {
-                eventItemOccurrence.EventItemId = PageParameter( "EventItemId" ).AsIntegerOrNull() ?? 0;
+                eventItemOccurrence.EventItemId = EventItemService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.EventItemId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( i => i.Id )
+                .FirstOrDefault();
             }
 
             eventItemOccurrence.LoadAttributes();
@@ -528,13 +556,13 @@ namespace RockWeb.Blocks.Event
             lActionTitle.Text = ActionTitle.Add( "Event Occurrence" ).FormatAsHtmlTitle();
 
             // If NOT copying from an existing Occurrence then return
-            var copyFromOccurrenceId = PageParameter( "CopyFromId" ).AsInteger();
+            var copyFromOccurrenceId = PageParameter( PageParameterKey.CopyFromId ).AsInteger();
             if ( copyFromOccurrenceId == 0 )
             {
                 return eventItemOccurrence;
             }
 
-            var oldOccurrence = new EventItemOccurrenceService( new RockContext() ).Get( copyFromOccurrenceId );
+            var oldOccurrence = EventItemOccurrenceService.Get( PageParameter( PageParameterKey.CopyFromId ), IsAllowingPredictableIds );
             if ( oldOccurrence != null )
             {
                 // clone the workflow type
@@ -712,11 +740,27 @@ namespace RockWeb.Blocks.Event
                 }
             }
 
-            var qryParams = new Dictionary<string, string>
+            var qryParams = new Dictionary<string, string>();
+
+            var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                PageParameter( PageParameterKey.EventCalendarId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
             {
-                { "EventCalendarId", PageParameter("EventCalendarId") },
-                { "EventItemId", PageParameter("EventItemId") }
-            };
+                qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
+            }
+
+            var eventItemIdKey = EventItemService.GetNoTracking(
+                PageParameter( PageParameterKey.EventItemId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventItemIdKey ) )
+            {
+                qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+            }
 
             NavigateToParentPage( qryParams );
         }
@@ -750,7 +794,19 @@ namespace RockWeb.Blocks.Event
                 if ( eventItemOccurrence == null )
                 {
                     newItem = true;
-                    eventItemOccurrence = new EventItemOccurrence { EventItemId = PageParameter( "EventItemId" ).AsInteger() };
+
+                    var eventItemId = EventItemService.GetQueryableByKey(
+                        PageParameter( PageParameterKey.EventItemId ),
+                        IsAllowingPredictableIds
+                    )
+                    .Select( i => i.Id )
+                    .FirstOrDefault();
+
+                    eventItemOccurrence = new EventItemOccurrence
+                    {
+                        EventItemId = eventItemId != 0 ? eventItemId : PageParameter( "EventItemId" ).AsInteger()
+                    };
+
                     eventItemOccurrenceService.Add( eventItemOccurrence );
                 }
 
@@ -901,8 +957,26 @@ namespace RockWeb.Blocks.Event
                 }.Send();
 
                 var qryParams = new Dictionary<string, string>();
-                qryParams.Add( "EventCalendarId", PageParameter( "EventCalendarId" ) );
-                qryParams.Add( "EventItemId", PageParameter( "EventItemId" ) );
+
+                var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventCalendarId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+
+                if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
+                {
+                    qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
+                }
+
+                var eventItemIdKey = EventItemService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventItemId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+
+                if ( !string.IsNullOrEmpty( eventItemIdKey ) )
+                {
+                    qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+                }
 
                 if ( newItem )
                 {
@@ -923,18 +997,42 @@ namespace RockWeb.Blocks.Event
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnCancel_Click( object sender, EventArgs e )
         {
-            int eventItemId = hfEventItemOccurrenceId.ValueAsInt();
-            if ( eventItemId == 0 )
+            var eventItemIdKey = EventItemService.GetNoTracking(
+                PageParameter( PageParameterKey.EventItemId ),
+                IsAllowingPredictableIds
+            )?.IdKey ?? hfEventItemOccurrenceId.ValueAsInt().ToString();
+
+            if ( eventItemIdKey == "0" )
             {
+
                 var qryParams = new Dictionary<string, string>();
-                qryParams.Add( "EventCalendarId", PageParameter( "EventCalendarId" ) );
-                qryParams.Add( "EventItemId", PageParameter( "EventItemId" ) );
+
+                var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventCalendarId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+
+                if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
+                {
+                    qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
+                }
+
+                if ( !string.IsNullOrEmpty( eventItemIdKey ) )
+                {
+                    qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+                }
+
                 NavigateToParentPage( qryParams );
             }
             else
             {
                 LinkedRegistrationsState.Clear();
-                var eventItemOccurrence = new EventItemOccurrenceService( new RockContext() ).Get( eventItemId );
+
+                var eventItemOccurrence = new EventItemOccurrenceService( new RockContext() ).Get(
+                    eventItemIdKey,
+                    IsAllowingPredictableIds
+                );
+
                 ShowReadonlyDetails( eventItemOccurrence );
             }
         }
@@ -986,7 +1084,13 @@ namespace RockWeb.Blocks.Event
                 var eventItemOccurrenceGroupMap = new EventItemOccurrenceGroupMap();
 
                 // Find most recent mapping with same event, campus and copy some of it's registration instance values
-                int eventItemId = PageParameter( "EventItemId" ).AsInteger();
+                var eventItemId = EventItemService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.EventItemId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( i => i.Id)
+                .FirstOrDefault();
+
                 int? campusId = ddlCampus.SelectedValueAsInt();
                 var registrationInstance = new EventItemOccurrenceGroupMapService( rockContext )
                     .Queryable()
