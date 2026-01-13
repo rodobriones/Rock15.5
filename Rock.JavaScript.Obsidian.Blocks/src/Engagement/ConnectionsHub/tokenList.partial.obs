@@ -5,12 +5,13 @@
                 <slot name="item" :item="item" :index="index" />
             </template>
 
-            <div
-                 v-if="showOverflowIndicator"
+            <div v-if="showOverflowIndicator"
                  ref="overflowRef"
                  class="overflow-indicator">
-                {{ items.length - visibleItems.length }} more
-                <button type="button" @click="expand">Expand</button>
+                <Token>{{ items.length - visibleItems.length }} more</Token>
+                <RockButton isSquare @click="expand">
+                    <i class="ti ti-chevrons-down"></i>
+                </RockButton>
             </div>
         </div>
 
@@ -19,9 +20,9 @@
                 <slot name="item" :item="item" :index="index" />
             </template>
 
-            <button type="button" @click="collapse">
-                Collapse
-            </button>
+            <RockButton isSquare @click="collapse">
+                <i class="ti ti-chevrons-up"></i>
+            </RockButton>
         </div>
 
         <div ref="measureRef" class="measure-row">
@@ -33,16 +34,11 @@
 </template>
 
 <style scoped>
-.token-overflow-root {
-    --gap-x: 0.5rem;
-    --gap-y: 0.5rem;
-}
-
 .token-row {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    gap: var(--gap-x);
+    gap: var(--spacing-xsmall);
     overflow: hidden;
     white-space: nowrap;
 }
@@ -50,14 +46,16 @@
 .expanded-list {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--gap-y) var(--gap-x);
-    margin-top: var(--gap-y);
+    gap: var(--spacing-xsmall);
+    margin-top: var(--spacing-xsmall);
 }
 
 .overflow-indicator {
     /* Prevent the indicator from shrinking or growing so the width can be calculated correctly. */
     flex: 0 0 auto;
+    display: inline-flex;
     white-space: nowrap;
+    gap: var(--spacing-xsmall);
 }
 
 .measure-row {
@@ -69,13 +67,14 @@
 
     display: flex;
     flex-wrap: nowrap;
-    gap: var(--gap-x);
+    gap: var(--spacing-xsmall);
 }
 </style>
 
 <script setup lang="ts" generic="T">
     import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
     import Token from "./token.partial.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
 
     const props = defineProps<{
         items: T[]
