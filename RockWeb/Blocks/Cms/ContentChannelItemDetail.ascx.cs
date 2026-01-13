@@ -213,6 +213,8 @@ namespace RockWeb.Blocks.Cms
 
         #region Properties
 
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
         /// <summary>
         /// Gets the interaction intent defined type cache.
         /// </summary>
@@ -230,6 +232,12 @@ namespace RockWeb.Blocks.Cms
             set { ViewState["ContentChannelIdState"] = value; }
         }
 
+        private ContentChannelService ContentChannelService => new ContentChannelService( new RockContext() );
+        private ContentChannelItemService ContentChannelItemService => new ContentChannelItemService( new RockContext() );
+        private EventCalendarService EventCalendarService => new EventCalendarService( new RockContext() );
+        private EventItemService EventItemService => new EventItemService( new RockContext() );
+        private EventItemOccurrenceService EventItemOccurrenceService => new EventItemOccurrenceService( new RockContext() );
+        
         #endregion
 
         #region Control Methods
@@ -300,14 +308,29 @@ namespace RockWeb.Blocks.Cms
 
             if ( !Page.IsPostBack )
             {
+                var contentItemId = ContentChannelItemService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.ContentItemId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( ci => ci.Id )
+                .FirstOrDefault();
+
                 if ( string.IsNullOrWhiteSpace( GetAttributeValue( AttributeKey.ContentChannel ) ) )
                 {
-                    ShowDetail( PageParameter( PageParameterKey.ContentItemId ).AsInteger(), PageParameter( PageParameterKey.ContentChannelId ).AsIntegerOrNull() );
+                    var contentChannelId = ContentChannelService.GetQueryableByKey(
+                        PageParameter( PageParameterKey.ContentChannelId ),
+                        IsAllowingPredictableIds
+                    )
+                    .Select( cc => cc.Id )
+                    .FirstOrDefault();
+
+                    ShowDetail( contentItemId, contentChannelId );
                 }
                 else
                 {
-                    var contentChannel = GetAttributeValue( AttributeKey.ContentChannel ).AsGuid();
-                    ShowDetail( PageParameter( PageParameterKey.ContentItemId ).AsInteger(), new ContentChannelService( new RockContext() ).Get( GetAttributeValue( AttributeKey.ContentChannel ).AsGuid() ).Id );
+                    var contentChannelGuid = GetAttributeValue( AttributeKey.ContentChannel ).AsGuid();
+                    var contentChannel = ContentChannelService.Get( contentChannelGuid );
+                    ShowDetail( contentItemId, contentChannel?.Id );
                 }
             }
             else
@@ -316,7 +339,7 @@ namespace RockWeb.Blocks.Cms
                 ContentChannelItem item = GetContentItem();
                 item.LoadAttributes();
 
-                ShowApproval( item , true );
+                ShowApproval( item, true );
                 BindSlugs( item );
 
                 ShowDialog();
@@ -335,15 +358,21 @@ namespace RockWeb.Blocks.Cms
             var breadCrumbs = new List<BreadCrumb>();
 
             var itemIds = GetNavHierarchy().AsIntegerList();
-            int? itemId = PageParameter( pageReference, PageParameterKey.ContentItemId ).AsIntegerOrNull();
-            if ( itemId != null )
+            var itemId = ContentChannelItemService.GetQueryableByKey(
+                PageParameter( pageReference, PageParameterKey.ContentItemId ),
+                IsAllowingPredictableIds
+            )
+            .Select( ci => ci.Id )
+            .FirstOrDefault();
+
+            if ( itemId != 0 )
             {
-                itemIds.Add( itemId.Value );
+                itemIds.Add( itemId );
             }
 
             foreach ( var contentItemId in itemIds )
             {
-                ContentChannelItem contentItem = new ContentChannelItemService( new RockContext() ).Get( contentItemId );
+                ContentChannelItem contentItem = ContentChannelItemService.Get( contentItemId );
                 if ( contentItem != null )
                 {
                     breadCrumbs.Add( new BreadCrumb( contentItem.Title, pageReference ) );
@@ -501,23 +530,29 @@ namespace RockWeb.Blocks.Cms
                         requestFilterService.UpdatePersonalizedEntityForRequestFilters( entityTypeId, contentItem.Id, lbRequestFilters.SelectedValuesAsInt );
                     }
 
-                    int? eventItemOccurrenceId = PageParameter( PageParameterKey.EventItemOccurrenceId ).AsIntegerOrNull();
-                    if ( eventItemOccurrenceId.HasValue )
+                    var eventItemOccurrenceId = EventItemOccurrenceService.GetQueryableByKey(
+                        PageParameter( PageParameterKey.EventItemOccurrenceId ),
+                        IsAllowingPredictableIds
+                    )
+                    .Select( io => io.Id )
+                    .FirstOrDefault();
+
+                    if ( eventItemOccurrenceId != 0 )
                     {
-                        var occurrenceChannelItemService = new EventItemOccurrenceChannelItemService( rockContext );
-                        var occurrenceChannelItem = occurrenceChannelItemService
+                        var occurrenceChannelItemServiceContext = new EventItemOccurrenceChannelItemService( rockContext );
+                        var occurrenceChannelItem = occurrenceChannelItemServiceContext
                             .Queryable()
                             .Where( c =>
                                 c.ContentChannelItemId == contentItem.Id &&
-                                c.EventItemOccurrenceId == eventItemOccurrenceId.Value )
+                                c.EventItemOccurrenceId == eventItemOccurrenceId )
                             .FirstOrDefault();
 
                         if ( occurrenceChannelItem == null )
                         {
                             occurrenceChannelItem = new EventItemOccurrenceChannelItem();
                             occurrenceChannelItem.ContentChannelItemId = contentItem.Id;
-                            occurrenceChannelItem.EventItemOccurrenceId = eventItemOccurrenceId.Value;
-                            occurrenceChannelItemService.Add( occurrenceChannelItem );
+                            occurrenceChannelItem.EventItemOccurrenceId = eventItemOccurrenceId;
+                            occurrenceChannelItemServiceContext.Add( occurrenceChannelItem );
                             rockContext.SaveChanges();
                         }
                     }
@@ -1490,13 +1525,43 @@ namespace RockWeb.Blocks.Cms
         {
             var qryParams = new Dictionary<string, string>();
 
-            int? eventItemOccurrenceId = PageParameter( PageParameterKey.EventItemOccurrenceId ).AsIntegerOrNull();
-            if ( eventItemOccurrenceId.HasValue )
+            var eventItemOccurrenceIdKey = EventItemOccurrenceService.GetNoTracking(
+                PageParameter( PageParameterKey.EventItemOccurrenceId ),
+                IsAllowingPredictableIds
+            )?.IdKey;
+
+            if ( !string.IsNullOrEmpty( eventItemOccurrenceIdKey ) )
             {
-                qryParams.Add( "EventCalendarId", PageParameter( PageParameterKey.EventCalendarId ) );
-                qryParams.Add( "EventItemId", PageParameter( PageParameterKey.EventItemId ) );
-                qryParams.Add( "EventItemOccurrenceId", eventItemOccurrenceId.Value.ToString() );
-                qryParams.Add( "ContentChannelId", hfChannelId.Value );
+                var eventCalendarIdKey = EventCalendarService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventCalendarId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+
+                if ( !string.IsNullOrEmpty( eventCalendarIdKey ) )
+                {
+                    qryParams[PageParameterKey.EventCalendarId] = eventCalendarIdKey;
+                }
+
+                var eventItemIdKey = EventItemService.GetNoTracking(
+                    PageParameter( PageParameterKey.EventItemId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+
+                if (!string.IsNullOrEmpty( eventItemIdKey ) ) 
+                {
+                    qryParams[PageParameterKey.EventItemId] = eventItemIdKey;
+                }
+
+                qryParams[PageParameterKey.EventItemOccurrenceId] = eventItemOccurrenceIdKey;
+
+                var contentChannelIdKey = ContentChannelService.GetNoTracking(
+                    PageParameter( PageParameterKey.ContentChannelId ),
+                    IsAllowingPredictableIds
+                )?.IdKey;
+                if ( !string.IsNullOrEmpty( contentChannelIdKey ) )
+                {
+                    qryParams[PageParameterKey.ContentChannelId] = contentChannelIdKey;
+                }
                 NavigateToParentPage( qryParams );
             }
             else
@@ -1508,7 +1573,15 @@ namespace RockWeb.Blocks.Cms
                 {
                     if ( itemId != hfId.Value )
                     {
-                        newHierarchy.Add( itemId );
+                        var itemIdKey = ContentChannelItemService.GetNoTracking(
+                            itemId,
+                            true
+                        )?.IdKey;
+
+                        if ( !string.IsNullOrEmpty( itemIdKey ) )
+                        {
+                            newHierarchy.Add( itemIdKey );
+                        }
                     }
                     else
                     {
@@ -1520,15 +1593,24 @@ namespace RockWeb.Blocks.Cms
                 {
                     if ( newHierarchy.Count > 1 )
                     {
-                        qryParams.Add( "Hierarchy", newHierarchy.Take( newHierarchy.Count() - 1 ).ToList().AsDelimited( "," ) );
+                        qryParams[PageParameterKey.Hierarchy] = newHierarchy.Take( newHierarchy.Count() - 1 ).ToList().AsDelimited( "," );
                     }
 
-                    qryParams.Add( "ContentItemId", newHierarchy.Last() );
+                    qryParams[PageParameterKey.ContentItemId] = newHierarchy.Last();
                     NavigateToCurrentPage( qryParams );
                 }
                 else
                 {
-                    qryParams.Add( "ContentChannelId", hfChannelId.Value );
+                    var contentChannelIdKey = ContentChannelService.GetNoTracking(
+                        hfChannelId.Value,
+                        true
+                    )?.IdKey;
+
+                    if ( !string.IsNullOrEmpty( contentChannelIdKey ) )
+                    {
+                        qryParams[PageParameterKey.ContentChannelId] = contentChannelIdKey;
+                    }
+
                     NavigateToParentPage( qryParams );
                 }
             }
