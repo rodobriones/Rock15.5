@@ -84,8 +84,8 @@ BEGIN
                 )
             )
 
-            -- NOTE: We intentionally do not apply person eligibility filters here.
-            -- We include all GivingIds in the percentile distribution, and only apply eligibility filters when updating AttributeValues.
+            -- NOTE: We intentionally do not apply all the person eligibility filters here.
+            -- We include all GivingIds in the percentile distribution, and only apply eligibility filters later when updating AttributeValues.
             AND p.GivingId IS NOT NULL 
             AND p.GivingId <> ''
             AND p.[Guid] <> @GiverAnonymousGuid

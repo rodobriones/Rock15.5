@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
@@ -61,7 +60,8 @@ namespace Rock.Financial
                 var consistentGiverMeanFrequency = new SqlParameter( "@ConsistentGiverMeanFrequency", journeySettings.ConsistentGiverMeanFrequency );
                 var occasionalGiverLastGaveDays = new SqlParameter( "@OccasionalGiverLastGaveDays", journeySettings.OccasionalGiverLastGaveDays );
                 var occasionalGiverMeanFrequency = new SqlParameter( "@OccasionalGiverMeanFrequency", journeySettings.OccasionalGiverMeanFrequency );
-                var formerGiverNoContributionThreshold = new SqlParameter( "@FormerGiverNoContributionThreshold", journeySettings.FormerGiverNoContributionThreshold );
+                var lapsedGiverNoGiftDays = new SqlParameter( "@LapsedGiverNoGiftDays", journeySettings.LapsedGiverNoGiftDays );
+                var lapsedGiverMeanFrequency = new SqlParameter( "@LapsedGiverMeanFrequency", journeySettings.LapsedGiverMeanFrequency );
 
                 return rockContext.Database.SqlQuery<int>(
                     @"EXEC [dbo].[spGivingAutomation_UpdateGivingJourneyStages] 
@@ -75,7 +75,8 @@ namespace Rock.Financial
                         @ConsistentGiverMeanFrequency, 
                         @OccasionalGiverLastGaveDays, 
                         @OccasionalGiverMeanFrequency, 
-                        @FormerGiverNoContributionThreshold",
+                        @LapsedGiverNoGiftDays,
+                        @LapsedGiverMeanFrequency",
                     now,
                     transactionTypeIds,
                     financialAccountIds,
@@ -86,7 +87,8 @@ namespace Rock.Financial
                     consistentGiverMeanFrequency,
                     occasionalGiverLastGaveDays,
                     occasionalGiverMeanFrequency,
-                    formerGiverNoContributionThreshold )
+                    lapsedGiverNoGiftDays,
+                    lapsedGiverMeanFrequency )
                     .FirstOrDefault();
             }
         }
@@ -118,34 +120,6 @@ namespace Rock.Financial
         }
 
         #endregion Stored Procedures
-
-        #region Attribute Helpers
-
-        /// <summary>
-        /// Returns the attribute updates to apply when a giving unit has no qualifying transactions in the last 12 months
-        /// (based on the current Giving Automation transaction filters).
-        /// </summary>
-        /// <remarks>
-        /// Intentionally does not clear <see cref="Rock.SystemGuid.Attribute.PERSON_ERA_LAST_GAVE"/>.
-        /// </remarks>
-        internal static List<AttributeUpdate> GetClearedAttributeUpdatesForNoRecentTransactions( DateTime now )
-        {
-            return new List<AttributeUpdate>
-            {
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PERCENT_SCHEDULED.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_SOURCE.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_CURRENCY.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), string.Empty ),
-                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE.AsGuid(), now )
-            };
-        }
-
-        #endregion Attribute Helpers
 
         #region Alerts
 
@@ -314,7 +288,7 @@ namespace Rock.Financial
             var transactionsForAlertType = alertTypeAccountIds == null
                 ? ( orderedTransactions ?? new List<FinancialTransactionView>() )
                 : ( orderedTransactions ?? new List<FinancialTransactionView>() )
-                    .Where( t => t.GetTransactionDetails().Any( td => alertTypeAccountIds.Contains( td.AccountId ) ) )
+                    .Where( t => t.GetTransactionDetails().Any( ftd => alertTypeAccountIds.Contains( ftd.AccountId ) ) )
                     .ToList();
 
             var transactionDateTimesForAlertType = transactionsForAlertType
@@ -324,12 +298,12 @@ namespace Rock.Financial
             var transactionAmountsForAlertType = alertTypeAccountIds == null
                 ? transactionsForAlertType
                     .SelectMany( t => t.GetTransactionDetails() )
-                    .Select( td => td.Amount )
+                    .Select( ftd => ftd.Amount )
                     .ToList()
                 : transactionsForAlertType
                     .SelectMany( t => t.GetTransactionDetails() )
-                    .Where( td => alertTypeAccountIds.Contains( td.AccountId ) )
-                    .Select( td => td.Amount )
+                    .Where( ftd => alertTypeAccountIds.Contains( ftd.AccountId ) )
+                    .Select( ftd => ftd.Amount )
                     .ToList();
 
             return new AlertTypeComputedMetrics
@@ -655,74 +629,6 @@ namespace Rock.Financial
     #region DTOs
 
     /// <summary>
-    /// Minimal representation of a pending attribute update (used by Giving Automation and Giving Journeys).
-    /// </summary>
-    internal sealed class AttributeUpdate
-    {
-        /// <summary>
-        /// Gets or sets the attribute Id to update.
-        /// </summary>
-        public int AttributeId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the raw attribute value to persist.
-        /// </summary>
-        public string Value { get; set; }
-    }
-
-    internal static class GivingAttributeUpdate
-    {
-        private static readonly ConcurrentDictionary<Guid, int> _attributeIdCache = new ConcurrentDictionary<Guid, int>();
-
-        /// <summary>
-        /// Creates an <see cref="AttributeUpdate"/> with a date/time value.
-        /// </summary>
-        internal static AttributeUpdate Create( Guid attributeGuid, DateTime? value )
-        {
-            return Create( attributeGuid, value.ToISO8601DateString() );
-        }
-
-        /// <summary>
-        /// Creates an <see cref="AttributeUpdate"/> with an integer value.
-        /// </summary>
-        internal static AttributeUpdate Create( Guid attributeGuid, int? value )
-        {
-            return Create( attributeGuid, value.ToStringSafe() );
-        }
-
-        /// <summary>
-        /// Creates an <see cref="AttributeUpdate"/> with a decimal value.
-        /// </summary>
-        internal static AttributeUpdate Create( Guid attributeGuid, decimal? value )
-        {
-            return Create( attributeGuid, value.ToStringSafe() );
-        }
-
-        /// <summary>
-        /// Creates an <see cref="AttributeUpdate"/> with a string value.
-        /// </summary>
-        internal static AttributeUpdate Create( Guid attributeGuid, string value )
-        {
-            var attributeId = _attributeIdCache.GetOrAdd( attributeGuid, guid =>
-            {
-                var attribute = AttributeCache.Get( guid );
-                return attribute?.Id ?? 0;
-            } );
-
-            if ( attributeId == 0 )
-            {
-                return new AttributeUpdate { AttributeId = 0, Value = value };
-            }
-
-            return new AttributeUpdate
-            {
-                AttributeId = attributeId,
-                Value = value
-            };
-        }
-    }
-
-    /// <summary>
     /// Represents computed giving-frequency statistics for a transaction series.
     /// </summary>
     internal sealed class FrequencyCalculationResult
@@ -865,7 +771,7 @@ namespace Rock.Financial
         /// <summary>
         /// Gets the total amount for the transaction after applying refunds.
         /// </summary>
-        public decimal TotalAmount => GetTransactionDetails().Sum( d => d.Amount );
+        public decimal TotalAmount => GetTransactionDetails().Sum( ftd => ftd.Amount );
 
         /// <summary>
         /// Gets the transaction details aggregated by account id and adjusted for refunds.
@@ -1017,9 +923,9 @@ namespace Rock.Financial
         Occasional = 3,
 
         /// <summary>
-        /// Infrequent giver
+        /// Lapsed giver
         /// </summary>
-        Infrequent = 4,
+        Lapsed = 4,
 
         /// <summary>
         /// Former giver

@@ -2,14 +2,16 @@ CREATE OR ALTER PROCEDURE dbo.spGivingAutomation_UpdateGivingJourneyStages
     @CurrentRockDateTime DATETIME,
     @TransactionTypeIds dbo.IdList READONLY,                -- List of allowed TransactionTypeValueIds ( Defined in Giving Automation Configuration Block )
     @FinancialAccountIds dbo.IdList READONLY,               -- List of allowed FinancialAccounts ( Defined in Giving Automation Configuration Block )
-    @NewGiverFirstGaveDays INT = 180,                       -- Max days since the first gift for someone to be classified as New Giver
+    @NewGiverFirstGaveDays INT = 150,                       -- Max days since the first gift for someone to qualify for New Giver
     @NewGiverContributionCountBetweenMinimum INT = 1,       -- Minimum number of gifts for New Giver
     @NewGiverContributionCountBetweenMaximum INT = 5,       -- Maximum number of gifts for New Giver
     @ConsistentGiverLastGaveDays INT = 32,                  -- Maximum days since last gift to still be considered active for Consistent
-    @ConsistentGiverMeanFrequency INT = 32,                 -- Max average days between gifts (last 2 years) to qualify as Consistent
-    @OccasionalGiverLastGaveDays INT = 180,                 -- Maximum days since last gift to be considered Occasional/active but not consistent
-    @OccasionalGiverMeanFrequency INT = 95,                 -- Max average days between gifts (last 2 years) for Occasional
-    @FormerGiverNoContributionThreshold INT = 730           -- Days of inactivity after which someone becomes a Former Giver
+    @ConsistentGiverMeanFrequency INT = 32,                 -- Max average days between gifts (last 2 years) to qualify for Consistent
+    @OccasionalGiverLastGaveDays INT = 150,                 -- Maximum days since last gift to be considered Occasional/active but not consistent
+    @OccasionalGiverMeanFrequency INT = 94,                 -- Max average days between gifts (last 2 years) to qualify for Occasional
+    @OccasionalGiverMeanFrequency INT = 94,                 -- Max average days between gifts (last 2 years) to qualify for Occasional
+    @LapsedGiverNoGiftDays INT = 150,                       -- Minimum days without a gift to be considered for Lapsed
+    @LapsedGiverMeanFrequency INT = 100                     -- Max average days between gifts (last 2 years) to qualify for Lapsed
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -56,11 +58,6 @@ BEGIN
         GROUP BY ftr.OriginalTransactionId
     ),
 
-    /*
-        Single-pass transaction scan:
-        - No explicit 24-month cutoff in the transaction scan.
-        - We compute all-time first/last gift dates, plus last-24-months first/last/count, via conditional aggregates.
-    */
     EligibleTransactions AS (
         SELECT
             p.GivingId,
@@ -70,6 +67,7 @@ BEGIN
         JOIN dbo.Person p ON p.Id = pa.PersonId
         LEFT JOIN RefundTotals rt ON rt.OriginalTransactionId = ft.Id
         WHERE ft.TransactionDateTime <= @CurrentRockDateTime
+            
             -- 1. Transaction type filter
             AND ft.TransactionTypeValueId IN (SELECT Id FROM @TransactionTypeIds)
 
@@ -134,11 +132,10 @@ BEGIN
             LastGiftDate,
             ISNULL(GiftCount24Months, 0) AS GiftCount24Months,
             CASE
-                WHEN ISNULL(GiftCount24Months, 0) > 0 OR FirstGiftDate IS NOT NULL THEN 1
+                WHEN FirstGiftDate IS NOT NULL THEN 1
                 ELSE 0
             END AS HasGivenEver,
            
-
            /*
                 1/11/2026 - MSE
 
@@ -166,7 +163,6 @@ BEGIN
                 WHEN DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) >
                      (DATEDIFF(DAY, FirstGiftDate24Months, LastGiftDate) * 1.0 / (ISNULL(GiftCount24Months, 0) - 1))
                 THEN DATEDIFF(DAY, FirstGiftDate24Months, @CurrentRockDateTime) * 1.0 / ISNULL(GiftCount24Months, 0)
-
 
                 /*
                     Standard Calculation:
@@ -213,23 +209,21 @@ BEGIN
                 THEN 1
                 
                 -- 2. CONSISTENT: Last gift within @ConsistentGiverLastGaveDays AND MeanFrequency <= @ConsistentGiverMeanFrequency.
-                WHEN LastGiftDate >= @StartDate
-                     AND DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) <= @ConsistentGiverLastGaveDays
+                WHEN DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) <= @ConsistentGiverLastGaveDays
                      AND MeanFrequency <= @ConsistentGiverMeanFrequency
                 THEN 2
                 
                 -- 3. OCCASIONAL: Last gift within @OccasionalGiverLastGaveDays AND MeanFrequency <= @OccasionalGiverMeanFrequency.
-                WHEN LastGiftDate >= @StartDate
-                     AND DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) <= @OccasionalGiverLastGaveDays
+                WHEN DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) <= @OccasionalGiverLastGaveDays
                      AND MeanFrequency <= @OccasionalGiverMeanFrequency
                 THEN 3
                 
-                -- 4. INFREQUENT: Has given, LastGiftDate within @FormerGiverNoContributionThreshold, and not NEW/CONSISTENT/OCCASIONAL.
-                WHEN LastGiftDate IS NOT NULL
-                     AND DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) <= @FormerGiverNoContributionThreshold
+                -- 4. LAPSED: Last Gift > @LapsedGiverNoGiftDays days AND Mean Frequency < @LapsedGiverMeanFrequency.
+                WHEN DATEDIFF(DAY, LastGiftDate, @CurrentRockDateTime) > @LapsedGiverNoGiftDays 
+                     AND MeanFrequency < @LapsedGiverMeanFrequency 
                 THEN 4
                 
-                -- 5. FORMER: Has given, LastGiftDate older than @FormerGiverNoContributionThreshold.
+                -- 5. FORMER: Catch-all for any remaining givers not classified above.
                 ELSE 5
             END AS NewJourneyStage
         FROM Calculations
@@ -250,7 +244,7 @@ BEGIN
     JOIN EligiblePersons elg ON elg.GivingId = jc.GivingId
     LEFT JOIN dbo.AttributeValue av ON av.EntityId = elg.PersonId AND av.AttributeId = @AttrId_CurrentJourneyStage
     WHERE
-        ISNULL(jc.NewJourneyStage, -1) != ISNULL(TRY_CAST(av.Value AS INT), -1);
+        jc.NewJourneyStage != ISNULL(TRY_CAST(av.Value AS INT), -1);
 
     CREATE CLUSTERED INDEX IX_PersonId ON #JourneyUpdates (PersonId);
 

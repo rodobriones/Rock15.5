@@ -406,7 +406,8 @@ namespace RockWeb.Blocks.Finance
             givingAutomationSettings.GivingJourneySettings.OccasionalGiverLastGaveDays = nbOccasionalGiverLastGaveDays.IntegerValue;
             givingAutomationSettings.GivingJourneySettings.OccasionalGiverMeanFrequency = nbOccasionalGiverMeanFrequency.IntegerValue;
 
-            givingAutomationSettings.GivingJourneySettings.FormerGiverNoContributionThreshold = nbFormerGiverNoContributionThreshold.IntegerValue;
+            givingAutomationSettings.GivingJourneySettings.LapsedGiverNoGiftDays = nbLapsedGiverNoGiftDays.IntegerValue;
+            givingAutomationSettings.GivingJourneySettings.LapsedGiverMeanFrequency = nbLapsedGiverMeanFrequency.IntegerValue;
 
             // Alerting Settings
             givingAutomationSettings.GivingAlertingSettings.GlobalRepeatPreventionDurationDays = nbGlobalRepeatPreventionDuration.Text.AsIntegerOrNull();
@@ -486,7 +487,8 @@ namespace RockWeb.Blocks.Finance
             nbOccasionalGiverLastGaveDays.IntegerValue = givingAutomationSetting.GivingJourneySettings.OccasionalGiverLastGaveDays;
             nbOccasionalGiverMeanFrequency.IntegerValue = givingAutomationSetting.GivingJourneySettings.OccasionalGiverMeanFrequency;
 
-            nbFormerGiverNoContributionThreshold.IntegerValue = givingAutomationSetting.GivingJourneySettings.FormerGiverNoContributionThreshold;
+            nbLapsedGiverNoGiftDays.IntegerValue = givingAutomationSetting.GivingJourneySettings.LapsedGiverNoGiftDays;
+            nbLapsedGiverMeanFrequency.IntegerValue = givingAutomationSetting.GivingJourneySettings.LapsedGiverMeanFrequency;
 
             nbGlobalRepeatPreventionDuration.Text = givingAutomationSetting.GivingAlertingSettings.GlobalRepeatPreventionDurationDays.ToStringSafe();
             nbGratitudeRepeatPreventionDuration.Text = givingAutomationSetting.GivingAlertingSettings.GratitudeRepeatPreventionDurationDays.ToStringSafe();

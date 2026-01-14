@@ -138,12 +138,19 @@
                             <hr />
                             <div class="row d-flex flex-wrap align-items-end align-items-md-center justify-content-center">
                                 <div class="col-xs-12 col-md-12 col-lg-2 font-weight-semibold mb-2 mb-md-0">
-                                    Infrequent Giver
+                                    Lapsed Giver
                                 </div>
-                                <div class="col-xs-12 col-md-8 col-lg-6">
+                                <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
+                                    <Rock:NumberBox ID="nbLapsedGiverNoGiftDays" runat="server" Label="No Gift Within" AppendText="days" Required="true" FormGroupCssClass="m-0" />
+                                </div>
+                                <div class="px-2 mb-3 mb-sm-4 mb-md-0 mt-md-4 text-center">
+                                    and
+                                </div>
+                                <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
+                                    <Rock:NumberBox ID="nbLapsedGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than" AppendText="days" Required="true" FormGroupCssClass="m-0" />
                                 </div>
                                 <div class="col-xs-12 col-md-4 text-sm text-muted">
-                                    Infrequent Givers are defined as having given in the past, and having a qualifying gift more recently than a Former Giver, but not meeting the New, Consistent, or Occasional criteria.
+                                    Lapsed Givers are defined as having given in the past, but not having a qualifying gift (within the number of days provided) and an average interval between gifts that is less than or equal to the number of days provided.
                                 </div>
                             </div>
                             <hr />
@@ -151,12 +158,10 @@
                                 <div class="col-xs-12 col-md-12 col-lg-2 font-weight-semibold mb-2 mb-md-0">
                                     Former Giver
                                 </div>
-                                <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
-                                    <Rock:NumberBox ID="nbFormerGiverNoContributionThreshold" runat="server" Label="No Contribution in the Last" AppendText="days" Required="true" FormGroupCssClass="m-0" />
+                                <div class="col-xs-12 col-md-8 col-lg-6">
                                 </div>
-                                <div class="col-xs-12 flex-sm-eq col-md-4"></div>
                                 <div class="col-xs-12 col-md-4 text-sm text-muted">
-                                    Former Givers are defined as having given in the past, but not having a qualifying gift within the number of days provided.
+                                    Former Givers are defined as having given in the past, but not meeting the criteria for any other classification.
                                 </div>
                             </div>
                         </div>
@@ -312,24 +317,28 @@
 
         <%-- Filter Change Confirmation Modal --%>
         <Rock:ModalDialog ID="mdFiltersChangedConfirm" runat="server" Title="Filters Changed" SaveButtonText="Confirm" OnSaveClick="mdFiltersChangedConfirm_SaveClick">
-            <Content>
-                <div class="alert alert-warning">
-                    <strong>You changed the Giving Automation transaction filters.</strong>
-                </div>
+        <Content>
+            <div class="alert alert-warning">
+                <strong>Giving Automation filters have been modified.</strong>
+            </div>
 
-                <p>
-                    Changing the <strong>Transaction Types</strong>, <strong>Accounts</strong>, or <strong>Include Child Accounts</strong> setting will mean that previously-computed giving automation attributes are no longer valid.
-                </p>
+            <p>
+                Changes to the <strong>Transaction Types</strong>, <strong>Accounts</strong>, or <strong>Include Child Accounts</strong> settings invalidate any previously calculated Giving Automation attributes.
+            </p>
 
-                <p>
-                    The next time the <strong>Giving Automation</strong> job runs, it will perform a full refresh to recompute attributes for <strong>all giving units</strong> using the new filters. This may take longer than normal.
-                </p>
+            <p>
+                When the <strong>Giving Automation</strong> job next runs, it will perform a full recalculation of <strong>all giving attributes defined within the job for all people</strong> using the updated filters. This operation may take significantly longer than a typical run.
+            </p>
 
-                <p>
-                    Are you sure you want to continue?
-                </p>
-            </Content>
-        </Rock:ModalDialog>
+            <p>
+                Because this action will overwrite existing computed values across the entire system, it is <strong>potentially destructive</strong> and should only be performed when you are confident the new filters are correct.
+            </p>
 
+            <p>
+                Do you want to proceed with these changes?
+            </p>
+        </Content>
+    </Rock:ModalDialog>
+    
     </ContentTemplate>
 </asp:UpdatePanel>

@@ -21,7 +21,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Data.Entity;
-using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -33,10 +32,10 @@ using Microsoft.EntityFrameworkCore;
 using Rock.Attribute;
 using Rock.Bus.Message;
 using Rock.Data;
-using Rock.Enums.Core;
 using Rock.Financial;
 using Rock.Model;
 using Rock.Tasks;
+using Rock.Utility;
 using Rock.Utility.Settings.Giving;
 using Rock.Web.Cache;
 
@@ -46,9 +45,7 @@ namespace Rock.Jobs
     /// Job that updates giving classifications, journey stages, and giving alerts.
     /// </summary>
     /*
-        1/11/2026 - MSE
-        
-        Giving Automation Job (refactored)
+        Giving Automation Job (refactored 01/2026)
 
         Summary:
             - Updates a total of 17 person attributes as part of Giving Automation.
@@ -59,7 +56,7 @@ namespace Rock.Jobs
                - Calculates per-giving-unit values and persists them to all people that share the same GivingId.
                - Statistical attributes are only updated when there is sufficient transaction history, and only
                  for GivingIds who have new transactions since the last classification job run.
-               - EXCEPTION: Bin and Percentile attributes are now updated through a centralized stored procedure,
+               - Note: Bin and Percentile attributes are now updated through a centralized stored procedure,
                  with a full explanation outlining this change provided in the procedure’s comments.
 
             2) Update Giving Journey Stage attributes (3).
@@ -133,7 +130,11 @@ namespace Rock.Jobs
                     DebugHelper.Enable();
                 }
 
-                var jobStartDateTime = context.Now;
+                var parallelOptions = new ParallelOptions
+                {
+                    // Set to half of the Processor Count. This seems to be the sweet spot for best performance without overwhelming the machine and slowing down IIS.
+                    MaxDegreeOfParallelism = Environment.ProcessorCount > 4 ? Environment.ProcessorCount / 2 : 1
+                };
 
                 context.CommandTimeout = GetAttributeValue( AttributeKey.CommandTimeout ).AsIntegerOrNull() ?? AttributeDefaultValue.CommandTimeout;
 
@@ -141,14 +142,30 @@ namespace Rock.Jobs
                 var lastClassificationRunDateTime = context.Settings.GivingClassificationSettings.LastRunDateTime ?? fallback;
                 var today = context.Now.DayOfWeek;
 
-                // Determine whether to run certain attribute updates today.
+                // Determine whether to update attribute values for classification attributes today.
                 var givingClassificationSettings = context.Settings?.GivingClassificationSettings;
                 var isClassificationUpdateDay = givingClassificationSettings?.RunDays == null || givingClassificationSettings.RunDays.Contains( today );
                 var isJourneyUpdateDay = context.Settings.GivingJourneySettings?.DaysToUpdateGivingJourneys?.Contains( today ) == true;
 
-                // If the Giving Automation job transaction filters have changed (Transaction Types, Accounts, Include Child Accounts), then
-                // previously computed attributes are stale. In that case, run classifications today and reprocess all giving ids
-                // by skipping the lastClassificationRunDateTime filter in GetDirtyGivingIds.
+                /*
+                     1/11/2026 - MSE
+
+                     When the transaction-related filters on the GivingAutomationConfiguration block change
+                     (Transaction Types, Accounts, or Include Child Accounts), any previously computed
+                     classification attribute values are considered invalid for all people.
+
+                     To prevent retaining invalid data, all Giving Ids are reprocessed using the updated
+                     transaction filter criteria. Without this reset, people would retain the values
+                     calculated using the old filters, while only new givers would receive values based on
+                     the updated filters, resulting in inconsistent data.
+
+                     We would be comparing apples to oranges...
+
+                     There are warnings set in the UI notifying administrators of this behavior.
+
+                     Reason: Changes to which transactions qualify for this job invalidate all previously
+                     computed classification attribute values.
+                */
                 var filtersChanged = context.Settings?.GivingClassificationSettings?.FiltersChanged == true;
                 if ( filtersChanged )
                 {
@@ -156,7 +173,7 @@ namespace Rock.Jobs
                     isJourneyUpdateDay = true;
                 }
 
-                // Identify GivingIds with new or modified transactions since the last time classifications was run
+                // Identify GivingIds with new or modified transactions since the last time classifications were run
                 var dirtyGivingIds = GetDirtyGivingIds( context, lastClassificationRunDateTime, filtersChanged );
                 var dirtyGivingIdsCount = dirtyGivingIds.Count;
 
@@ -165,13 +182,26 @@ namespace Rock.Jobs
                 var hasAlertTypes = context.AlertTypes.Any();
 
                 // Determine if there are any alert types that don't require sensitivity
-                // These can be processed even for givers without enough transaction history for statistical analysis
+                // These can be processed even for givers without enough transaction history over the past year.
                 bool hasAlertTypesWithoutSensitivity = hasAlertTypes && context.AlertTypes.Any( a => !a.FrequencySensitivityScale.HasValue && !a.AmountSensitivityScale.HasValue );
 
                 if ( isClassificationUpdateDay )
                 {
-                    this.UpdateLastStatusMessage( "Updating Giving Bins and Percentiles..." );
+                    /*
+                         1/11/2026 - MSE
 
+                         Giving bins and percentiles are recalculated for all people, not just those with
+                         new giving activity.
+
+                         Percentiles are relative to the entire giving distribution. When any person’s
+                         giving changes, the distribution shifts, which affects the percentile placement
+                         of everyone else. Updating only people with new transactions would allow others to
+                         retain stale and inflated values.
+
+                         Reason: Percentile and bin values must be recalculated globally to remain accurate
+                         as the overall giving amount distribution changes.
+                    */
+                    this.UpdateLastStatusMessage( "Updating Giving Bins and Percentiles..." );
                     try
                     {
                         GivingAutomationHelper.UpdateGivingBinsAndPercentiles();
@@ -196,215 +226,178 @@ namespace Rock.Jobs
                     }
                 }
 
-                this.UpdateLastStatusMessage( "Processing Giving Classifications and Alerts..." );
-
-                int batchSize = context.BatchSize;
-                for ( int i = 0; i < dirtyGivingIdsCount; i += batchSize )
+                if ( dirtyGivingIdsCount > 0 )
                 {
-                    int currentBatchSize = Math.Min( batchSize, dirtyGivingIdsCount - i );
-                    var batchIds = dirtyGivingIds.GetRange( i, currentBatchSize );
+                    int batchSize = dirtyGivingIdsCount > 500 ? 500 : dirtyGivingIdsCount;
 
-                    var twelveMonthsTransactionsByGivingId = GetTransactionsForBatch( context, batchIds );
-                    var twelveMonthsAlertsByGivingId = GetAlertsForBatch( context, batchIds );
-                    var eligibleGivingIdsByDataViewId = GetEligibleGivingIdsByDataViewIdForBatch( context, batchIds );
-                    var personsByGivingId = GetPersonsForBatch( context, batchIds );
-
-                    var batchSw = Stopwatch.StartNew();
-
-                    var parallelOptions = new ParallelOptions
+                    for ( int i = 0; i < dirtyGivingIdsCount; i += batchSize )
                     {
-                        // Set to half of the Processor Count. This seems to be the sweet spot for best performance without overwhelming the machine and slowing down IIS.
-                        MaxDegreeOfParallelism = Environment.ProcessorCount > 4 ? Environment.ProcessorCount / 2 : 1
-                    };
+                        int currentBatchSize = Math.Min( batchSize, dirtyGivingIdsCount - i );
+                        var batchIds = dirtyGivingIds.GetRange( i, currentBatchSize );
 
-                    var batchedUpdates = new ConcurrentBag<GivingUnitUpdate>();
+                        this.UpdateLastStatusMessage( $"Processing Giving Classifications and Alerts...{( dirtyGivingIdsCount > 500 ? $" {i + currentBatchSize}/{dirtyGivingIdsCount}" : "" )}" );
+                        var batchSw = Stopwatch.StartNew();
 
-                    Parallel.ForEach( batchIds, parallelOptions, givingId =>
-                    {
-                        Stopwatch threadSw = null;
+                        var twelveMonthsTransactionsByGivingId = GetTransactionsForBatch( context, batchIds );
+                        var twelveMonthsAlertsByGivingId = GetAlertsForBatch( context, batchIds );
+                        var eligibleGivingIdsByDataViewId = GetEligibleGivingIdsByDataViewIdForBatch( context, batchIds );
+                        var personsByGivingId = GetPersonsForBatch( context, batchIds );
+
+                        var batchAttributeValueUpdates = new ConcurrentDictionary<int, List<AttributeValueUpdate>>();
+
+                        Parallel.ForEach( batchIds, parallelOptions, givingId =>
+                        {
+                            Stopwatch threadSw = null;
+                            if ( context.DebugModeEnabled )
+                            {
+                                threadSw = Stopwatch.StartNew();
+                            }
+
+                            try
+                            {
+                                var twelveMonthsTransactions = twelveMonthsTransactionsByGivingId.GetValueOrNull( givingId ) ?? new List<FinancialTransactionView>();
+                                var twelveMonthsAlerts = twelveMonthsAlertsByGivingId.GetValueOrNull( givingId ) ?? new List<AlertView>();
+
+                                // If there are no transactions in the last 12 months, there is no basis to classify or alert.
+                                if ( !twelveMonthsTransactions.Any() )
+                                {
+                                    // If the transaction filters have changed and therefore this giving unit doesn't have
+                                    // any qualifying transactions in the last 12 months, clear their invalidated attributes.
+                                    if ( filtersChanged && isClassificationUpdateDay )
+                                    {
+                                        var personsForGivingId = personsByGivingId.GetValueOrNull( givingId ) ?? new List<Person>();
+                                        var attributeValueUpdates = CreateClearedAttributeValueUpdates( context.Now );
+
+                                        if ( personsForGivingId.Any() )
+                                        {
+                                            foreach ( var person in personsForGivingId )
+                                            {
+                                                batchAttributeValueUpdates.TryAdd( person.Id, attributeValueUpdates );
+                                            }
+                                        }
+                                    }
+
+                                    return;
+                                }
+
+                                var persons = personsByGivingId.GetValueOrNull( givingId );
+                                if ( persons == null || !persons.Any() )
+                                {
+                                    return;
+                                }
+
+                                var firstGiftDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE ).AsDateTime();
+                                var lastClassifiedDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE ).AsDateTime() ?? DateTime.MinValue;
+
+                                // If first gift date is missing, try to determine it.
+                                if ( !firstGiftDate.HasValue )
+                                {
+                                    using ( var rockContext = new RockContext() )
+                                    {
+                                        firstGiftDate = new FinancialTransactionService( rockContext )
+                                            .GetGivingAutomationSourceTransactionQueryByGivingId( givingId )
+                                            .Where( t => t.TransactionDateTime.HasValue )
+                                            .Min( t => t.TransactionDateTime );
+
+                                        // If first gift date was missing but now identified, persist it.
+                                        if ( firstGiftDate.HasValue )
+                                        {
+                                            var attributeValueUpdates = new List<AttributeValueUpdate>
+                                            {
+                                                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE.AsGuid(), firstGiftDate )
+                                            };
+
+                                            foreach ( var person in persons )
+                                            {
+                                                var updates = batchAttributeValueUpdates.GetOrAdd( person.Id, _ => new List<AttributeValueUpdate>( 16 ) );
+                                                updates.AddRange( attributeValueUpdates );
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // If the first gift date was less than 12 months ago and there are less than 5 gifts,
+                                // there is not enough data to develop any meaningful insights.
+                                var hasEnoughDataForClassification =
+                                    !( ( !firstGiftDate.HasValue || firstGiftDate.Value > context.OneYearAgo )
+                                        && twelveMonthsTransactions.Count < context.MinimumTransactionCountForClassifications );
+
+                                // ========================================
+                                // CALCULATE GIVING ATTRIBUTE VALUES
+                                // ========================================
+                                if ( isClassificationUpdateDay )
+                                {
+                                    var attributeValueUpdates = CalculateAttributesPerGivingId( context, twelveMonthsTransactions, hasEnoughDataForClassification );
+
+                                    foreach ( var person in persons )
+                                    {
+                                        var updates = batchAttributeValueUpdates.GetOrAdd( person.Id, _ => new List<AttributeValueUpdate>( 16 ) );
+                                        updates.AddRange( attributeValueUpdates );
+                                    }
+                                }
+
+                                // ========================================
+                                // GENERATE RECENT GIFT ALERTS
+                                // ========================================
+                                if ( hasAlertTypes && ( hasEnoughDataForClassification || hasAlertTypesWithoutSensitivity ) )
+                                {
+                                    if ( !hasAlertTypesWithoutSensitivity )
+                                    {
+                                        if ( lastClassifiedDate < context.OneWeekAgo )
+                                        {
+                                            return;
+                                        }
+                                    }
+
+                                    ProcessRecentTxnAlertsPerGivingId(
+                                        context,
+                                        givingId,
+                                        twelveMonthsTransactions,
+                                        twelveMonthsAlerts,
+                                        eligibleGivingIdsByDataViewId );
+                                }
+                            }
+                            catch ( Exception ex )
+                            {
+                                Interlocked.Increment( ref context.GivingUnitsFailed );
+                                AddError( context, $"Error processing GivingId '{givingId}'.", ex );
+                            }
+                            finally
+                            {
+                                Interlocked.Increment( ref context.GivingUnitsProcessed );
+
+                                if ( threadSw != null )
+                                {
+                                    threadSw.Stop();
+                                    DebugHelper.RecordProcessed( threadSw.ElapsedMilliseconds );
+                                }
+                            }
+                        } );
+
+                        batchSw.Stop();
                         if ( context.DebugModeEnabled )
                         {
-                            threadSw = Stopwatch.StartNew();
+                            DebugHelper.Write( $"Processed batch {( i / batchSize ) + 1} of {Math.Ceiling( ( double ) dirtyGivingIdsCount / batchSize )} in {batchSw.ElapsedMilliseconds} ms" );
                         }
 
-                        try
+                        // ========================================
+                        // SAVE ATTRIBUTE VALUES
+                        // ========================================
+                        var batchUpdatesToSave = batchAttributeValueUpdates.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => kvp.Value.Where( u => u.AttributeId > 0 ).ToList() );
+
+                        if ( batchUpdatesToSave.Any() )
                         {
-                            var twelveMonthsTransactions = twelveMonthsTransactionsByGivingId.GetValueOrNull( givingId ) ?? new List<FinancialTransactionView>();
-                            var twelveMonthsAlerts = twelveMonthsAlertsByGivingId.GetValueOrNull( givingId ) ?? new List<AlertView>();
-
-                            // If there are no transactions in the last 12 months, there is no basis to classify or alert.
-                            // This can occur if a GivingId is "dirty" due to a modified transaction outside the 12-month window,
-                            if ( !twelveMonthsTransactions.Any() )
-                            {
-                                // If filters changed, clear stale attributes only for giving units that no longer have
-                                // qualifying transactions in the last 12 months.
-                                if ( filtersChanged && isClassificationUpdateDay )
-                                {
-                                    var personsForGivingId = personsByGivingId.GetValueOrNull( givingId ) ?? new List<Person>();
-                                    var attributeUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-
-                                    batchedUpdates.Add( new GivingUnitUpdate
-                                    {
-                                        Persons = personsForGivingId,
-                                        AttributeUpdates = attributeUpdates
-                                    } );
-                                }
-
-                                return;
-                            }
-
-                            var persons = personsByGivingId.GetValueOrNull( givingId );
-                            if ( persons == null || !persons.Any() )
-                            {
-                                return;
-                            }
-
-                            var firstGiftDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE ).AsDateTime();
-                             // Fetch lastClassifiedDate here as it is used in both classification logic and alert logic
-                            var lastClassifiedDate = GetGivingUnitAttributeValue( persons, SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE ).AsDateTime() ?? DateTime.MinValue;
-
-                            if ( !firstGiftDate.HasValue )
-                            {
-                                using ( var rockContext = new RockContext() )
-                                {
-                                    firstGiftDate = new FinancialTransactionService( rockContext )
-                                        .GetGivingAutomationSourceTransactionQueryByGivingId( givingId )
-                                        .Where( t => t.TransactionDateTime.HasValue )
-                                        .Min( t => t.TransactionDateTime );
-
-                                    // If first gift date was missing but now identified, persist it.
-                                    if ( firstGiftDate.HasValue )
-                                    {
-                                        batchedUpdates.Add( new GivingUnitUpdate
-                                        {
-                                            Persons = persons,
-                                            AttributeUpdates = new List<AttributeUpdate>
-                                            {
-                                                GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE.AsGuid(), firstGiftDate )
-                                            }
-                                        } );
-                                    }
-                                }
-                            }
-
-                            // If the first gift date was less than 12 months ago and there are less than 5 gifts,
-                            // there is not enough data to develop any meaningful insights.
-                            var hasEnoughDataForClassification =
-                                !( ( !firstGiftDate.HasValue || firstGiftDate.Value > context.OneYearAgo )
-                                    && twelveMonthsTransactions.Count < context.MinimumTransactionCountForClassifications );
-
-                            // Only write classification attributes when there is enough data for meaningful statistics.
-                            var shouldProcessClassificationAttributes = isClassificationUpdateDay && hasEnoughDataForClassification;
-
-                            // If there isn't enough data for meaningful stats and there are no "no-sensitivity" alert types,
-                            // then there is nothing to do for this giving unit.
-                            //
-                            // Special case: if the filters changed, previously computed classification attributes are now considered stale,
-                            // since we're filtering transactions differently.
-                            var shouldSkipDueToInsufficientData = !hasEnoughDataForClassification && !hasAlertTypesWithoutSensitivity;
-                            if ( shouldSkipDueToInsufficientData )
-                            {
-                                if ( filtersChanged && isClassificationUpdateDay )
-                                {
-                                    // Since they don't have enough data for meaningful stats, clear their stale classification attributes.
-                                    var clearedAttributeUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-
-                                    batchedUpdates.Add( new GivingUnitUpdate
-                                    {
-                                        Persons = persons,
-                                        AttributeUpdates = clearedAttributeUpdates
-                                    } );
-                                }
-
-                                return;
-                            }
-
-                            // If we aren't writing classification attributes and there are no alert types to process, then there is nothing to do.
-                            var shouldProcessAlerts = hasAlertTypes && ( hasEnoughDataForClassification || hasAlertTypesWithoutSensitivity );
-                            if ( !shouldProcessClassificationAttributes && !shouldProcessAlerts )
-                            {
-                                return;
-                            }
-
-                            // ATTRIBUTE UPDATES
-                            if ( shouldProcessClassificationAttributes )
-                            {
-                                var attributeUpdates = CalculateAttributesPerGivingId( context, twelveMonthsTransactions );
-
-                                batchedUpdates.Add( new GivingUnitUpdate
-                                {
-                                    Persons = persons,
-                                    AttributeUpdates = attributeUpdates
-                                } );
-                            }
-                            else if ( filtersChanged && isClassificationUpdateDay && !hasEnoughDataForClassification )
-                            {
-                                // During a filter-change refresh, clear stale analytics attributes for giving units that do not have enough
-                                // qualifying transactions to calculate meaningful statistics.
-                                var clearedUpdates = GivingAutomationHelper.GetClearedAttributeUpdatesForNoRecentTransactions( context.Now );
-
-                                batchedUpdates.Add( new GivingUnitUpdate
-                                {
-                                    Persons = persons,
-                                    AttributeUpdates = clearedUpdates
-                                } );
-                            }
-
-                            // ALERT GENERATION
-                            if ( shouldProcessAlerts )
-                            {
-                                if ( !hasAlertTypesWithoutSensitivity )
-                                {
-                                    if ( lastClassifiedDate < context.OneWeekAgo )
-                                    {
-                                        return;
-                                    }
-                                }
-
-                                ProcessRecentTxnAlertsPerGivingId(
-                                    context,
-                                    givingId,
-                                    twelveMonthsTransactions,
-                                    twelveMonthsAlerts,
-                                    eligibleGivingIdsByDataViewId );
-                            }
-                        }
-                        catch ( Exception ex )
-                        {
-                            Interlocked.Increment( ref context.GivingUnitsFailed );
-                            AddError( context, $"Error processing GivingId '{givingId}'.", ex );
-                        }
-                        finally
-                        {
-                            Interlocked.Increment( ref context.GivingUnitsProcessed );
-
-                            if ( threadSw != null )
-                            {
-                                threadSw.Stop();
-                                DebugHelper.RecordProcessed( threadSw.ElapsedMilliseconds );
-                            }
-                        }
-                    } );
-
-                    SaveAttributeValuesForBatch( context, batchedUpdates );
-
-                    foreach ( var update in batchedUpdates )
-                    {
-                        if ( update.Persons != null && update.Persons.Any() )
-                        {
-                            GivingUnitWasClassifiedMessage.Publish( update.Persons.Select( p => p.Id ) );
+                            SaveAttributeValuesForBatch( context, batchUpdatesToSave );
+                            GivingUnitWasClassifiedMessage.Publish( batchUpdatesToSave.Keys.ToList() );
                         }
                     }
-
-                    batchSw.Stop();
-                    if ( context.DebugModeEnabled )
-                    {
-                        DebugHelper.Write( $"Processed batch {( i / batchSize ) + 1} of {Math.Ceiling( ( double ) dirtyGivingIdsCount / batchSize )} in {batchSw.ElapsedMilliseconds} ms" );
-                    }
-
-                    this.UpdateLastStatusMessage( $"Processing Giving Classifications and Alerts... {i + currentBatchSize}/{dirtyGivingIdsCount}" );
                 }
 
+                // ========================================
+                // GENERATE LATE GIFT ALERTS
+                // ========================================
                 if ( hasAlertTypes )
                 {
                     this.UpdateLastStatusMessage( "Processing late gift alerts..." );
@@ -420,7 +413,7 @@ namespace Rock.Jobs
 
                 if ( isClassificationUpdateDay )
                 {
-                    SaveLastClassificationsRunDateTime( context, jobStartDateTime );
+                    SaveLastClassificationsRunDateTime( context, context.Now );
                 }
 
                 if ( filtersChanged && context?.Settings?.GivingClassificationSettings != null )
@@ -602,9 +595,10 @@ namespace Rock.Jobs
             {
                 rockContext.Database.SetCommandTimeout( context.CommandTimeout );
 
-                var baseQuery = new FinancialTransactionService( rockContext ).GetGivingAutomationSourceTransactionQueryByGivingIds( givingIds, context.OneYearAgo );
+                var query = new FinancialTransactionService( rockContext ).GetGivingAutomationSourceTransactionQueryByGivingIds( givingIds );
+                query = query.Where( t => t.TransactionDateTime >= context.OneYearAgo );
 
-                var transactions = baseQuery
+                var transactions = query
                     .Select( t => new FinancialTransactionView
                     {
                         Id = t.Id,
@@ -707,6 +701,8 @@ namespace Rock.Jobs
                     if ( dataViewQuery != null )
                     {
                         var eligibleGivingIds = dataViewQuery
+                            // Don't have to worry about SQL parameter limits here since we're at most
+                            // using batches of 500.
                             .Where( gId => givingIds.Contains( gId ) )
                             .Distinct()
                             .ToList();
@@ -769,20 +765,20 @@ namespace Rock.Jobs
 
         #endregion Methods
 
-        #region Classification Attributes
+        #region Giving Classification Attributes
 
         /// <summary>
         /// Calculates the 14 Giving Automation attributes for the specified GivingId based on the provided transactions.
         /// </summary>
-        private static List<AttributeUpdate> CalculateAttributesPerGivingId( GivingAutomationContext context, List<FinancialTransactionView> transactions )
+        private static List<AttributeValueUpdate> CalculateAttributesPerGivingId( GivingAutomationContext context, List<FinancialTransactionView> transactions, bool calculateStatistics )
         {
             if ( transactions == null || transactions.Count == 0 )
             {
                 // Should not happen due to prior safeguards.
-                return new List<AttributeUpdate>();
+                return new List<AttributeValueUpdate>();
             }
 
-            var attributeUpdates = new List<AttributeUpdate>();
+            var attributeValueUpdates = new List<AttributeValueUpdate>();
 
             // PERSON_ERA_FIRST_GAVE
             // ^^^ This attribute is already handled within Execute(), since it must consider all transactions
@@ -790,22 +786,19 @@ namespace Rock.Jobs
 
             // PERSON_ERA_LAST_GAVE
             var lastGiftDate = transactions.Max( t => t.TransactionDateTime );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_ERA_LAST_GAVE.AsGuid(), lastGiftDate ) );
+            attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_ERA_LAST_GAVE.AsGuid(), lastGiftDate ) );
 
             // PERSON_GIVING_PERCENT_SCHEDULED
             var percentScheduled = GivingAutomationHelper.GetPercentScheduled( transactions );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PERCENT_SCHEDULED.AsGuid(), percentScheduled ) );
+            attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PERCENT_SCHEDULED.AsGuid(), percentScheduled ) );
 
             // PERSON_GIVING_PREFERRED_SOURCE
             var preferredSourceGuid = GivingAutomationHelper.GetPreferredSourceGuid( transactions );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_SOURCE.AsGuid(), preferredSourceGuid.ToStringSafe() ) );
+            attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_SOURCE.AsGuid(), preferredSourceGuid.ToStringSafe() ) );
 
             // PERSON_GIVING_PREFERRED_CURRENCY
             var preferredCurrencyGuid = GivingAutomationHelper.GetPreferredCurrencyGuid( transactions );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_CURRENCY.AsGuid(), preferredCurrencyGuid.ToStringSafe() ) );
-
-            // PERSON_GIVING_LAST_CLASSIFICATION_DATE
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE.AsGuid(), context.Now ) );
+            attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_CURRENCY.AsGuid(), preferredCurrencyGuid.ToStringSafe() ) );
 
             // PERSON_GIVING_AMOUNT_MEDIAN
             // PERSON_GIVING_AMOUNT_IQR
@@ -813,31 +806,33 @@ namespace Rock.Jobs
             // PERSON_GIVING_FREQUENCY_STD_DEV_DAYS
             // PERSON_GIVING_FREQUENCY_LABEL
             // PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE
-            if ( transactions.Count < context.MinimumTransactionCountForClassifications )
+            if ( calculateStatistics )
             {
-                attributeUpdates.AddRange( new List<AttributeUpdate>
-                {
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), string.Empty ),
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), string.Empty ),
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), string.Empty ),
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), string.Empty ),
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), string.Empty ),
-                    GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), string.Empty )
-                } );
+                var orderedTransactionDateTimes = transactions.Select( t => t.TransactionDateTime ).OrderBy( d => d ).ToList();
+                var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedTransactionDateTimes, context.TransactionWindowDurationHours );
+                var quartileRanges = GivingAutomationHelper.GetQuartileRanges( transactions.Select( t => t.TotalAmount ) );
 
-                return attributeUpdates;
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), frequencyStats.MeanDays ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), frequencyStats.StdDevDays ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), ( int ) frequencyStats.FrequencyLabel ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), frequencyStats.NextExpectedGiftDate ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), quartileRanges.MedianAmount ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), quartileRanges.IQRAmount ) );
+            }
+            else
+            {
+                // If we aren't calculating statistics (not enough transactions), we need to explicitly clear them
+                // to ensure we don't have stale data remaining on the person record.
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), string.Empty ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), string.Empty ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), string.Empty ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), string.Empty ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), string.Empty ) );
+                attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), string.Empty ) );
             }
 
-            var orderedTransactionDateTimes = transactions.Select( t => t.TransactionDateTime ).OrderBy( d => d ).ToList();
-            var frequencyStats = GivingAutomationHelper.GetFrequencyStats( orderedTransactionDateTimes, context.TransactionWindowDurationHours );
-            var quartileRanges = GivingAutomationHelper.GetQuartileRanges( transactions.Select( t => t.TotalAmount ) );
-
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), frequencyStats.MeanDays ) );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), frequencyStats.StdDevDays ) );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), ( int ) frequencyStats.FrequencyLabel ) );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), frequencyStats.NextExpectedGiftDate ) );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), quartileRanges.MedianAmount ) );
-            attributeUpdates.Add( GivingAttributeUpdate.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), quartileRanges.IQRAmount ) );
+            // PERSON_GIVING_LAST_CLASSIFICATION_DATE
+            attributeValueUpdates.Add( AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE.AsGuid(), context.Now ) );
 
             // PERSON_GIVING_BIN
             // PERSON_GIVING_PERCENTILE
@@ -848,17 +843,17 @@ namespace Rock.Jobs
             // They're handled separately due to their nature, because we need to consider
             // ALL GivingIds in the database for changes, not just the people who've given since last job run.
 
-            return attributeUpdates;
+            return attributeValueUpdates;
         }
 
         /// <summary>
-        /// Processes a batch of attribute updates by merging them into the database in a single transaction.
+        /// Processes all attribute value updates by merging them into the database in a single transaction.
         /// </summary>
         /// <param name="context">The job context.</param>
-        /// <param name="batchedUpdates">The collection of updates to process.</param>
-        private static void SaveAttributeValuesForBatch( GivingAutomationContext context, IEnumerable<GivingUnitUpdate> batchedUpdates )
+        /// <param name="updates">The dictionary of updates (Key: PersonId, Value: List of AttributeUpdate objects).</param>
+        private static void SaveAttributeValuesForBatch( GivingAutomationContext context, Dictionary<int, List<AttributeValueUpdate>> updates )
         {
-            if ( batchedUpdates == null || !batchedUpdates.Any() )
+            if ( updates == null || !updates.Any() )
             {
                 return;
             }
@@ -867,46 +862,11 @@ namespace Rock.Jobs
             {
                 rockContext.Database.SetCommandTimeout( context.CommandTimeout );
 
-                var dataTable = new DataTable();
-                dataTable.Columns.Add( "EntityId", typeof( int ) );
-                dataTable.Columns.Add( "AttributeId", typeof( int ) );
-                dataTable.Columns.Add( "Value", typeof( string ) );
-
-                foreach ( var givingUnitUpdate in batchedUpdates )
-                {
-                    if ( givingUnitUpdate.AttributeUpdates == null || !givingUnitUpdate.AttributeUpdates.Any() )
-                    {
-                        continue;
-                    }
-
-                    foreach ( var person in givingUnitUpdate.Persons )
-                    {
-                        foreach ( var update in givingUnitUpdate.AttributeUpdates )
-                        {
-                            if ( update.AttributeId <= 0 )
-                            {
-                                continue;
-                            }
-
-                            dataTable.Rows.Add( person.Id, update.AttributeId, update.Value ?? string.Empty );
-                        }
-                    }
-                }
-
-                if ( dataTable.Rows.Count == 0 )
-                {
-                    return;
-                }
-
-                var parameters = new SqlParameter( "@GivingUnitUpdates", SqlDbType.Structured )
-                {
-                    TypeName = "dbo.AttributeValueUpdates",
-                    Value = dataTable
-                };
+                var parameters = updates.ConvertToAttributeValueUpdateListParameter( "@GivingAttributeValueUpdates" );
 
                 rockContext.Database.ExecuteSqlCommand( @"
 MERGE INTO [AttributeValue] AS [Target]
-USING @GivingUnitUpdates AS [Source]
+USING @GivingAttributeValueUpdates AS [Source]
 ON [Target].[AttributeId] = [Source].[AttributeId] AND [Target].[EntityId] = [Source].[EntityId]
 WHEN MATCHED THEN
     UPDATE SET 
@@ -918,7 +878,7 @@ WHEN NOT MATCHED THEN
             }
         }
 
-        #endregion Classification Attributes
+        #endregion Giving Classification Attributes
 
         #region Recent Transaction Alerts
 
@@ -1495,23 +1455,11 @@ WHEN NOT MATCHED THEN
                     significantly in this case since we'll be doing the GroupBy in memory instead of having SQL
                     figure it out. 
                 */
-
                 var transactionsByGivingId = twelveMonthsTransactions
                     .GroupBy( t => t.AuthorizedPersonGivingId )
                     .ToDictionary(
                         g => g.Key,
                         g => g.OrderBy( t => t.TransactionDateTime ).ToList() );
-
-                var recentAlertsOfAlertTypeByGivingId = new Dictionary<string, List<AlertView>>();
-
-                /*
-                    1/11/2026 - MSE
-
-                    To avoid hitting SQL Server's 2100-parameter limit if the number of GivingIds is large,
-                    we do not use `query.Where(a => givingIds.Contains(a.GivingId))`. Instead, we materialize first 
-                    and filter in-memory when building the dictionary.
-                */
-                var givingIdSetForAlertType = new HashSet<string>( transactionsByGivingId.Keys );
 
                 var recentAlertsOfType = new FinancialTransactionAlertService( rockContext ).Queryable()
                     .AsNoTracking()
@@ -1524,6 +1472,9 @@ WHEN NOT MATCHED THEN
                         a.AlertTypeId
                     } )
                     .ToList();
+
+                var givingIdSetForAlertType = new HashSet<string>( transactionsByGivingId.Keys );
+                var recentAlertsOfAlertTypeByGivingId = new Dictionary<string, List<AlertView>>();
 
                 recentAlertsOfAlertTypeByGivingId = recentAlertsOfType
                     .Where( a => givingIdSetForAlertType.Contains( a.GivingId ) )
@@ -1852,6 +1803,30 @@ WHEN NOT MATCHED THEN
         }
 
         /// <summary>
+        /// Returns the attribute value updates to apply when a giving unit has no qualifying transactions in the last 12 months
+        /// (based on the current Giving Automation transaction filters).
+        /// </summary>
+        /// <remarks>
+        /// Intentionally does not clear <see cref="Rock.SystemGuid.Attribute.PERSON_ERA_FIRST_GAVE"/> or <see cref="Rock.SystemGuid.Attribute.PERSON_ERA_LAST_GAVE"/>.
+        /// </remarks>
+        internal static List<AttributeValueUpdate> CreateClearedAttributeValueUpdates( DateTime now )
+        {
+            return new List<AttributeValueUpdate>
+            {
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PERCENT_SCHEDULED.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_SOURCE.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_PREFERRED_CURRENCY.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_MEDIAN.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_AMOUNT_IQR.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_MEAN_DAYS.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_STD_DEV_DAYS.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_FREQUENCY_LABEL.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_NEXT_EXPECTED_GIFT_DATE.AsGuid(), string.Empty ),
+                AttributeValueUpdateFactory.Create( SystemGuid.Attribute.PERSON_GIVING_LAST_CLASSIFICATION_DATE.AsGuid(), now )
+            };
+        }
+
+        /// <summary>
         /// Adds an error message to the job context and logs the exception (if provided).
         /// </summary>
         /// <param name="context">The current job context.</param>
@@ -1873,22 +1848,6 @@ WHEN NOT MATCHED THEN
         #endregion Helper Methods
 
         #region DTOs
-
-        /// <summary>
-        /// Represents a batch of updates to be applied to a single giving unit (GivingId).
-        /// </summary>
-        private sealed class GivingUnitUpdate
-        {
-            /// <summary>
-            /// Gets or sets the people in the giving unit.
-            /// </summary>
-            public List<Person> Persons { get; set; }
-
-            /// <summary>
-            /// Gets or sets the attribute updates to apply to the people in the giving unit.
-            /// </summary>
-            public List<AttributeUpdate> AttributeUpdates { get; set; }
-        }
 
         /// <summary>
         /// Holds job-scoped state and configuration values used while executing the Giving Automation processing run.
@@ -1929,11 +1888,6 @@ WHEN NOT MATCHED THEN
             /// Gets or sets a value indicating whether debug mode is enabled for this run.
             /// </summary>
             public bool DebugModeEnabled { get; set; }
-
-            /// <summary>
-            /// Gets or sets the number of giving ids to process per batch.
-            /// </summary>
-            public int BatchSize { get; set; } = 100;
 
             /// <summary>
             /// Tracks the number of alerts created during this run (updated via <see cref="System.Threading.Interlocked"/>).

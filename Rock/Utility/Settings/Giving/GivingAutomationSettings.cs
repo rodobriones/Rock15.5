@@ -193,7 +193,7 @@ namespace Rock.Utility.Settings.Giving
         /// <remarks>
         /// This corresponds to <c>@NewGiverFirstGaveDays</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
         /// </remarks>
-        public int? NewGiverFirstGaveDays { get; set; } = 180;
+        public int? NewGiverFirstGaveDays { get; set; } = 150;
 
         /// <summary>
         /// Gets or sets the minimum number of qualifying gifts (within the 24-month analysis window) required to be classified as a New Giver.
@@ -235,7 +235,7 @@ namespace Rock.Utility.Settings.Giving
         /// <remarks>
         /// This corresponds to <c>@OccasionalGiverLastGaveDays</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
         /// </remarks>
-        public int? OccasionalGiverLastGaveDays { get; set; } = 180;
+        public int? OccasionalGiverLastGaveDays { get; set; } = 150;
 
         /// <summary>
         /// Gets or sets the maximum mean frequency (average days between gifts) for a giving unit to be classified as an Occasional Giver.
@@ -243,15 +243,23 @@ namespace Rock.Utility.Settings.Giving
         /// <remarks>
         /// This corresponds to <c>@OccasionalGiverMeanFrequency</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
         /// </remarks>
-        public int? OccasionalGiverMeanFrequency { get; set; } = 95;
+        public int? OccasionalGiverMeanFrequency { get; set; } = 94;
 
         /// <summary>
-        /// Gets or sets the number of days of inactivity after which a giving unit becomes a Former Giver.
+        /// Gets or sets the number of days of inactivity after which a giving unit becomes a Lapsed Giver.
         /// </summary>
         /// <remarks>
-        /// This corresponds to <c>@FormerGiverNoContributionThreshold</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
+        /// This corresponds to <c>@LapsedGiverNoGiftDays</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
         /// </remarks>
-        public int? FormerGiverNoContributionThreshold { get; set; } = 730;
+        public int? LapsedGiverNoGiftDays { get; set; } = 150;
+
+        /// <summary>
+        /// Gets or sets the mean frequency (average days between gifts) threshold for a giving unit to be classified as Lapsed.
+        /// </summary>
+        /// <remarks>
+        /// This corresponds to <c>@LapsedGiverMeanFrequency</c> in <c>spGivingAutomation_UpdateGivingJourneyStages</c>.
+        /// </remarks>
+        public int? LapsedGiverMeanFrequency { get; set; } = 100;
     }
 
     /// <summary>
