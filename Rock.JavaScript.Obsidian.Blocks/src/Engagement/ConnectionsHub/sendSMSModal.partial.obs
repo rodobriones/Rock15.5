@@ -6,7 +6,7 @@
         <TokenList isExpandable
                    :items="communicationRecipients ?? []">
             <template #item="{ item }">
-                <Token :tooltip="getRecipientTooltip(item)">
+                <Token :tooltip="getRecipientTooltip(item)" :tokenType="getRecipientTokenType(item)">
                     <img :src="item?.photoUrl ?? undefined" style="border-radius: 24px; width: 24px; height: 24px" />
                     <span class="item-content">{{ item.name }}</span>
                 </Token>
@@ -52,6 +52,16 @@
 
         // This recipient cannot receive SMS messages. Get the error.
         return `${recipient.name ?? "This recipient"} doesn't have a phone number with SMS enabled.`;
+    }
+
+    function getRecipientTokenType(recipient: CommunicationRecipientBag): "default" | "danger" {
+        if (!recipient || recipient.isSmsAllowed) {
+            // No tooltip when recipient is missing.
+            return "default";
+        }
+
+        // This recipient cannot receive SMS messages. Get the error.
+        return "danger";
     }
 
     watch(isVisible, () => {
