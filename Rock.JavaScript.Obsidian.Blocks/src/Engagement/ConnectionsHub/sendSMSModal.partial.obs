@@ -20,26 +20,23 @@
         <div class="row">
             <div class="col-sm-6">
                 <DropDownList v-model="smsFromSystemNumberGuidOrEmptyString"
-                            help="The number to originate message from (configured under Admin Tools > Communications > System Phone Numbers)."
-                            :items="smsFromSystemPhoneNumbers"
-                            label="From Phone"
-                            rules="required"
-                            :showBlankItem="false" />
+                              help="The number to originate message from (configured under Admin Tools > Communications > System Phone Numbers)."
+                              :items="smsFromSystemPhoneNumbers"
+                              label="From Phone"
+                              rules="required"
+                              :showBlankItem="false" />
             </div>
         </div>
-        <!-- <SmsMessageEditor v-model="smsMessage"
+
+        <SmsMessageEditor v-model="smsMessage"
                           :commonMergeFields="commonMergeFields"
-                          :disabled="disabled"
                           :editorHeight="210"
                           :isCharacterCountShown="true"
                           :mergeFields="['GlobalAttribute', 'Rock.Model.Person']"
                           rules="required"
-                          :shortLinkCheckToken="shortLinkCheckToken"
-                          :shortLinkGetPageId="shortLinkGetPageId"
-                          :shortLinkSites="shortLinkSites"
-                          toolbarLabel="Message" /> -->
+                          toolbarLabel="Message" />
 
-        <AttachmentPicker v-model="internalAttachments" />
+        <AttachmentPicker v-model="attachments" />
     </Modal>
 </template>
 
@@ -86,11 +83,21 @@
         (e: "close"): void;
     }>();
 
+    const commonMergeFields = [
+        "Person.FirstName^First Name|ti ti-user",
+        "Person.NickName^Nick Name|ti ti-user",
+        "Person.FullName^Full Name|ti ti-user",
+    ];
+
     // #region Values
 
+    // UI state
     const isVisible = useVModelPassthrough(props, "visible", emit);
+
+    // Communication state
+    const smsMessage = ref<string>("");
     const smsFromSystemNumberGuidOrEmptyString = ref<string>("");
-    const internalAttachments = ref<ListItemBag[]>([]);
+    const attachments = ref<ListItemBag[]>([]);
 
     // #endregion Values
 

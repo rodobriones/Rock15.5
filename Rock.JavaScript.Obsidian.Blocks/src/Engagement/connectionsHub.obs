@@ -218,7 +218,8 @@
                                @fetchPlacementGroupDetails="fetchPlacementGroupDetails" />
 
     <SendSMSModal v-model:visible="isSendSMSModalVisible"
-                  :communicationRecipients="communicationRecipients" />
+                  :communicationRecipients="communicationRecipients"
+                  :smsFromSystemPhoneNumbers="[]" />
     <SendEmailModal v-model:visible="isSendEmailModalVisible"
                     :selectedKeys="allSelectedKeys" />
 </template>
