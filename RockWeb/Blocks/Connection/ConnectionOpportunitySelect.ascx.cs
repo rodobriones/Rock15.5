@@ -23,6 +23,7 @@ using System.Linq;
 using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
@@ -87,6 +88,16 @@ namespace RockWeb.Blocks.Connection
     [Rock.SystemGuid.BlockTypeGuid( "23438CBC-105B-4ADB-8B9A-D5DDDCDD7643" )]
     public partial class ConnectionOpportunitySelect : Rock.Web.UI.RockBlock
     {
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        protected List<ConnectionTypeSummary> SummaryState { get; set; }
+
+        private ConnectionOpportunityService ConnectionOpportunityService => new ConnectionOpportunityService( new RockContext() );
+
+        #endregion Properties
+
         #region Keys
 
         /// <summary>
@@ -150,12 +161,6 @@ namespace RockWeb.Blocks.Connection
 </div>";
 
         #endregion Attribute Default values
-
-        #region Properties
-
-        protected List<ConnectionTypeSummary> SummaryState { get; set; }
-
-        #endregion Properties
 
         #region Base Control Methods
 
@@ -333,10 +338,28 @@ namespace RockWeb.Blocks.Connection
 
             if ( e.CommandName == "Select" )
             {
-                var queryParams = new Dictionary<string, string> { { PageParameterKey.ConnectionOpportunityId, selectedOpportunityId.ToString() } };
+                var queryParams = new Dictionary<string, string>();
+
+                var selectedOpportunityIdKey = ConnectionOpportunityService.GetNoTracking(
+                    selectedOpportunityId.ToString(),
+                    true
+                )?.IdKey ?? selectedOpportunityId.ToString();
+
+                if ( !string.IsNullOrEmpty( selectedOpportunityIdKey ) )
+                {
+                    queryParams[PageParameterKey.ConnectionOpportunityId] = selectedOpportunityIdKey;
+                }
+
                 if ( cpCampusFilter.SelectedCampusId.HasValue )
                 {
-                    queryParams.Add( PageParameterKey.CampusId, cpCampusFilter.SelectedCampusId.ToString() );
+                    var selectedCampusIdKey = CampusCache.Get(
+                        cpCampusFilter.SelectedCampusId.Value
+                    )?.IdKey ?? cpCampusFilter.SelectedCampusId.ToString();
+
+                    if ( !string.IsNullOrEmpty( selectedCampusIdKey ) )
+                    {
+                        queryParams[PageParameterKey.CampusId] = selectedCampusIdKey;
+                    }
                 }
 
                 NavigateToLinkedPage( AttributeKey.OpportunityDetailPage, queryParams );
