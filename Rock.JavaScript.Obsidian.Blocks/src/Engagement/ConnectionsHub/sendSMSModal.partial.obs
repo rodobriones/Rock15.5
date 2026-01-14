@@ -6,7 +6,7 @@
         <TokenList isExpandable
                    :items="communicationRecipients ?? []">
             <template #item="{ item }">
-                <Token>
+                <Token :tooltip="getRecipientTooltip(item)">
                     <img :src="item?.photoUrl ?? undefined" style="border-radius: 24px; width: 24px; height: 24px" />
                     <span class="item-content">{{ item.name }}</span>
                 </Token>
@@ -43,6 +43,16 @@
     const errorMessage = ref();
 
     const isVisible = useVModelPassthrough(props, "visible", emit);
+
+    function getRecipientTooltip(recipient: CommunicationRecipientBag): string {
+        if (!recipient || recipient.isSmsAllowed) {
+            // No tooltip when recipient is missing.
+            return "";
+        }
+
+        // This recipient cannot receive SMS messages. Get the error.
+        return `${recipient.name ?? "This recipient"} doesn't have a phone number with SMS enabled.`;
+    }
 
     watch(isVisible, () => {
         errorMessage.value = "";
