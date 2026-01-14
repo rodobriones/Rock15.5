@@ -41,11 +41,11 @@ namespace Rock.Blocks.Cms
     /// Displays a list of content channel items.
     /// </summary>
 
-    [DisplayName( "Content Item List" )]
+    [DisplayName( "Content Channel Item List" )]
     [Category( "CMS" )]
     [Description( "Displays a list of content channel items." )]
     [IconCssClass( "ti ti-list" )]
-    // [SupportedSiteTypes( Model.SiteType.Web )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     [ContextAware]
 
@@ -99,7 +99,8 @@ namespace Rock.Blocks.Cms
 
     [Rock.Cms.DefaultBlockRole( Rock.Enums.Cms.BlockRole.Secondary )]
     [Rock.SystemGuid.EntityTypeGuid( "5597badd-bb0e-4bcd-be1f-5acf230cf428" )]
-    [Rock.SystemGuid.BlockTypeGuid( "93dc73c4-545d-40b9-bfea-1cec04c07eb1" )]
+    [Rock.SystemGuid.BlockTypeGuid( "B995BE3F-A9EB-4A18-AE24-E93A8796AEDE" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "93dc73c4-545d-40b9-bfea-1cec04c07eb1" )]
     [CustomizedGrid]
     public class ContentChannelItemList : RockEntityListBlockType<ContentChannelItem>
     {
