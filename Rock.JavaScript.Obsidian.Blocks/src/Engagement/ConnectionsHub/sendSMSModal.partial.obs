@@ -3,7 +3,9 @@
     <Modal v-model="isVisible"
            title="Send SMS"
            saveText="Save">
-        <TokenList isExpandable
+        <TokenList label="Recipients"
+                   isExpandable
+                   rules="required"
                    :items="communicationRecipients ?? []">
             <template #item="{ item }">
                 <Token :tooltip="getRecipientTooltip(item)" :tokenType="getRecipientTokenType(item)">
@@ -12,16 +14,24 @@
                 </Token>
             </template>
         </TokenList>
+
+        <div v-if="smsNotAllowedMessage" class="text-danger">{{ smsNotAllowedMessage }}</div>
+
+        <TextBox :modelValue="''"
+                 label="Message"
+                 rules="required" />
     </Modal>
 </template>
 
 <script setup lang="ts">
-    import { ref, PropType, watch } from "vue";
+    import { ref, PropType, watch, computed } from "vue";
     import Modal from "@Obsidian/Controls/modal.obs";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
     import Token from "./token.partial.obs";
     import TokenList from "./tokenList.partial.obs";
+    import { Enumerable } from "@Obsidian/Utility/linq";
 
     const props = defineProps({
         visible: {
@@ -40,9 +50,27 @@
         (e: "close"): void;
     }>();
 
-    const errorMessage = ref();
+    // #region Values
 
     const isVisible = useVModelPassthrough(props, "visible", emit);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    const smsNotAllowedMessage = computed<string | null>(() => {
+        const count = Enumerable.from(props.communicationRecipients ?? []).count(cr => !cr.isSmsAllowed);
+
+        if (count === 0) {
+            return null;
+        }
+
+        return `${count.toLocaleString(undefined)} Recipients won't receive this SMS.`;
+    });
+
+    // #endregion Computed Values
+
+    // #region Functions
 
     function getRecipientTooltip(recipient: CommunicationRecipientBag): string {
         if (!recipient || recipient.isSmsAllowed) {
@@ -64,11 +92,15 @@
         return "danger";
     }
 
+    // #endregion Functions
+
+    // #region Watchers
+
     watch(isVisible, () => {
-        errorMessage.value = "";
         if (!isVisible.value) {
             emit("close");
         }
     });
 
+    // #endregion Watchers
 </script>
