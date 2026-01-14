@@ -48,6 +48,8 @@ namespace RockWeb.Blocks.Connection
     {
         #region Properties
 
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
         private List<Attribute> AttributesState { get; set; }
         private List<ConnectionActivityType> ActivityTypesState { get; set; }
         private List<ConnectionStatusState> StatusesState { get; set; }
@@ -57,7 +59,7 @@ namespace RockWeb.Blocks.Connection
 
         #endregion
 
-        #region ViewStateKeys
+        #region Keys
 
         private static class ViewStateKey
         {
@@ -69,7 +71,12 @@ namespace RockWeb.Blocks.Connection
             public const string ConnectionTypeAttributesStateJson = "ConnectionTypeAttributesStateJson";
         }
 
-        #endregion ViewStateKeys
+        private static class PageParameterKey
+        {
+            public const string ConnectionTypeId = "ConnectionTypeId";
+        }
+
+        #endregion Keys
 
         #region Control Methods
 
@@ -211,7 +218,12 @@ namespace RockWeb.Blocks.Connection
         {
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "ConnectionTypeId" ).AsInteger() );
+                var connectionTypeId = ConnectionTypeCache.Get(
+                    PageParameter( PageParameterKey.ConnectionTypeId ),
+                    IsAllowingPredictableIds
+                )?.Id ?? 0;
+
+                ShowDetail( connectionTypeId );
             }
 
             base.OnLoad( e );
@@ -239,7 +251,7 @@ namespace RockWeb.Blocks.Connection
                 ContractResolver = reducedViewStateResolver,
 
                 // Don't need to serialize fields that have null values, since they'll get initialized to null when deserialized.
-                NullValueHandling = NullValueHandling.Ignore, 
+                NullValueHandling = NullValueHandling.Ignore,
             };
 
             ViewState[ViewStateKey.AttributesStateJson] = RockJsonTextWriter.SerializeObjectInSimpleMode( AttributesState, Formatting.None, jsonSetting );
@@ -264,7 +276,11 @@ namespace RockWeb.Blocks.Connection
         {
             var breadCrumbs = new List<BreadCrumb>();
 
-            int? connectionTypeId = PageParameter( pageReference, "ConnectionTypeId" ).AsIntegerOrNull();
+            int? connectionTypeId = ConnectionTypeCache.Get(
+                    PageParameter( PageParameterKey.ConnectionTypeId ),
+                    IsAllowingPredictableIds
+                )?.Id ?? ( int? ) null;
+
             if ( connectionTypeId != null )
             {
                 ConnectionType connectionType = new ConnectionTypeService( new RockContext() ).Get( connectionTypeId.Value );
@@ -653,10 +669,14 @@ namespace RockWeb.Blocks.Connection
             }
             else
             {
-                string connectionTypeId = PageParameter( "ConnectionTypeId" );
-                if ( !string.IsNullOrWhiteSpace( connectionTypeId ) )
+                var connectionTypeId = ConnectionTypeCache.Get(
+                    PageParameter( PageParameterKey.ConnectionTypeId ),
+                    IsAllowingPredictableIds
+                )?.Id ?? 0;
+
+                if ( connectionTypeId != 0 )
                 {
-                    ShowDetail( connectionTypeId.AsInteger() );
+                    ShowDetail( connectionTypeId );
                 }
                 else
                 {
@@ -1662,7 +1682,7 @@ namespace RockWeb.Blocks.Connection
             connectionWorkflow.ConnectionTypeId = 0;
             connectionWorkflow.ManualTriggerFilterConnectionStatusId = rblConnectionStatuses.SelectedValueAsInt();
             connectionWorkflow.AppliesToAgeClassification = rblAppliesToAgeClassification.SelectedValue.AsIntegerOrNull().HasValue
-                ? (AppliesToAgeClassification)rblAppliesToAgeClassification.SelectedValue.AsInteger() : AppliesToAgeClassification.All;
+                ? ( AppliesToAgeClassification ) rblAppliesToAgeClassification.SelectedValue.AsInteger() : AppliesToAgeClassification.All;
             connectionWorkflow.IncludeDataViewId = dvpIncludeDataView.SelectedValueAsId();
             connectionWorkflow.ExcludeDataViewId = dvpExcludeDataView.SelectedValueAsId();
             if ( !connectionWorkflow.IsValid )
@@ -1735,13 +1755,13 @@ namespace RockWeb.Blocks.Connection
             {
                 wpWorkflowType.SetValue( connectionWorkflow.WorkflowTypeId );
                 ddlTriggerType.SelectedValue = connectionWorkflow.TriggerType.ConvertToInt().ToString();
-                rblAppliesToAgeClassification.SetValue( ( (int)connectionWorkflow.AppliesToAgeClassification ).ToString() );
+                rblAppliesToAgeClassification.SetValue( ( ( int ) connectionWorkflow.AppliesToAgeClassification ).ToString() );
                 dvpIncludeDataView.SetValue( connectionWorkflow.IncludeDataViewId );
                 dvpExcludeDataView.SetValue( connectionWorkflow.ExcludeDataViewId );
             }
             else
             {
-                rblAppliesToAgeClassification.SetValue( ( (int)AppliesToAgeClassification.All ).ToString() );
+                rblAppliesToAgeClassification.SetValue( ( ( int ) AppliesToAgeClassification.All ).ToString() );
                 dvpIncludeDataView.SetValue( null );
                 dvpExcludeDataView.SetValue( null );
             }
@@ -1881,7 +1901,7 @@ namespace RockWeb.Blocks.Connection
                     the first value is picked as the PrimaryQualifier since it is on the right of the first |, if the values are greater than 2
                     then the SecondaryQualifier is the third value since it is on the right side of the second |
                 */
-                
+
                 if ( connectionWorkflow != null )
                 {
                     if ( connectionWorkflow.TriggerType == ddlTriggerType.SelectedValueAsEnum<ConnectionWorkflowTriggerType>() )
@@ -2317,7 +2337,7 @@ namespace RockWeb.Blocks.Connection
                     connectionStatusAutomation.DataViewName = dataView.Name;
                 }
             }
-            else if( !dataViewId.HasValue )
+            else if ( !dataViewId.HasValue )
             {
                 connectionStatusAutomation.DataViewName = string.Empty;
             }
