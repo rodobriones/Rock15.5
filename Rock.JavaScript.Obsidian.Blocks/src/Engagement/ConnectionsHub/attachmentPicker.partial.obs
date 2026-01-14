@@ -1,0 +1,92 @@
+<template>
+    <TokenList :items="internalAttachmentListItemBags"
+               :disabled="disabled"
+               isAddable
+               isExpandable
+               label="Attachments"
+               @add="onOpenPopup">
+        <template #item="{ item }">
+            <Token isRemovable @remove="onRemove(item)">{{ item.text || '(file name unknown)' }}</Token>
+        </template>
+    </TokenList>
+
+    <NotificationBox v-if="attachmentErrorMessage" alertType="warning">
+        <strong><i class="ti ti-alert-triangle"></i> Warning </strong>
+        <span>{{ attachmentErrorMessage }}</span>
+    </NotificationBox>
+
+    <div ref="fileInputWrapper" class="d-none">
+        <FileUploader :disabled="disabled"
+                      :binaryFileTypeGuid="BinaryFiletype.CommunicationAttachment"
+                      @error="onAttachmentError"
+                      @update:modelValue="onAttachmentAdded" />
+    </div>
+</template>
+
+<script setup lang="ts">
+    import { PropType, ref } from "vue";
+    import Token from "./token.partial.obs";
+    import TokenList from "./tokenList.partial.obs";
+    import FileUploader from "@Obsidian/Controls/fileUploader.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import { BinaryFiletype } from "@Obsidian/SystemGuids/binaryFiletype";
+    import { useVModelPassthrough } from "@Obsidian/Utility/component";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
+    const props = defineProps({
+        modelValue: {
+            type: Array as PropType<ListItemBag[]>,
+            required: true
+        },
+
+        disabled: {
+            type: Boolean as PropType<boolean>,
+            default: false
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "update:modelValue", value: ListItemBag[]): void;
+    }>();
+
+    //#region Values
+
+    const internalAttachmentListItemBags = useVModelPassthrough(props, "modelValue", emit);
+    const attachmentErrorMessage = ref<string | null | undefined>();
+    const fileInputWrapper = ref<HTMLInputElement | undefined>();
+
+    //#endregion
+
+    //#region Event Handlers
+
+    function onAttachmentAdded(file: ListItemBag | undefined): void {
+        if (file) {
+            const allAttachments = [...internalAttachmentListItemBags.value];
+
+            allAttachments.push(file);
+
+            internalAttachmentListItemBags.value = allAttachments;
+        }
+    }
+
+    function onAttachmentError(error: string): void {
+        attachmentErrorMessage.value = error;
+    }
+
+    function onOpenPopup(): void {
+        attachmentErrorMessage.value = null;
+        if (fileInputWrapper.value) {
+            const group = fileInputWrapper.value.querySelector(".fileupload-group") as HTMLElement;
+            if (group) {
+                group.click();
+            }
+        }
+    }
+
+    function onRemove(item: ListItemBag): void {
+        const updatedAttachments = internalAttachmentListItemBags.value.filter(a => a.value !== item.value);
+        internalAttachmentListItemBags.value = updatedAttachments;
+    }
+
+    //#endregion
+</script>

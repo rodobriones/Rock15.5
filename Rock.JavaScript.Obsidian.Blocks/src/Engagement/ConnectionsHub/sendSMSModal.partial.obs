@@ -15,23 +15,54 @@
             </template>
         </TokenList>
 
-        <div v-if="smsNotAllowedMessage" class="text-danger">{{ smsNotAllowedMessage }}</div>
+        <div v-if="smsNotAllowedMessage" class="recipients-sms-error">{{ smsNotAllowedMessage }}</div>
 
-        <TextBox :modelValue="''"
-                 label="Message"
-                 rules="required" />
+        <div class="row">
+            <div class="col-sm-6">
+                <DropDownList v-model="smsFromSystemNumberGuidOrEmptyString"
+                            help="The number to originate message from (configured under Admin Tools > Communications > System Phone Numbers)."
+                            :items="smsFromSystemPhoneNumbers"
+                            label="From Phone"
+                            rules="required"
+                            :showBlankItem="false" />
+            </div>
+        </div>
+        <!-- <SmsMessageEditor v-model="smsMessage"
+                          :commonMergeFields="commonMergeFields"
+                          :disabled="disabled"
+                          :editorHeight="210"
+                          :isCharacterCountShown="true"
+                          :mergeFields="['GlobalAttribute', 'Rock.Model.Person']"
+                          rules="required"
+                          :shortLinkCheckToken="shortLinkCheckToken"
+                          :shortLinkGetPageId="shortLinkGetPageId"
+                          :shortLinkSites="shortLinkSites"
+                          toolbarLabel="Message" /> -->
+
+        <AttachmentPicker v-model="internalAttachments" />
     </Modal>
 </template>
 
+<style scoped>
+.recipients-sms-error {
+    color: var(--color-danger-strong);
+    margin-bottom: var(--spacing-medium);
+}
+</style>
+
 <script setup lang="ts">
-    import { ref, PropType, watch, computed } from "vue";
-    import Modal from "@Obsidian/Controls/modal.obs";
-    import { useVModelPassthrough } from "@Obsidian/Utility/component";
-    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
-    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import { PropType, watch, computed, ref } from "vue";
+    import AttachmentPicker from "./attachmentPicker.partial.obs";
     import Token from "./token.partial.obs";
     import TokenList from "./tokenList.partial.obs";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import SmsMessageEditor from "@Obsidian/Controls/smsMessageEditor.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { Enumerable } from "@Obsidian/Utility/linq";
+    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
     const props = defineProps({
         visible: {
@@ -41,6 +72,11 @@
 
         communicationRecipients: {
             type: Array as PropType<CommunicationRecipientBag[] | null | undefined>,
+            required: true
+        },
+
+        smsFromSystemPhoneNumbers: {
+            type: Array as PropType<ListItemBag[]>,
             required: true
         }
     });
@@ -53,6 +89,8 @@
     // #region Values
 
     const isVisible = useVModelPassthrough(props, "visible", emit);
+    const smsFromSystemNumberGuidOrEmptyString = ref<string>("");
+    const internalAttachments = ref<ListItemBag[]>([]);
 
     // #endregion Values
 

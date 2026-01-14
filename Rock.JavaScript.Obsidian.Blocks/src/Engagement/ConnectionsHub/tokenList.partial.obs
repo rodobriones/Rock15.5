@@ -5,7 +5,7 @@
                    :rules="rules"
                    :formGroupClasses="'rock-token-list ' + formGroupClasses">
         <div class="token-list-root">
-            <div class="token-list-main">
+            <div ref="mainRef" class="token-list-main">
                 <div ref="containerRef"
                      class="token-row"
                      v-show="!isExpanded && !isCollapsing">
@@ -35,15 +35,27 @@
                 </TransitionVerticalCollapse>
             </div>
 
-            <div ref="controlRef" class="token-list-control">
-                <RockButton v-show="isExpandable && (hiddenCount > 0 || isExpanded)"
-                            :aria-label="isExpanded ? 'Collapse' : 'Expand'"
-                            isSquare
-                            btnSize="sm"
-                            btnType="link"
-                            @click="isExpanded ? onCollapse() : onExpand()">
-                    <i :class="isExpanded ? 'ti ti-chevrons-up' : 'ti ti-chevrons-down'"></i>
-                </RockButton>
+            <div ref="controlRef" class="token-list-controls">
+                <div class="add-button">
+                    <RockButton v-show="isAddable"
+                                aria-label="Add"
+                                isSquare
+                                btnSize="sm"
+                                btnType="link"
+                                @click="onAdd">
+                        <i class="ti ti-square-plus"></i>
+                    </RockButton>
+                </div>
+                <div class="expand-button">
+                    <RockButton v-show="isExpandable && (hiddenCount > 0 || isExpanded)"
+                                :aria-label="isExpanded ? 'Collapse' : 'Expand'"
+                                isSquare
+                                btnSize="sm"
+                                btnType="link"
+                                @click="isExpanded ? onCollapse() : onExpand()">
+                        <i :class="isExpanded ? 'ti ti-chevrons-up' : 'ti ti-chevrons-down'"></i>
+                    </RockButton>
+                </div>
             </div>
 
             <div ref="measureRef" class="measure-row">
@@ -52,6 +64,12 @@
                         <Token>{{ item }}</Token>
                     </slot>
                 </template>
+
+                <div ref="measureOverflowRef" class="overflow-indicator">
+                    <Token>
+                        {{ props.items.length }} more
+                    </Token>
+                </div>
             </div>
         </div>
     </RockFormField>
@@ -81,12 +99,19 @@
     overflow: hidden;
 }
 
-.token-list-control {
+.token-list-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     align-self: start;
 }
 
-.token-list-control button {
+.expand-button .btn {
     color: var(--color-interface-strongest);
+}
+
+.add-button .btn {
+    color: var(--color-info-strong);
 }
 
 .token-row {
@@ -94,9 +119,9 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: var(--spacing-xsmall);
-    overflow: hidden;
     white-space: nowrap;
-    /* Add a minimum height when there is no item to display */
+
+    /* Add a minimum height when there is no item to display so the field doesn't collapse */
     min-height: var(--spacing-medium);
 }
 
@@ -146,6 +171,16 @@
         },
 
         /**
+         * Whether the add button should be shown.
+         *
+         * @remarks This button does not have any built-in behavior besides emitting the "add" event.
+         */
+        isAddable: {
+            type: Boolean as PropType<boolean>,
+            default: false
+        },
+
+        /**
          * Whether the button to expand/collapse should be shown
          * to allow the user to expand the list to show all items.
          */
@@ -154,6 +189,10 @@
             default: false
         }
     });
+
+    const emit = defineEmits<{
+        (e: "add"): void;
+    }>();
 
     const fieldProps = useStandardRockFormFieldProps(props);
 
@@ -168,6 +207,8 @@
     // The available space is then used to determine how many items can be shown
     // before needing to collapse the list.
     const containerRef = ref<HTMLElement | undefined>();
+    const mainRef = ref<HTMLElement | undefined>();
+    const measureOverflowRef = ref<HTMLElement | undefined>();
     const measureRef = ref<HTMLElement | undefined>();
     const overflowRef = ref<HTMLElement | undefined>();
     const controlRef = ref<HTMLElement | undefined>();
@@ -215,23 +256,36 @@
 
     // #region Functions
 
+    function getFlexGapPx(element: HTMLElement): number {
+        const style = getComputedStyle(element);
+        const gap = style.columnGap || style.gap;
+        return Number.parseFloat(gap) || 0;
+    }
+
     function calculateVisibleItems(): void {
         if (isExpanded.value) {
             visibleCount.value = props.items.length;
             return;
         }
 
+        const main = mainRef.value;
         const container = containerRef.value;
         const measure = measureRef.value;
-        if (!container || !measure) return;
+        if (!main || !container || !measure) {
+            return;
+        }
 
-        const indicatorWidth = isOverflowIndicatorShown.value
-            ? overflowRef.value?.offsetWidth ?? 0
-            : 0;
+        // Worst case overflow indicator width
+        const indicatorWidth = Math.max(
+            measureOverflowRef.value?.offsetWidth ?? 0,
+            overflowRef.value?.offsetWidth ?? 0
+        );
+
+        const gap = getFlexGapPx(container);
 
         const availableWidth = Math.max(
             0,
-            container.clientWidth - indicatorWidth
+            main.clientWidth - indicatorWidth - gap
         );
 
         let used = 0;
@@ -241,11 +295,14 @@
 
         for (let i = 0; i < children.length && count < props.items.length; i++) {
             const w = children[i].offsetWidth;
-            if (used + w > availableWidth) {
+
+            const gapWidth = count > 0 ? gap : 0;
+
+            if (used + gapWidth + w > availableWidth) {
                 break;
             }
 
-            used += w;
+            used += gapWidth + w;
             count++;
         }
 
@@ -266,6 +323,10 @@
         isExpanded.value = false;
         await nextTick();
         calculateVisibleItems();
+    }
+
+    function onAdd(): void {
+        emit("add");
     }
 
     // #endregion Event Handlers

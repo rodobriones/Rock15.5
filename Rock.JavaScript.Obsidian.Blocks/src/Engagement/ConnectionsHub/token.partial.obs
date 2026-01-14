@@ -3,9 +3,9 @@
          :class="{
             'token': true,
             [`token-${tokenType}`]: true,
-            'is-removable': removable,
-            'is-disabled': disabled
-        }"
+    'is-removable': isRemovable,
+    'is-disabled': disabled
+}"
          :data-original-title="tooltip"
          role="listitem"
          @click="onClick">
@@ -13,7 +13,7 @@
             <slot></slot>
         </div>
 
-        <button v-if="removable"
+        <button v-if="isRemovable"
                 class="token-remove"
                 type="button"
                 aria-label="Remove"
@@ -82,7 +82,7 @@
     import { tooltip as initializeTooltip } from "@Obsidian/Utility/tooltip";
 
     const props = defineProps({
-        removable: {
+        isRemovable: {
             type: Boolean,
             default: false
         },
