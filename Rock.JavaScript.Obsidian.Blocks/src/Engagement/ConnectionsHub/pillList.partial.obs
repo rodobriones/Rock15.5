@@ -4,7 +4,7 @@
                    v-bind="fieldProps"
                    :rules="rules"
                    :formGroupClasses="'rock-pill-list ' + formGroupClasses">
-        <div class="pill-list-root">
+        <div class="pill-list-root styled-scroll">
             <div ref="mainRef" class="pill-list-main">
                 <div ref="containerRef"
                      class="pill-row"
@@ -25,12 +25,14 @@
                 </div>
 
                 <TransitionVerticalCollapse @transitionStart="isExpandCollapsing = true" @transitionEnd="isExpandCollapsing = false">
-                    <div v-show="isExpanded" class="expanded-list">
-                        <template v-for="(item, index) in items" :key="index">
-                            <slot name="item" :item="item" :index="index">
-                                <Pill>{{ item }}</Pill>
-                            </slot>
-                        </template>
+                    <div v-show="isExpanded" class="expanded-container">
+                        <div class="expanded-list">
+                            <template v-for="(item, index) in items" :key="index">
+                                <slot name="item" :item="item" :index="index">
+                                    <Pill>{{ item }}</Pill>
+                                </slot>
+                            </template>
+                        </div>
                     </div>
                 </TransitionVerticalCollapse>
             </div>
@@ -123,6 +125,12 @@
 
     /* Add a minimum height when there is no item to display so the field doesn't collapse */
     min-height: var(--spacing-medium);
+}
+
+.expanded-container {
+    max-height: 250px; /* TODO JMH - adjust as needed */
+    overflow-y: auto;
+    padding-right: var(--spacing-xsmall);
 }
 
 .expanded-list {
