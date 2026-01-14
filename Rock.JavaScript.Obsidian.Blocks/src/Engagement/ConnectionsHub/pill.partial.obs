@@ -1,20 +1,20 @@
 <template>
     <div ref="tokenRef"
          :class="{
-            'token': true,
-            [`token-${tokenType}`]: true,
+            'pill': true,
+            [`pill-${tokenType}`]: true,
     'is-removable': isRemovable,
     'is-disabled': disabled
 }"
          :data-original-title="tooltip"
          role="listitem"
          @click="onClick">
-        <div class="token-content">
+        <div class="pill-content">
             <slot></slot>
         </div>
 
         <button v-if="isRemovable"
-                class="token-remove"
+                class="pill-remove"
                 type="button"
                 aria-label="Remove"
                 @click.stop="onRemove">
@@ -26,10 +26,10 @@
 </template>
 
 <style scoped>
-.token {
+.pill {
     display: inline-flex;
     align-items: center;
-    /* Don't allow a single token from getting truncated in the list */
+    /* Don't allow a single pill from getting truncated in the list */
     max-width: 100%;
     padding: var(--spacing-tiny) var(--spacing-xsmall);
     border-radius: 100px;
@@ -37,23 +37,23 @@
     background: var(--color-interface-softer);
     gap: var(--spacing-xsmall);
     white-space: nowrap;
-    /* Don't allow shrinking or growing so the parent TokenList can calculate widths correctly. */
+    /* Don't allow shrinking or growing so the parent PillList can calculate widths correctly. */
     flex: 0 0 auto;
 
     font-size: var(--font-size-small);
 }
 
-.token-danger {
+.pill-danger {
     background-color: var(--color-danger-soft);
     color: var(--color-danger-strong);
     border-color: 1px solid var(--color-danger-soft);
 }
 
-.token-default {
+.pill-default {
     background-color: var(--color-interface-softer);
     color: var(--color-interface-strongest);
 }
-.token-content {
+.pill-content {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xsmall);
@@ -62,7 +62,7 @@
     min-width: 0;
 }
 
-.token-remove {
+.pill-remove {
     border: none;
     background: none;
     cursor: pointer;
@@ -71,7 +71,7 @@
     line-height: 1;
 }
 
-.token.is-disabled {
+.pill.is-disabled {
     opacity: 0.5;
     pointer-events: none;
 }

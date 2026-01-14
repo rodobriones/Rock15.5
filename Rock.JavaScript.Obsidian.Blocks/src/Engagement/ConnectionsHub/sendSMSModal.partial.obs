@@ -3,17 +3,17 @@
     <Modal v-model="isVisible"
            title="Send SMS"
            saveText="Save">
-        <TokenList label="Recipients"
-                   isExpandable
-                   rules="required"
-                   :items="communicationRecipients ?? []">
+        <PillList label="Recipients"
+                  isExpandable
+                  rules="required"
+                  :items="communicationRecipients ?? []">
             <template #item="{ item }">
-                <Token :tooltip="getRecipientTooltip(item)" :tokenType="getRecipientTokenType(item)">
+                <Pill :tooltip="getRecipientTooltip(item)" :tokenType="getRecipientTokenType(item)">
                     <img :src="item?.photoUrl ?? undefined" style="border-radius: 24px; width: 24px; height: 24px" />
                     <span class="item-content">{{ item.name }}</span>
-                </Token>
+                </Pill>
             </template>
-        </TokenList>
+        </PillList>
 
         <div v-if="smsNotAllowedMessage" class="recipients-sms-error">{{ smsNotAllowedMessage }}</div>
 
@@ -50,8 +50,8 @@
 <script setup lang="ts">
     import { PropType, watch, computed, ref } from "vue";
     import AttachmentPicker from "./attachmentPicker.partial.obs";
-    import Token from "./token.partial.obs";
-    import TokenList from "./tokenList.partial.obs";
+    import Pill from "./pill.partial.obs";
+    import PillList from "./pillList.partial.obs";
     import Modal from "@Obsidian/Controls/modal.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import SmsMessageEditor from "@Obsidian/Controls/smsMessageEditor.obs";

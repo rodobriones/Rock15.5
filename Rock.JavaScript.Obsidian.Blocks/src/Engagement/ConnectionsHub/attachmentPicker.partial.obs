@@ -1,14 +1,14 @@
 <template>
-    <TokenList :items="internalAttachmentListItemBags"
-               :disabled="disabled"
-               isAddable
-               isExpandable
-               label="Attachments"
-               @add="onOpenPopup">
+    <PillList :items="internalAttachmentListItemBags"
+              :disabled="disabled"
+              isAddable
+              isExpandable
+              label="Attachments"
+              @add="onOpenPopup">
         <template #item="{ item }">
-            <Token isRemovable @remove="onRemove(item)">{{ item.text || '(file name unknown)' }}</Token>
+            <Pill isRemovable @remove="onRemove(item)">{{ item.text || '(file name unknown)' }}</Pill>
         </template>
-    </TokenList>
+    </PillList>
 
     <NotificationBox v-if="attachmentErrorMessage" alertType="warning">
         <strong><i class="ti ti-alert-triangle"></i> Warning </strong>
@@ -25,8 +25,8 @@
 
 <script setup lang="ts">
     import { PropType, ref } from "vue";
-    import Token from "./token.partial.obs";
-    import TokenList from "./tokenList.partial.obs";
+    import Pill from "./pill.partial.obs";
+    import PillList from "./pillList.partial.obs";
     import FileUploader from "@Obsidian/Controls/fileUploader.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import { BinaryFiletype } from "@Obsidian/SystemGuids/binaryFiletype";
