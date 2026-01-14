@@ -80,7 +80,7 @@
     display: grid;
     grid-template-columns: 1fr auto;
     column-gap: var(--spacing-xsmall);
-    align-items: start;
+    align-items: center;
     width: 100%;
 
     padding: var(--spacing-xsmall);
