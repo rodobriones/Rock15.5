@@ -65,12 +65,6 @@
                         </div>
                         <div class="d-block">
                             <hr />
-                            <div class="row">
-                                <div class="col-md-12 text-sm text-muted">
-                                    Mean frequency is calculated using qualifying transactions from the last 2 years.
-                                </div>
-                            </div>
-                            <hr />
                             <div class="row d-flex flex-wrap align-items-end align-items-md-center justify-content-center">
                                 <div class="col-xs-12 col-md-12 col-lg-2 font-weight-semibold mb-2 mb-md-0">
                                     Non-Giver
@@ -111,7 +105,7 @@
                                     and
                                 </div>
                                 <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
-                                    <Rock:NumberBox ID="nbConsistentGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than or Equal To" AppendText="days" Required="true" FormGroupCssClass="m-0" />
+                                    <Rock:NumberBox ID="nbConsistentGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than or Equal To" AppendText="days" Required="true" FormGroupCssClass="m-0" Help="Mean frequency is calculated using qualifying transactions from the last 2 years." />
                                 </div>
                                 <div class="col-xs-12 col-md-4 text-sm text-muted">
                                     Consistent Givers are defined as having a recent qualifying gift (within the number of days provided) and an average interval between gifts that is less than or equal to the number of days provided.
@@ -129,7 +123,7 @@
                                     and
                                 </div>
                                 <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
-                                    <Rock:NumberBox ID="nbOccasionalGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than or Equal To" AppendText="days" Required="true" FormGroupCssClass="m-0" />
+                                    <Rock:NumberBox ID="nbOccasionalGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than or Equal To" AppendText="days" Required="true" FormGroupCssClass="m-0" Help="Mean frequency is calculated using qualifying transactions from the last 2 years." />
                                 </div>
                                 <div class="col-xs-12 col-md-4 text-sm text-muted">
                                     Occasional Givers are defined as having a recent qualifying gift (within the number of days provided) and an average interval between gifts that is less than or equal to the number of days provided.
@@ -147,7 +141,7 @@
                                     and
                                 </div>
                                 <div class="col-xs-12 flex-sm-eq col-md-3 mb-3 mb-md-0">
-                                    <Rock:NumberBox ID="nbLapsedGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than" AppendText="days" Required="true" FormGroupCssClass="m-0" />
+                                    <Rock:NumberBox ID="nbLapsedGiverMeanFrequency" runat="server" Label="Mean Frequency Less Than" AppendText="days" Required="true" FormGroupCssClass="m-0" Help="Mean frequency is calculated using qualifying transactions from the last 2 years." />
                                 </div>
                                 <div class="col-xs-12 col-md-4 text-sm text-muted">
                                     Lapsed Givers are defined as having given in the past, but not having a qualifying gift (within the number of days provided) and an average interval between gifts that is less than or equal to the number of days provided.

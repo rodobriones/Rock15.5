@@ -529,6 +529,16 @@ namespace Rock.Model
                 accountIds = FinancialAccountCache.GetByGuids( settings.FinancialAccountGuids )
                     .Select( a => a.Id )
                     .ToList();
+
+                if ( settings.AreChildAccountsIncluded == true )
+                {
+                    var childIds = FinancialAccountCache
+                        .GetByIds( accountIds )
+                        .SelectMany( a => a.GetDescendentFinancialAccountIds() )
+                        .ToList();
+                    accountIds.AddRange( childIds );
+                    accountIds = accountIds.Distinct().ToList();
+                }
             }
             else
             {
@@ -546,22 +556,12 @@ namespace Rock.Model
                 isAllTaxDeductible = true;
 
                 // The list of account IDs must still be materialized because they are passed
-                // as a TVP to the stored procedure in GivingAutomationHelper.
+                // as a TVP to the stored procedures in GivingAutomationHelper.
                 accountIds = new FinancialAccountService( rockContext ).Queryable()
                     .AsNoTracking()
                     .Where( a => a.IsTaxDeductible )
                     .Select( a => a.Id )
                     .ToList();
-            }
-
-            if ( settings.AreChildAccountsIncluded == true )
-            {
-                var childIds = FinancialAccountCache
-                    .GetByIds( accountIds )
-                    .SelectMany( a => a.GetDescendentFinancialAccountIds() )
-                    .ToList();
-                accountIds.AddRange( childIds );
-                accountIds = accountIds.Distinct().ToList();
             }
 
             return ( transactionTypeIds, accountIds, isAllTaxDeductible );

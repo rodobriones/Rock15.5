@@ -9,7 +9,6 @@ CREATE OR ALTER PROCEDURE dbo.spGivingAutomation_UpdateGivingJourneyStages
     @ConsistentGiverMeanFrequency INT = 32,                 -- Max average days between gifts (last 2 years) to qualify for Consistent
     @OccasionalGiverLastGaveDays INT = 150,                 -- Maximum days since last gift to be considered Occasional/active but not consistent
     @OccasionalGiverMeanFrequency INT = 94,                 -- Max average days between gifts (last 2 years) to qualify for Occasional
-    @OccasionalGiverMeanFrequency INT = 94,                 -- Max average days between gifts (last 2 years) to qualify for Occasional
     @LapsedGiverNoGiftDays INT = 150,                       -- Minimum days without a gift to be considered for Lapsed
     @LapsedGiverMeanFrequency INT = 100                     -- Max average days between gifts (last 2 years) to qualify for Lapsed
 AS

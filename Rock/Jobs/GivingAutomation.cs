@@ -105,6 +105,12 @@ namespace Rock.Jobs
             public const int CommandTimeout = 180;
         }
 
+        private static class Icons
+        {
+            public const string SUCCESS_ICON = "<i class='ti ti-circle-filled text-success'></i> ";
+            public const string ERROR_ICON = "<i class='ti ti-circle-filled text-danger'></i> ";
+        }
+
         #endregion Keys
 
         #region Execute
@@ -389,8 +395,10 @@ namespace Rock.Jobs
 
                         if ( batchUpdatesToSave.Any() )
                         {
-                            SaveAttributeValuesForBatch( context, batchUpdatesToSave );
-                            GivingUnitWasClassifiedMessage.Publish( batchUpdatesToSave.Keys.ToList() );
+                            if ( SaveAttributeValuesForBatch( context, batchUpdatesToSave ) )
+                            {
+                                GivingUnitWasClassifiedMessage.Publish( batchUpdatesToSave.Keys.ToList() );
+                            }
                         }
                     }
                 }
@@ -425,11 +433,11 @@ namespace Rock.Jobs
                 DebugHelper.WriteFinalSummary( dirtyGivingIdsCount, context.GivingUnitsProcessed, context.GivingUnitsFailed, context.Errors.Count );
 
                 var sb = new StringBuilder();
-                sb.AppendLine( $"Processed {dirtyGivingIdsCount} giving units." );
-                sb.AppendLine( $"Created {context.AlertsCreated} alerts." );
+                sb.AppendLine( $"{Icons.SUCCESS_ICON}Processed {dirtyGivingIdsCount} giving units." );
+                sb.AppendLine( $"{Icons.SUCCESS_ICON}Created {context.AlertsCreated} alerts." );
                 if ( numberOfJourneysChanged.HasValue )
                 {
-                    sb.AppendLine( $"Updated {numberOfJourneysChanged.Value} journey stages." );
+                    sb.AppendLine( $"{Icons.SUCCESS_ICON}Updated {numberOfJourneysChanged.Value} journey stages." );
                 }
 
                 if ( context.Errors.Any() )
@@ -438,17 +446,18 @@ namespace Rock.Jobs
                     sb.AppendLine( "Errors:" );
                     foreach ( var error in context.Errors )
                     {
-                        sb.AppendLine( error );
+                        sb.AppendLine( $"{Icons.ERROR_ICON}{error}" );
                     }
                 }
 
-                this.Result = sb.ToString().Trim();
+                this.Result = sb.ToString().Trim().ConvertCrLfToHtmlBr();
             }
             catch ( Exception ex )
             {
                 ExceptionLogService.LogException( ex );
                 AddError( context, "Giving Automation failed with an exception.", ex );
-                this.Result = $"Giving Automation failed with an exception: {ex.Message}";
+                this.Result = $"{Icons.ERROR_ICON}Giving Automation failed with an exception: {ex.Message}";
+                throw;
             }
         }
 
@@ -851,20 +860,22 @@ namespace Rock.Jobs
         /// </summary>
         /// <param name="context">The job context.</param>
         /// <param name="updates">The dictionary of updates (Key: PersonId, Value: List of AttributeUpdate objects).</param>
-        private static void SaveAttributeValuesForBatch( GivingAutomationContext context, Dictionary<int, List<AttributeValueUpdate>> updates )
+        private static bool SaveAttributeValuesForBatch( GivingAutomationContext context, Dictionary<int, List<AttributeValueUpdate>> updates )
         {
             if ( updates == null || !updates.Any() )
             {
-                return;
+                return false;
             }
 
-            using ( var rockContext = new RockContext() )
+            try
             {
-                rockContext.Database.SetCommandTimeout( context.CommandTimeout );
+                using ( var rockContext = new RockContext() )
+                {
+                    rockContext.Database.SetCommandTimeout( context.CommandTimeout );
 
-                var parameters = updates.ConvertToAttributeValueUpdateListParameter( "@GivingAttributeValueUpdates" );
+                    var parameters = updates.ConvertToAttributeValueUpdateListParameter( "@GivingAttributeValueUpdates" );
 
-                rockContext.Database.ExecuteSqlCommand( @"
+                    rockContext.Database.ExecuteSqlCommand( @"
 MERGE INTO [AttributeValue] AS [Target]
 USING @GivingAttributeValueUpdates AS [Source]
 ON [Target].[AttributeId] = [Source].[AttributeId] AND [Target].[EntityId] = [Source].[EntityId]
@@ -875,6 +886,14 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
     INSERT ([IsSystem], [AttributeId], [EntityId], [Value], [Guid], [CreatedDateTime], [ModifiedDateTime])
     VALUES (0, [Source].[AttributeId], [Source].[EntityId], [Source].[Value], NEWID(), SYSDATETIME(), SYSDATETIME());", parameters );
+                }
+
+                return true;
+            }
+            catch ( Exception ex )
+            {
+                AddError( context, "Error when persisting attribute values.", ex );
+                return false;
             }
         }
 
