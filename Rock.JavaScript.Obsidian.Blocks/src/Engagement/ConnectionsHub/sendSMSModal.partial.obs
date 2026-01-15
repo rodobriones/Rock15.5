@@ -40,7 +40,7 @@
         <TransitionVerticalCollapse>
             <ButtonList v-if="areSnippetsShown"
                         :items="smsSnippets"
-                        @click="smsMessage += $event.value" />
+                        @click="onInsertSmsSnippet($event)" />
         </TransitionVerticalCollapse>
 
         <SmsMessageEditor v-model="smsMessage"
@@ -49,7 +49,11 @@
                           :isCharacterCountShown="true"
                           :mergeFields="['GlobalAttribute', 'Rock.Model.Person']"
                           rules="required"
-                          toolbarLabel="Message" />
+                          toolbarLabel="Message">
+            <template #plugins>
+                <InsertTextPlugin :insertTextRequest="insertTextRequest" />
+            </template>
+        </SmsMessageEditor>
 
         <AttachmentPicker v-model="attachments" />
     </Modal>
@@ -77,6 +81,7 @@
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
     import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import InsertTextPlugin from "./insertTextPlugin.partial.obs";
 
     const props = defineProps({
         visible: {
@@ -116,6 +121,7 @@
     // UI state
     const isVisible = useVModelPassthrough(props, "visible", emit);
     const areSnippetsShown = ref<boolean>(false);
+    const insertTextRequest = ref<{ text: string; } | null | undefined>();
 
     // Communication state
     const smsMessage = ref<string>("");
@@ -165,6 +171,14 @@
     }
 
     // #endregion Functions
+
+    // #region Event Handlers
+
+    function onInsertSmsSnippet(item: ListItemBag): void {
+        insertTextRequest.value = { text: item.value ?? "" };
+    }
+
+    // #endregion Event Handlers
 
     // #region Watchers
 
