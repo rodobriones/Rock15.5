@@ -608,6 +608,24 @@ namespace Rock.SystemGuid
         public const string CONNECTION_TYPES = "9CC19684-7AD2-4D4E-A7C4-10DAE56E7FA6";
 
         /// <summary>
+        /// Gets the Connections Opportunities page guid.
+        /// ParentPage: Connections
+        /// </summary>
+        public const string CONNECTIONS_OPPORTUNITIES = "";
+
+        /// <summary>
+        /// Gets the Connections Hub page guid.
+        /// ParentPage: Connections
+        /// </summary>
+        public const string CONNECTIONS_HUB = "";
+
+        /// <summary>
+        /// Gets the Connections Operational Snapshot page guid.
+        /// ParentPage: Connections
+        /// </summary>
+        public const string CONNECTIONS_OPERATIONAL_SNAPSHOT = "";
+
+        /// <summary>
         /// Gets the Contact Us page guid
         /// ParentPage: Connect
         /// </summary>
