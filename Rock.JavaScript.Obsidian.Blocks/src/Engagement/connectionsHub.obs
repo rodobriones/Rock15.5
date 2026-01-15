@@ -219,7 +219,9 @@
 
     <SendSMSModal v-model:visible="isSendSMSModalVisible"
                   :communicationRecipients="communicationRecipients"
-                  :smsFromSystemPhoneNumbers="[]" />
+                  :smsFromSystemPhoneNumbers="smsFromSystemPhoneNumbers"
+                  :smsSnippets="smsSnippets" />
+
     <SendEmailModal v-model:visible="isSendEmailModalVisible"
                     :selectedKeys="allSelectedKeys" />
 </template>
@@ -362,7 +364,10 @@
     const assignTo = ref();
     const allPossibleConnectors = ref(box.options?.allPossibleConnectors ?? []);
 
+    // SMS modal state
     const communicationRecipients = ref<CommunicationRecipientBag[] | null | undefined>();
+    const smsFromSystemPhoneNumbers = ref<ListItemBag[]>([]);
+    const smsSnippets = ref<ListItemBag[]>([]);
 
     // TODO Change items based on sequential mode.
     const actionItems = [
@@ -568,7 +573,8 @@
 
     async function getCommunicationRecipients(): Promise<HttpResult<GetCommunicationRecipientsResponseBag>> {
         const bag: GetCommunicationRecipientsRequestBag = {
-            connectionRequestIdKeys: allSelectedKeys.value
+            connectionRequestIdKeys: allSelectedKeys.value,
+            connectionTypeIdKey: box.options?.connectionTypeIdKey
         };
 
         const result = await invokeBlockAction<GetCommunicationRecipientsResponseBag>("GetCommunicationRecipients", {
@@ -583,12 +589,16 @@
 
         if (result.isSuccess && result.data?.communicationRecipients?.length) {
             communicationRecipients.value = result.data.communicationRecipients;
+            smsFromSystemPhoneNumbers.value = result.data.smsFromSystemPhoneNumbers ?? [];
+            smsSnippets.value = result.data.smsSnippets ?? [];
             isSendSMSModalVisible.value = true;
         }
         else {
             console.error(result.errorMessage);
             // TODO - Show error message to user
             communicationRecipients.value = null;
+            smsFromSystemPhoneNumbers.value = [];
+            smsSnippets.value = [];
             isSendSMSModalVisible.value = false;
         }
     }

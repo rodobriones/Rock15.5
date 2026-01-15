@@ -841,9 +841,14 @@ namespace Rock.Blocks.Engagement
                 return ActionBadRequest( "Request is required" );
             }
 
+            if ( bag.ConnectionTypeIdKey.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "Connection Type is required" );
+            }
+
             if ( bag.ConnectionRequestIdKeys == null )
             {
-                return ActionBadRequest( "Connection Request Ids are required" );
+                return ActionBadRequest( "Connection Requests are required" );
             }
 
             // Convert the connection request id keys to ids so we can query them.
@@ -856,7 +861,7 @@ namespace Rock.Blocks.Engagement
             var connectionRequestService = new ConnectionRequestService( RockContext );
             var mobilePhoneDefinedValueId = DefinedValueCache.GetId( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid() );
             var personalDeviceQuery = new PersonalDeviceService( RockContext ).Queryable().AsNoTracking();
-
+            
             var communicationRecipients = connectionRequestService
                 .GetByIds( connectionRequestIds )
                 .AsNoTracking()
@@ -889,9 +894,48 @@ namespace Rock.Blocks.Engagement
                 } )
                 .ToList();
 
+            var currentPerson = GetCurrentPerson();
+            var currentPersonAliasIds = currentPerson?.Aliases?.Select( a => a.Id ).ToList() ?? new List<int>();
+            var smsFromSystemPhoneNumbers = SystemPhoneNumberCache
+                    .All( includeInactive: false )
+                    .Where( spn => spn.IsAuthorized( Authorization.VIEW, currentPerson ) )
+                    .OrderByDescending( spn => spn.AssignedToPersonAliasId.HasValue && currentPersonAliasIds.Contains( spn.AssignedToPersonAliasId.Value ) )
+                    .ThenBy( spn => spn.Order )
+                    .ThenBy( spn => spn.Name )
+                    .ThenBy( spn => spn.Id )
+                    .ToListItemBagList();
+
+            var snippetTypeGuid = SystemGuid.SnippetType.SMS.AsGuid();
+            var smsSnippetTypeId = new SnippetTypeService( RockContext )
+                .Queryable()
+                .Where( st => st.Guid == snippetTypeGuid )
+                .Select( st => ( int? ) st.Id )
+                .FirstOrDefault();
+            var snippetCategoryId = new ConnectionTypeService( RockContext )
+                .GetQueryableByKey( bag.ConnectionTypeIdKey )
+                .Select( ct => ( int? ) ct.SnippetCategoryId )
+                .FirstOrDefault();
+            var smsSnippets = new SnippetService( RockContext )
+                .GetAuthorizedSnippets(
+                    currentPerson,
+                    s => s.SnippetTypeId == smsSnippetTypeId
+                        && ( !snippetCategoryId.HasValue || s.CategoryId == snippetCategoryId.Value )
+                )
+                .OrderBy( s => s.Order )
+                .ThenBy( s => s.Name )
+                .ThenBy( s => s.Id )
+                .Select( s => new ListItemBag
+                {
+                    Text = s.Name,
+                    Value = s.Content
+                } )
+                .ToList();
+
             return ActionOk( new GetCommunicationRecipientsResponseBag
             {
-                CommunicationRecipients = communicationRecipients
+                CommunicationRecipients = communicationRecipients,
+                SmsFromSystemPhoneNumbers = smsFromSystemPhoneNumbers,
+                SmsSnippets = smsSnippets
             } );
         }
 

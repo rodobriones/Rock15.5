@@ -27,6 +27,11 @@ namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
     public class GetCommunicationRecipientsRequestBag
     {
         /// <summary>
+        /// Gets or sets the communication type ID key associated with the selected connection requests being sent an SMS communication.
+        /// </summary>
+        public string ConnectionTypeIdKey { get; set; }
+
+        /// <summary>
         /// Gets or sets the list of connection request ID keys to retrieve communication recipients for.
         /// </summary>
         /// <value>Each request is associated with a single person. These identifiers are used to find the people who will be sent the communication.</value>

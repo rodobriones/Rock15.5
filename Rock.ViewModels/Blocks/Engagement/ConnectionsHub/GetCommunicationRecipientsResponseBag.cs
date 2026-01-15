@@ -17,6 +17,8 @@
 
 using System.Collections.Generic;
 
+using Rock.ViewModels.Utility;
+
 namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
 {
     /// <summary>
@@ -28,5 +30,15 @@ namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
         /// Gets or sets the collection of recipients for the communication.
         /// </summary>
         public List<CommunicationRecipientBag> CommunicationRecipients { get; set; }
+
+        /// <summary>
+        /// Gets or sets the SMS From numbers that can be selected for sending the SMS communication.
+        /// </summary>
+        public List<ListItemBag> SmsFromSystemPhoneNumbers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the SMS snippets that can be selected for the SMS communication.
+        /// </summary>
+        public List<ListItemBag> SmsSnippets { get; set; }
     }
 }

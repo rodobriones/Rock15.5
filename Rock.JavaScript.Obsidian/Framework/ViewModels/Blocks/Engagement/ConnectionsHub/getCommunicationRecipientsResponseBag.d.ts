@@ -22,9 +22,16 @@
 //
 
 import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
 /** Represents a response from retrieving communication recipients for a set of connection requests using a specified communication type. */
 export type GetCommunicationRecipientsResponseBag = {
     /** Gets or sets the collection of recipients for the communication. */
     communicationRecipients?: CommunicationRecipientBag[] | null;
+
+    /** Gets or sets the SMS From numbers that can be selected for sending the SMS communication. */
+    smsFromSystemPhoneNumbers?: ListItemBag[] | null;
+
+    /** Gets or sets the SMS snippets that can be selected for the SMS communication. */
+    smsSnippets?: ListItemBag[] | null;
 };

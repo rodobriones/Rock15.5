@@ -25,4 +25,7 @@
 export type GetCommunicationRecipientsRequestBag = {
     /** Gets or sets the list of connection request ID keys to retrieve communication recipients for. */
     connectionRequestIdKeys?: string[] | null;
+
+    /** Gets or sets the communication type ID key associated with the selected connection requests being sent an SMS communication. */
+    connectionTypeIdKey?: string | null;
 };

@@ -28,6 +28,21 @@
             </div>
         </div>
 
+
+        <div class="row">
+            <div class="col-sm-12">
+                <RockButton btnType="link"
+                            class="text-small"
+                            @click="areSnippetsShown = !areSnippetsShown">{{ showHideSnippetsText }}<i :class="areSnippetsShown ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i></RockButton>
+            </div>
+        </div>
+
+        <TransitionVerticalCollapse>
+            <ButtonList v-if="areSnippetsShown"
+                        :items="smsSnippets"
+                        @click="smsMessage += $event.value" />
+        </TransitionVerticalCollapse>
+
         <SmsMessageEditor v-model="smsMessage"
                           :commonMergeFields="commonMergeFields"
                           :editorHeight="210"
@@ -50,12 +65,14 @@
 <script setup lang="ts">
     import { PropType, watch, computed, ref } from "vue";
     import AttachmentPicker from "./attachmentPicker.partial.obs";
+    import ButtonList from "./buttonList.partial.obs";
     import Pill from "./pill.partial.obs";
     import PillList from "./pillList.partial.obs";
+    import TransitionVerticalCollapse from "@Obsidian/Controls/transitionVerticalCollapse.obs";
     import Modal from "@Obsidian/Controls/modal.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
     import SmsMessageEditor from "@Obsidian/Controls/smsMessageEditor.obs";
-    import TextBox from "@Obsidian/Controls/textBox.obs";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { Enumerable } from "@Obsidian/Utility/linq";
     import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
@@ -73,6 +90,11 @@
         },
 
         smsFromSystemPhoneNumbers: {
+            type: Array as PropType<ListItemBag[]>,
+            required: true
+        },
+
+        smsSnippets: {
             type: Array as PropType<ListItemBag[]>,
             required: true
         }
@@ -93,6 +115,7 @@
 
     // UI state
     const isVisible = useVModelPassthrough(props, "visible", emit);
+    const areSnippetsShown = ref<boolean>(false);
 
     // Communication state
     const smsMessage = ref<string>("");
@@ -102,6 +125,10 @@
     // #endregion Values
 
     // #region Computed Values
+
+    const showHideSnippetsText = computed<string>(() => {
+        return areSnippetsShown.value ? "Hide Snippets" : "Show Snippets";
+    });
 
     const smsNotAllowedMessage = computed<string | null>(() => {
         const count = Enumerable.from(props.communicationRecipients ?? []).count(cr => !cr.isSmsAllowed);
