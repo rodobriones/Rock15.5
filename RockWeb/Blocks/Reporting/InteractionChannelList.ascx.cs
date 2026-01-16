@@ -49,7 +49,7 @@ namespace RockWeb.Blocks.Reporting
         IsRequired = false,
         Order = 2,
         DefaultValue = @"{% if InteractionChannel != null and InteractionChannel != '' %}
-    <a href='{% if InteractionChannel.UsesSession == true %}{{ SessionListPage }}{% else %}{{ ComponentListPage }}{% endif %}?ChannelId={{ InteractionChannel.Id }}'>
+    <a href='{% if InteractionChannel.UsesSession == true %}{{ SessionListPage }}{% else %}{{ ComponentListPage }}{% endif %}?ChannelId={{ InteractionChannel.IdKey }}'>
         <div class='panel panel-widget collapsed'>
             <div class='panel-heading clearfix'>
                 {% if InteractionChannel.Name != '' %}<h1 class='panel-title pull-left'>{{ InteractionChannel.Name }}</h1>{% endif %}
@@ -74,6 +74,25 @@ namespace RockWeb.Blocks.Reporting
         private const string INCLUDE_INACTIVE_FILTER = "Include Inactive";
 
         #endregion
+
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        private PersonService PersonService => new PersonService( new RockContext() );
+        private PersonAliasService PersonAliasService => new PersonAliasService( new RockContext() );
+
+        #endregion Properties
+
+        #region Keys
+
+        private static class PageParameterKey
+        {
+            public const string PersonId = "PersonId";
+            public const string PersonAliasId = "PersonAliasId";
+        }
+
+        #endregion Keys
 
         #region Base Control Methods
 
@@ -261,8 +280,14 @@ namespace RockWeb.Blocks.Reporting
         /// </summary>
         private int? GetPersonId()
         {
-            int? personId = PageParameter( "PersonId" ).AsIntegerOrNull();
-            if ( !personId.HasValue )
+            int? personId = PersonService.GetQueryableByKey(
+                PageParameter( PageParameterKey.PersonId ),
+                IsAllowingPredictableIds
+            )
+            .Select( p => (int?)p.Id )
+            .FirstOrDefault();
+
+            if ( !personId.HasValue)
             {
                 var person = ContextEntity<Person>();
                 if ( person != null )
@@ -273,8 +298,14 @@ namespace RockWeb.Blocks.Reporting
 
 			if ( !personId.HasValue )
 			{
-	            int? personAliasId = PageParameter( "PersonAliasId" ).AsIntegerOrNull();
-	            if ( personAliasId.HasValue )
+	            int? personAliasId = PersonAliasService.GetQueryableByKey(
+                    PageParameter( PageParameterKey.PersonAliasId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( pa => (int?)pa.Id )
+                .FirstOrDefault();
+
+                if ( personAliasId.HasValue )
 	            {
 	                personId = new PersonAliasService( new RockContext() ).GetPersonId( personAliasId.Value );
 	            }
