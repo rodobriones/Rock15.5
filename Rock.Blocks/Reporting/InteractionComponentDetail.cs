@@ -52,6 +52,14 @@ namespace Rock.Blocks.Reporting
     [Rock.SystemGuid.BlockTypeGuid( "bc2034d1-416b-4fb4-9fff-e202fa666203" )]
     public class InteractionComponentDetail : RockBlockType
     {
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        private InteractionComponentService InteractionComponentService => new InteractionComponentService( new RockContext() );
+
+        #endregion Properties
+
         #region Keys
 
         private static class AttributeKey
@@ -118,8 +126,11 @@ namespace Rock.Blocks.Reporting
         /// </summary>
         private InteractionComponentDetailInitializationBox GetInitializationBox()
         {
-            var interactionId = PageParameter( PageParameterKey.ComponentId ).AsInteger();
-            var interactionComponent = new InteractionComponentService( RockContext ).Get( interactionId );
+            var interactionComponent = InteractionComponentService.Get(
+                PageParameter( PageParameterKey.ComponentId ),
+                IsAllowingPredictableIds
+                ) ?? null;
+
             var box = new InteractionComponentDetailInitializationBox();
 
             if ( interactionComponent != null )
@@ -166,12 +177,18 @@ namespace Rock.Blocks.Reporting
         private IEntity GetComponentEntity( RockContext rockContext, InteractionComponent interactionComponent )
         {
             IEntity componentEntity = null;
+            if ( interactionComponent != null )
+            {
+                if ( interactionComponent.EntityId.HasValue && interactionComponent.InteractionChannel.ComponentEntityTypeId.HasValue )
+                {
             var componentEntityType = EntityTypeCache.Get( interactionComponent.InteractionChannel.ComponentEntityTypeId.Value ).GetEntityType();
             IService serviceInstance = Reflection.GetServiceForEntityType( componentEntityType, rockContext );
             if ( serviceInstance != null )
             {
                 System.Reflection.MethodInfo getMethod = serviceInstance.GetType().GetMethod( "Get", new Type[] { typeof( int ) } );
                 componentEntity = getMethod.Invoke( serviceInstance, new object[] { interactionComponent.EntityId.Value } ) as Rock.Data.IEntity;
+                    }
+                }
             }
 
             return componentEntity;
