@@ -760,7 +760,9 @@
 </script>
 
 <script id="js-template-card" type="text/template">
-    <div class="board-card js-board-card" data-request-id="{{Id}}" data-opportunity-id="{{ConnectionOpportunityId}}">
+    <div class="board-card js-board-card" data-request-id-key="{{IdKey}}" data-opportunity-id-key="{{ConnectionOpportunityIdKey}}">
+        <input type="hidden" class="hf-data-request-id" value="{{Id}}">
+        <input type="hidden" class="hf-data-request-connection-opportunity-id" value="{{ConnectionOpportunityId}}">
         <div class="board-card-content js-board-card-content">
             <div class="board-card-header">
                 {{StatusIconsHtml}}

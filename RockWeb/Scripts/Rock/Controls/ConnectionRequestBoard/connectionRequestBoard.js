@@ -113,9 +113,9 @@
         const fetchStatusViewModels = function (options, callback) {
             const url = getStatusViewModelsApiUrl(options.connectionOpportunityId);
             // Update the query string with the opportunity id and parameter.
-            updateConnectionQuerystringParameters("ConnectionOpportunityId", options.connectionOpportunityId, false);
+            updateConnectionQuerystringParameters("ConnectionOpportunityId", options.connectionOpportunityIdKey, false);
             if (options.connectionRequestId) {
-                updateConnectionQuerystringParameters("ConnectionRequestId", options.connectionRequestId, true);
+                updateConnectionQuerystringParameters("ConnectionRequestId", options.connectionRequestIdKey, true);
             }
 
             const data = {
@@ -250,13 +250,13 @@
             }
 
             fetchRequestViewModel(options, function (requestViewModel) {
-                refreshCard(options.connectionRequestId, requestViewModel);
+                refreshCard(options.connectionRequestIdKey, requestViewModel);
             });
         };
 
-        const moveCard = function (connectionRequestId, newStatusId, newIndex) {
+        const moveCard = function (connectionRequestIdKey, newStatusId, newIndex) {
             const $newStatusCol = $('[data-status-id=' + newStatusId + ']');
-            const $card = $('[data-request-id=' + connectionRequestId + ']');
+            const $card = $('[data-request-id-key=' + connectionRequestIdKey + ']');
             const $oldStatusCol = $card.closest('[data-status-id]');
             const oldStatusId = Number($oldStatusCol.attr('data-status-id'));
 
@@ -297,7 +297,7 @@
         };
 
         const indexCardsInColumn = function (statusId) {
-            $('[data-status-id=' + statusId + '] [data-request-id]').each(function (index, el) {
+            $('[data-status-id=' + statusId + '] [data-request-id-key]').each(function (index, el) {
                 const $card = $(el);
                 $card.attr('data-index', index + 1);
             });
@@ -343,8 +343,8 @@
             initializeDraggingCards();
         };
 
-        const refreshCard = function (connectionRequestId, requestViewModel) {
-            const $oldCard = $('[data-request-id=' + connectionRequestId + ']');
+        const refreshCard = function (connectionRequestIdKey, requestViewModel) {
+            const $oldCard = $('[data-request-id-key=' + connectionRequestIdKey + ']');
 
             if (!requestViewModel) {
                 // This request is not currently visible
@@ -368,21 +368,21 @@
             $oldCard.replaceWith(newCardHtml);
 
             if (didStatusChange) {
-                moveCard(requestViewModel.Id, newStatusId, 1);
+                moveCard(requestViewModel.IdKey, newStatusId, 1);
             }
             else {
                 indexCardsInColumn(requestViewModel.StatusId);
             }
         };
 
-        const removeCard = function (connectionRequestId) {
-            $('[data-request-id=' + connectionRequestId + ']').remove();
+        const removeCard = function (connectionRequestIdKey) {
+            $('[data-request-id-key=' + connectionRequestIdKey + ']').remove();
         };
 
-        const deleteRequestAndRemoveCard = function (connectionRequestId) {
+        const deleteRequestAndRemoveCard = function (connectionRequestId, connectionRequestIdKey) {
             promptConfirmation('Are you sure you want to delete this request?', function () {
                 deleteRequest(connectionRequestId, function () {
-                    removeCard(connectionRequestId);
+                    removeCard(connectionRequestIdKey);
                 });
             });
         };
@@ -479,12 +479,13 @@
             const oldStatusId = $source.data('statusId');
             const newIndex = $target.children().index(el);
             const originalIndex = Number($el.attr('data-index'));
-            const requestId = $el.data('requestId');
-            const opportunityId = $el.data('opportunityId');
+            const requestIdKey = $el.data('requestIdKey');
+            const opportunityId = $el.closest('.js-board-card')
+                .find('input.hf-data-request-connection-opportunity-id').val();
 
             if ($target.hasClass('js-drag-scroll-zone')) {
                 // Put the card back out of the scroll zone
-                moveCard(requestId, oldStatusId, originalIndex);
+                moveCard(requestIdKey, oldStatusId, originalIndex);
                 return;
             }
 
@@ -496,7 +497,7 @@
 
                     promptConfirmation(msg,
                         function () {
-                            sendPostback('card-drop-confirmed', requestId, newStatusId, newIndex);
+                            sendPostback('card-drop-confirmed', requestIdKey, newStatusId, newIndex);
 
                             updateColCount(newStatusId, 1);
                             indexCardsInColumn(newStatusId);
@@ -505,12 +506,12 @@
                             indexCardsInColumn(oldStatusId);
                         },
                         function () {
-                            moveCard(requestId, oldStatusId, originalIndex);
+                            moveCard(requestIdKey, oldStatusId, originalIndex);
                         }
                     );
                 }
                 else {
-                    sendPostback('card-drop-confirmed', requestId, newStatusId, newIndex);
+                    sendPostback('card-drop-confirmed', requestIdKey, newStatusId, newIndex);
 
                     updateColCount(newStatusId, 1);
                     indexCardsInColumn(newStatusId);
@@ -523,24 +524,25 @@
 
         const onCardClick = function (event) {
             const $target = $(event.target);
-            const connectionRequestId = $target.closest('[data-request-id]').data('requestId');
+            const connectionRequestIdKey = $target.closest('[data-request-id-key]').data('requestIdKey');
+            const connectionRequestId = $target.closest('.js-board-card').find('input.hf-data-request-id').val();
 
             if (!connectionRequestId) {
                 return;
             }
 
             if ($target.closest('.js-delete').length) {
-                deleteRequestAndRemoveCard(connectionRequestId);
+                deleteRequestAndRemoveCard(connectionRequestIdKey);
                 return;
             }
 
             if ($target.closest('.js-view').length) {
-                sendPostback('view', connectionRequestId);
+                sendPostback('view', connectionRequestIdKey);
                 return;
             }
 
             if ($target.closest('.js-connect').length) {
-                sendPostback('connect', connectionRequestId);
+                sendPostback('connect', connectionRequestIdKey);
                 return;
             }
 
@@ -549,11 +551,12 @@
                 return;
             }
 
-            // Update the QueryString parameters to include the ConnectionRequestId on the click. 
-            updateConnectionQuerystringParameters("ConnectionRequestId", connectionRequestId, true);
+            // Update the QueryString parameters to include the ConnectionRequestIdKey on the click.
+            updateConnectionQuerystringParameters("ConnectionRequestId", connectionRequestIdKey, true);
 
             // If the execution makes it this far then the user clicked the card (not a button) and we will open the modal
-            sendPostback('view', connectionRequestId);
+            sendPostback('view', connectionRequestIdKey);
+
         };
 
         //
@@ -581,6 +584,10 @@
         const updateConnectionQuerystringParameters = function (chosenParameter, id, keepOtherParameters) {
             // Get the current query string parameters as a variable.
             var urlParameters = new URLSearchParams(location.search);
+
+            // Remove double quotations from id if they exist. Cannot change input formatting because
+            // other variables may depend on the quotations being there.
+            id = id.replace(/"/g, "");
 
             // Start with the question mark for the query string parameters.
             var newQueryString = "?";

@@ -82,5 +82,101 @@ namespace Rock.Model
         /// The connection request identifier.
         /// </value>
         public int? ConnectionRequestId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Connection Request Id.
+        /// </summary>
+        /// <value>
+        /// The connection request obfuscated identifier key.
+        /// </value>
+        public string ConnectionRequestIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Placement Group Id.
+        /// </summary>
+        /// <value>
+        /// The placement group obfuscated identifier key.
+        /// </value>
+        public string PlacementGroupIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Placement Group Role Id.
+        /// </summary>
+        /// <value>
+        /// The placement group role obfuscated identifier key.
+        /// </value>
+        public string PlacementGroupRoleIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Person Id.
+        /// </summary>
+        /// <value>
+        /// The person obfuscated identifier key.
+        /// </value>
+        public string PersonIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Person Alias Id.
+        /// </summary>
+        /// <value>
+        /// The person alias obfuscated identifier key.
+        /// </value>
+        public string PersonAliasIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Campus Id.
+        /// </summary>
+        /// <value>
+        /// The campus obfuscated identifier key.
+        /// </value>
+        public string CampusIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Connector Person Id.
+        /// </summary>
+        /// <value>
+        /// The connector person obfuscated identifier key.
+        /// </value>
+        public string ConnectorPersonIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Connector Person Alias Id.
+        /// </summary>
+        /// <value>
+        /// The connector person alias obfuscated identifier key.
+        /// </value>
+        public string ConnectorPersonAliasIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Status Id.
+        /// </summary>
+        /// <value>
+        /// The status obfuscated identifier key.
+        /// </value>
+        public string StatusIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Connection Opportunity Id.
+        /// </summary>
+        /// <value>
+        /// The connection opportunity obfuscated identifier key.
+        /// </value>
+        public string ConnectionOpportunityIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Connection Type Id.
+        /// </summary>
+        /// <value>
+        /// The connection type obfuscated identifier key.
+        /// </value>
+        public string ConnectionTypeIdKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the obfuscated identifier (IdKey) for the Last Activity Type Id.
+        /// </summary>
+        /// <value>
+        /// The last activity type obfuscated identifier key.
+        /// </value>
+        public string LastActivityTypeIdKey { get; set; }
     }
 }

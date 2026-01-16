@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using Rock.Data;
 using Rock.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -596,6 +597,174 @@ namespace Rock.Model
                 }
 
                 return GroupName;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Connection Request Id.
+        /// </summary>
+        public string IdKey
+        {
+            get
+            {
+                return new ConnectionRequestService( new RockContext() )
+                    .GetNoTracking( Id )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Placement Group Id.
+        /// </summary>
+        public string PlacementGroupIdKey
+        {
+            get
+            {
+                return PlacementGroupId.HasValue
+                    ? new GroupService( new RockContext() )
+                        .GetNoTracking( PlacementGroupId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Placement Group Role Id.
+        /// </summary>
+        public string PlacementGroupRoleIdKey
+        {
+            get
+            {
+                return PlacementGroupRoleId.HasValue
+                    ? new GroupTypeRoleService( new RockContext() )
+                        .GetNoTracking( PlacementGroupRoleId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Person Id.
+        /// </summary>
+        public string PersonIdKey
+        {
+            get
+            {
+                return new PersonService( new RockContext() )
+                    .GetNoTracking( PersonId )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Person Alias Id.
+        /// </summary>
+        public string PersonAliasIdKey
+        {
+            get
+            {
+                return new PersonAliasService( new RockContext() )
+                    .GetNoTracking( PersonAliasId )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Campus Id.
+        /// </summary>
+        public string CampusIdKey
+        {
+            get
+            {
+                return CampusId.HasValue
+                    ? CampusCache
+                        .Get( CampusId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Connector Person Id.
+        /// </summary>
+        public string ConnectorPersonIdKey
+        {
+            get
+            {
+                return ConnectorPersonId.HasValue
+                    ? new PersonService( new RockContext() )
+                        .GetNoTracking( ConnectorPersonId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Connector Person Alias Id.
+        /// </summary>
+        public string ConnectorPersonAliasIdKey
+        {
+            get
+            {
+                return ConnectorPersonAliasId.HasValue
+                    ? new PersonAliasService( new RockContext() )
+                        .GetNoTracking( ConnectorPersonAliasId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Status Id.
+        /// </summary>
+        public string StatusIdKey
+        {
+            get
+            {
+                return new ConnectionStatusService( new RockContext() )
+                    .GetNoTracking( StatusId )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Connection Opportunity Id.
+        /// </summary>
+        public string ConnectionOpportunityIdKey
+        {
+            get
+            {
+                return new ConnectionOpportunityService( new RockContext() )
+                    .GetNoTracking( ConnectionOpportunityId )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Connection Type Id.
+        /// </summary>
+        public string ConnectionTypeIdKey
+        {
+            get
+            {
+                return new ConnectionTypeService( new RockContext() )
+                    .GetNoTracking( ConnectionTypeId )
+                    ?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the Last Activity Type Id.
+        /// </summary>
+        public string LastActivityTypeIdKey
+        {
+            get
+            {
+                return LastActivityTypeId.HasValue
+                    ? new ConnectionActivityTypeService( new RockContext() )
+                        .GetNoTracking( LastActivityTypeId.Value )
+                        ?.IdKey ?? string.Empty
+                    : string.Empty;
             }
         }
 

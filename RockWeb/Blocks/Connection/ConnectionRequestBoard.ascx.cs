@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -219,6 +220,8 @@ ORDER BY ct.[Name], cs.[Name]",
         #endregion
 
         #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
 
         /// <summary>
         /// Gets or sets the available attributes.
@@ -430,6 +433,21 @@ ORDER BY ct.[Name], cs.[Name]",
         }
 
         /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the current connection opportunity.
+        /// </summary>
+        protected string ConnectionOpportunityIdKey
+        {
+            get
+            {
+                return new ConnectionOpportunityService( new RockContext() )
+                    .GetNoTracking(
+                        ViewState[ViewStateKey.ConnectionOpportunityId].ToStringSafe(),
+                        true
+                    )?.IdKey ?? string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Gets or sets the connection request identifier.
         /// </summary>
         private int? ConnectionRequestId
@@ -442,6 +460,21 @@ ORDER BY ct.[Name], cs.[Name]",
             set
             {
                 ViewState[ViewStateKey.ConnectionRequestId] = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets the obfuscated identifier (IdKey) for the current connection request.
+        /// </summary>
+        protected string ConnectionRequestIdKey
+        {
+            get
+            {
+                return new ConnectionRequestService( new RockContext() )
+                    .GetNoTracking(
+                        ViewState[ViewStateKey.ConnectionRequestId].ToStringSafe(),
+                        true
+                    )?.IdKey ?? string.Empty;
             }
         }
 
@@ -705,20 +738,19 @@ ORDER BY ct.[Name], cs.[Name]",
             else
             {
                 var connectionType = GetConnectionType();
-                int entitySetId = GetEntitySetId( selectedItems );
-                int connectionTypeId = connectionType.Id;
+                var entitySetIdKey = GetEntitySetId( selectedItems );
 
                 var queryParams = new Dictionary<string, string>()
                 {
-                    { PageParameterKey.ConnectionTypeId, connectionTypeId.ToString() },
-                    { PageParameterKey.EntitySetId, entitySetId.ToString() }
+                    { PageParameterKey.ConnectionTypeId, connectionType.IdKey },
+                    { PageParameterKey.EntitySetId, entitySetIdKey }
                 };
 
                 NavigateToLinkedPage( AttributeKey.BulkUpdateRequestsPage, queryParams );
             }
         }
 
-        private int GetEntitySetId( List<int> ids )
+        private string GetEntitySetId( List<int> ids )
         {
             var rockContext = new RockContext();
             var entitySet = new EntitySet();
@@ -741,7 +773,7 @@ ORDER BY ct.[Name], cs.[Name]",
 
             rockContext.BulkInsert( entitySetItems );
 
-            return entitySet.Id;
+            return entitySet.IdKey;
         }
 
         /// <summary>
@@ -820,7 +852,7 @@ ORDER BY ct.[Name], cs.[Name]",
 
             string action;
             int? newStatusId;
-            int? requestId;
+            string requestIdKey;
             int? newIndex;
 
             /*
@@ -835,14 +867,14 @@ ORDER BY ct.[Name], cs.[Name]",
                 Reason: [Sometimes] Can't delete requests in list view.
                 https://github.com/SparkDevNetwork/Rock/issues/5720
              */
-            ParseDeleteEventArgument( argument, out requestId );
-            if ( requestId.HasValue )
+            ParseDeleteEventArgument( argument, out requestIdKey );
+            if ( !string.IsNullOrEmpty( requestIdKey ) )
             {
-                DeleteGridRequest( requestId.Value );
+                DeleteGridRequest( requestIdKey );
                 return;
             }
 
-            ParseDragEventArgument( argument, out action, out newStatusId, out requestId, out newIndex );
+            ParseDragEventArgument( argument, out action, out newStatusId, out requestIdKey, out newIndex );
 
             if ( action == "on-following-change" )
             {
@@ -851,12 +883,20 @@ ORDER BY ct.[Name], cs.[Name]",
                 return;
             }
 
-            if ( !requestId.HasValue )
+            if ( string.IsNullOrEmpty( requestIdKey ) )
             {
                 return;
             }
 
-            ConnectionRequestId = requestId.Value;
+            var isRequestIdDehashed = Rock.Utility.IdHasher.Instance.TryGetId( requestIdKey, out int dehashedRequestId );
+            if ( isRequestIdDehashed )
+            {
+                ConnectionRequestId = dehashedRequestId;
+            }
+            else
+            {
+                return;
+            }
 
             if ( action == "view" )
             {
@@ -890,14 +930,14 @@ ORDER BY ct.[Name], cs.[Name]",
         /// </summary>
         /// <param name="argument">The argument.</param>
         /// <param name="requestId">The request identifier.</param>
-        private void ParseDeleteEventArgument( string argument, out int? requestId )
+        private void ParseDeleteEventArgument( string argument, out string requestIdKey )
         {
-            requestId = null;
+            requestIdKey = null;
 
             var segments = argument.SplitDelimitedValues();
             if ( segments.Length == 2 && segments[0] == "on-request-delete" )
             {
-                requestId = segments[1].AsIntegerOrNull();
+                requestIdKey = segments[1];
             }
         }
 
@@ -1011,13 +1051,13 @@ ORDER BY ct.[Name], cs.[Name]",
         /// <param name="argument">The argument.</param>
         /// <param name="action">The action.</param>
         /// <param name="newStatusId">The new status identifier.</param>
-        /// <param name="requestId">The request identifier.</param>
+        /// <param name="requestIdKey">The request identifier.</param>
         /// <param name="newIndex">The new index.</param>
-        private void ParseDragEventArgument( string argument, out string action, out int? newStatusId, out int? requestId, out int? newIndex )
+        private void ParseDragEventArgument( string argument, out string action, out int? newStatusId, out string requestIdKey, out int? newIndex )
         {
             var segments = argument.SplitDelimitedValues();
             action = segments.Length >= 1 ? segments[0].ToLower() : string.Empty;
-            requestId = segments.Length >= 2 ? segments[1].AsIntegerOrNull() : null;
+            requestIdKey = segments.Length >= 2 ? segments[1] : null;
             newStatusId = segments.Length >= 3 ? segments[2].AsIntegerOrNull() : null;
             newIndex = segments.Length >= 4 ? segments[3].AsIntegerOrNull() : null;
         }
@@ -1117,9 +1157,43 @@ ORDER BY ct.[Name], cs.[Name]",
             divRequestModalViewModePhoto.Attributes["style"] = string.Format( "background-image: url( '{0}' );", viewModel.PersonPhotoUrl );
             lRequestModalViewModeStatusIcons.Text = GetStatusIconHtml( viewModel );
             lRequestModalViewModePersonFullName.Text = viewModel.PersonFullname;
-            lRequestModalViewModeEmail.Text = requesterPerson.GetEmailTag( ResolveRockUrl( "/" ) );
-            aRequestModalViewModeProfileLink.Attributes["href"] = string.Format( "/person/{0}", viewModel.PersonId );
+            aRequestModalViewModeProfileLink.Attributes["href"] = string.Format( "/person/{0}", viewModel.PersonIdKey );
             btnRequestModalViewModeTransfer.Visible = DoShowTransferButton();
+
+            /*
+                 01/15/2026 - DJS
+
+                 Temporary workaround to ensure the requester's email in the ConnectionRequestBoard
+                 uses an IdKey instead of a raw Id. This avoids exposing internal IDs until the block
+                 is migrated to Obsidian. It falls back on internal Ids if the IdKey cannot be found,
+                 but this should never be the case.
+
+                 Note: The GetEmailTag method will eventually be updated to return IdKeys natively.
+                 However, to avoid disrupting other blocks that may still rely on the current
+                 implementation, this short-term fix is in place.
+
+                 Reason: Prevents exposing internal entity IDs in email links while maintaining
+                 compatibility with legacy blocks.
+            */
+
+            var requesterEmailTag = requesterPerson.GetEmailTag( ResolveRockUrl( "/" ) );
+            var requesterEmailTagPersonId = requesterEmailTag
+                .Split( new[] { "person=" }, StringSplitOptions.None )[1].Trim()
+                .Split( new[] { "\'" }, StringSplitOptions.None )[0].Trim();
+            var requesterEmailTagIdKey = new PersonService( new RockContext() )
+                .GetNoTracking( requesterEmailTagPersonId, true )
+                ?.IdKey ?? string.Empty;
+
+            if ( !string.IsNullOrEmpty( requesterEmailTagIdKey ) )
+            {
+                var idKeyUpdatedRequesterEmailTag = requesterEmailTag
+                    .Replace( requesterEmailTagPersonId, requesterEmailTagIdKey );
+                lRequestModalViewModeEmail.Text = idKeyUpdatedRequesterEmailTag;
+            }
+            else
+            {
+                lRequestModalViewModeEmail.Text = requesterEmailTag;
+            }
 
             /*
                 08/09/2022 - SK
@@ -1146,9 +1220,13 @@ ORDER BY ct.[Name], cs.[Name]",
 
                 if ( hasSmsLink && p.IsMessagingEnabled )
                 {
+                    var personIdKey = new PersonService( new RockContext() )
+                        .GetNoTracking( viewModel.PersonId.ToString(), true )
+                        ?.IdKey;
+
                     var smsLink = LinkedPageUrl(
                         AttributeKey.SmsLinkPage,
-                        new Dictionary<string, string> { { "Person", viewModel.PersonId.ToString() } } );
+                        new Dictionary<string, string> { { "Person", personIdKey } } );
 
                     smsLinkHtml = string.Format( @"<a href=""{0}""><i class=""ti ti-messages""></i></a>", smsLink );
                 }
@@ -1186,7 +1264,7 @@ ORDER BY ct.[Name], cs.[Name]",
                     AttributeKey.GroupDetailPage,
                     new Dictionary<string, string>
                     {
-                        { "GroupId", connectionRequest.AssignedGroup.Id.ToString() }
+                        { "GroupId", connectionRequest.AssignedGroup.IdKey }
                     } );
 
                 placementGroupHtml = string.Format( "<a href=\"{0}\">{1}</a>", groupDetailPageUrl, viewModel.GroupName );
@@ -1432,7 +1510,10 @@ ORDER BY ct.[Name], cs.[Name]",
 
         internal string UpdateConnectionQuerystring( string connectionRequestId )
         {
-            return string.Format( "return Rock.controls.connectionRequestBoard.updateConnectionQuerystringParameters(\"{0}\", \"{1}\", \"{2}\");", "ConnectionOpportunityId", connectionRequestId.ToStringSafe(), false );
+            var connectionRequestIdKey = new ConnectionRequestService( new RockContext() )
+                .GetNoTracking( connectionRequestId, true )
+                ?.IdKey ?? connectionRequestId.ToStringSafe();
+            return string.Format( "return Rock.controls.connectionRequestBoard.updateConnectionQuerystringParameters(\"{0}\", \"{1}\", \"{2}\");", "ConnectionOpportunityId", connectionRequestIdKey, false );
         }
 
         #endregion Helper Methods
@@ -2577,12 +2658,16 @@ ORDER BY ct.[Name], cs.[Name]",
         /// Handles the Delete event of the gRequests control.
         /// </summary>
         /// <param name="connectionRequestId">The connection request identifier.</param>
-        private void DeleteGridRequest( int connectionRequestId )
+        private void DeleteGridRequest( string connectionRequestId )
         {
-            ConnectionRequestId = connectionRequestId;
-            ViewAllActivities = false;
-            DeleteRequest();
-            BindRequestsGrid();
+            var isRequestIdDehashed = Rock.Utility.IdHasher.Instance.TryGetId( connectionRequestId, out int dehashedRequestId );
+            if ( isRequestIdDehashed )
+            {
+                ConnectionRequestId = dehashedRequestId;
+                ViewAllActivities = false;
+                DeleteRequest();
+                BindRequestsGrid();
+            }
         }
 
         /// <summary>
@@ -2679,7 +2764,10 @@ ORDER BY ct.[Name], cs.[Name]",
             {
                 personProfileLinkField.ControlStyle.CssClass = "btn btn-default btn-sm";
                 var queryParams = new Dictionary<string, string>();
-                queryParams.Add( "PersonId", connectionRequestViewModel.PersonId.ToString() );
+                var personIdKey = new PersonService( new RockContext() )
+                    .GetNoTracking( connectionRequestViewModel.PersonId.ToString(), true )
+                    ?.IdKey;
+                queryParams.Add( "PersonId", personIdKey );
                 personProfileLinkField.NavigateUrl = LinkedPageUrl( AttributeKey.PersonProfilePage, queryParams );
             }
 
@@ -2779,7 +2867,11 @@ ORDER BY ct.[Name], cs.[Name]",
             }
             else
             {
-                NavigateToLinkedPage( AttributeKey.WorkflowDetailPage, PageParameterKey.WorkflowId, requestWorkflow.Workflow.Id );
+                var qryParam = new Dictionary<string, string>();
+
+                qryParam[PageParameterKey.WorkflowId] = requestWorkflow.Workflow.IdKey;
+
+                NavigateToLinkedPage( AttributeKey.WorkflowDetailPage, qryParam);
             }
         }
 
@@ -2790,9 +2882,10 @@ ORDER BY ct.[Name], cs.[Name]",
         /// <param name="workflowGuid"></param>
         private void RegisterWorkflowDetailPageScript( int workflowTypeId, Guid workflowGuid, string message = null )
         {
+            var workflowTypeIdKey = WorkflowTypeCache.Get( workflowTypeId ).IdKey;
             var qryParam = new Dictionary<string, string>
                 {
-                    { "WorkflowTypeId", workflowTypeId.ToString() },
+                    { "WorkflowTypeId", workflowTypeIdKey },
                     { "WorkflowGuid", workflowGuid.ToString() }
                 };
 
@@ -5022,18 +5115,34 @@ ORDER BY ct.[Name], cs.[Name]",
             var availableOpportunityIds = typeViewModels.SelectMany( vm => vm.ConnectionOpportunities.Select( co => co.Id ) );
 
             // Check for a connection request or opportunity id param. The request takes priority since it is more specific
-            var connectionRequestIdParam = PageParameter( PageParameterKey.ConnectionRequestId ).AsIntegerOrNull();
-            var connectionOpportunityIdParam = PageParameter( PageParameterKey.ConnectionOpportunityId ).AsIntegerOrNull();
-            var campusIdParam = PageParameter( PageParameterKey.CampusId ).AsIntegerOrNull();
+            var connectionRequestIdParam = new ConnectionRequestService( new RockContext() )
+                .GetQueryableByKey(
+                    PageParameter( PageParameterKey.ConnectionRequestId ),
+                    IsAllowingPredictableIds
+                )
+                .Select( cr => cr.Id)
+                .FirstOrDefault();
 
-            if ( !ConnectionOpportunityId.HasValue && connectionRequestIdParam.HasValue )
+            var connectionOpportunityIdParam = new ConnectionOpportunityService( new RockContext() )
+                .GetQueryableByKey(
+                    PageParameter( PageParameterKey.ConnectionOpportunityId )
+                )
+                .Select( co => co.Id )
+                .FirstOrDefault();
+
+            var campusIdParam = CampusCache.Get(
+                PageParameter( PageParameterKey.CampusId ),
+                IsAllowingPredictableIds
+            )?.Id;
+
+            if ( !ConnectionOpportunityId.HasValue && connectionRequestIdParam != 0 )
             {
                 var rockContext = new RockContext();
                 var connectionRequestService = new ConnectionRequestService( rockContext );
 
                 var result = connectionRequestService.Queryable()
                     .AsNoTracking()
-                    .Where( cr => cr.Id == connectionRequestIdParam.Value )
+                    .Where( cr => cr.Id == connectionRequestIdParam )
                     .Select( cr => new
                     {
                         cr.ConnectionOpportunityId
@@ -5043,7 +5152,7 @@ ORDER BY ct.[Name], cs.[Name]",
                 if ( result != null && availableOpportunityIds.Contains( result.ConnectionOpportunityId ) )
                 {
                     ConnectionOpportunityId = result.ConnectionOpportunityId;
-                    ConnectionRequestId = connectionRequestIdParam.Value;
+                    ConnectionRequestId = connectionRequestIdParam;
                     ViewAllActivities = false;
                     IsRequestModalAddEditMode = false;
                     RequestModalViewModeSubMode = RequestModalViewModeSubMode_View;
@@ -5053,10 +5162,10 @@ ORDER BY ct.[Name], cs.[Name]",
 
             // If the opportunity is not yet set by the request id param, then set it
             if ( !ConnectionOpportunityId.HasValue &&
-                connectionOpportunityIdParam.HasValue &&
-                availableOpportunityIds.Contains( connectionOpportunityIdParam.Value ) )
+                connectionOpportunityIdParam != 0 &&
+                availableOpportunityIds.Contains( connectionOpportunityIdParam ) )
             {
-                ConnectionOpportunityId = connectionOpportunityIdParam.Value;
+                ConnectionOpportunityId = connectionOpportunityIdParam;
                 ConnectionRequestId = null;
                 ViewAllActivities = false;
                 IsRequestModalAddEditMode = false;
@@ -5866,6 +5975,27 @@ ORDER BY ct.[Name], cs.[Name]",
             var rawTemplate = GetConnectionRequestStatusIconsTemplate();
             var whitespaceRemovedTemplate = Regex.Replace( rawTemplate, @"\s+", " " );
 
+            // Get IdKeys to pass to javascript
+            var connectorPersonAliasIdKey = new PersonAliasService( new RockContext() )
+                .GetNoTracking( ConnectorPersonAliasId ?? 0 )
+                ?.IdKey ?? string.Empty;
+            var requesterPersonAliasIdKey = new PersonAliasService( new RockContext() )
+                .GetNoTracking( ppRequesterFilter.PersonAliasId ?? 0 )
+                ?.IdKey ?? string.Empty;
+            var connectionStatusIdsKeys = cblStatusFilter.SelectedValuesAsInt
+                .Select( id => new ConnectionStatusService( new RockContext() )
+                    .GetNoTracking( id )
+                    ?.IdKey ?? string.Empty )
+                .ToList();
+            var lastActivityTypeIdsKeys = cblLastActivityFilter.SelectedValuesAsInt
+                .Select( id => new ConnectionActivityTypeService( new RockContext() )
+                    .GetNoTracking( id )
+                    ?.IdKey ?? string.Empty )
+                .ToList();
+            var connectionRequestIdKey = new ConnectionRequestService( new RockContext() )
+                .GetNoTracking( ConnectionRequestId.ToString(), true )
+                ?.IdKey ?? string.Empty;
+
             var script = string.Format(
 @"Rock.controls.connectionRequestBoard.fetchAndRefreshCard({{
     connectionRequestId: {0},
@@ -5879,7 +6009,12 @@ ORDER BY ct.[Name], cs.[Name]",
     statusIds: {8},
     connectionStates: {9},
     campusId: {10},
-    pastDueOnly: {11}
+    pastDueOnly: {11},
+    connectorPersonAliasIdKey: {12},
+    requesterPersonAliasIdKey: {13},
+    statusIdsKeys: {14},
+    lastActivityTypeIdsKeys: {15},
+    connectionRequestIdKey: '{16}'
 }});",
                 ToJavaScript( ConnectionRequestId ), // 0
                 ToJavaScript( whitespaceRemovedTemplate ), // 1
@@ -5892,7 +6027,12 @@ ORDER BY ct.[Name], cs.[Name]",
                 ToJavaScript( cblStatusFilter.SelectedValuesAsInt ), // 8
                 ToJavaScript( cblStateFilter.SelectedValues ), // 9
                 ToJavaScript( CampusId ), // 10
-                ToJavaScript( rcbPastDueOnly.Checked ) /* 11 */ );
+                ToJavaScript( rcbPastDueOnly.Checked ), // 11
+                ToJavaScript( connectorPersonAliasIdKey ), // 12
+                ToJavaScript( requesterPersonAliasIdKey ), // 13
+                ToJavaScript( connectionStatusIdsKeys ), // 14
+                ToJavaScript( lastActivityTypeIdsKeys ), // 15
+                ToJavaScript( connectionRequestIdKey ) /* 16 */);
 
             ScriptManager.RegisterStartupScript(
                 upnlJavaScript,
@@ -5912,6 +6052,30 @@ ORDER BY ct.[Name], cs.[Name]",
             var rawTemplate = GetConnectionRequestStatusIconsTemplate();
             var whitespaceRemovedTemplate = Regex.Replace( rawTemplate, @"\s+", " " );
 
+            // Get IdKeys to pass to javascript
+            var connectionOpportunityIdKey = new ConnectionOpportunityService( new RockContext() )
+                .GetNoTracking( ConnectionOpportunityId.ToString(), true )
+                ?.IdKey ?? string.Empty;
+            var connectorPersonAliasIdKey = new PersonAliasService( new RockContext() )
+                .GetNoTracking( ConnectorPersonAliasId ?? 0 )
+                ?.IdKey ?? string.Empty;
+            var requesterPersonAliasIdKey = new PersonAliasService( new RockContext() )
+                .GetNoTracking( ppRequesterFilter.PersonAliasId ?? 0 )
+                ?.IdKey ?? string.Empty;
+            var connectionStatusIdsKeys = cblStatusFilter.SelectedValuesAsInt
+                .Select( id => new ConnectionStatusService( new RockContext() )
+                    .GetNoTracking( id )
+                    ?.IdKey ?? string.Empty )
+                .ToList();
+            var lastActivityTypeIdsKeys = cblLastActivityFilter.SelectedValuesAsInt
+                .Select( id => new ConnectionActivityTypeService( new RockContext() )
+                    .GetNoTracking( id )
+                    ?.IdKey ?? string.Empty )
+                .ToList();
+            var connectionRequestIdKey = new ConnectionRequestService( new RockContext() )
+                .GetNoTracking( ConnectionRequestId.ToString(), true )
+                ?.IdKey ?? string.Empty;
+
             var script = string.Format(
                 @"Rock.controls.connectionRequestBoard.initialize({{
     connectionOpportunityId: {0},
@@ -5928,7 +6092,13 @@ ORDER BY ct.[Name], cs.[Name]",
     lastActivityTypeIds: {11},
     controlClientId: {12},
     pastDueOnly: {13},
-    connectionRequestId: {14}
+    connectionRequestId: {14},
+    connectionOpportunityIdKey: {15},
+    connectorPersonAliasIdKey: {16},
+    requesterPersonAliasIdKey: {17},
+    statusIdsKeys: {18},
+    lastActivityTypeIdsKeys: {19},
+    connectionRequestIdKey: '{20}'
 }});",
                 ToJavaScript( ConnectionOpportunityId ), // 0
                 ToJavaScript( GetMaxCardsPerColumn() ), // 1
@@ -5944,7 +6114,13 @@ ORDER BY ct.[Name], cs.[Name]",
                 ToJavaScript( cblLastActivityFilter.SelectedValuesAsInt ), // 11
                 ToJavaScript( lbJavaScriptCommand.ClientID ), // 12
                 ToJavaScript( rcbPastDueOnly.Checked ), //13
-                ToJavaScript( ConnectionRequestId ) /* 14 */ );
+                ToJavaScript( ConnectionRequestId ), // 14
+                ToJavaScript( connectionOpportunityIdKey ), //15
+                ToJavaScript( connectorPersonAliasIdKey ), // 16
+                ToJavaScript( requesterPersonAliasIdKey ), // 17
+                ToJavaScript( connectionStatusIdsKeys ), // 18
+                ToJavaScript( lastActivityTypeIdsKeys ), // 19
+                ToJavaScript( connectionRequestIdKey ) /* 20 */);
 
             ScriptManager.RegisterStartupScript(
                 upnlJavaScript,
