@@ -46,7 +46,6 @@
     <asp:ContentPlaceHolder ID="css" runat="server" />
 
 	<!-- Included CSS Files -->
-    <link rel="stylesheet" href="<%# ResolveRockUrl("~~/Styles/bootstrap.css", true) %>"/>
 	<link rel="stylesheet" href="<%# ResolveRockUrl("~~/Styles/theme.css", true) %>"/>
 
     <script src="<%# ResolveRockUrl("~~/Assets/Scripts/theme.js", true) %>"></script>
@@ -67,7 +66,7 @@
                 {% endif %}
 
                 <div id="fixed-header" class="header-content flex-grow-1" role="navigation">
-                        <a href="javascript: window.location = document.referrer;" class="btn btn-nav-zone"><i class="fa fa-chevron-left"></i></a>
+                        <a href="javascript: window.location = document.referrer;" class="btn btn-nav-zone btn-square"><i class="ti ti-chevron-left"></i></a>
                         {% assign checkinManagerCookieData = 'CheckinManager.CheckinManagerConfiguration' | ReadCookie | FromJSON %}
                         {% assign checkinAreaType = checkinManagerCookieData.CheckinAreaGuid | FromCache:'GroupType' %}
                         <span class="site-name d-none d-sm-flex align-items-center">{{ checkinAreaType.Name | Default:CurrentPage.Layout.Site.Name }}</span>
@@ -79,9 +78,6 @@
             </nav>
 
             <nav class="navbar-default navbar-static-side collapse d-print-none" role="navigation">
-                <div class="navbar-toggle-side-left" data-toggle="collapse" data-target=".navbar-static-side">
-                    <i class="ti ti-menu-2"></i>
-                </div>
                 <Rock:Zone Name="Navigation" runat="server" />
             </nav>
 

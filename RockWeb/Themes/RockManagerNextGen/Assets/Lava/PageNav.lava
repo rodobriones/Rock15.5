@@ -15,9 +15,6 @@
                 </a>
             </li>
         {%- endfor -%}
-        <li class="login">
-            <a href="#"><img src="{{ CurrentPerson.PhotoUrl }}" class="avatar avatar-sm" alt=""> {{ CurrentPerson.FullName }}</a>
-        </li>
     </ul>
 {%- endif -%}
 {% endif %}

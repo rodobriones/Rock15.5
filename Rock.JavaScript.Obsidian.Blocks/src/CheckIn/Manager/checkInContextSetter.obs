@@ -17,7 +17,8 @@
             </li>
         </ul>
 
-        <TreeItemPicker :modelValue="location"
+        <div class="nav navbar-nav contextsetter contextsetter-location">
+            <TreeItemPicker :modelValue="location"
                         formGroupClasses="location-item-picker"
                         iconCssClass=""
                         :blankValue="!!selectedCampus ? 'Select Location' : 'Select Campus'"
@@ -25,7 +26,8 @@
                         autoExpand
                         :disabled="!selectedCampus"
                         @update:modelValue="onLocationSelected($event as ListItemBag | null)">
-        </TreeItemPicker>
+            </TreeItemPicker>
+        </div>
 
         <ul class="nav navbar-nav contextsetter contextsetter-schedule" style="margin: 0;">
             <li class="dropdown">
@@ -49,49 +51,6 @@
         </ul>
     </div>
 </template>
-
-<style scoped>
-.context-setters-container {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-medium);
-    margin-right: var(--spacing-medium);
-}
-
-.context-setters-container > .contextsetter-campus {
-    margin: 0;
-}
-
-.context-setters-container :deep(.picker .picker-label) {
-    /* Fix color to match mockup. */
-    background-color: transparent;
-    border-color: var(--theme-white);
-    color: var(--theme-white);
-}
-
-.context-setters-container :deep(.picker .picker-label:focus) {
-    /* Fix color to match mockup. */
-    border-color: var(--theme-white);
-    box-shadow: none;
-    text-decoration: none;
-}
-
-.context-setters-container :deep(.dropdown-menu) {
-    /* Force all dropdowns to align right edge so they don't go off screen. */
-    right: 0;
-    left: auto;
-}
-
-.context-setters-container :deep(.dropdown-menu::after) {
-    /* Hide mis-aligned arrow in popup. */
-    display: none;
-}
-
-.context-setters-container :deep(.picker .picker-select-none) {
-    /* Hide the deselect button as we don't want to allow clearing location. */
-    display: none;
-}
-</style>
 
 <script setup lang="ts">
     import TreeItemPicker from "@Obsidian/Controls/treeItemPicker.obs";

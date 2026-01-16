@@ -1,0 +1,249 @@
+@import "../../../Styles/summernote/summernote.min.css";
+@import "../../../Styles/styles-v2/sass-variable";
+@import "../../../Styles/styles-v2/core";
+
+// @import "../../../Styles/style-v2/icons/fontawesome-icon.css";
+// @import "../../../Styles/style-v2/icons/fontawesome-regular.css";
+// @import "../../../Styles/style-v2/icons/fontawesome-solid.css";
+// @import "../../../Styles/style-v2/icons/tabler-icon.css";
+
+
+// Custom Theme Styles
+// =============================================
+
+// Table of Contents
+// ---------------------------------------------
+// 1. Top Header Bar
+// 2. Manager Main Content
+// ---------------------------------------------
+
+:root {
+  --navbar-height: 80px;
+}
+
+
+// Top Header Bar
+// ---------------------------------------------
+
+#fixed-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.site-name {
+  padding-bottom: var(--spacing-tiny);
+  margin-left: var(--spacing-medium);
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--base-interface-softest);
+}
+
+.btn-nav-zone {
+  display: flex;
+  padding: var(--spacing-xsmall) var(--spacing-small);
+  color: var(--base-interface-softest);
+  background: transparent;
+  border: 1px solid var(--base-interface-softest);
+  border-radius: var(--rounded-small);
+  height: 38px;
+  justify-content: center;
+  align-items: center;
+
+  &:hover,
+  &:focus {
+    color: var(--color-primary);
+    background-color: var(--base-interface-softer);
+  }
+
+}
+
+.rock-top-header {
+  display: flex;
+  background-color: var(--color-primary);
+  margin-bottom: 0;
+  color: var(--base-interface-softest);
+  border: 0;
+
+  .navbar-zone-login {
+    display: flex;
+  }
+
+  .navbar-toggle {
+    display: flex;
+    align-items: center;
+    height: var(--navbar-height);
+    padding: 0 var(--spacing-medium);
+    margin: 0;
+    font-size: var(--font-size-h4);
+    color: var(--base-interface-softest);
+    cursor: pointer;
+  }
+
+  .navbar-zone-header {
+    display: flex;
+    flex: 1 1 auto;
+
+    .zone-content {
+      width: 100%;
+    }
+
+  }
+
+  // Context Setters
+  .context-setters-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+    margin-right: var(--spacing-medium);
+
+    .contextsetter {
+
+      .dropdown-toggle,
+      .picker-label {
+        @extend .btn-nav-zone;
+      }
+
+      // Match location picker styles with other pickers
+      .picker {
+
+        .picker-select-none {
+          // Hide the deselect button as we don't want to allow clearing location.
+          display: none;
+        }
+
+      }
+
+      .dropdown-menu {
+      // Force all dropdowns to align right edge so they don't go off screen.
+      right: 0;
+      left: auto;
+
+        &::after {
+          // Hide mis-aligned arrow in popup.
+          display: none;
+        }
+      }
+
+    }
+
+    .contextsetter-campus {
+      margin: 0;
+    }
+
+  }
+
+}
+
+// Top Zones - Header & Login Blocks
+
+#zone-header .zone-content,
+#zone-login .zone-content {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+}
+
+#zone-login {
+  margin-right: var(--spacing-medium);
+}
+
+#zone-login .zone-content {
+
+  a.dropdown-toggle.navbar-link {
+    padding: 0;
+
+    .loginstatus-wrapper {
+      margin-left: 0;
+      padding: 0;
+
+      .profile-photo {
+        margin-right: 0;
+      }
+
+    }
+
+    b {
+      display: none;
+    }
+
+  }
+}
+
+//
+
+// Side Nav Bar
+// ---------------------------------------------
+
+#zone-navigation .zone-content {
+  .nav.navbar-side {
+    padding: 0px var(--spacing-medium);
+
+    li a {
+      color: var(--color-interface-strong);
+      border-radius: var(--rounded-small);
+      padding: var(--spacing-xsmall) var(--spacing-small);
+
+      &:hover,
+      &:focus {
+        background-color: var(--color-primary-soft);
+        color: var(--color-primary);
+      }
+    }
+
+    li:first-child a {
+      background-color: var(--color-interface-softest);
+
+      &:hover,
+      &:focus {
+        background-color: var(--color-primary-soft);
+      }
+    }
+
+  }
+}
+
+.navbar-static-side {
+  display: block;
+  position: fixed;
+  top: var(--navbar-height);
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  opacity: 0;
+  width: 222px;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--color-interface-strong);
+  background-color: var(--color-interface-softer);
+  border-right: 1px solid var(--color-interface-soft);
+  box-shadow: var(--box-shadow-strong);
+  transform: translateX(-100%);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  will-change: transform;
+
+  &.collapse.in {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+}
+
+
+// Manager Main Content
+// ---------------------------------------------
+
+.main-content {
+  padding: var(--spacing-medium);
+}
+
+
+// Roster Styles
+// ---------------------------------------------
+
+
+// OLD CHECK-IN MANAGER STYLES
+// =============================================
