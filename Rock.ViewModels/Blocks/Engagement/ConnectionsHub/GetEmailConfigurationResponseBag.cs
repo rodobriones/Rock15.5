@@ -22,9 +22,9 @@ using Rock.ViewModels.Utility;
 namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
 {
     /// <summary>
-    /// Represents a response from retrieving communication recipients for a set of connection requests using a specified communication type.
+    /// Represents a response containing email configuration details for sending communications to a set of connection requests.
     /// </summary>
-    public class GetCommunicationRecipientsResponseBag
+    public class GetEmailConfigurationResponseBag
     {
         /// <summary>
         /// Gets or sets the collection of recipients for the communication.
@@ -32,13 +32,8 @@ namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
         public List<CommunicationRecipientBag> CommunicationRecipients { get; set; }
 
         /// <summary>
-        /// Gets or sets the SMS From numbers that can be selected for sending the SMS communication.
+        /// Gets or sets the communication templates that can be selected for the email communication.
         /// </summary>
-        public List<ListItemBag> SmsFromSystemPhoneNumbers { get; set; }
-
-        /// <summary>
-        /// Gets or sets the SMS snippets that can be selected for the SMS communication.
-        /// </summary>
-        public List<ListItemBag> SmsSnippets { get; set; }
+        public List<CommunicationTemplateBag> CommunicationTemplates { get; set; }
     }
 }

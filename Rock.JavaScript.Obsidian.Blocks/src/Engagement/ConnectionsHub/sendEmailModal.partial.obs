@@ -3,14 +3,81 @@
     <Modal v-model="isVisible"
            title="Send Email"
            saveText="Save">
-        {{ selectedKeys }}
+        <PillList label="Recipients"
+                  isExpandable
+                  rules="required"
+                  :items="communicationRecipients ?? []">
+            <template #item="{ item }">
+                <Pill :tooltip="getRecipientTooltip(item)" :tokenType="getRecipientTokenType(item)">
+                    <img :src="item?.photoUrl ?? undefined" style="border-radius: 24px; width: 24px; height: 24px" />
+                    <span class="item-content">{{ item.name }}</span>
+                </Pill>
+            </template>
+        </PillList>
+
+        <div v-if="emailNotAllowedMessage" class="recipients-email-error">{{ emailNotAllowedMessage }}</div>
+
+        <div class="row">
+            <div class="col-sm-6">
+                <TextBox v-model="fromName"
+                         label="From Name"
+                         rules="required" />
+            </div>
+            <div class="col-sm-6">
+                <EmailBox v-model="fromEmail"
+                          label="From Address"
+                          rules="required" />
+            </div>
+        </div>
+
+        <TextBox v-model="subject"
+                 label="Email Subject"
+                 rules="required" />
+
+        <div class="row">
+            <div class="col-sm-6">
+                <DropDownList v-model="communicationTemplateIdKeyOrEmptyString"
+                              help="Copies the message body from the selected template. If the From Name, From Address, and Email Subject fields in the message you're sending are all empty, those values will also be copied from the template. If any of those fields already have a value, they will not be overwritten."
+                              :items="communicationTemplateListItems"
+                              label="Template" />
+            </div>
+        </div>
+
+        <HtmlEditor v-model="emailMessage"
+                          :commonMergeFields="commonMergeFields"
+                          :editorHeight="210"
+                          :isCharacterCountShown="true"
+                          label="Message"
+                          :mergeFields="['GlobalAttribute', 'Rock.Model.Person']"
+                          rules="required"
+                          toolbarLabel="Message" />
+
+        <AttachmentPicker v-model="attachments" />
     </Modal>
 </template>
 
+<style scoped>
+.recipients-email-error {
+    color: var(--color-danger-strong);
+    margin-bottom: var(--spacing-medium);
+}
+</style>
+
 <script setup lang="ts">
+    import { PropType, watch, computed, ref } from "vue";
+    import AttachmentPicker from "./attachmentPicker.partial.obs";
+    import Pill from "./pill.partial.obs";
+    import PillList from "./pillList.partial.obs";
     import Modal from "@Obsidian/Controls/modal.obs";
-    import { ref, PropType, watch } from "vue";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import HtmlEditor from "@Obsidian/Controls/htmlEditor.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import EmailBox from "@Obsidian/Controls/emailBox.obs";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
+    import { Enumerable } from "@Obsidian/Utility/linq";
+    import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+    import { CommunicationTemplateBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationTemplateBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
     const props = defineProps({
         visible: {
@@ -18,8 +85,14 @@
             required: true
         },
 
-        selectedKeys: {
-            type: Array as PropType<string[]>
+        communicationRecipients: {
+            type: Array as PropType<CommunicationRecipientBag[] | null | undefined>,
+            required: true
+        },
+
+        communicationTemplates: {
+            type: Array as PropType<CommunicationTemplateBag[]>,
+            required: true
         }
     });
 
@@ -28,15 +101,99 @@
         (e: "close"): void;
     }>();
 
-    const errorMessage = ref();
+    const commonMergeFields = [
+        "Person.FirstName^First Name|ti ti-user",
+        "Person.NickName^Nick Name|ti ti-user",
+        "Person.FullName^Full Name|ti ti-user",
+    ];
 
+    // #region Values
+
+    // UI state
     const isVisible = useVModelPassthrough(props, "visible", emit);
 
+    // Communication state
+    const fromName = ref<string>("");
+    const fromEmail = ref<string>("");
+    const subject = ref<string>("");
+    const emailMessage = ref<string>("");
+    const communicationTemplateIdKeyOrEmptyString = ref<string>("");
+    const attachments = ref<ListItemBag[]>([]);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    const emailNotAllowedMessage = computed<string | null>(() => {
+        const count = Enumerable.from(props.communicationRecipients ?? []).count(cr => !cr.isEmailAllowed);
+
+        if (count === 0) {
+            return null;
+        }
+
+        return `${count.toLocaleString(undefined)} Recipients won't receive this email.`;
+    });
+
+    const communicationTemplateListItems = computed<ListItemBag[]>(() => {
+        return props.communicationTemplates.map(ct => ({
+            value: ct.idKey,
+            text: ct.name
+        }));
+    });
+
+    // #endregion Computed Values
+
+    // #region Functions
+
+    function getRecipientTooltip(recipient: CommunicationRecipientBag): string {
+        if (!recipient || recipient.isEmailAllowed) {
+            // No tooltip when recipient is missing.
+            return "";
+        }
+
+        // This recipient cannot receive email messages. Get the error.
+        return `${recipient.name ?? "This recipient"} doesn't have an email address with email enabled.`;
+    }
+
+    function getRecipientTokenType(recipient: CommunicationRecipientBag): "default" | "danger" {
+        if (!recipient || recipient.isEmailAllowed) {
+            // No tooltip when recipient is missing.
+            return "default";
+        }
+
+        // This recipient cannot receive email messages. Get the error.
+        return "danger";
+    }
+
+    // #endregion Functions
+
+    // #region Watchers
+
     watch(isVisible, () => {
-        errorMessage.value = "";
         if (!isVisible.value) {
             emit("close");
         }
     });
 
+    watch(communicationTemplateIdKeyOrEmptyString, (newValue) => {
+        if (!newValue) {
+            return;
+        }
+
+        const selectedTemplate = props.communicationTemplates.find(ct => ct.idKey === newValue);
+        if (!selectedTemplate?.message) {
+            return;
+        }
+
+        emailMessage.value = selectedTemplate.message ?? "";
+
+        // If from name, from email, AND subject are empty, then populate them from the template.
+        if (!fromName.value && !fromEmail.value && !subject.value) {
+            fromName.value = selectedTemplate.fromName ?? "";
+            fromEmail.value = selectedTemplate.fromEmail ?? "";
+            subject.value = selectedTemplate.subject ?? "";
+        }
+    });
+
+    // #endregion Watchers
 </script>

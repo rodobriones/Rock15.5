@@ -17,24 +17,28 @@
 
 using System.Collections.Generic;
 
-using Rock.Enums.Communication;
+using Rock.ViewModels.Utility;
 
 namespace Rock.ViewModels.Blocks.Engagement.ConnectionsHub
 {
     /// <summary>
-    /// Represents a request to retrieve communication recipients for a set of connection requests using a specified communication type.
+    /// Represents a response containing SMS configuration details for sending communications to a set of connection requests.
     /// </summary>
-    public class GetCommunicationRecipientsRequestBag
+    public class GetSmsConfigurationResponseBag
     {
         /// <summary>
-        /// Gets or sets the communication type ID key associated with the selected connection requests being sent an SMS communication.
+        /// Gets or sets the collection of recipients for the communication.
         /// </summary>
-        public string ConnectionTypeIdKey { get; set; }
+        public List<CommunicationRecipientBag> CommunicationRecipients { get; set; }
 
         /// <summary>
-        /// Gets or sets the list of connection request ID keys to retrieve communication recipients for.
+        /// Gets or sets the SMS From numbers that can be selected for sending the SMS communication.
         /// </summary>
-        /// <value>Each request is associated with a single person. These identifiers are used to find the people who will be sent the communication.</value>
-        public List<string> ConnectionRequestIdKeys { get; set; }
+        public List<ListItemBag> SmsFromSystemPhoneNumbers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the SMS snippets that can be selected for the SMS communication.
+        /// </summary>
+        public List<ListItemBag> SmsSnippets { get; set; }
     }
 }

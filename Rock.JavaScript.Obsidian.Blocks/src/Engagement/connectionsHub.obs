@@ -223,7 +223,8 @@
                   :smsSnippets="smsSnippets" />
 
     <SendEmailModal v-model:visible="isSendEmailModalVisible"
-                    :selectedKeys="allSelectedKeys" />
+                    :communicationRecipients="communicationRecipients"
+                    :communicationTemplates="communicationTemplates" />
 </template>
 
 <style>
@@ -313,10 +314,13 @@
     import { areEqual, toGuidOrNull } from "@Obsidian/Utility/guid";
     import { EntityType } from "@Obsidian/SystemGuids/entityType";
     import { CommunicationRecipientBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationRecipientBag";
+    import { CommunicationTemplateBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/communicationTemplateBag";
     import { ConnectionRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/connectionRequestBag";
     import { ConnectionOpportunityDetailBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/connectionOpportunityDetailBag";
-    import { GetCommunicationRecipientsRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getCommunicationRecipientsRequestBag";
-    import { GetCommunicationRecipientsResponseBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getCommunicationRecipientsResponseBag";
+    import { GetEmailConfigurationRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getEmailConfigurationRequestBag";
+    import { GetEmailConfigurationResponseBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getEmailConfigurationResponseBag";
+    import { GetSmsConfigurationRequestBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getSmsConfigurationRequestBag";
+    import { GetSmsConfigurationResponseBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/getSmsConfigurationResponseBag";
     import { PlacementGroupDetailsBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionsHub/placementGroupDetailsBag";
     import { PublicAttributeBag } from "@Obsidian/ViewModels/Utility/publicAttributeBag";
     import { ValidPropertiesBox } from "@Obsidian/ViewModels/Utility/validPropertiesBox";
@@ -368,6 +372,7 @@
     const communicationRecipients = ref<CommunicationRecipientBag[] | null | undefined>();
     const smsFromSystemPhoneNumbers = ref<ListItemBag[]>([]);
     const smsSnippets = ref<ListItemBag[]>([]);
+    const communicationTemplates = ref<CommunicationTemplateBag[]>([]);
 
     // TODO Change items based on sequential mode.
     const actionItems = [
@@ -571,13 +576,26 @@
         selectedKeys.value[key] = [...state.selectedKeys];
     }
 
-    async function getCommunicationRecipients(): Promise<HttpResult<GetCommunicationRecipientsResponseBag>> {
-        const bag: GetCommunicationRecipientsRequestBag = {
+    async function getSmsConfiguration(): Promise<HttpResult<GetSmsConfigurationResponseBag>> {
+        const bag: GetSmsConfigurationRequestBag = {
             connectionRequestIdKeys: allSelectedKeys.value,
             connectionTypeIdKey: box.options?.connectionTypeIdKey
         };
 
-        const result = await invokeBlockAction<GetCommunicationRecipientsResponseBag>("GetCommunicationRecipients", {
+        const result = await invokeBlockAction<GetSmsConfigurationResponseBag>("GetSmsConfiguration", {
+            bag
+        });
+
+        return result;
+    }
+
+    async function getEmailConfiguration(): Promise<HttpResult<GetEmailConfigurationResponseBag>> {
+        const bag: GetEmailConfigurationRequestBag = {
+            connectionRequestIdKeys: allSelectedKeys.value,
+            connectionTypeIdKey: box.options?.connectionTypeIdKey
+        };
+
+        const result = await invokeBlockAction<GetEmailConfigurationResponseBag>("GetEmailConfiguration", {
             bag
         });
 
@@ -585,7 +603,7 @@
     }
 
     async function showSMSModal(): Promise<void> {
-        const result = await getCommunicationRecipients();
+        const result = await getSmsConfiguration();
 
         if (result.isSuccess && result.data?.communicationRecipients?.length) {
             communicationRecipients.value = result.data.communicationRecipients;
@@ -604,7 +622,20 @@
     }
 
     async function showEmailModal(): Promise<void> {
-        isSendEmailModalVisible.value = true;
+        const result = await getEmailConfiguration();
+
+        if (result.isSuccess && result.data?.communicationRecipients?.length) {
+            communicationRecipients.value = result.data.communicationRecipients;
+            communicationTemplates.value = result.data.communicationTemplates ?? [];
+            isSendEmailModalVisible.value = true;
+        }
+        else {
+            console.error(result.errorMessage);
+            // TODO - Show error message to user
+            communicationRecipients.value = null;
+            communicationTemplates.value = [];
+            isSendEmailModalVisible.value = true;
+        }
     }
 
     function clearAllSelections() {
