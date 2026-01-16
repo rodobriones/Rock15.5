@@ -58,7 +58,7 @@ namespace RockWeb.Blocks.Reporting
 			{% for component in InteractionComponents %}
 			
 				 {% if ComponentDetailPage != null and ComponentDetailPage != '' %}
-                    <a href = '{{ ComponentDetailPage }}?ComponentId={{ component.Id }}'>
+                    <a href = '{{ ComponentDetailPage }}?ComponentId={{ component.IdKey }}'>
                 {% endif %}
                 
 				 <div class='panel panel-widget'>
@@ -94,7 +94,51 @@ namespace RockWeb.Blocks.Reporting
         private int pageNumber = 0;
         private int? _channelId = null;
 
-        #endregion
+        #endregion Fields
+
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        private InteractionChannelService InteractionChannelService => new InteractionChannelService( new RockContext() );
+        private PageService PageService => new PageService( new RockContext() );
+        private PersonService PersonService => new PersonService( new RockContext() );
+        private PersonAliasService PersonAliasService => new PersonAliasService( new RockContext() );
+
+        #endregion Properties
+
+        #region Keys
+
+        private static class AttributeKey
+        {
+            public const string DefaultTemplate = "DefaultTemplate";
+            public const string PageSize = "PageSize";
+        }
+
+        private static class PageParameterKey
+        {
+            public const string ChannelId = "ChannelId";
+            public const string Page = "Page";
+            public const string PersonId = "PersonId";
+            public const string PersonAliasId = "PersonAliasId";
+        }
+
+        private static class MergeFieldKey
+        {
+            public const string ComponentDetailPage = "ComponentDetailPage";
+            public const string InteractionDetailPage = "InteractionDetailPage";
+            public const string InteractionChannel = "InteractionChannel";
+            public const string InteractionComponents = "InteractionComponents";
+            public const string InteractionCounts = "InteractionCounts";
+        }
+
+        private static class PageNavigationKey
+        {
+            public const string NextPageNavigateUrl = "NextPageNavigateUrl";
+            public const string PreviousPageNavigateUrl = "PreviousPageNavigateUrl";
+        }
+
+        #endregion Keys
 
         #region Base Control Methods
 
@@ -106,7 +150,13 @@ namespace RockWeb.Blocks.Reporting
         {
             base.OnInit( e );
 
-            _channelId = PageParameter( "ChannelId" ).AsIntegerOrNull();
+            _channelId = InteractionChannelService.GetQueryableByKey(
+                PageParameter( PageParameterKey.ChannelId ),
+                IsAllowingPredictableIds
+            )
+            .Select( p => (int?)p.Id )
+            .FirstOrDefault();
+
             if ( !_channelId.HasValue )
             {
                 upnlContent.Visible = false;
@@ -131,9 +181,9 @@ namespace RockWeb.Blocks.Reporting
             {
                 if ( _channelId.HasValue )
                 {
-                    if ( !string.IsNullOrEmpty( PageParameter( "Page" ) ) )
+                    if ( !string.IsNullOrEmpty( PageParameter( PageParameterKey.Page ) ) )
                     {
-                        pageNumber = PageParameter( "Page" ).AsInteger();
+                        pageNumber = PageParameter( PageParameterKey.Page ).AsInteger();
                     }
 
                     ShowList();
@@ -166,7 +216,7 @@ namespace RockWeb.Blocks.Reporting
         /// </summary>
         public void ShowList()
         {
-            int pageSize = GetAttributeValue( "PageSize" ).AsInteger();
+            int pageSize = GetAttributeValue( AttributeKey.PageSize ).AsInteger();
 
             int skipCount = pageNumber * pageSize;
 
@@ -193,11 +243,11 @@ namespace RockWeb.Blocks.Reporting
                                         .Take( pageSize + 1 );
 
                     var interactionComponents = interactionComponentQry.ToList().Take( pageSize );
-                    var componentIdList = interactionComponents.Select( c => c.Id );
+                    var componentIdList = interactionComponents.Select( c => c.IdKey );
 
-                    var componentInteractionCount = new InteractionService( rockContext ).Queryable().AsNoTracking()
-                        .Where( i => componentIdList.Contains( i.InteractionComponentId ) )
-                        .GroupBy( i => i.InteractionComponentId )
+                    var componentInteractionCount = new InteractionService( rockContext ).Queryable().AsNoTracking().ToList()
+                        .Where( i => componentIdList.Contains( i.InteractionComponent.IdKey ) )
+                        .GroupBy( i => i.InteractionComponent.IdKey )
                         .Select( g => new InteractionCount
                                     {
                                         ComponentId = g.Key,
@@ -206,47 +256,79 @@ namespace RockWeb.Blocks.Reporting
                         .ToList();
 
                     var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, this.CurrentPerson );
-                    mergeFields.Add( "ComponentDetailPage", LinkedPageRoute( "ComponentDetailPage" ) );
-                    mergeFields.Add( "InteractionDetailPage", LinkedPageRoute( "InteractionDetailPage" ) );
-                    mergeFields.Add( "InteractionChannel", interactionChannel );
-                    mergeFields.Add( "InteractionComponents", interactionComponents );
-                    mergeFields.Add( "InteractionCounts", componentInteractionCount );
+                    mergeFields.Add(
+                        MergeFieldKey.ComponentDetailPage,
+                        LinkedPageRoute( MergeFieldKey.ComponentDetailPage )
+                    );
+                    mergeFields.Add(
+                        MergeFieldKey.InteractionDetailPage,
+                        LinkedPageRoute( MergeFieldKey.InteractionDetailPage )
+                    );
+                    mergeFields.Add( MergeFieldKey.InteractionChannel, interactionChannel );
+                    mergeFields.Add( MergeFieldKey.InteractionComponents, interactionComponents );
+                    mergeFields.Add( MergeFieldKey.InteractionCounts, componentInteractionCount );
 
                     // set next button
                     if ( interactionComponentQry.Count() > pageSize )
                     {
+                        var channelCriteria = _channelId.ToString();
+                        var pageCriteria = ( pageNumber + 1 ).ToString();
+
+                        var channelIdKey = InteractionChannelService.GetNoTracking(
+                            channelCriteria,
+                            true
+                        )?.IdKey ?? channelCriteria;
+
                         Dictionary<string, string> queryStringNext = new Dictionary<string, string>();
-                        queryStringNext.Add( "ChannelId", _channelId.ToString() );
-                        queryStringNext.Add( "Page", ( pageNumber + 1 ).ToString() );
+                        queryStringNext.Add( PageParameterKey.ChannelId, channelIdKey );
+                        queryStringNext.Add( PageParameterKey.Page, pageCriteria );
 
                         if ( personId.HasValue )
                         {
-                            queryStringNext.Add( "PersonId", personId.Value.ToString() );
+                            var personIdKey = PersonService.GetNoTracking(
+                                personId.Value.ToString(),
+                                true
+                            )?.IdKey ?? personId.Value.ToString();
+
+                            queryStringNext.Add( PageParameterKey.PersonId, personIdKey );
                         }
 
                         var pageReferenceNext = new Rock.Web.PageReference( CurrentPageReference.PageId, CurrentPageReference.RouteId, queryStringNext );
-                        mergeFields.Add( "NextPageNavigateUrl", pageReferenceNext.BuildUrl() );
+                        mergeFields.Add( PageNavigationKey.NextPageNavigateUrl, pageReferenceNext.BuildUrl() );
                     }
 
                     // set prev button
                     if ( pageNumber != 0 )
                     {
+                        var channelCriteria = _channelId.ToString();
+                        var pageCriteria = ( pageNumber - 1 ).ToString();
+
+                        var channelIdKey = InteractionChannelService.GetNoTracking(
+                            channelCriteria,
+                            true
+                        )?.IdKey ?? channelCriteria;
+
                         Dictionary<string, string> queryStringPrev = new Dictionary<string, string>();
-                        queryStringPrev.Add( "ChannelId", _channelId.ToString() );
-                        queryStringPrev.Add( "Page", ( pageNumber - 1 ).ToString() );
+                        queryStringPrev.Add( PageParameterKey.ChannelId, channelIdKey );
+                        queryStringPrev.Add( PageParameterKey.Page, pageCriteria );
 
                         if ( personId.HasValue )
                         {
-                            queryStringPrev.Add( "PersonId", personId.Value.ToString() );
+                            var personIdKey = PersonService.GetNoTracking(
+                                personId.Value.ToString(),
+                                true
+                            )?.IdKey ?? personId.Value.ToString();
+
+                            queryStringPrev.Add( PageParameterKey.PersonId, personIdKey );
                         }
 
                         var pageReferencePrev = new Rock.Web.PageReference( CurrentPageReference.PageId, CurrentPageReference.RouteId, queryStringPrev );
-                        mergeFields.Add( "PreviousPageNavigateUrl", pageReferencePrev.BuildUrl() );
+                        mergeFields.Add( PageNavigationKey.PreviousPageNavigateUrl, pageReferencePrev.BuildUrl() );
                     }
 
                     lContent.Text = interactionChannel.ComponentListTemplate.IsNotNullOrWhiteSpace() ?
                         interactionChannel.ComponentListTemplate.ResolveMergeFields( mergeFields ) :
-                        GetAttributeValue( "DefaultTemplate" ).ResolveMergeFields( mergeFields );
+                        GetAttributeValue( AttributeKey.DefaultTemplate ).ResolveMergeFields( mergeFields );
                 }
             }
         }
@@ -256,8 +338,19 @@ namespace RockWeb.Blocks.Reporting
         /// </summary>
         public int? GetPersonId()
         {
-            int? personId = PageParameter( "PersonId" ).AsIntegerOrNull();
-            int? personAliasId = PageParameter( "PersonAliasId" ).AsIntegerOrNull();
+            int? personId = PersonService.GetQueryableByKey(
+                PageParameter( PageParameterKey.PersonId ),
+                IsAllowingPredictableIds
+            )
+            .Select( p => (int?)p.Id)
+            .FirstOrDefault();
+
+            int? personAliasId = PersonAliasService.GetQueryableByKey(
+                PageParameter( PageParameterKey.PersonAliasId ),
+                IsAllowingPredictableIds
+            )
+            .Select( pa => ( int? ) pa.Id )
+            .FirstOrDefault();
 
             if ( personAliasId.HasValue )
             {
@@ -290,7 +383,7 @@ namespace RockWeb.Blocks.Reporting
             /// <value>
             /// The component identifier.
             /// </value>
-            public int ComponentId { get; set; }
+            public string ComponentId { get; set; }
 
             /// <summary>
             /// Gets or sets the count.
