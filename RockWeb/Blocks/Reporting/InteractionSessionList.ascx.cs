@@ -107,6 +107,26 @@ namespace RockWeb.Blocks.Reporting
 
         #endregion
 
+        #region Properties
+
+        private bool IsAllowingPredictableIds => !PageCache.Layout.Site.DisablePredictableIds;
+
+        private ContentChannelService ContentChannelService => new ContentChannelService( new RockContext() );
+
+        #endregion Properties
+
+        #region Keys
+
+        private static class PageParameterKey
+        {
+            public const string ChannelId = "ChannelId";
+            public const string StartDate = "StartDate";
+            public const string EndDate = "EndDate";
+            public const string Page = "Page";
+        }
+
+        #endregion Keys
+
         #region Base Control Methods
 
         /// <summary>
@@ -117,7 +137,13 @@ namespace RockWeb.Blocks.Reporting
         {
             base.OnInit( e );
 
-            _channelId = PageParameter( "ChannelId" ).AsIntegerOrNull();
+            _channelId = ContentChannelService.GetQueryableByKey(
+                PageParameter( PageParameterKey.ChannelId ),
+                IsAllowingPredictableIds
+            )
+            .Select( c => (int?)c.Id)
+            .FirstOrDefault();
+
             if ( !_channelId.HasValue )
             {
                 upnlContent.Visible = false;
