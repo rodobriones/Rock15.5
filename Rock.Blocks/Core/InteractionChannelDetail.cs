@@ -15,7 +15,6 @@
 // </copyright>
 //
 
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -28,6 +27,7 @@ using Rock.Security;
 using Rock.ViewModels.Blocks;
 using Rock.ViewModels.Blocks.Core.InteractionChannelDetail;
 using Rock.ViewModels.Utility;
+using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
@@ -84,8 +84,9 @@ namespace Rock.Blocks.Core
     #endregion
 
     [Rock.SystemGuid.EntityTypeGuid( "9438e0fe-f7ab-48d5-8ab8-d54336d30fbd" )]
-    [Rock.SystemGuid.BlockTypeGuid( "2efa1f9d-7062-466a-a8f3-9dcdbff054e9" )]
-    public class InteractionChannelDetail : RockEntityDetailBlockType<InteractionChannel, InteractionChannelBag>
+    [Rock.SystemGuid.BlockTypeGuid( "F722A03E-C344-40B1-B87D-EB90E2BCBC47" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "2efa1f9d-7062-466a-a8f3-9dcdbff054e9" )]
+    public class InteractionChannelDetail : RockEntityDetailBlockType<InteractionChannel, InteractionChannelBag>, IBreadCrumbBlock
     {
         #region Keys
 
@@ -387,6 +388,33 @@ namespace Rock.Blocks.Core
             }
 
             return true;
+        }
+
+        #endregion
+
+        #region IBreadCrumbBlock
+
+        /// <inheritdoc/>
+        public BreadCrumbResult GetBreadCrumbs( PageReference pageReference )
+        {
+                var key = pageReference.GetPageParameter( PageParameterKey.InteractionChannelId );
+                var pageParameters = new Dictionary<string, string>();
+
+                var name = new InteractionChannelService( RockContext )
+                    .GetSelect( key, l => l.Name );
+
+                if ( name != null )
+                {
+                    pageParameters.Add( PageParameterKey.InteractionChannelId, key );
+                }
+
+                var breadCrumbPageRef = new PageReference( pageReference.PageId, 0, pageParameters );
+                var breadCrumb = new BreadCrumbLink( name ?? "New Label", breadCrumbPageRef );
+
+                return new BreadCrumbResult
+                {
+                    BreadCrumbs = new List<IBreadCrumb> { breadCrumb }
+                };
         }
 
         #endregion
