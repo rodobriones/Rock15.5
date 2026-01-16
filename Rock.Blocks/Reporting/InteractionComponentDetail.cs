@@ -33,7 +33,7 @@ namespace Rock.Blocks.Reporting
     [Category( "Reporting" )]
     [Description( "Presents the details of a interaction channel using Lava" )]
     [IconCssClass( "ti ti-question-mark" )]
-    // [SupportedSiteTypes( Model.SiteType.Web )]
+    [SupportedSiteTypes( Model.SiteType.Web )]
 
     #region Block Attributes
 
@@ -49,7 +49,8 @@ namespace Rock.Blocks.Reporting
     #endregion Block Attribute
 
     [Rock.SystemGuid.EntityTypeGuid( "29e5a6bf-fe7f-406e-afc1-64eab506ddb0" )]
-    [Rock.SystemGuid.BlockTypeGuid( "bc2034d1-416b-4fb4-9fff-e202fa666203" )]
+    [Rock.SystemGuid.BlockTypeGuid( "926261B2-CF4C-4B1F-A384-CD83696CFBC2" )]
+    // was [Rock.SystemGuid.BlockTypeGuid( "bc2034d1-416b-4fb4-9fff-e202fa666203" )]
     public class InteractionComponentDetail : RockBlockType
     {
         #region Properties
@@ -181,12 +182,12 @@ namespace Rock.Blocks.Reporting
             {
                 if ( interactionComponent.EntityId.HasValue && interactionComponent.InteractionChannel.ComponentEntityTypeId.HasValue )
                 {
-            var componentEntityType = EntityTypeCache.Get( interactionComponent.InteractionChannel.ComponentEntityTypeId.Value ).GetEntityType();
-            IService serviceInstance = Reflection.GetServiceForEntityType( componentEntityType, rockContext );
-            if ( serviceInstance != null )
-            {
-                System.Reflection.MethodInfo getMethod = serviceInstance.GetType().GetMethod( "Get", new Type[] { typeof( int ) } );
-                componentEntity = getMethod.Invoke( serviceInstance, new object[] { interactionComponent.EntityId.Value } ) as Rock.Data.IEntity;
+                    var componentEntityType = EntityTypeCache.Get( interactionComponent.InteractionChannel.ComponentEntityTypeId.Value ).GetEntityType();
+                    IService serviceInstance = Reflection.GetServiceForEntityType( componentEntityType, rockContext );
+                    if ( serviceInstance != null )
+                    {
+                        System.Reflection.MethodInfo getMethod = serviceInstance.GetType().GetMethod( "Get", new Type[] { typeof( int ) } );
+                        componentEntity = getMethod.Invoke( serviceInstance, new object[] { interactionComponent.EntityId.Value } ) as Rock.Data.IEntity;
                     }
                 }
             }
