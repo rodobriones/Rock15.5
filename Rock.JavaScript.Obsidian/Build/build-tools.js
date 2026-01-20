@@ -256,16 +256,12 @@ function defineFileConfig(input, output, options) {
 
     options = options || {};
 
-    // If they requested the special nested structure, we need to generate
-    // a special index file that exports all the files and folders
-    // recursively.
     if (options.nested) {
         const virtualData = {};
         inputFile = createVirtualNestedIndex(virtualData, input);
         virtualPlugin = virtual(virtualData);
     }
 
-    // Not really needed, but makes the build log much cleaner.
     inputFile = path.relative(cwd(), inputFile).replace(/\\/g, "/");
 
     const config = defineRollupConfig({
@@ -278,6 +274,22 @@ function defineFileConfig(input, output, options) {
         },
 
         external: (target, source) => {
+            // Forzar bundle de ZXing (SystemJS en Rock no resuelve bare npm imports)
+            if (target === "@zxing/browser" || target.startsWith("@zxing/browser")) {
+                return false;
+            }
+            if (target.startsWith("@zxing/")) {
+                return false;
+            }
+
+            // Mantener style-inject interno (si postcss lo usa)
+            // Mantener style-inject interno (SystemJS no puede cargarlo desde /node_modules)
+            if (target.includes("style-inject")) {
+                return false;
+            }
+
+
+
             // Check if this is a primary bundle.
             if (source === undefined) {
                 return false;
@@ -298,11 +310,6 @@ function defineFileConfig(input, output, options) {
                 return false;
             }
 
-            // Always keep the CSS style inejector internal.
-            if (target.includes("style-inject.es.js")) {
-                return false;
-            }
-
             // If we are building a bundled file then include any relative imports.
             if (options.bundled || options.nested) {
                 if (target.startsWith("./") || target.startsWith(absoluteSrcPath)) {
@@ -313,27 +320,33 @@ function defineFileConfig(input, output, options) {
             return true;
         },
 
+
         plugins: [
             virtualPlugin,
 
             resolve({
                 browser: true,
-                extensions: [".js", ".ts"]
+                // ✅ agrega .mjs para que resuelva ESM
+                extensions: [".mjs", ".js", ".ts"]
             }),
 
             commonjs(),
 
             vue({
                 include: [/\.obs$/i],
-                preprocessStyles: true,
+                preprocessStyles: false,
                 needMap: false
             }),
 
+
             postcss({
-                plugins: [
-                    cssnano()
-                ]
+                inject: {
+                    insertAt: "top"
+                },
+                minimize: true,
+                plugins: [cssnano()]
             }),
+
 
             babel({
                 babelHelpers: "bundled",
@@ -348,25 +361,30 @@ function defineFileConfig(input, output, options) {
         ]
     });
 
-    // If they requested minification, then do so.
     if (options.minify) {
         config.plugins.push(terser());
     }
 
-    // If they wanted to copy it, do that after the bundle is closed.
+    // ✅ Copia normal (lo que ya hace Rock para copiar el .js y .map al RockWeb)
     if (options.copy) {
         const copySource = path.relative(cwd(), output).replace(/\\/g, "/");
         const copyDestination = path.relative(cwd(), options.copy).replace(/\\/g, "/");
 
         config.plugins.push(copy({
             targets: [
+                { src: copySource, dest: copyDestination },
+                { src: `${copySource}.map`, dest: copyDestination }
+            ],
+            hook: "closeBundle"
+        }));
+
+        // ✅ Copia EXTRA: tu vendor bundle a la carpeta del Block en RockWeb
+        // (esto hace que exista: RockWeb/Obsidian/Blocks/QREVENT/vendor/zxing.bundle.js)
+        config.plugins.push(copy({
+            targets: [
                 {
-                    src: copySource,
-                    dest: copyDestination,
-                },
-                {
-                    src: `${copySource}.map`,
-                    dest: copyDestination,
+                    src: "src/QREVENT/vendor/zxing.bundle.js",
+                    dest: path.join(options.copy, "vendor")
                 }
             ],
             hook: "closeBundle"
@@ -375,6 +393,7 @@ function defineFileConfig(input, output, options) {
 
     return config;
 }
+
 
 // #endregion
 

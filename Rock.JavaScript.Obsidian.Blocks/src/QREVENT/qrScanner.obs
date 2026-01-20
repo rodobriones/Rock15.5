@@ -1,0 +1,865 @@
+﻿<template>
+    <Panel type="block" title="Eventos • Scanner QR">
+        <template #default>
+            <div class="qrwrap">
+                <!-- HEADER -->
+                <div class="qrhead">
+                    <div>
+                        <div class="qrtitle">Check-in por QR</div>
+                        <div class="qrsub text-muted">
+                            Selecciona un evento y registra asistencia escaneando QR o buscándolo por nombre/email.
+                        </div>
+                    </div>
+
+                    <div class="qrstatus" :class="statusPillClass">
+                        <span class="qrdot"></span>
+                        <span>{{ statusPillText }}</span>
+                    </div>
+                </div>
+
+                <!-- LISTA DE EVENTOS -->
+                <div v-if="view === 'list'" class="qrcard">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <TextBox
+                                v-model="q"
+                                label="Buscar evento"
+                                placeholder="Buscar…"
+                                @keyup="onSearchKeyup" />
+                        </div>
+
+                        <div class="col-md-4" style="padding-top: 25px;">
+                            <CheckBox
+                                v-model="showAll"
+                                label="Filtros"
+                                text="Mostrar todos (incluye finalizados)" />
+                        </div>
+                    </div>
+
+                    <div v-if="err" class="mt-2">
+                        <NotificationBox alertType="danger">
+                            {{ err }}
+                        </NotificationBox>
+                    </div>
+
+                    <div class="mt-3">
+                        <NotificationBox v-if="loading" alertType="info">
+                            Cargando…
+                        </NotificationBox>
+
+                        <div v-if="!loading && filteredEvents.length === 0" class="text-muted">
+                            Sin resultados
+                        </div>
+
+                        <div v-if="!loading && filteredEvents.length">
+                            <div
+                                v-for="ev in filteredEvents"
+                                :key="ev.id"
+                                class="qritem"
+                                @click="selectEvent(ev)">
+                                <div class="qritemMain">
+                                    <div class="qritemName">{{ ev.name }}</div>
+                                    <div class="qritemMeta text-muted">
+                                        {{ fmtDate(ev.dateBegin) }} → {{ fmtDate(ev.dateEnd) }}
+                                    </div>
+                                </div>
+
+                                <div class="qritemRight">
+                                    <span v-if="isFinished(ev)" class="qrbadge">Finalizado</span>
+                                    <span class="qrarrow">›</span>
+                                </div>
+                            </div>
+
+                            <div class="text-muted mt-2" style="font-size:12px;">
+                                * Si no eres Admin, aquí solo verás eventos permitidos por tu acceso (si aplicas tu filtro en backend).
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SCANNER / CHECK-IN -->
+                <div v-else class="qrcard">
+                    <div class="qreventRow">
+                        <div style="min-width:0;">
+                            <div class="text-muted" style="font-size:12px;">Evento seleccionado</div>
+                            <div class="qreventName">
+                                {{ selectedEvent?.name || ("ID " + selectedEventId) }}
+                            </div>
+                        </div>
+
+                        <RockButton btnType="link" @click="backToList" :disabled="busy">
+  Cambiar
+</RockButton>
+
+                    </div>
+
+                    <div v-if="err" class="mt-2">
+                        <NotificationBox alertType="danger">
+                            {{ err }}
+                        </NotificationBox>
+                    </div>
+
+                    <div class="mt-3">
+                        <!-- VIDEO -->
+                        <div class="qrvideoShell">
+                            <video
+                                ref="videoRef"
+                                muted
+                                playsinline
+                                class="qrvideo"></video>
+
+                            <div class="qroverlay">
+                                <div class="qrframe"></div>
+
+                                <div v-if="!scanning" class="qroverText">
+                                    <div class="qroverTitle">Cámara apagada</div>
+                                    <div class="qroverSub">Pulsa “Iniciar cámara” para escanear.</div>
+                                </div>
+
+                                <div v-else class="qroverHint">
+                                    Apunta al QR dentro del recuadro
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="qractionRow">
+                            <RockButton btnType="primary" @click="startScan" :disabled="scanning || busy">
+                                {{ scanning ? "Escaneando…" : "Iniciar cámara" }}
+                            </RockButton>
+
+                            <RockButton btnType="default" @click="stopScan" :disabled="!scanning">
+                                Detener
+                            </RockButton>
+                        </div>
+
+                        <!-- BANNER QR -->
+                        <div class="qrbanner" :class="bannerClass">
+                            <div class="qrbannerTop">
+                                <div class="qrbannerIcon">{{ bannerIcon }}</div>
+                                <div class="qrbannerText">
+                                    <div class="qrbannerTitle">{{ bannerTitle }}</div>
+                                    <div v-if="bannerName" class="qrbannerSub text-muted">{{ bannerName }}</div>
+                                </div>
+                            </div>
+
+                            <div v-if="lastCode" class="qrbannerCode text-muted">
+                                QR: {{ lastCode }}
+                            </div>
+
+                            <div v-if="busy" class="qrbannerBusy text-muted">
+                                Procesando…
+                            </div>
+                        </div>
+
+                        <!-- BUSCAR POR NOMBRE/EMAIL -->
+                        <div class="mt-3">
+                            <TextBox
+                                v-model="manualName"
+                                label="Buscar asistente por nombre o email"
+                                placeholder="Ej: Juan Perez o juan@correo.com"
+                                @keyup="onNameKeyup" />
+
+                            <div v-if="searchingName" class="text-muted" style="font-size:12px; margin-top:6px;">
+                                Buscando…
+                            </div>
+
+                            <div
+                                v-if="!searchingName && manualName.trim().length >= 2 && nameResults.length === 0"
+                                class="text-muted"
+                                style="font-size:12px; margin-top:6px;">
+                                Sin resultados
+                            </div>
+
+                            <div
+                                v-if="nameResults.length"
+                                class="mt-2"
+                                style="border:1px solid #ececf0; border-radius:12px; overflow:hidden;">
+
+                                <div
+                                    v-for="r in nameResults"
+                                    :key="r.registrantId"
+                                    class="qrpick"
+                                    :class="{ 'qrpick--selected': lastPickedRegistrantId === r.registrantId }"
+                                >
+                                    <div style="min-width:0;">
+                                        <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            {{ r.name }}
+                                        </div>
+
+                                        <div v-if="r.email"
+                                             class="text-muted"
+                                             style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            {{ r.email }}
+                                        </div>
+
+                                        <div class="text-muted" style="font-size:11px;">
+                                            ID: {{ r.registrantId }}
+                                        </div>
+                                    </div>
+
+                                    <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px;">
+                                        <span v-if="r.checkedIn" class="qrbadge">Ya asistió</span>
+                                        <span v-if="lastPickedRegistrantId === r.registrantId" class="qrbadge">Marcado</span>
+
+                                        <RockButton
+                                            btnType="primary"
+                                            size="sm"
+                                            @click="markFromList(r)"
+                                            :disabled="busy || r.checkedIn">
+                                            Marcar
+                                        </RockButton>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-muted mt-2" style="font-size:12px;">
+                            Tip: En iPhone, asegúrate de permitir cámara al navegador. Si cambiaste permisos, recarga la página.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL AUTOCLOSE 3s -->
+            <div v-if="modalOpen" class="qrmodalBack" @click="closeModal">
+                <div class="qrmodal" @click.stop>
+                    <div class="qrmodalTitle">{{ modalTitle }}</div>
+                    <div class="qrmodalMsg">{{ modalMessage }}</div>
+                    <div class="qrmodalFoot text-muted">Se cerrará automáticamente…</div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel";
+import TextBox from "@Obsidian/Controls/textBox";
+import CheckBox from "@Obsidian/Controls/checkBox";
+import RockButton from "@Obsidian/Controls/rockButton";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+
+type EventItem = {
+    id: number;
+    name: string;
+    dateBegin?: string | null;
+    dateEnd?: string | null;
+};
+
+type InitBox = {
+    eventos: EventItem[];
+};
+
+type RegistrantItem = {
+    registrantId: number;
+    personId: number;
+    name: string;
+    email: string;
+    checkedIn: boolean;
+};
+
+type SearchRegistrantsResponse = {
+    results: RegistrantItem[];
+};
+
+const config = useConfigurationValues<InitBox>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const view = ref<"list" | "scan">("list");
+
+const q = ref<string>("");
+const showAll = ref<boolean>(false);
+const loading = ref<boolean>(false);
+const err = ref<string>("");
+
+const allEvents = ref<EventItem[]>(config.eventos || []);
+
+const selectedEvent = ref<EventItem | null>(null);
+const selectedEventId = ref<number>(0);
+
+const scanning = ref<boolean>(false);
+const busy = ref<boolean>(false);
+
+const lastCode = ref<string>("");
+
+const bannerStatus = ref<string>("");
+const bannerName = ref<string>("");
+const bannerTitle = ref<string>("Listo para escanear");
+
+const debounceHandle = ref<number | null>(null);
+
+// video + stream
+const videoRef = ref<HTMLVideoElement | null>(null);
+let stream: MediaStream | null = null;
+
+// ZXing via vendor bundle (SystemJS)
+let zxingReader: any = null;
+
+async function getZxingModule(): Promise<any> {
+    const SystemJs = (window as any).System;
+    if (!SystemJs?.import) {
+        throw new Error("SystemJS no está disponible en esta página.");
+    }
+    return await SystemJs.import("/Obsidian/Blocks/QREVENT/vendor/zxing.lib.js");
+}
+
+async function reloadEvents() {
+    loading.value = true;
+    err.value = "";
+
+    try {
+        const bag = { q: q.value || "", showAll: Boolean(showAll.value) };
+        const res = await invokeBlockAction<any>("SearchEvents", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudieron cargar los eventos.";
+            return;
+        }
+
+        allEvents.value = (res.data.events || []) as EventItem[];
+    } catch {
+        err.value = "Error cargando eventos.";
+    } finally {
+        loading.value = false;
+    }
+}
+
+watch(showAll, () => {
+    reloadEvents();
+});
+
+// cooldown
+// cooldown
+let lastScanAt = 0;
+const scanCooldownMs = 900;
+
+// HOLD después de resultado (para evitar re-escaneo inmediato mientras el modal está visible)
+let scanHoldUntil = 0;
+const postResultHoldMs = 3000; // igual que el modal (ajusta si quieres)
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+
+// Buscar por nombre/email
+const manualName = ref<string>("");
+const searchingName = ref<boolean>(false);
+const nameResults = ref<RegistrantItem[]>([]);
+const nameDebounceHandle = ref<number | null>(null);
+const lastPickedRegistrantId = ref<number | null>(null);
+
+// Modal 3s
+const modalOpen = ref<boolean>(false);
+const modalTitle = ref<string>("");
+const modalMessage = ref<string>("");
+let modalTimer: number | null = null;
+
+function showModal(title: string, message: string) {
+    modalTitle.value = title;
+    modalMessage.value = message;
+    modalOpen.value = true;
+
+    if (modalTimer) window.clearTimeout(modalTimer);
+
+    modalTimer = window.setTimeout(() => {
+        modalOpen.value = false;
+        modalTimer = null;
+    }, 3000);
+}
+
+function closeModal() {
+    modalOpen.value = false;
+    if (modalTimer) {
+        window.clearTimeout(modalTimer);
+        modalTimer = null;
+    }
+}
+
+function parseDate(s?: string | null): Date | null {
+    if (!s) return null;
+    const d = new Date(String(s).replace(" ", "T"));
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isFinished(ev: EventItem): boolean {
+    const end = parseDate(ev.dateEnd);
+    if (!end) return false;
+    return end.getTime() < Date.now();
+}
+
+function fmtDate(s?: string | null): string {
+    if (!s) return "—";
+    const d = parseDate(s);
+    if (!d) return String(s);
+    return d.toLocaleString();
+}
+
+const filteredEvents = computed<EventItem[]>(() => {
+    const list = allEvents.value || [];
+    const needle = q.value.trim().toLowerCase();
+
+    const byText = needle
+        ? list.filter(e => (e.name || "").toLowerCase().includes(needle))
+        : list;
+
+    if (showAll.value) return byText;
+    return byText.filter(ev => !isFinished(ev));
+});
+
+const bannerClass = computed(() => {
+    if (!bannerStatus.value) return "qrbanner--idle";
+    if (bannerStatus.value === "checked_in") return "qrbanner--ok";
+    if (bannerStatus.value === "already_used") return "qrbanner--warn";
+    if (bannerStatus.value === "not_found") return "qrbanner--bad";
+    if (bannerStatus.value === "error") return "qrbanner--bad";
+    return "qrbanner--idle";
+});
+
+const bannerIcon = computed(() => {
+    if (!bannerStatus.value) return "◎";
+    if (bannerStatus.value === "checked_in") return "✓";
+    if (bannerStatus.value === "already_used") return "!";
+    if (bannerStatus.value === "not_found") return "×";
+    if (bannerStatus.value === "error") return "×";
+    return "◎";
+});
+
+const statusPillText = computed(() => {
+    if (busy.value) return "Procesando";
+    if (view.value === "list") return "Lista";
+    if (scanning.value) return "Escaneando";
+    return "Listo";
+});
+
+const statusPillClass = computed(() => {
+    if (busy.value) return "qrstatus--busy";
+    if (view.value === "list") return "qrstatus--idle";
+    if (scanning.value) return "qrstatus--scan";
+    return "qrstatus--idle";
+});
+
+function setBanner(status: string, title: string, name: string, code: string) {
+    bannerStatus.value = status || "";
+    bannerTitle.value = title || "—";
+    bannerName.value = name || "";
+    lastCode.value = code || "";
+}
+
+function onSearchKeyup() {
+    if (debounceHandle.value) {
+        window.clearTimeout(debounceHandle.value);
+    }
+
+    debounceHandle.value = window.setTimeout(() => {
+        reloadEvents();
+    }, 250);
+}
+
+
+function selectEvent(ev: EventItem) {
+    selectedEvent.value = ev;
+    selectedEventId.value = ev.id;
+    view.value = "scan";
+    err.value = "";
+    setBanner("", "Listo para escanear", "", "");
+
+    manualName.value = "";
+    nameResults.value = [];
+    lastPickedRegistrantId.value = null;
+}
+
+async function backToList() {
+    await stopScan(); // apaga cámara sí o sí
+
+    selectedEvent.value = null;
+    selectedEventId.value = 0;
+    view.value = "list";
+    manualName.value = "";
+    nameResults.value = [];
+    lastPickedRegistrantId.value = null;
+}
+
+
+async function startScan() {
+    err.value = "";
+
+    if (!videoRef.value) {
+        err.value = "No se encontró el elemento de video.";
+        return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        err.value = "Tu navegador no soporta cámara (getUserMedia).";
+        return;
+    }
+
+    try {
+        await stopScanInternal(true);
+
+        const constraints: MediaStreamConstraints = {
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoRef.value.srcObject = stream;
+        await videoRef.value.play();
+
+        scanning.value = true;
+        setBanner("", "Escaneando…", "", "");
+
+        const mod = await getZxingModule();
+        zxingReader = new mod.BrowserQRCodeReader();
+
+        scanLoopZXing();
+    } catch (e: any) {
+        const msg = String(e?.name || e?.message || "");
+        if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+            err.value = "Permiso de cámara denegado. Actívalo en el navegador y vuelve a intentar.";
+        } else if (msg.includes("NotFoundError")) {
+            err.value = "No se encontró cámara disponible en el dispositivo.";
+        } else {
+            err.value = "No se pudo iniciar la cámara.";
+        }
+        scanning.value = false;
+    }
+}
+
+function scanLoopZXing() {
+    if (!scanning.value || !videoRef.value || !zxingReader) return;
+
+    zxingReader.decodeOnceFromVideoElement(videoRef.value)
+        .then(async (result: any) => {
+            const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
+
+            if (!raw) {
+                if (scanning.value) scanLoopZXing();
+                return;
+            }
+
+            const now = Date.now();
+
+// si hay hold activo (ej: modal visible), ignorar lectura
+if (now < scanHoldUntil) {
+    if (scanning.value) scanLoopZXing();
+    return;
+}
+
+if (now - lastScanAt < scanCooldownMs) {
+    if (scanning.value) scanLoopZXing();
+    return;
+}
+
+lastScanAt = now;
+
+
+            try { navigator.vibrate?.(35); } catch { }
+
+            scanning.value = false;
+await submitQrCode(raw);
+
+// Activa hold por el mismo tiempo del modal
+scanHoldUntil = Date.now() + postResultHoldMs;
+
+// Espera ese tiempo antes de reanudar
+await sleep(postResultHoldMs);
+
+scanning.value = true;
+if (scanning.value) scanLoopZXing();
+
+        })
+        .catch((e: any) => {
+            const msg = String(e?.name || e?.message || e || "");
+            if (msg.toLowerCase().includes("notfound")) {
+                if (scanning.value) scanLoopZXing();
+                return;
+            }
+
+            err.value = "Error leyendo QR. Intenta reiniciar la cámara.";
+            scanning.value = false;
+        });
+}
+
+async function stopScan() {
+    await stopScanInternal(false);
+}
+
+async function stopScanInternal(keepState: boolean) {
+    zxingReader = null;
+
+    try {
+        if (videoRef.value) {
+            const s: any = videoRef.value.srcObject;
+            if (s && s.getTracks) {
+                s.getTracks().forEach((t: any) => t.stop());
+            }
+            videoRef.value.srcObject = null;
+        }
+    } catch { }
+
+    stream = null;
+
+    if (!keepState) {
+        scanning.value = false;
+        setBanner("", "Listo para escanear", "", lastCode.value);
+    }
+}
+
+async function submitQrCode(code: string) {
+    if (busy.value) return;
+
+    if (!selectedEventId.value) {
+        setBanner("error", "Selecciona un evento", "", code);
+        showModal("Error", "Selecciona un evento antes de escanear.");
+        return;
+    }
+
+    const c = String(code || "").trim();
+    if (!c) return;
+
+    busy.value = true;
+
+    try {
+        const bag = { eventId: Number(selectedEventId.value), code: c };
+        const res = await invokeBlockAction<any>("ProcessQr", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            setBanner("error", res.errorMessage || "Error al validar", "", c);
+            showModal("Error", res.errorMessage || "Error al validar QR.");
+            return;
+        }
+
+        const status = String(res.data.status || "");
+        const name = String(res.data.name || "");
+        const message = String(res.data.message || "");
+
+        setBanner(status, message || "Resultado", name, c);
+
+        if (status === "checked_in") {
+            showModal("Asistencia registrada", (name ? name + " • " : "") + (message || "Marcado correctamente"));
+        } else if (status === "already_used") {
+            showModal("Ya estaba marcado", (name ? name + " • " : "") + (message || "Ya asistió"));
+        } else {
+            showModal("No encontrado", message || "Código no encontrado");
+        }
+
+    } catch {
+        setBanner("error", "Error al validar", "", c);
+        showModal("Error", "Error al validar QR.");
+    } finally {
+        busy.value = false;
+    }
+}
+
+function onNameKeyup() {
+    if (nameDebounceHandle.value) {
+        window.clearTimeout(nameDebounceHandle.value);
+    }
+
+    nameDebounceHandle.value = window.setTimeout(() => {
+        searchByName();
+    }, 250);
+}
+
+async function searchByName() {
+    const evId = Number(selectedEventId.value || 0);
+    const needle = manualName.value.trim();
+
+    if (!evId || needle.length < 2) {
+        nameResults.value = [];
+        return;
+    }
+
+    searchingName.value = true;
+
+    try {
+        const bag = {
+            eventId: evId,
+            q: needle,
+            take: 30,
+            includeCheckedIn: true
+        };
+
+        const res = await invokeBlockAction<SearchRegistrantsResponse>("SearchRegistrants", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            nameResults.value = [];
+            return;
+        }
+
+        nameResults.value = (res.data.results || []) as RegistrantItem[];
+    } catch {
+        nameResults.value = [];
+    } finally {
+        searchingName.value = false;
+    }
+}
+
+async function markFromList(r: RegistrantItem) {
+    if (busy.value) return;
+
+    const evId = Number(selectedEventId.value || 0);
+    if (!evId) {
+        showModal("Error", "Selecciona un evento.");
+        return;
+    }
+
+    busy.value = true;
+    lastPickedRegistrantId.value = r.registrantId;
+
+    try {
+        const bag = { eventId: evId, registrantId: r.registrantId };
+        const res = await invokeBlockAction<any>("CheckInRegistrant", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            showModal("Error", res.errorMessage || "No se pudo marcar asistencia.");
+            return;
+        }
+
+        const status = String(res.data.status || "");
+        const name = String(res.data.name || r.name || "");
+        const message = String(res.data.message || "");
+
+        if (status === "checked_in") {
+            showModal("Asistencia registrada", `${name} • ${message || "Marcado correctamente"}`);
+        } else if (status === "already_used") {
+            showModal("Ya estaba marcado", `${name} • ${message || "Ya asistió"}`);
+        } else {
+            showModal("No encontrado", `${name} • ${message || "No se pudo marcar"}`);
+        }
+
+        await searchByName();
+    } catch {
+        showModal("Error", "Error al registrar asistencia.");
+    } finally {
+        busy.value = false;
+    }
+}
+
+onBeforeUnmount(() => {
+    stopScan();
+    closeModal();
+});
+</script>
+
+<style>
+.qrwrap { max-width: 980px; margin: 0 auto; }
+.qrhead { display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; margin-bottom: 14px; }
+.qrtitle { font-size: 18px; font-weight: 800; letter-spacing: 0.2px; }
+.qrsub { font-size: 12px; margin-top: 2px; }
+
+.qrcard { background: #fff; border: 1px solid #e7e7ea; border-radius: 14px; padding: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
+
+.qrstatus { display:flex; align-items:center; gap:8px; border-radius: 999px; padding: 7px 10px; font-size: 12px; border: 1px solid #e7e7ea; background: #fafafa; white-space: nowrap; }
+.qrdot { width: 8px; height: 8px; border-radius: 50%; background: #999; display:inline-block; }
+.qrstatus--scan .qrdot { background: #2f71b2; }
+.qrstatus--busy .qrdot { background: #f0ad4e; }
+
+.qritem { border: 1px solid #ececf0; border-radius: 12px; padding: 12px; margin-bottom: 10px; display:flex; align-items:center; justify-content:space-between; gap: 12px; cursor: pointer; transition: transform .06s ease, box-shadow .06s ease, border-color .06s ease; background: #fff; }
+.qritem:hover { border-color: #d9d9df; box-shadow: 0 10px 18px rgba(0,0,0,0.06); transform: translateY(-1px); }
+.qritemName { font-weight: 700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qritemMeta { font-size: 12px; margin-top: 2px; }
+.qritemRight { display:flex; align-items:center; gap:10px; flex: 0 0 auto; }
+.qrarrow { font-size: 22px; line-height: 1; color: #888; margin-left: 2px; }
+
+.qrbadge { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid #e0e0e6; background: #f5f5f7; color: #555; }
+
+.qreventRow { display:flex; align-items:center; justify-content:space-between; gap: 12px; }
+.qreventName {
+  font-weight: 800;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  word-break: break-word;
+}
+
+.qrvideoShell { position: relative; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid #1e1e1e; }
+.qrvideo { width: 100%; height: 340px; object-fit: cover; display:block; }
+
+.qroverlay { position:absolute; inset:0; pointer-events:none; }
+.qrframe { position:absolute; left: 50%; top: 50%; width: min(72vw, 320px); height: min(72vw, 320px); transform: translate(-50%, -50%); border-radius: 16px; border: 2px solid rgba(255,255,255,0.65); box-shadow: 0 0 0 9999px rgba(0,0,0,0.25); }
+.qroverText { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; text-align:center; padding: 18px; }
+.qroverTitle { font-weight: 800; font-size: 16px; }
+.qroverSub { margin-top: 4px; font-size: 12px; opacity: 0.85; }
+
+.qroverHint { position:absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 999px; }
+
+.qractionRow { margin-top: 10px; display:flex; gap: 8px; }
+
+.qrbanner { margin-top: 12px; border-radius: 14px; border: 1px solid #e7e7ea; background: #fafafa; padding: 12px; }
+.qrbannerTop { display:flex; gap: 10px; align-items:flex-start; }
+.qrbannerIcon { width: 28px; height: 28px; border-radius: 10px; display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid #e7e7ea; font-weight: 900; }
+.qrbannerTitle { font-weight: 900; font-size: 16px; }
+.qrbannerCode { margin-top: 6px; font-size: 12px; }
+.qrbannerBusy { margin-top: 6px; font-size: 12px; }
+
+.qrbanner--ok { border-color: rgba(40,167,69,0.35); background: rgba(40,167,69,0.08); }
+.qrbanner--warn { border-color: rgba(240,173,78,0.45); background: rgba(240,173,78,0.10); }
+.qrbanner--bad { border-color: rgba(220,53,69,0.35); background: rgba(220,53,69,0.08); }
+.qrbanner--idle { }
+
+.qrpick {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f3;
+  background: #fff;
+}
+.qrpick:last-child { border-bottom: none; }
+.qrpick--selected { background: #f7fbff; }
+
+.qrmodalBack {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+}
+.qrmodal {
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e7e7ea;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.20);
+  padding: 14px;
+}
+.qrmodalTitle { font-weight: 900; font-size: 16px; }
+.qrmodalMsg { margin-top: 6px; font-size: 13px; }
+.qrmodalFoot { margin-top: 10px; font-size: 12px; }
+
+/* Evita overflow en móvil: permite que el lado derecho baje de línea */
+.qritemMain { min-width: 0; } /* importantísimo para ellipsis real */
+
+@media (max-width: 480px) {
+  .qritem {
+    flex-wrap: wrap;            /* permite salto de línea */
+    align-items: flex-start;
+  }
+
+  .qritemRight {
+    width: 100%;                /* baja a la siguiente línea */
+    justify-content: flex-end;  /* chip a la derecha */
+    gap: 8px;
+  }
+
+  .qrbadge {
+    font-size: 10px;
+    padding: 2px 6px;
+    white-space: nowrap;        /* no partir “Finalizado” */
+  }
+
+  .qrarrow {
+    display: none;              /* opcional: en móvil estorba */
+  }
+}
+
+</style>

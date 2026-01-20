@@ -87,6 +87,7 @@
     <Content Include="src\Group\GroupAttendanceDetail\groupLocationSchedulePicker.partial.obs" />
     <Content Include="src\Group\GroupAttendanceDetail\initialsFilter.partial.obs" />
     <Content Include="src\Group\GroupAttendanceDetail\searchFilter.partial.obs" />
+    <Content Include="src\QREVENT\qrScanner.obs" />
     <Content Include="src\Security\accountEntry.obs" />
     <Content Include="src\Security\AccountEntry\completedStep.partial.obs" />
     <Content Include="src\Security\AccountEntry\confirmationSentStep.partial.obs" />
@@ -154,6 +155,7 @@
     <Folder Include="src\Finance\" />
     <Folder Include="src\Group\" />
     <Folder Include="src\Group\GroupAttendanceDetail\" />
+    <Folder Include="src\QREVENT\" />
     <Folder Include="src\Security\" />
     <Folder Include="src\Security\AccountEntry\" />
     <Folder Include="src\Security\Login\" />

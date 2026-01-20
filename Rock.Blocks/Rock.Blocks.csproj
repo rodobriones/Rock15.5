@@ -62,6 +62,7 @@
     <Compile Include="Crm\FamilyPreRegistration.cs" />
     <Compile Include="Engagement\SignUp\SignUpDetail.cs" />
     <Compile Include="Group\GroupAttendanceDetail.cs" />
+    <Compile Include="QREVENT\QRScanner.cs" />
     <Compile Include="Reporting\ServiceMetricsEntry.cs" />
     <Compile Include="Group\Scheduling\GroupScheduler.cs" />
     <Compile Include="Security\AccountEntry.cs" />
