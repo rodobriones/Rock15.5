@@ -61,6 +61,7 @@
     </Compile>
     <Compile Include="Crm\FamilyPreRegistration.cs" />
     <Compile Include="Engagement\SignUp\SignUpDetail.cs" />
+    <Compile Include="FamilyHub\FamilyHub..cs" />
     <Compile Include="Group\GroupAttendanceDetail.cs" />
     <Compile Include="QREVENT\QRScanner.cs" />
     <Compile Include="Reporting\ServiceMetricsEntry.cs" />
