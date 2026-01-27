@@ -7,7 +7,6 @@
                 </NotificationBox>
 
                 <div v-else>
-                    <!-- HEADER (mobile-first) -->
                     <div class="fhhead">
                         <div class="fhheadLeft">
                             <div class="fhtitle">Mi Familia</div>
@@ -23,7 +22,6 @@
 
                     <div v-if="statusHtml" v-html="statusHtml"></div>
 
-                    <!-- GRID (sin bootstrap para que sea estable en móvil) -->
                     <div class="fhgrid">
                         <div v-for="m in members" :key="m.personId" class="fhcol">
                             <div class="card fhcard">
@@ -37,43 +35,46 @@
 
                                     <div class="fhmemberBody">
                                         <div class="fhmemberTop">
-                                            <div class="fhmemberTitle">
-                                                <div class="fhname">
-                                                    <span class="fhnameText">{{ m.fullName }}</span>
-                                                    <span v-if="m.isMe" class="fhbadge">Yo</span>
-                                                </div>
+    <div class="fhmemberTitle">
+        <div class="fhname">
+            <span class="fhnameText">{{ m.fullName }}</span>
+            <span v-if="m.isMe" class="fhbadge">Yo</span>
+        </div>
 
-                                                <div class="fhmeta text-muted">
-                                                    {{ m.familyRole }} <span class="mx-1">•</span> {{ m.ageText }}
-                                                </div>
-                                            </div>
+        <div class="fhmeta text-muted">
+            {{ m.familyRole }} <span class="mx-1">•</span> {{ m.ageText }}
+        </div>
+    </div>
 
-                                            <div class="fhactions">
-                                                <RockButton
-                                                    class="fhEditBtn"
-                                                    btnType="default"
-                                                    size="sm"
-                                                    @click="openEdit(m.personId)"
-                                                    :disabled="busy">
-                                                    Editar
-                                                </RockButton>
-                                            </div>
-                                        </div>
+    <!-- BOTÓN LÁPIZ -->
+    <button
+    class="fhEditIconBtn"
+    @click="openEdit(m.personId)"
+    :disabled="busy"
+    aria-label="Editar">
+    ✎
+</button>
+
+</div>
+
 
                                         <div class="fhmemberInfo">
-                                            <div class="fhinfoRow">
-                                                <strong>Email:</strong>
-                                                <span class="fhinfoVal">{{ m.emailText }}</span>
-                                            </div>
-                                            <div class="fhinfoRow">
-                                                <strong>Móvil:</strong>
-                                                <span class="fhinfoVal">{{ m.mobileText }}</span>
-                                            </div>
-                                            <div class="fhinfoRow">
-                                                <strong>Parentesco conmigo:</strong>
-                                                <span class="fhinfoVal">{{ m.relationshipToMeText }}</span>
-                                            </div>
+                                        <div class="fhinfoRow fhHideMobile">
+                                            <strong>Email:</strong>
+                                            <span class="fhinfoVal">{{ m.emailText }}</span>
                                         </div>
+
+                                        <div class="fhinfoRow fhHideMobile">
+                                            <strong>Móvil:</strong>
+                                            <span class="fhinfoVal">{{ m.mobileText }}</span>
+                                        </div>
+
+                                        <div class="fhinfoRow">
+                                            <strong>Parentesco conmigo:</strong>
+                                            <span class="fhinfoVal">{{ m.relationshipToMeText }}</span>
+                                        </div>
+                                    </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -83,7 +84,6 @@
                     <!-- MODAL -->
                     <div v-if="modalOpen" class="fhmodalBack" @click="closeModal">
                         <div class="fhmodal" @click.stop>
-                            <!-- Sticky header para móvil -->
                             <div class="fhmodalTop">
                                 <div class="fhmodalTitle">
                                     {{ editModel.personId ? "Editar miembro" : "Agregar miembro" }}
@@ -131,7 +131,10 @@
                                         </div>
                                     </div>
 
-                                    <FileUploader v-model="photoFile" label="Foto" />
+                                    <FileUploader
+                                        v-model="photoFile"
+                                        label="Foto"
+                                        :binaryFileTypeGuid="config.personImageBinaryFileTypeGuid" />
 
                                     <div class="fhhelp text-muted">
                                         Al guardar, la foto se asigna como PhotoId del miembro.
@@ -157,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel";
 import RockButton from "@Obsidian/Controls/rockButton";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
@@ -166,6 +169,8 @@ import DatePicker from "@Obsidian/Controls/datePicker.obs";
 import DropDownList from "@Obsidian/Controls/dropDownList";
 import FileUploader from "@Obsidian/Controls/fileUploader";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+
 
 type ListItemBag = { text: string; value: string };
 
@@ -188,6 +193,7 @@ type InitBag = {
     members: Member[];
     relationshipRoles: ListItemBag[];
     genderOptions: ListItemBag[];
+    personImageBinaryFileTypeGuid: string;
 };
 
 type EditModel = {
@@ -247,26 +253,31 @@ const relationshipValue = computed<string>({
     }
 });
 
-/**
- * FileUploader v-model: ListItemBag|null
- * - photoFile.value?.value trae el BinaryFileId en string
- */
+// Rock 15.5.1 FileUploader v-model: ListItemBag|null
 const photoFile = ref<ListItemBag | null>(null);
-
-const photoBinaryFileId = computed<number | null>(() => {
-    const v = photoFile.value?.value;
-    if (!v) return null;
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : null;
+watch(photoFile, (val) => {
+    console.log("PHOTO FILE CHANGED:", val);
 });
 
+
+// FileUploader entrega el BinaryFileId como string en .value
+const photoBinaryFileGuid = computed<string | null>(() => {
+    const raw = photoFile.value?.value;
+    if (!raw) return null;
+
+    const s = String(raw).trim();
+    return s.length > 0 ? s : null;
+});
+
+
 const photoPreviewUrl = computed<string>(() => {
-    const id = photoBinaryFileId.value;
-    if (id && id > 0) {
-        return `/GetFile.ashx?Id=${id}`;
+    const guid = photoBinaryFileGuid.value;
+    if (guid) {
+        return `/GetImage.ashx?guid=${encodeURIComponent(guid)}&w=160&h=160&mode=crop`;
     }
     return editModel.value.photoUrl || "";
 });
+
 
 const photoPreviewInitials = computed<string>(() => {
     const full = `${(editModel.value.firstName || "").trim()} ${(editModel.value.lastName || "").trim()}`.trim();
@@ -354,6 +365,10 @@ async function save() {
     busy.value = true;
 
     try {
+            console.log("PHOTO FILE MODEL:", photoFile.value);
+    console.log("PHOTO BINARY FILE GUID:", photoBinaryFileGuid.value);
+
+
         const bag = {
             personId: editModel.value.personId,
             firstName: first,
@@ -363,7 +378,8 @@ async function save() {
             email: editModel.value.email || "",
             mobile: editModel.value.mobile || "",
             relationshipRoleId: editModel.value.relationshipRoleId,
-            photoBinaryFileId: photoBinaryFileId.value
+            photoBinaryFileGuid: photoBinaryFileGuid.value
+
         };
 
         const res = await invokeBlockAction<any>("SaveMember", { bag });
@@ -385,333 +401,107 @@ async function save() {
 </script>
 
 <style>
+/* (tu CSS igual, lo dejo tal cual lo tenías) */
 /* ========= Base wrapper ========= */
-.fhwrap {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 10px 8px;
-}
+.fhwrap { max-width: 1100px; margin: 0 auto; padding: 10px 8px; }
+.fhhead { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.fhheadLeft { min-width: 0; }
+.fhtitle { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.fhsub { font-size: 13px; line-height: 1.3; }
+.fhheadRight { flex: 0 0 auto; }
+.fhAddBtn { white-space: nowrap; }
+.fhgrid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 768px) { .fhgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .fhgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.fhcard { height: 100%; }
+.fhcardBody { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+.fhavatarWrap { flex: 0 0 auto; }
+.fhavatar { width: 56px; height: 56px; border-radius: 999px; overflow: hidden; display: grid; place-items: center; background: #f3f3f3; border: 1px solid rgba(0,0,0,0.06); }
+.fhavatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fhavatar span { font-weight: 700; }
+.fhmemberBody { min-width: 0; width: 100%; }
+.fhmemberTop { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.fhmemberTitle { min-width: 0; }
+.fhname { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.fhnameText { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.fhbadge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,0.06); white-space: nowrap; }
+.fhmeta { font-size: 12px; margin-top: 2px; }
+.fhactions { display: flex; justify-content: flex-end; }
+.fhEditBtn { white-space: nowrap; }
+.fhmemberInfo { margin-top: 8px; font-size: 12.5px; display: grid; gap: 6px; }
+.fhinfoRow { display: flex; gap: 6px; min-width: 0; }
+.fhinfoVal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fhmodalBack { position: fixed; inset: 0; background: rgba(0,0,0,0.55); padding: 12px; display: grid; place-items: center; z-index: 1050; }
+.fhmodal { width: min(920px, 100%); max-height: 90vh; overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.25); padding: 12px; }
+.fhmodalTop { position: sticky; top: 0; background: #fff; z-index: 2; display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 2px 10px 2px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+.fhmodalTitle { font-size: 16px; font-weight: 700; }
+.fhalert { margin-top: 10px; }
+/* Botón lápiz */
+.fhEditIconBtn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
 
-/* ========= Header (mobile-first) ========= */
-.fhhead {
+    width: 36px;
+    height: 36px;
+
     display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-.fhheadLeft {
-    min-width: 0;
-}
-
-.fhtitle {
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.fhsub {
-    font-size: 13px;
-    line-height: 1.3;
-}
-
-.fhheadRight {
-    flex: 0 0 auto;
-}
-
-.fhAddBtn {
-    white-space: nowrap;
-}
-
-/* ========= Grid (stable) ========= */
-.fhgrid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-}
-
-@media (min-width: 768px) {
-    .fhgrid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (min-width: 1200px) {
-    .fhgrid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
-/* ========= Card ========= */
-.fhcard {
-    height: 100%;
-}
-
-.fhcardBody {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    min-width: 0;
-}
-
-.fhavatarWrap {
-    flex: 0 0 auto;
-}
-
-/* Avatar */
-.fhavatar {
-    width: 56px;
-    height: 56px;
-    border-radius: 999px;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-    background: #f3f3f3;
-    border: 1px solid rgba(0,0,0,0.06);
-}
-
-.fhavatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.fhavatar span {
-    font-weight: 700;
-}
-
-/* Member body */
-.fhmemberBody {
-    min-width: 0;
-    width: 100%;
-}
-
-/* Top area: nombre + botón */
-.fhmemberTop {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: start;
-}
-
-.fhmemberTitle {
-    min-width: 0;
-}
-
-.fhname {
-    display: flex;
-    gap: 8px;
     align-items: center;
-    min-width: 0;
+    justify-content: center;
+
+    font-size: 18px;
+    line-height: 1;
+
+    border-radius: 50%;
+    color: #6c757d;
 }
 
-.fhnameText {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 700;
-}
-
-.fhbadge {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 999px;
+.fhEditIconBtn:hover {
     background: rgba(0,0,0,0.06);
-    white-space: nowrap;
+    color: #000;
 }
 
-.fhmeta {
-    font-size: 12px;
-    margin-top: 2px;
+.fhEditIconBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
-/* Actions */
-.fhactions {
-    display: flex;
-    justify-content: flex-end;
-}
 
-.fhEditBtn {
-    white-space: nowrap;
-}
 
-/* Info rows */
-.fhmemberInfo {
-    margin-top: 8px;
-    font-size: 12.5px;
-    display: grid;
-    gap: 6px;
-}
-
-.fhinfoRow {
-    display: flex;
-    gap: 6px;
-    min-width: 0;
-}
-
-.fhinfoVal {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* ========= Modal ========= */
-.fhmodalBack {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.55);
-    padding: 12px;
-    display: grid;
-    place-items: center;
-    z-index: 1050;
-}
-
-.fhmodal {
-    width: min(920px, 100%);
-    max-height: 90vh;
-    overflow: auto;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-    padding: 12px;
-}
-
-/* Sticky header */
-.fhmodalTop {
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 2;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 2px 10px 2px;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
-}
-
-.fhmodalTitle {
-    font-size: 16px;
-    font-weight: 700;
-}
-
-.fhalert {
-    margin-top: 10px;
-}
-
-/* Form grid */
-.fhformGrid {
-    margin-top: 12px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-}
-
-@media (min-width: 992px) {
-    .fhformGrid {
-        grid-template-columns: minmax(0, 1fr) 320px;
-        gap: 14px;
-        align-items: start;
-    }
-}
-
-.fhformLeft,
-.fhformRight {
-    min-width: 0;
-}
-
-/* Two columns inside left (date + gender) */
-.fhform2 {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-}
-
-@media (min-width: 576px) {
-    .fhform2 {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
-}
-
-/* Force controls full width */
-.fhformGrid .form-control,
-.fhformGrid input,
-.fhformGrid select,
-.fhformGrid textarea {
-    width: 100%;
-    max-width: 100%;
-}
-
-/* Photo preview */
-.fhphotoPreview {
-    display: grid;
-    place-items: center;
-    padding: 8px 0 10px;
-}
-
-.fhavatarLg {
-    width: 96px;
-    height: 96px;
-}
-
-.fhhelp {
-    font-size: 12px;
-    margin-top: 6px;
-}
-
-/* Modal actions */
-.fhmodalActions {
-    margin-top: 14px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
-
-/* ========= Mobile tweaks ========= */
+.fhformGrid { margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 992px) { .fhformGrid { grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; } }
+.fhformLeft, .fhformRight { min-width: 0; }
+.fhform2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 576px) { .fhform2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.fhformGrid .form-control, .fhformGrid input, .fhformGrid select, .fhformGrid textarea { width: 100%; max-width: 100%; }
+.fhphotoPreview { display: grid; place-items: center; padding: 8px 0 10px; }
+.fhavatarLg { width: 96px; height: 96px; }
+.fhhelp { font-size: 12px; margin-top: 6px; }
+.fhmodalActions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 @media (max-width: 576px) {
-    .fhwrap {
-        padding: 10px 6px;
-    }
+    .fhwrap { padding: 10px 6px; }
+    .fhhead { flex-direction: column; align-items: stretch; }
+    .fhheadRight, .fhAddBtn { width: 100%; }
 
-    .fhhead {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .fhheadRight,
-    .fhAddBtn {
-        width: 100%;
-    }
-
+    /* Card layout móvil: foto izquierda, info derecha */
     .fhcardBody {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
     }
 
-    .fhavatarWrap {
-        display: flex;
-        justify-content: flex-start;
-    }
+    .fhavatarWrap { display: block; }
+    .fhavatar { width: 52px; height: 52px; }
 
-    .fhmemberTop {
-        grid-template-columns: 1fr;
-    }
+    /* Título/meta a la derecha; acciones abajo */
+    .fhmemberTop { grid-template-columns: 1fr; }
+    .fhactions { width: 100%; justify-content: stretch; margin-top: 8px; }
+    .fhEditBtn { width: 100%; }
 
-    .fhactions {
-        width: 100%;
-        justify-content: stretch;
-    }
+    /* Ocultar Email y Móvil SOLO en móvil */
+    .fhHideMobile { display: none !important; }
 
-    .fhEditBtn {
-        width: 100%;
-    }
-
+    /* Deja relación en una línea bonita */
     .fhinfoVal {
         white-space: normal;
         overflow: visible;
@@ -719,17 +509,14 @@ async function save() {
         word-break: break-word;
     }
 
-    .fhmodal {
-        padding: 10px;
-        border-radius: 10px;
-    }
+    .fhmodal { padding: 10px; border-radius: 10px; }
+    .fhmodalActions { justify-content: stretch; }
+    .fhmodalActions > * { width: 100%; }
 
-    .fhmodalActions {
-        justify-content: stretch;
-    }
-
-    .fhmodalActions > * {
-        width: 100%;
+    .fhmemberTop {
+        grid-template-columns: 1fr auto;
+        align-items: center;
     }
 }
+
 </style>

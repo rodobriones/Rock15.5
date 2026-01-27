@@ -1,4 +1,5 @@
-﻿using System;
+﻿// FamilyHub.cs (completo) - Rock Obsidian Block
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -10,8 +11,7 @@ using Rock.Data;
 using Rock.Model;
 using Rock.ViewModels.Utility;
 using Rock.Web.Cache;
-using Rock.Utility;
-using Rock.Store;
+
 namespace Rock.Blocks.FamilyHub
 {
     [DisplayName("Family Hub")]
@@ -35,7 +35,8 @@ namespace Rock.Blocks.FamilyHub
                         statusHtml = "",
                         members = new List<MemberListItemBag>(),
                         relationshipRoles = new List<ListItemBag>(),
-                        genderOptions = BuildGenderOptions()
+                        genderOptions = BuildGenderOptions(),
+                        personImageBinaryFileTypeGuid = Rock.SystemGuid.BinaryFiletype.PERSON_IMAGE
                     };
                 }
 
@@ -50,11 +51,12 @@ namespace Rock.Blocks.FamilyHub
                         statusHtml = "<div class='alert alert-warning'>No se encontró un grupo familiar asociado a tu usuario.</div>",
                         members = new List<MemberListItemBag>(),
                         relationshipRoles = known.roles,
-                        genderOptions = BuildGenderOptions()
+                        genderOptions = BuildGenderOptions(),
+                        personImageBinaryFileTypeGuid = Rock.SystemGuid.BinaryFiletype.PERSON_IMAGE
                     };
                 }
 
-                var members = GetFamilyMembers(
+                var members = GetPeopleMerged(
                     rockContext,
                     familyGroupId.Value,
                     currentPerson.Id,
@@ -67,7 +69,8 @@ namespace Rock.Blocks.FamilyHub
                     statusHtml = "",
                     members = members,
                     relationshipRoles = known.roles,
-                    genderOptions = BuildGenderOptions()
+                    genderOptions = BuildGenderOptions(),
+                    personImageBinaryFileTypeGuid = Rock.SystemGuid.BinaryFiletype.PERSON_IMAGE
                 };
             }
         }
@@ -83,6 +86,8 @@ namespace Rock.Blocks.FamilyHub
             public List<MemberListItemBag> members { get; set; }
             public List<ListItemBag> relationshipRoles { get; set; }
             public List<ListItemBag> genderOptions { get; set; }
+
+            public string personImageBinaryFileTypeGuid { get; set; }
         }
 
         public class MemberListItemBag
@@ -104,12 +109,24 @@ namespace Rock.Blocks.FamilyHub
             public int personId { get; set; }
         }
 
+        private class PersonRow
+        {
+            public int PersonId { get; set; }
+            public string NickName { get; set; }
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public DateTime? BirthDate { get; set; }
+            public string Email { get; set; }
+            public string FamilyRoleName { get; set; }
+            public int? PhotoId { get; set; }
+        }
+
         public class EditModelBag
         {
             public int? personId { get; set; }
             public string firstName { get; set; }
             public string lastName { get; set; }
-            public string birthDate { get; set; } // yyyy-MM-dd
+            public string birthDate { get; set; }
             public int? gender { get; set; }
             public string email { get; set; }
             public string mobile { get; set; }
@@ -127,11 +144,13 @@ namespace Rock.Blocks.FamilyHub
             public int? personId { get; set; }
             public string firstName { get; set; }
             public string lastName { get; set; }
-            public string birthDate { get; set; } // yyyy-MM-dd o ""
+            public string birthDate { get; set; }
             public int? gender { get; set; }
             public string email { get; set; }
             public string mobile { get; set; }
             public int? relationshipRoleId { get; set; }
+
+            public string photoBinaryFileGuid { get; set; }
             public int? photoBinaryFileId { get; set; }
         }
 
@@ -167,7 +186,15 @@ namespace Rock.Blocks.FamilyHub
                     return ActionBadRequest("No se encontró grupo familiar.");
                 }
 
-                if (!IsPersonInFamily(rockContext, bag.personId, familyGroupId.Value))
+                var known = GetKnownRelationshipRoles(rockContext);
+
+                if (!CanEditPerson(
+                        rockContext,
+                        currentPerson.Id,
+                        bag.personId,
+                        familyGroupId.Value,
+                        known.knownGroupTypeId,
+                        known.ownerRoleId))
                 {
                     return ActionBadRequest("No tienes permiso para editar a esta persona.");
                 }
@@ -178,7 +205,6 @@ namespace Rock.Blocks.FamilyHub
                     return ActionBadRequest("Persona no encontrada.");
                 }
 
-                var known = GetKnownRelationshipRoles(rockContext);
                 var relRoleId = GetRelationshipRoleIdFromMeToPerson(
                     rockContext,
                     currentPerson.Id,
@@ -237,6 +263,9 @@ namespace Rock.Blocks.FamilyHub
                     });
                 }
 
+                // IMPORTANTE: calcular known UNA sola vez, y usar CanEditPerson para editar family o known.
+                var known = GetKnownRelationshipRoles(rockContext);
+
                 var personService = new PersonService(rockContext);
 
                 var isNew = !bag.personId.HasValue || bag.personId.Value <= 0;
@@ -262,7 +291,13 @@ namespace Rock.Blocks.FamilyHub
                         return ActionBadRequest("No se encontró la persona a editar.");
                     }
 
-                    if (!IsPersonInFamily(rockContext, person.Id, familyGroupId.Value))
+                    if (!CanEditPerson(
+                            rockContext,
+                            currentPerson.Id,
+                            person.Id,
+                            familyGroupId.Value,
+                            known.knownGroupTypeId,
+                            known.ownerRoleId))
                     {
                         return ActionBadRequest("No tienes permiso para editar a esta persona.");
                     }
@@ -270,6 +305,8 @@ namespace Rock.Blocks.FamilyHub
 
                 person.FirstName = first;
                 person.LastName = last;
+                person.NickName = first;
+
 
                 var bd = ParseDate(bag.birthDate);
                 if (bd.HasValue)
@@ -293,33 +330,57 @@ namespace Rock.Blocks.FamilyHub
 
                 SaveMobilePhone(rockContext, person, bag.mobile);
 
-                rockContext.SaveChanges();
+                rockContext.SaveChanges(); // asegura person.Id
+
+                // Si es NUEVO:
+                // - si relationshipRoleId viene seteado => es known-only => crear su household propio (campus heredado)
+                // - si no => miembro de mi familia => meterlo a mi family group
+                var isKnownOnly = bag.relationshipRoleId.HasValue && bag.relationshipRoleId.Value > 0;
 
                 if (isNew)
                 {
-                    AddPersonToFamily(rockContext, familyGroupId.Value, person.Id);
-                }
-
-                if (bag.photoBinaryFileId.HasValue && bag.photoBinaryFileId.Value > 0)
-                {
-                    var binaryFileService = new BinaryFileService(rockContext);
-                    var binaryFile = binaryFileService.Get(bag.photoBinaryFileId.Value);
-
-                    if (binaryFile != null)
+                    if (isKnownOnly)
                     {
-                        // MUY IMPORTANTE
-                        binaryFile.IsTemporary = false;
-
-                        person.PhotoId = binaryFile.Id;
-
-                        rockContext.SaveChanges();
+                        var campusId = currentPerson.PrimaryCampusId;
+                        EnsurePersonHasPrimaryFamily(rockContext, person.Id, campusId);
+                    }
+                    else
+                    {
+                        AddPersonToFamily(rockContext, familyGroupId.Value, person.Id);
                     }
                 }
 
+                // Foto
+                BinaryFile binaryFile = null;
+                var binaryFileService = new BinaryFileService(rockContext);
 
+                var guidString = (bag.photoBinaryFileGuid ?? string.Empty).Trim();
+                Guid bfGuid;
+                if (!guidString.IsNullOrWhiteSpace() && Guid.TryParse(guidString, out bfGuid))
+                {
+                    binaryFile = binaryFileService.Get(bfGuid);
+                }
 
-                var known = GetKnownRelationshipRoles(rockContext);
+                if (binaryFile == null && bag.photoBinaryFileId.HasValue && bag.photoBinaryFileId.Value > 0)
+                {
+                    binaryFile = binaryFileService.Get(bag.photoBinaryFileId.Value);
+                }
 
+                if (binaryFile != null)
+                {
+                    binaryFile.IsTemporary = false;
+
+                    var personImageTypeId = BinaryFileTypeCache.Get(Rock.SystemGuid.BinaryFiletype.PERSON_IMAGE.AsGuid())?.Id;
+                    if (personImageTypeId.HasValue)
+                    {
+                        binaryFile.BinaryFileTypeId = personImageTypeId.Value;
+                    }
+
+                    person.PhotoId = binaryFile.Id;
+                    rockContext.SaveChanges();
+                }
+
+                // Known relationship (si viene null/vacío, se elimina)
                 SaveKnownRelationshipFromMeToPerson(
                     rockContext,
                     currentPerson.Id,
@@ -330,7 +391,7 @@ namespace Rock.Blocks.FamilyHub
 
                 rockContext.SaveChanges();
 
-                var members = GetFamilyMembers(
+                var members = GetPeopleMerged(
                     rockContext,
                     familyGroupId.Value,
                     currentPerson.Id,
@@ -348,6 +409,49 @@ namespace Rock.Blocks.FamilyHub
         // --------------------
         // Helpers
         // --------------------
+
+        private static readonly Guid KnownRelationshipGroupTypeGuid = new Guid("E0C5A0E2-B7B3-4EF4-820D-BBF7F9A374EF");
+
+        private bool CanEditPerson(
+            RockContext rockContext,
+            int currentPersonId,
+            int targetPersonId,
+            int familyGroupId,
+            int? knownGroupTypeId,
+            int? ownerRoleId)
+        {
+            if (IsPersonInFamily(rockContext, targetPersonId, familyGroupId))
+            {
+                return true;
+            }
+
+            if (!knownGroupTypeId.HasValue || !ownerRoleId.HasValue)
+            {
+                return false;
+            }
+
+            var myKnownGroupId = new GroupService(rockContext)
+                .Queryable()
+                .Where(g => g.GroupTypeId == knownGroupTypeId.Value)
+                .Where(g => g.Members.Any(m =>
+                    m.PersonId == currentPersonId &&
+                    m.GroupRoleId == ownerRoleId.Value &&
+                    m.GroupMemberStatus == GroupMemberStatus.Active))
+                .Select(g => (int?)g.Id)
+                .FirstOrDefault();
+
+            if (!myKnownGroupId.HasValue)
+            {
+                return false;
+            }
+
+            return new GroupMemberService(rockContext)
+                .Queryable()
+                .Any(m =>
+                    m.GroupId == myKnownGroupId.Value &&
+                    m.PersonId == targetPersonId &&
+                    m.GroupMemberStatus == GroupMemberStatus.Active);
+        }
 
         private static string Clean(string s)
         {
@@ -376,8 +480,8 @@ namespace Rock.Blocks.FamilyHub
             return new List<ListItemBag>
             {
                 new ListItemBag { Text = "—", Value = "" },
-                new ListItemBag { Text = "Masculino", Value = ( (int)Rock.Model.Gender.Male ).ToString() },
-                new ListItemBag { Text = "Femenino", Value = ( (int)Rock.Model.Gender.Female ).ToString() }
+                new ListItemBag { Text = "Masculino", Value = (((int)Rock.Model.Gender.Male)).ToString() },
+                new ListItemBag { Text = "Femenino", Value = (((int)Rock.Model.Gender.Female)).ToString() }
             };
         }
 
@@ -483,32 +587,184 @@ namespace Rock.Blocks.FamilyHub
             rockContext.SaveChanges();
         }
 
-        private List<MemberListItemBag> GetFamilyMembers(
+        private void EnsurePersonHasPrimaryFamily(RockContext rockContext, int personId, int? campusId)
+        {
+            var familyGroupTypeId = GroupTypeCache.GetFamilyGroupType().Id;
+
+            var hasFamily = new GroupMemberService(rockContext)
+                .Queryable()
+                .Any(gm =>
+                    gm.PersonId == personId
+                    && gm.Group != null
+                    && gm.Group.GroupTypeId == familyGroupTypeId
+                    && gm.GroupMemberStatus == GroupMemberStatus.Active);
+
+            if (hasFamily)
+            {
+                return;
+            }
+
+            var person = new PersonService(rockContext).Get(personId);
+            if (person == null)
+            {
+                return;
+            }
+
+            // Crear grupo familiar (Household)
+            var familyGroup = new Rock.Model.Group
+            {
+                Name = (person.LastName ?? "Family") + " Family",
+                GroupTypeId = familyGroupTypeId,
+                IsActive = true,
+                CampusId = campusId
+            };
+
+            var groupService = new GroupService(rockContext);
+            groupService.Add(familyGroup);
+            rockContext.SaveChanges();
+
+            // Rol Adult (o el primero disponible)
+            var groupType = GroupTypeCache.Get(familyGroupTypeId);
+            var roles = groupType?.Roles;
+
+            var adultRole = roles?.FirstOrDefault(r => r.Name.Equals("Adult", StringComparison.OrdinalIgnoreCase))
+                            ?? roles?.FirstOrDefault();
+
+            if (adultRole == null)
+            {
+                return;
+            }
+
+            new GroupMemberService(rockContext).Add(new GroupMember
+            {
+                GroupId = familyGroup.Id,
+                PersonId = personId,
+                GroupRoleId = adultRole.Id,
+                GroupMemberStatus = GroupMemberStatus.Active
+            });
+
+            rockContext.SaveChanges();
+        }
+
+        private int? GetMyKnownGroupId(RockContext rockContext, int mePersonId, int? knownGroupTypeId, int? ownerRoleId)
+        {
+            if (!knownGroupTypeId.HasValue || !ownerRoleId.HasValue)
+            {
+                return null;
+            }
+
+            return new GroupService(rockContext)
+                .Queryable()
+                .Where(g => g.GroupTypeId == knownGroupTypeId.Value)
+                .Where(g => g.Members.Any(m =>
+                    m.PersonId == mePersonId
+                    && m.GroupRoleId == ownerRoleId.Value
+                    && m.GroupMemberStatus == GroupMemberStatus.Active))
+                .Select(g => (int?)g.Id)
+                .FirstOrDefault();
+        }
+
+        private string GetKnownRelationFromMe(RockContext rockContext, int myKnownGroupId, int otherPersonId, int ownerRoleId)
+        {
+            var roleId = new GroupMemberService(rockContext)
+                .Queryable()
+                .Where(m => m.GroupId == myKnownGroupId
+                    && m.PersonId == otherPersonId
+                    && m.GroupMemberStatus == GroupMemberStatus.Active
+                    && m.GroupRoleId != ownerRoleId)
+                .Select(m => (int?)m.GroupRoleId)
+                .FirstOrDefault();
+
+            if (!roleId.HasValue)
+            {
+                return "";
+            }
+
+            var role = new GroupTypeRoleService(rockContext).Get(roleId.Value);
+            return role != null ? role.Name : "";
+        }
+
+        private List<MemberListItemBag> GetPeopleMerged(
             RockContext rockContext,
             int familyGroupId,
             int currentPersonId,
             int? knownGroupTypeId,
             int? ownerRoleId)
         {
-            var members = new GroupMemberService(rockContext)
+            var myKnownGroupId = GetMyKnownGroupId(rockContext, currentPersonId, knownGroupTypeId, ownerRoleId);
+            var ownerRoleIdValue = ownerRoleId ?? 0;
+
+            // Familia
+            var familyMembers = new GroupMemberService(rockContext)
                 .Queryable()
                 .Where(gm => gm.GroupId == familyGroupId && gm.GroupMemberStatus == GroupMemberStatus.Active)
-                .Select(gm => new
+                .Select(gm => new PersonRow
                 {
                     PersonId = gm.PersonId,
-                    gm.Person.NickName,
-                    gm.Person.FirstName,
-                    gm.Person.LastName,
-                    gm.Person.BirthDate,
-                    gm.Person.Email,
+                    NickName = gm.Person.NickName,
+                    FirstName = gm.Person.FirstName,
+                    LastName = gm.Person.LastName,
+                    BirthDate = gm.Person.BirthDate,
+                    Email = gm.Person.Email,
                     FamilyRoleName = gm.GroupRole.Name,
-                    gm.Person.PhotoId
+                    PhotoId = gm.Person.PhotoId
                 })
+                .ToList();
+
+            // Known: SOLO del grupo donde yo soy Owner (dirección "desde mí")
+            var knownPersonIds = new List<int>();
+            if (myKnownGroupId.HasValue)
+            {
+                knownPersonIds = new GroupMemberService(rockContext)
+                    .Queryable()
+                    .Where(gm => gm.GroupId == myKnownGroupId.Value
+                        && gm.GroupMemberStatus == GroupMemberStatus.Active
+                        && gm.PersonId != currentPersonId)
+                    .Select(gm => gm.PersonId)
+                    .Distinct()
+                    .ToList();
+            }
+
+            // Unir IDs
+            var allPersonIds = new HashSet<int>(familyMembers.Select(x => x.PersonId));
+            foreach (var pid in knownPersonIds)
+            {
+                allPersonIds.Add(pid);
+            }
+
+            // Traer personas extra (solo las que no estaban en familia)
+            var familyIdsSet = new HashSet<int>(familyMembers.Select(x => x.PersonId));
+            var missingIds = allPersonIds.Where(id => !familyIdsSet.Contains(id)).ToList();
+
+            var extraPeople = new List<PersonRow>();
+            if (missingIds.Any())
+            {
+                extraPeople = new PersonService(rockContext)
+                    .Queryable()
+                    .Where(p => missingIds.Contains(p.Id))
+                    .Select(p => new PersonRow
+                    {
+                        PersonId = p.Id,
+                        NickName = p.NickName,
+                        FirstName = p.FirstName,
+                        LastName = p.LastName,
+                        BirthDate = p.BirthDate,
+                        Email = p.Email,
+                        FamilyRoleName = null,
+                        PhotoId = p.PhotoId
+                    })
+                    .ToList();
+            }
+
+            var combined = familyMembers
+                .Concat(extraPeople)
+                .GroupBy(x => x.PersonId)
+                .Select(g => g.First())
                 .ToList();
 
             var results = new List<MemberListItemBag>();
 
-            foreach (var m in members)
+            foreach (var m in combined)
             {
                 var displayFirst = !m.NickName.IsNullOrWhiteSpace() ? m.NickName : m.FirstName;
                 var fullName = (displayFirst + " " + m.LastName).Trim();
@@ -519,31 +775,35 @@ namespace Rock.Blocks.FamilyHub
 
                 var mobile = GetMobilePhone(rockContext, m.PersonId);
 
-                var relRoleId = GetRelationshipRoleIdFromMeToPerson(
-                    rockContext,
-                    currentPersonId,
-                    m.PersonId,
-                    knownGroupTypeId,
-                    ownerRoleId);
+                var knownFromMe = "";
+                if (myKnownGroupId.HasValue && ownerRoleIdValue > 0 && m.PersonId != currentPersonId)
+                {
+                    knownFromMe = GetKnownRelationFromMe(rockContext, myKnownGroupId.Value, m.PersonId, ownerRoleIdValue);
+                }
 
-                var relText = GetKnownRelationshipRoleName(rockContext, relRoleId);
+                var mixed = !m.FamilyRoleName.IsNullOrWhiteSpace()
+                    ? m.FamilyRoleName
+                    : knownFromMe;
 
                 results.Add(new MemberListItemBag
                 {
                     personId = m.PersonId,
                     fullName = fullName,
                     isMe = m.PersonId == currentPersonId,
-                    familyRole = m.FamilyRoleName ?? "—",
+                    familyRole = !m.FamilyRoleName.IsNullOrWhiteSpace() ? m.FamilyRoleName : "—",
                     ageText = ageText,
                     emailText = !m.Email.IsNullOrWhiteSpace() ? m.Email : "—",
                     mobileText = !mobile.IsNullOrWhiteSpace() ? mobile : "—",
-                    relationshipToMeText = !relText.IsNullOrWhiteSpace() ? relText : "—",
+                    relationshipToMeText = !mixed.IsNullOrWhiteSpace() ? mixed : "—",
                     photoUrl = BuildPhotoUrl(m.PhotoId, 112),
                     initials = GetInitials(fullName)
                 });
             }
 
-            return results;
+            return results
+                .OrderByDescending(x => x.isMe)
+                .ThenBy(x => x.fullName)
+                .ToList();
         }
 
         private static string BuildPhotoUrl(int? photoId, int size)
@@ -638,7 +898,7 @@ namespace Rock.Blocks.FamilyHub
         {
             var gt = new GroupTypeService(rockContext)
                 .Queryable()
-                .FirstOrDefault(t => t.Name == "Known Relationships");
+                .FirstOrDefault(t => t.Guid == KnownRelationshipGroupTypeGuid);
 
             var knownGroupTypeId = gt != null ? (int?)gt.Id : null;
 
@@ -675,7 +935,7 @@ namespace Rock.Blocks.FamilyHub
             }
             else
             {
-                rolesBag.Add(new ListItemBag { Text = "No se encontró 'Known Relationships'.", Value = "" });
+                rolesBag.Add(new ListItemBag { Text = "No se encontró el GroupType de Known Relationship.", Value = "" });
             }
 
             return (knownGroupTypeId, ownerRoleId, rolesBag);
@@ -719,17 +979,6 @@ namespace Rock.Blocks.FamilyHub
             }
 
             return existingMember.GroupRoleId;
-        }
-
-        private string GetKnownRelationshipRoleName(RockContext rockContext, int? roleId)
-        {
-            if (!roleId.HasValue)
-            {
-                return "";
-            }
-
-            var role = new GroupTypeRoleService(rockContext).Get(roleId.Value);
-            return role != null ? role.Name : "";
         }
 
         private void SaveKnownRelationshipFromMeToPerson(
