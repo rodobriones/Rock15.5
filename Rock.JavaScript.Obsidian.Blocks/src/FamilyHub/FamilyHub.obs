@@ -35,46 +35,39 @@
 
                                     <div class="fhmemberBody">
                                         <div class="fhmemberTop">
-    <div class="fhmemberTitle">
-        <div class="fhname">
-            <span class="fhnameText">{{ m.fullName }}</span>
-            <span v-if="m.isMe" class="fhbadge">Yo</span>
-        </div>
+                                            <div class="fhmemberTitle">
+                                                <div class="fhname">
+                                                    <span class="fhnameText">{{ m.fullName }}</span>
+                                                    <span v-if="m.isMe" class="fhbadge">Yo</span>
+                                                </div>
 
-        <div class="fhmeta text-muted">
-            {{ m.familyRole }} <span class="mx-1">•</span> {{ m.ageText }}
-        </div>
-    </div>
+                                                <div class="fhmeta text-muted">
+                                                    {{ m.familyRole }} <span class="mx-1">•</span> {{ m.ageText }}
+                                                </div>
+                                            </div>
 
-    <!-- BOTÓN LÁPIZ -->
-    <button
-    class="fhEditIconBtn"
-    @click="openEdit(m.personId)"
-    :disabled="busy"
-    aria-label="Editar">
-    ✎
-</button>
-
-</div>
-
+                                            <button class="fhEditIconBtn" @click="openEdit(m.personId)" :disabled="busy"
+                                                aria-label="Editar">
+                                                ✎
+                                            </button>
+                                        </div>
 
                                         <div class="fhmemberInfo">
-                                        <div class="fhinfoRow fhHideMobile">
-                                            <strong>Email:</strong>
-                                            <span class="fhinfoVal">{{ m.emailText }}</span>
-                                        </div>
+                                            <div class="fhinfoRow fhHideMobile">
+                                                <strong>Email:</strong>
+                                                <span class="fhinfoVal">{{ m.emailText }}</span>
+                                            </div>
 
-                                        <div class="fhinfoRow fhHideMobile">
-                                            <strong>Móvil:</strong>
-                                            <span class="fhinfoVal">{{ m.mobileText }}</span>
-                                        </div>
+                                            <div class="fhinfoRow fhHideMobile">
+                                                <strong>Móvil:</strong>
+                                                <span class="fhinfoVal">{{ m.mobileText }}</span>
+                                            </div>
 
-                                        <div class="fhinfoRow">
-                                            <strong>Parentesco conmigo:</strong>
-                                            <span class="fhinfoVal">{{ m.relationshipToMeText }}</span>
+                                            <div class="fhinfoRow">
+                                                <strong>Parentesco conmigo:</strong>
+                                                <span class="fhinfoVal">{{ m.relationshipToMeText }}</span>
+                                            </div>
                                         </div>
-                                    </div>
-
                                     </div>
                                 </div>
                             </div>
@@ -83,7 +76,7 @@
 
                     <!-- MODAL -->
                     <div v-if="modalOpen" class="fhmodalBack" @click="closeModal">
-                        <div class="fhmodal" @click.stop>
+                        <div class="fhmodal fhmodalApp" @click.stop>
                             <div class="fhmodalTop">
                                 <div class="fhmodalTitle">
                                     {{ editModel.personId ? "Editar miembro" : "Agregar miembro" }}
@@ -94,51 +87,107 @@
                                 </RockButton>
                             </div>
 
-                            <div v-if="editError" class="fhalert">
-                                <NotificationBox alertType="danger">
-                                    {{ editError }}
-                                </NotificationBox>
-                            </div>
-
-                            <div class="fhformGrid">
-                                <div class="fhformLeft">
-                                    <TextBox v-model="editModel.firstName" label="Nombres" />
-                                    <TextBox v-model="editModel.lastName" label="Apellidos" />
-
-                                    <div class="fhform2">
-                                        <DatePicker v-model="editModel.birthDate" label="Fecha de nacimiento" />
-                                        <DropDownList v-model="genderValue" :items="genderOptions" label="Género" />
-                                    </div>
-
-                                    <TextBox v-model="editModel.email" label="Email" />
-                                    <TextBox v-model="editModel.mobile" label="Teléfono móvil" />
-
-                                    <DropDownList
-                                        v-model="relationshipValue"
-                                        :items="relationshipRoles"
-                                        label="Parentesco conmigo (Known Relationships)" />
-
-                                    <div class="fhhelp text-muted">
-                                        Esto crea/actualiza la relación desde tu perfil hacia este miembro en Known Relationships.
-                                    </div>
+                            <div class="fhmodalBody">
+                                <div v-if="editError" class="fhalert">
+                                    <NotificationBox alertType="danger">
+                                        {{ editError }}
+                                    </NotificationBox>
                                 </div>
 
-                                <div class="fhformRight">
-                                    <div class="fhphotoPreview">
-                                        <div class="fhavatar fhavatarLg">
-                                            <img v-if="photoPreviewUrl" :src="photoPreviewUrl" alt="Foto" />
-                                            <span v-else>{{ photoPreviewInitials }}</span>
+                                <div class="fhformGrid">
+                                    <div class="fhformLeft">
+                                        <TextBox v-model="editModel.firstName" label="Nombres" />
+                                        <TextBox v-model="editModel.lastName" label="Apellidos" />
+
+                                        <div class="fhform2">
+                                            <DatePicker v-model="editModel.birthDate" label="Fecha de nacimiento" />
+                                            <DropDownList v-model="genderValue" :items="genderOptions" label="Género" />
+                                        </div>
+
+                                        <TextBox v-model="editModel.email" label="Email" />
+
+                                      <div class="fhField">
+    <div class="fhLabel">Teléfono</div>
+
+    <div class="fhPhoneInput">
+        <button
+            type="button"
+            class="fhPhoneCodeBtn"
+            :disabled="busy"
+            @click="phoneMenuOpen = !phoneMenuOpen">
+            {{ editModel.phoneCountry }}
+            <span class="fhCaret" aria-hidden="true"></span>
+        </button>
+
+        <input
+            class="fhPhoneNumberInput"
+            type="tel"
+            inputmode="numeric"
+            autocomplete="tel-national"
+            :disabled="busy"
+            v-model="editModel.phoneNumber"
+            placeholder="Teléfono móvil"
+            @input="onPhoneNumberInput"
+            @blur="phoneMenuOpen = false" />
+
+        <div v-if="phoneMenuOpen" class="fhPhoneMenu">
+            <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('502')">502</button>
+            <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('503')">503</button>
+            <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('1')">1</button>
+        </div>
+    </div>
+
+    <div class="fhHelp text-muted">Código por defecto: 502</div>
+</div>
+
+
+
+                                        <DropDownList v-model="relationshipValue" :items="relationshipRoles"
+                                            label="Parentesco conmigo (Known Relationships)" />
+
+                                        <div class="fhhelp text-muted">
+                                            Esto crea/actualiza la relación desde tu perfil hacia este miembro en Known
+                                            Relationships.
                                         </div>
                                     </div>
 
-                                    <FileUploader
-                                        v-model="photoFile"
-                                        label="Foto"
-                                        :binaryFileTypeGuid="config.personImageBinaryFileTypeGuid" />
+                                    <div class="fhformRight">
+    <div class="fhphotoCard">
+        <div class="fhphotoStage">
+            <div class="fhavatar fhavatarLg fhavatarPhoto">
+                <img v-if="photoPreviewUrl" :src="photoPreviewUrl" alt="Foto" />
+                <span v-else>{{ photoPreviewInitials }}</span>
 
-                                    <div class="fhhelp text-muted">
-                                        Al guardar, la foto se asigna como PhotoId del miembro.
-                                    </div>
+                <!-- Botón lápiz -->
+                <button
+                    type="button"
+                    class="fhPhotoPencil"
+                    :disabled="busy"
+                    @click="triggerPhotoPicker"
+                    aria-label="Cambiar foto">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- FileUploader oculto (no debe verse) -->
+        <div class="fhHiddenUploader" ref="uploaderHost">
+            <FileUploader
+                v-model="photoFile"
+                label=""
+                :binaryFileTypeGuid="config.personImageBinaryFileTypeGuid" />
+        </div>
+
+        <div class="fhhelp text-muted">
+            Tocá el lápiz para cambiar la foto. Al guardar, se asigna como PhotoId del miembro.
+        </div>
+    </div>
+</div>
+
                                 </div>
                             </div>
 
@@ -170,8 +219,6 @@ import DropDownList from "@Obsidian/Controls/dropDownList";
 import FileUploader from "@Obsidian/Controls/fileUploader";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
 
-
-
 type ListItemBag = { text: string; value: string };
 
 type Member = {
@@ -200,10 +247,13 @@ type EditModel = {
     personId: number | null;
     firstName: string;
     lastName: string;
-    birthDate: string; // yyyy-MM-dd
+    birthDate: string;
     gender: number | null;
     email: string;
-    mobile: string;
+
+    phoneCountry: string; // "+502", "+503", "+1"
+    phoneNumber: string; // dígitos
+
     relationshipRoleId: number | null;
     photoUrl: string;
 };
@@ -217,6 +267,29 @@ const statusHtml = ref<string>(config.statusHtml || "");
 const relationshipRoles = ref<ListItemBag[]>(config.relationshipRoles || []);
 const genderOptions = ref<ListItemBag[]>(config.genderOptions || []);
 
+const phoneCountries = ref<ListItemBag[]>([
+    { text: "+502", value: "+502" },
+    { text: "+503", value: "+503" },
+    { text: "+1", value: "+1" }
+]);
+
+const phoneMenuOpen = ref<boolean>(false);
+
+function setPhoneCountry(cc: string) {
+    editModel.value.phoneCountry = cc;
+    phoneMenuOpen.value = false;
+}
+
+function onPhoneNumberInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const digits = String(el.value || "").replace(/[^\d]/g, "");
+    if (digits !== el.value) {
+        el.value = digits;
+    }
+    editModel.value.phoneNumber = digits;
+}
+
+
 const modalOpen = ref<boolean>(false);
 const busy = ref<boolean>(false);
 const editError = ref<string>("");
@@ -228,7 +301,8 @@ const editModel = ref<EditModel>({
     birthDate: "",
     gender: null,
     email: "",
-    mobile: "",
+    phoneCountry: "+502",
+    phoneNumber: "",
     relationshipRoleId: null,
     photoUrl: ""
 });
@@ -259,6 +333,20 @@ watch(photoFile, (val) => {
     console.log("PHOTO FILE CHANGED:", val);
 });
 
+function onlyDigits(s: string): string {
+    return String(s || "").replace(/[^\d]/g, "");
+}
+
+function parsePhone(raw: string): { cc: string; num: string } {
+    const d = onlyDigits(raw || "");
+    if (!d) return { cc: "+502", num: "" };
+
+    if (d.startsWith("502")) return { cc: "+502", num: d.substring(3) };
+    if (d.startsWith("503")) return { cc: "+503", num: d.substring(3) };
+    if (d.startsWith("1")) return { cc: "+1", num: d.substring(1) };
+
+    return { cc: "+502", num: d };
+}
 
 // FileUploader entrega el BinaryFileId como string en .value
 const photoBinaryFileGuid = computed<string | null>(() => {
@@ -269,7 +357,6 @@ const photoBinaryFileGuid = computed<string | null>(() => {
     return s.length > 0 ? s : null;
 });
 
-
 const photoPreviewUrl = computed<string>(() => {
     const guid = photoBinaryFileGuid.value;
     if (guid) {
@@ -277,7 +364,6 @@ const photoPreviewUrl = computed<string>(() => {
     }
     return editModel.value.photoUrl || "";
 });
-
 
 const photoPreviewInitials = computed<string>(() => {
     const full = `${(editModel.value.firstName || "").trim()} ${(editModel.value.lastName || "").trim()}`.trim();
@@ -306,7 +392,8 @@ function openNew() {
         birthDate: "",
         gender: null,
         email: "",
-        mobile: "",
+        phoneCountry: "+502",
+        phoneNumber: "",
         relationshipRoleId: null,
         photoUrl: ""
     };
@@ -329,6 +416,7 @@ async function openEdit(personId: number) {
         }
 
         const m = res.data.model;
+        const p = parsePhone(String(m.mobile || ""));
 
         editModel.value = {
             personId: m.personId ?? null,
@@ -337,7 +425,8 @@ async function openEdit(personId: number) {
             birthDate: String(m.birthDate || ""),
             gender: m.gender == null ? null : Number(m.gender),
             email: String(m.email || ""),
-            mobile: String(m.mobile || ""),
+            phoneCountry: p.cc,
+            phoneNumber: p.num,
             relationshipRoleId: m.relationshipRoleId == null ? null : Number(m.relationshipRoleId),
             photoUrl: String(m.photoUrl || "")
         };
@@ -365,9 +454,9 @@ async function save() {
     busy.value = true;
 
     try {
-            console.log("PHOTO FILE MODEL:", photoFile.value);
-    console.log("PHOTO BINARY FILE GUID:", photoBinaryFileGuid.value);
-
+        const phoneDigits = onlyDigits(editModel.value.phoneNumber || "");
+        const ccDigits = onlyDigits(editModel.value.phoneCountry || "+502");
+        const combinedMobile = phoneDigits ? (ccDigits + phoneDigits) : "";
 
         const bag = {
             personId: editModel.value.personId,
@@ -376,10 +465,9 @@ async function save() {
             birthDate: editModel.value.birthDate || "",
             gender: editModel.value.gender,
             email: editModel.value.email || "",
-            mobile: editModel.value.mobile || "",
+            mobile: combinedMobile,
             relationshipRoleId: editModel.value.relationshipRoleId,
             photoBinaryFileGuid: photoBinaryFileGuid.value
-
         };
 
         const res = await invokeBlockAction<any>("SaveMember", { bag });
@@ -398,66 +486,233 @@ async function save() {
         busy.value = false;
     }
 }
+
+const uploaderHost = ref<HTMLElement | null>(null);
+
+function triggerPhotoPicker() {
+    if (busy.value) return;
+
+    // Buscar el input file que FileUploader genera internamente y disparar click
+    const host = uploaderHost.value;
+    const input = host?.querySelector('input[type="file"]') as HTMLInputElement | null;
+    input?.click();
+}
+
 </script>
 
 <style>
-/* (tu CSS igual, lo dejo tal cual lo tenías) */
 /* ========= Base wrapper ========= */
-.fhwrap { max-width: 1100px; margin: 0 auto; padding: 10px 8px; }
-.fhhead { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
-.fhheadLeft { min-width: 0; }
-.fhtitle { font-size: 20px; font-weight: 700; line-height: 1.2; }
-.fhsub { font-size: 13px; line-height: 1.3; }
-.fhheadRight { flex: 0 0 auto; }
-.fhAddBtn { white-space: nowrap; }
-.fhgrid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-@media (min-width: 768px) { .fhgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1200px) { .fhgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.fhcard { height: 100%; }
-.fhcardBody { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
-.fhavatarWrap { flex: 0 0 auto; }
-.fhavatar { width: 56px; height: 56px; border-radius: 999px; overflow: hidden; display: grid; place-items: center; background: #f3f3f3; border: 1px solid rgba(0,0,0,0.06); }
-.fhavatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.fhavatar span { font-weight: 700; }
-.fhmemberBody { min-width: 0; width: 100%; }
-.fhmemberTop { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
-.fhmemberTitle { min-width: 0; }
-.fhname { display: flex; gap: 8px; align-items: center; min-width: 0; }
-.fhnameText { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-.fhbadge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,0.06); white-space: nowrap; }
-.fhmeta { font-size: 12px; margin-top: 2px; }
-.fhactions { display: flex; justify-content: flex-end; }
-.fhEditBtn { white-space: nowrap; }
-.fhmemberInfo { margin-top: 8px; font-size: 12.5px; display: grid; gap: 6px; }
-.fhinfoRow { display: flex; gap: 6px; min-width: 0; }
-.fhinfoVal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fhmodalBack { position: fixed; inset: 0; background: rgba(0,0,0,0.55); padding: 12px; display: grid; place-items: center; z-index: 1050; }
-.fhmodal { width: min(920px, 100%); max-height: 90vh; overflow: auto; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.25); padding: 12px; }
-.fhmodalTop { position: sticky; top: 0; background: #fff; z-index: 2; display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 2px 10px 2px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-.fhmodalTitle { font-size: 16px; font-weight: 700; }
-.fhalert { margin-top: 10px; }
-/* Botón lápiz */
+.fhavatarPhoto { position: relative; }
+
+.fhPhotoPencil {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+
+    border: 1px solid rgba(0,0,0,0.10);
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+
+    display: grid;
+    place-items: center;
+
+    color: rgba(0,0,0,0.75);
+    cursor: pointer;
+}
+
+.fhPhotoPencil:hover { background: rgba(255,255,255,1); color: rgba(0,0,0,0.95); }
+.fhPhotoPencil:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Ocultar totalmente el uploader */
+.fhHiddenUploader {
+    position: absolute;
+    left: -99999px;
+    top: -99999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+
+.fhwrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px 8px;
+}
+
+.fhhead {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.fhheadLeft {
+    min-width: 0;
+}
+
+.fhtitle {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.fhsub {
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.fhheadRight {
+    flex: 0 0 auto;
+}
+
+.fhAddBtn {
+    white-space: nowrap;
+}
+
+.fhgrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 768px) {
+    .fhgrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .fhgrid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.fhcard {
+    height: 100%;
+}
+
+.fhcardBody {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.fhavatarWrap {
+    flex: 0 0 auto;
+}
+
+.fhavatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: #f3f3f3;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.fhavatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.fhavatar span {
+    font-weight: 700;
+}
+
+.fhmemberBody {
+    min-width: 0;
+    width: 100%;
+}
+
+.fhmemberTop {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.fhmemberTitle {
+    min-width: 0;
+}
+
+.fhname {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+.fhnameText {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.fhbadge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+    white-space: nowrap;
+}
+
+.fhmeta {
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.fhmemberInfo {
+    margin-top: 8px;
+    font-size: 12.5px;
+    display: grid;
+    gap: 6px;
+}
+
+.fhinfoRow {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+}
+
+.fhinfoVal {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Botón lápiz (lista) */
 .fhEditIconBtn {
     border: none;
     background: transparent;
     cursor: pointer;
-
     width: 36px;
     height: 36px;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
     font-size: 18px;
     line-height: 1;
-
     border-radius: 50%;
     color: #6c757d;
 }
 
 .fhEditIconBtn:hover {
-    background: rgba(0,0,0,0.06);
+    background: rgba(0, 0, 0, 0.06);
     color: #000;
 }
 
@@ -466,42 +721,215 @@ async function save() {
     cursor: not-allowed;
 }
 
+/* ========= Modal (app style) ========= */
+.fhmodalBack {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 12px;
+    display: grid;
+    place-items: center;
+    z-index: 1050;
+}
 
+.fhmodal {
+    width: min(920px, 100%);
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
 
-.fhformGrid { margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 992px) { .fhformGrid { grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; } }
-.fhformLeft, .fhformRight { min-width: 0; }
-.fhform2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 576px) { .fhform2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-.fhformGrid .form-control, .fhformGrid input, .fhformGrid select, .fhformGrid textarea { width: 100%; max-width: 100%; }
-.fhphotoPreview { display: grid; place-items: center; padding: 8px 0 10px; }
-.fhavatarLg { width: 96px; height: 96px; }
-.fhhelp { font-size: 12px; margin-top: 6px; }
-.fhmodalActions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.fhmodalApp {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.fhmodalTop {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 2;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.fhmodalTitle {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.fhmodalBody {
+    padding: 12px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.fhalert {
+    margin-top: 10px;
+}
+
+.fhmodalActions {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    z-index: 2;
+    padding: 12px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.fhformGrid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+@media (min-width: 992px) {
+    .fhformGrid {
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 14px;
+        align-items: start;
+    }
+}
+
+.fhformLeft,
+.fhformRight {
+    min-width: 0;
+}
+
+.fhform2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+@media (min-width: 576px) {
+    .fhform2 {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+}
+
+.fhformGrid .form-control,
+.fhformGrid input,
+.fhformGrid select,
+.fhformGrid textarea {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Teléfono: selector + input */
+.fhPhoneRow {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 12px;
+}
+
 @media (max-width: 576px) {
-    .fhwrap { padding: 10px 6px; }
-    .fhhead { flex-direction: column; align-items: stretch; }
-    .fhheadRight, .fhAddBtn { width: 100%; }
+    .fhPhoneRow {
+        grid-template-columns: 1fr;
+    }
+}
 
-    /* Card layout móvil: foto izquierda, info derecha */
+/* Foto con lápiz overlay */
+.fhphotoCard {
+    display: grid;
+    gap: 10px;
+}
+
+.fhphotoStage {
+    display: grid;
+    place-items: center;
+    position: relative;
+    padding: 6px 0 2px;
+}
+
+.fhavatarLg {
+    width: 96px;
+    height: 96px;
+}
+
+.fhPhotoEditOverlay {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    display: grid;
+    place-items: center;
+    color: rgba(0, 0, 0, 0.75);
+}
+
+.fhPhotoEditOverlay.isDisabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.fhUploaderOverlay {
+    position: absolute;
+    inset: 0;
+    opacity: 0.001;
+}
+
+.fhUploaderOverlay * {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.fhhelp {
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+/* ========= Mobile tweaks ========= */
+@media (max-width: 576px) {
+    .fhwrap {
+        padding: 10px 6px;
+    }
+
+    .fhhead {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .fhheadRight,
+    .fhAddBtn {
+        width: 100%;
+    }
+
     .fhcardBody {
         flex-direction: row;
         align-items: center;
         gap: 12px;
     }
 
-    .fhavatarWrap { display: block; }
-    .fhavatar { width: 52px; height: 52px; }
+    .fhavatarWrap {
+        display: block;
+    }
 
-    /* Título/meta a la derecha; acciones abajo */
-    .fhmemberTop { grid-template-columns: 1fr; }
-    .fhactions { width: 100%; justify-content: stretch; margin-top: 8px; }
-    .fhEditBtn { width: 100%; }
+    .fhavatar {
+        width: 52px;
+        height: 52px;
+    }
 
-    /* Ocultar Email y Móvil SOLO en móvil */
-    .fhHideMobile { display: none !important; }
+    .fhHideMobile {
+        display: none !important;
+    }
 
-    /* Deja relación en una línea bonita */
     .fhinfoVal {
         white-space: normal;
         overflow: visible;
@@ -509,14 +937,26 @@ async function save() {
         word-break: break-word;
     }
 
-    .fhmodal { padding: 10px; border-radius: 10px; }
-    .fhmodalActions { justify-content: stretch; }
-    .fhmodalActions > * { width: 100%; }
+    .fhmodalBack {
+        padding: 0;
+    }
 
-    .fhmemberTop {
-        grid-template-columns: 1fr auto;
-        align-items: center;
+    .fhmodalApp {
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .fhmodalActions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        justify-content: stretch;
+    }
+
+    .fhmodalActions>* {
+        width: 100%;
     }
 }
-
 </style>
