@@ -74,8 +74,8 @@
                                     </div>
 
                                     <div class="ssDownloadWrap">
-                                        <RockButton btnType="default" @click="downloadPdf" :disabled="busy">
-                                            📥 Descargar PDF
+                                        <RockButton btnType="default" @click="downloadImage" :disabled="busy">
+                                            📥 Descargar
                                         </RockButton>
                                     </div>
 
@@ -419,136 +419,100 @@ function qrUrl(code: string): string {
     return `/GetQRCode.ashx?data=${encodeURIComponent(code)}&size=${dim}`;
 }
 
-function downloadPdf() {
+function downloadImage() {
     if (!activeReservation.value) return;
 
     const res = activeReservation.value;
-    const qrSize = 300;
+    const qrSize = 280;
     const qrSrc = `/GetQRCode.ashx?data=${encodeURIComponent(res.reservationCode)}&size=${qrSize}`;
 
-    const html = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Reserva ${res.reservationCode}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 40px;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 24px;
-            font-weight: 800;
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 30px;
-        }
-        .info-item .label {
-            font-size: 12px;
-            color: #6B7280;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-        .info-item .value {
-            font-size: 16px;
-            font-weight: 700;
-            color: #111827;
-        }
-        .qr-section {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .qr-img {
-            width: ${qrSize}px;
-            height: ${qrSize}px;
-            border: 2px solid #E5E7EB;
-            border-radius: 12px;
-        }
-        .code {
-            margin-top: 12px;
-            font-family: monospace;
-            font-size: 14px;
-            color: #374151;
-            word-break: break-all;
-        }
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 12px;
-            color: #9CA3AF;
-        }
-        @media print {
-            body { padding: 20px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">VidaReal.tv</div>
+    // Cargar imagen QR primero
+    const qrImg = new Image();
+    qrImg.crossOrigin = "anonymous";
     
-    <div class="info-grid">
-        <div class="info-item">
-            <div class="label">Campus</div>
-            <div class="value">${res.campusName}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Día</div>
-            <div class="value">${res.occurrenceDateText}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Horario</div>
-            <div class="value">${res.scheduleName}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Cantidad</div>
-            <div class="value">${res.quantity}</div>
-        </div>
-    </div>
-    
-    <div class="qr-section">
-        <img class="qr-img" src="${qrSrc}" alt="QR Reserva">
-        <div class="code">${res.reservationCode}</div>
-    </div>
-    
-    <div class="footer">
-        Presenta este código QR al ingresar
-    </div>
-</body>
-</html>`;
+    qrImg.onload = () => {
+        // Dimensiones del canvas
+        const canvasWidth = 420;
+        const canvasHeight = 580;
+        const padding = 30;
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-        showToast("danger", "No se pudo abrir la ventana. Permite ventanas emergentes.");
-        return;
-    }
+        const canvas = document.createElement("canvas");
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            showToast("danger", "No se pudo generar la imagen.");
+            return;
+        }
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+        // Fondo blanco
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // Esperar a que cargue la imagen antes de imprimir
-    const img = printWindow.document.querySelector(".qr-img") as HTMLImageElement;
-    if (img) {
-        img.onload = () => {
-            printWindow.focus();
-            printWindow.print();
+        // Header
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("VidaReal.tv", canvasWidth / 2, 45);
+
+        // Info grid
+        const infoY = 80;
+        const labelStyle = "#6B7280";
+        const valueStyle = "#111827";
+        const colWidth = (canvasWidth - padding * 2) / 2;
+
+        const drawInfo = (label: string, value: string, x: number, y: number) => {
+            ctx.fillStyle = labelStyle;
+            ctx.font = "600 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(label.toUpperCase(), x, y);
+            
+            ctx.fillStyle = valueStyle;
+            ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+            ctx.fillText(value, x, y + 18);
         };
-        img.onerror = () => {
-            printWindow.focus();
-            printWindow.print();
-        };
-    } else {
-        printWindow.focus();
-        printWindow.print();
-    }
+
+        drawInfo("Campus", res.campusName, padding, infoY);
+        drawInfo("Día", res.occurrenceDateText, padding + colWidth, infoY);
+        drawInfo("Horario", res.scheduleName, padding, infoY + 50);
+        drawInfo("Cantidad", String(res.quantity), padding + colWidth, infoY + 50);
+
+        // QR centrado
+        const qrX = (canvasWidth - qrSize) / 2;
+        const qrY = 195;
+        
+        // Borde del QR
+        ctx.strokeStyle = "#E5E7EB";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8);
+        
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+        // Código
+        ctx.fillStyle = "#374151";
+        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(res.reservationCode, canvasWidth / 2, qrY + qrSize + 25);
+
+        // Footer
+        ctx.fillStyle = "#9CA3AF";
+        ctx.font = "12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.fillText("Presenta este código QR al ingresar", canvasWidth / 2, canvasHeight - 25);
+
+        // Descargar
+        const link = document.createElement("a");
+        link.download = `reserva-${res.reservationCode}.jpg`;
+        link.href = canvas.toDataURL("image/jpeg", 0.95);
+        link.click();
+
+        showToast("success", "Imagen descargada");
+    };
+
+    qrImg.onerror = () => {
+        showToast("danger", "No se pudo cargar el código QR.");
+    };
+
+    qrImg.src = qrSrc;
 }
 
 const campusValue = computed<string>({
