@@ -1,4 +1,11 @@
-﻿// FamilyHub.cs (completo) - Rock Obsidian Block
+﻿// FamilyHub.cs - Rock Obsidian Block (backend corregido)
+// Notas clave:
+// - Quité "using Rock.SystemGuid;" porque te causa ambigüedad con Person/BinaryFile.
+// - GetEdit ahora devuelve phoneCountryCode/phoneNumber usando GetMobilePhoneParts.
+// - GetMobilePhone() ya NO toca model/person, solo devuelve string.
+// - SaveMobilePhoneV2 usa CountryCode como string (como lo tienes en tu Rock) y Number limpio.
+// - En SaveMember tipé explícitamente Rock.Model.Person y Rock.Model.BinaryFile para evitar ambigüedad.
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -86,7 +93,6 @@ namespace Rock.Blocks.FamilyHub
             public List<MemberListItemBag> members { get; set; }
             public List<ListItemBag> relationshipRoles { get; set; }
             public List<ListItemBag> genderOptions { get; set; }
-
             public string personImageBinaryFileTypeGuid { get; set; }
         }
 
@@ -129,9 +135,16 @@ namespace Rock.Blocks.FamilyHub
             public string birthDate { get; set; }
             public int? gender { get; set; }
             public string email { get; set; }
+
+            // Compat opcional (si ya la usabas en front); puedes quitarla luego
             public string mobile { get; set; }
+
             public int? relationshipRoleId { get; set; }
             public string photoUrl { get; set; }
+
+            // NUEVO: teléfono separado
+            public string phoneCountryCode { get; set; }   // "502" / "503" / "1"
+            public string phoneNumber { get; set; }        // "30505050" / "0237294547"
         }
 
         public class GetEditResponseBag
@@ -147,9 +160,15 @@ namespace Rock.Blocks.FamilyHub
             public string birthDate { get; set; }
             public int? gender { get; set; }
             public string email { get; set; }
-            public string mobile { get; set; }
-            public int? relationshipRoleId { get; set; }
 
+            // NUEVO: teléfono separado
+            public string phoneCountryCode { get; set; }
+            public string phoneNumber { get; set; }
+
+            // Compat opcional
+            public string mobile { get; set; }
+
+            public int? relationshipRoleId { get; set; }
             public string photoBinaryFileGuid { get; set; }
             public int? photoBinaryFileId { get; set; }
         }
@@ -212,6 +231,8 @@ namespace Rock.Blocks.FamilyHub
                     known.knownGroupTypeId,
                     known.ownerRoleId);
 
+                var phoneParts = GetMobilePhoneParts(rockContext, person.Id);
+
                 var model = new EditModelBag
                 {
                     personId = person.Id,
@@ -220,7 +241,13 @@ namespace Rock.Blocks.FamilyHub
                     birthDate = person.BirthDate.HasValue ? person.BirthDate.Value.ToString("yyyy-MM-dd") : "",
                     gender = person.Gender == Rock.Model.Gender.Unknown ? (int?)null : (int)person.Gender,
                     email = person.Email ?? "",
-                    mobile = GetMobilePhone(rockContext, person.Id),
+
+                    // compat
+                    mobile = phoneParts.number ?? "",
+
+                    phoneCountryCode = phoneParts.countryCode ?? "502",
+                    phoneNumber = phoneParts.number ?? "",
+
                     relationshipRoleId = relRoleId,
                     photoUrl = BuildPhotoUrl(person.PhotoId, 160)
                 };
@@ -263,17 +290,16 @@ namespace Rock.Blocks.FamilyHub
                     });
                 }
 
-                // IMPORTANTE: calcular known UNA sola vez, y usar CanEditPerson para editar family o known.
                 var known = GetKnownRelationshipRoles(rockContext);
 
                 var personService = new PersonService(rockContext);
 
                 var isNew = !bag.personId.HasValue || bag.personId.Value <= 0;
-                Person person;
+                Rock.Model.Person person;
 
                 if (isNew)
                 {
-                    person = new Person
+                    person = new Rock.Model.Person
                     {
                         IsEmailActive = true,
                         EmailPreference = EmailPreference.EmailAllowed,
@@ -307,7 +333,6 @@ namespace Rock.Blocks.FamilyHub
                 person.LastName = last;
                 person.NickName = first;
 
-
                 var bd = ParseDate(bag.birthDate);
                 if (bd.HasValue)
                 {
@@ -328,13 +353,15 @@ namespace Rock.Blocks.FamilyHub
 
                 person.Email = Clean(bag.email);
 
-                SaveMobilePhone(rockContext, person, bag.mobile);
+                // teléfono separado
+                SaveMobilePhoneV2(
+                    rockContext,
+                    person,
+                    bag.phoneCountryCode,
+                    bag.phoneNumber);
 
                 rockContext.SaveChanges(); // asegura person.Id
 
-                // Si es NUEVO:
-                // - si relationshipRoleId viene seteado => es known-only => crear su household propio (campus heredado)
-                // - si no => miembro de mi familia => meterlo a mi family group
                 var isKnownOnly = bag.relationshipRoleId.HasValue && bag.relationshipRoleId.Value > 0;
 
                 if (isNew)
@@ -351,7 +378,7 @@ namespace Rock.Blocks.FamilyHub
                 }
 
                 // Foto
-                BinaryFile binaryFile = null;
+                Rock.Model.BinaryFile binaryFile = null;
                 var binaryFileService = new BinaryFileService(rockContext);
 
                 var guidString = (bag.photoBinaryFileGuid ?? string.Empty).Trim();
@@ -610,7 +637,6 @@ namespace Rock.Blocks.FamilyHub
                 return;
             }
 
-            // Crear grupo familiar (Household)
             var familyGroup = new Rock.Model.Group
             {
                 Name = (person.LastName ?? "Family") + " Family",
@@ -623,7 +649,6 @@ namespace Rock.Blocks.FamilyHub
             groupService.Add(familyGroup);
             rockContext.SaveChanges();
 
-            // Rol Adult (o el primero disponible)
             var groupType = GroupTypeCache.Get(familyGroupTypeId);
             var roles = groupType?.Roles;
 
@@ -694,7 +719,6 @@ namespace Rock.Blocks.FamilyHub
             var myKnownGroupId = GetMyKnownGroupId(rockContext, currentPersonId, knownGroupTypeId, ownerRoleId);
             var ownerRoleIdValue = ownerRoleId ?? 0;
 
-            // Familia
             var familyMembers = new GroupMemberService(rockContext)
                 .Queryable()
                 .Where(gm => gm.GroupId == familyGroupId && gm.GroupMemberStatus == GroupMemberStatus.Active)
@@ -711,7 +735,6 @@ namespace Rock.Blocks.FamilyHub
                 })
                 .ToList();
 
-            // Known: SOLO del grupo donde yo soy Owner (dirección "desde mí")
             var knownPersonIds = new List<int>();
             if (myKnownGroupId.HasValue)
             {
@@ -725,14 +748,12 @@ namespace Rock.Blocks.FamilyHub
                     .ToList();
             }
 
-            // Unir IDs
             var allPersonIds = new HashSet<int>(familyMembers.Select(x => x.PersonId));
             foreach (var pid in knownPersonIds)
             {
                 allPersonIds.Add(pid);
             }
 
-            // Traer personas extra (solo las que no estaban en familia)
             var familyIdsSet = new HashSet<int>(familyMembers.Select(x => x.PersonId));
             var missingIds = allPersonIds.Where(id => !familyIdsSet.Contains(id)).ToList();
 
@@ -840,6 +861,8 @@ namespace Rock.Blocks.FamilyHub
             return initials.Length > 0 ? initials.ToUpperInvariant() : "—";
         }
 
+        // Devuelve SOLO el número (para list view actual).
+        // No toca "model" ni "person" (porque aquí no existen).
         private string GetMobilePhone(RockContext rockContext, int personId)
         {
             var mobileTypeId = DefinedValueCache.GetId(Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid());
@@ -857,21 +880,56 @@ namespace Rock.Blocks.FamilyHub
             return phone ?? "";
         }
 
-        private void SaveMobilePhone(RockContext rockContext, Person person, string mobileNumber)
+        // Devuelve (countryCode, number) para el modal edit.
+        private (string countryCode, string number) GetMobilePhoneParts(RockContext rockContext, int personId)
         {
-            var number = Clean(mobileNumber);
+            var mobileTypeId = DefinedValueCache.GetId(Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid());
+            if (!mobileTypeId.HasValue)
+            {
+                return ("502", "");
+            }
 
+            var phone = new PhoneNumberService(rockContext)
+                .Queryable()
+                .Where(p => p.PersonId == personId && p.NumberTypeValueId == mobileTypeId.Value)
+                .Select(p => new { p.CountryCode, p.Number })
+                .FirstOrDefault();
+
+            var cc = phone != null && !phone.CountryCode.IsNullOrWhiteSpace() ? phone.CountryCode : "502";
+            var num = phone != null ? (phone.Number ?? "") : "";
+
+            return (cc, num);
+        }
+
+        private void SaveMobilePhoneV2(
+            RockContext rockContext,
+            Rock.Model.Person person,
+            string countryCodeRaw,
+            string numberRaw)
+        {
             var mobileTypeId = DefinedValueCache.GetId(Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid());
             if (!mobileTypeId.HasValue)
             {
                 return;
             }
 
+            var ccDigits = OnlyDigits(countryCodeRaw);
+            var numDigits = OnlyDigits(numberRaw);
+
+            // Default: 502 (string)
+            var cc = "502";
+            if (!ccDigits.IsNullOrWhiteSpace())
+            {
+                cc = ccDigits;
+            }
+
             var phoneNumberService = new PhoneNumberService(rockContext);
+
             var phone = phoneNumberService.Queryable()
                 .FirstOrDefault(p => p.PersonId == person.Id && p.NumberTypeValueId == mobileTypeId.Value);
 
-            if (number.IsNullOrWhiteSpace())
+            // Si no hay número => borrar registro existente
+            if (numDigits.IsNullOrWhiteSpace())
             {
                 if (phone != null)
                 {
@@ -880,18 +938,34 @@ namespace Rock.Blocks.FamilyHub
                 return;
             }
 
+            // Crear si no existe
             if (phone == null)
             {
                 phone = new PhoneNumber
                 {
                     PersonId = person.Id,
                     NumberTypeValueId = mobileTypeId.Value,
-                    IsMessagingEnabled = true
+                    IsMessagingEnabled = true,
+                    IsUnlisted = false
                 };
                 phoneNumberService.Add(phone);
             }
 
-            phone.Number = PhoneNumber.CleanNumber(number);
+            phone.CountryCode = cc; // string
+            phone.Number = PhoneNumber.CleanNumber(numDigits);
+            phone.IsMessagingEnabled = true;
+        }
+
+        private static string OnlyDigits(string s)
+        {
+            s = (s ?? string.Empty).Trim();
+            if (s.Length == 0)
+            {
+                return "";
+            }
+
+            var chars = s.Where(char.IsDigit).ToArray();
+            return new string(chars);
         }
 
         private (int? knownGroupTypeId, int? ownerRoleId, List<ListItemBag> roles) GetKnownRelationshipRoles(RockContext rockContext)

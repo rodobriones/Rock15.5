@@ -1,0 +1,1153 @@
+<template>
+    <Panel type="block" title="Registro Servicio Dominical">
+        <template #default>
+            <div class="sswrap">
+                <NotificationBox v-if="config.notLogged" alertType="warning">
+                    Debes iniciar sesión para registrarte.
+                </NotificationBox>
+
+                <div v-else>
+                    <!-- Stepper -->
+                    <div v-if="!activeReservation || replacing" class="ssStepper">
+                        <div class="ssStep" :class="{ active: step === 1, done: step > 1 }">
+                            <div class="ssDot">1</div>
+                            <div class="ssStepText">Campus</div>
+                        </div>
+                        <div class="ssLine" :class="{ done: step > 1 }"></div>
+                        <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
+                            <div class="ssDot">2</div>
+                            <div class="ssStepText">Horario</div>
+                        </div>
+                        <div class="ssLine" :class="{ done: step > 2 }"></div>
+                        <div class="ssStep" :class="{ active: step === 3 }">
+                            <div class="ssDot">3</div>
+                            <div class="ssStepText">Confirmar</div>
+                        </div>
+                    </div>
+
+                    <div v-if="statusHtml" v-html="statusHtml"></div>
+
+                    <!-- Reserva activa -->
+                    <div v-if="activeReservation && !replacing" class="card ssCard">
+                        <div class="card-body">
+                            <div class="ssCardTitle">Tu reserva activa</div>
+
+                            <div class="ssInfoGrid">
+                                <div>
+                                    <div class="ssLabel">Campus</div>
+                                    <div class="ssVal">{{ activeReservation.campusName }}</div>
+                                </div>
+                                <div>
+                                    <div class="ssLabel">Día</div>
+                                    <div class="ssVal">{{ activeReservation.occurrenceDateText }}</div>
+                                </div>
+                                <div>
+                                    <div class="ssLabel">Horario</div>
+                                    <div class="ssVal">{{ activeReservation.scheduleName }}</div>
+                                </div>
+                                <div>
+                                    <div class="ssLabel">Cantidad</div>
+                                    <div class="ssVal">{{ activeReservation.quantity }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ssQrWrap">
+                                <img
+                                    class="ssQrImg"
+                                    :src="qrUrl(activeReservation.reservationCode)"
+                                    alt="QR Reserva" />
+                                <div class="ssCode">{{ activeReservation.reservationCode }}</div>
+                            </div>
+
+                        <div class="ssActions">
+                           <RockButton btnType="danger" @click="openCancelModal" :disabled="busy">
+                                Cancelar reserva
+                            </RockButton>
+
+
+                            <RockButton btnType="primary" @click="startReplaceFlow" :disabled="busy">
+                                Cambiar horario
+                            </RockButton>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- Flujo por pasos -->
+                    <div v-else class="card ssCard">
+                        <div class="card-body">
+                            <!-- STEP 1: Campus -->
+                            <div v-if="step === 1" class="ssScreen">
+                                <div class="ssScreenTitle">Selecciona tu campus</div>
+                                <div class="ssScreenSub text-muted">Elige el campus para ver horarios disponibles.</div>
+
+                                <div class="ssFormGrid">
+                                    <DropDownList
+                                        v-model="campusValue"
+                                        :items="campusOptions"
+                                        label="Campus"
+                                        :disabled="busy" />
+                                </div>
+
+                                <div class="ssNav">
+                                    <div></div>
+                                    <RockButton
+                                        btnType="primary"
+                                        @click="goStep2"
+                                        :disabled="busy || !campusId">
+                                        Siguiente
+                                    </RockButton>
+                                </div>
+                            </div>
+
+                            <!-- STEP 2: Horario -->
+                            <div v-else-if="step === 2" class="ssScreen">
+                                <div class="ssScreenTitle">Selecciona horario</div>
+                                <div class="ssScreenSub text-muted">Horarios disponibles para esta semana.</div>
+
+                                <div class="ssSummaryPill" v-if="campusNameSelected">
+                                    <div class="ssPillLabel">Campus</div>
+                                    <div class="ssPillValue">{{ campusNameSelected }}</div>
+                                </div>
+
+                                <div v-if="weekBusy" class="text-muted ssSmall">Cargando horarios…</div>
+
+                                <div v-if="weekError" class="ssAlert">
+                                    <NotificationBox alertType="danger">{{ weekError }}</NotificationBox>
+                                </div>
+
+                                <div v-if="!weekBusy && !weekError && days.length === 0" class="text-muted ssSmall">
+                                    No hay horarios disponibles para este campus en la semana.
+                                </div>
+
+                                <div v-if="days.length > 0" class="ssSlots">
+                                    <div v-for="d in days" :key="d.occurrenceDate" class="ssDayBlock">
+                                        <div class="ssDayTitle">{{ d.occurrenceDateText }}</div>
+
+                                        <button
+                                            v-for="s in d.slots"
+                                            :key="s.slotId"
+                                            type="button"
+                                            class="ssSlotBtn"
+                                            :class="{
+                                                isSelected: s.slotId === selectedSlotId,
+                                                isDisabled: !s.isAvailable
+                                            }"
+                                            :disabled="busy || !s.isAvailable"
+                                            @click="selectSlot(s)">
+                                            <div class="ssSlotTop">
+                                                <div class="ssSlotName">{{ s.scheduleName }}</div>
+                
+                                            </div>
+                                            
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="ssNav">
+                                    <RockButton btnType="default" @click="step = 1" :disabled="busy">
+                                        Atrás
+                                    </RockButton>
+
+                                    <RockButton
+                                        btnType="primary"
+                                        @click="goStep3"
+                                        :disabled="busy || !selectedSlotId">
+                                        Siguiente
+                                    </RockButton>
+                                </div>
+                            </div>
+
+                            <!-- STEP 3: Cantidad + Confirmar -->
+                            <div v-else class="ssScreen">
+                                <div class="ssScreenTitle">Cantidad y confirmación</div>
+                                <div class="ssScreenSub text-muted">Máximo 8 personas.</div>
+
+                                <div class="ssSummaryCard" v-if="selectedSummary">
+                                    <div class="ssSummaryRow">
+                                        <div class="ssLabel">Campus</div>
+                                        <div class="ssVal">{{ selectedSummary.campusName }}</div>
+                                    </div>
+                                    <div class="ssSummaryRow">
+                                        <div class="ssLabel">Día</div>
+                                        <div class="ssVal">{{ selectedSummary.occurrenceDateText }}</div>
+                                    </div>
+                                    <div class="ssSummaryRow">
+                                        <div class="ssLabel">Horario</div>
+                                        <div class="ssVal">{{ selectedSummary.scheduleName }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="ssQtyWrap">
+                                    <div class="ssQtyTitle">Cantidad</div>
+
+                                    <div class="ssQtyRow">
+                                        <button class="ssQtyBtn" type="button" @click="decQty" :disabled="holdBusy || quantity <= 1">-</button>
+                                        <div class="ssQtyVal">{{ quantity }}</div>
+                                        <button class="ssQtyBtn" type="button" @click="incQty" :disabled="holdBusy || quantity >= 8">+</button>
+                                    </div>
+
+                                    <div class="ssSmall text-muted">
+                                        Hold: {{ holdStatusText }}
+                                    </div>
+
+                                    <div v-if="holdError" class="ssAlert">
+                                        <NotificationBox alertType="danger">{{ holdError }}</NotificationBox>
+                                    </div>
+
+                                    <div class="ssConfirmRow">
+                                        <RockButton btnType="primary" @click="confirm" :disabled="holdBusy || !holdToken">
+                                            {{ busy ? "Procesando…" : "Confirmar reserva" }}
+                                        </RockButton>
+
+                                        <RockButton btnType="default" @click="step = 2" :disabled="busy">
+                                            Atrás
+                                        </RockButton>
+                                    </div>
+
+                                
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+<!-- Modal Confirmar Cancelación -->
+<div v-if="showCancelModal" class="ssModalOverlay" @click.self="closeCancelModal">
+    <div class="ssModalCard">
+        <div class="ssModalTitle">Cancelar reserva</div>
+        <div class="ssModalText">
+            ¿Seguro que deseas cancelar tu reserva? Esta acción libera tu cupo.
+        </div>
+
+        <div class="ssModalSummary" v-if="activeReservation">
+            <div class="ssModalRow">
+                <div class="ssModalLabel">Campus</div>
+                <div class="ssModalVal">{{ activeReservation.campusName }}</div>
+            </div>
+            <div class="ssModalRow">
+                <div class="ssModalLabel">Día</div>
+                <div class="ssModalVal">{{ activeReservation.occurrenceDateText }}</div>
+            </div>
+            <div class="ssModalRow">
+                <div class="ssModalLabel">Horario</div>
+                <div class="ssModalVal">{{ activeReservation.scheduleName }}</div>
+            </div>
+            <div class="ssModalRow">
+                <div class="ssModalLabel">Cantidad</div>
+                <div class="ssModalVal">{{ activeReservation.quantity }}</div>
+            </div>
+        </div>
+
+        <div class="ssModalActions">
+            <RockButton btnType="default" @click="closeCancelModal" :disabled="busy">
+                No, mantener
+            </RockButton>
+
+            <RockButton btnType="danger" @click="confirmCancelReservation" :disabled="busy">
+                Sí, cancelar
+            </RockButton>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div v-if="toast.show" class="ssToast" :class="toast.kind">
+    <div class="ssToastText">{{ toast.message }}</div>
+</div>
+
+
+            </div>
+        </template>
+    </Panel>
+</template>
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList";
+import RockButton from "@Obsidian/Controls/rockButton";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type ListItemBag = { text: string; value: string };
+
+type SlotBag = {
+    slotId: number;
+    campusId: number;
+    occurrenceDate: string;
+    scheduleId: number | null;
+    scheduleName: string;
+
+    capacity: number;
+    reservedCount: number;
+    holdCount: number;
+    available: number;
+    isAvailable: boolean;
+};
+
+type DaySlotsBag = {
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    slots: SlotBag[];
+};
+
+type ActiveReservationBag = {
+    reservationId: number;
+    reservationCode: string;
+    quantity: number;
+    status: number;
+
+    campusId: number;
+    campusName: string;
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    scheduleId: number | null;
+    scheduleName: string;
+};
+
+type InitBag = {
+    notLogged: boolean;
+    statusHtml: string;
+    campuses: ListItemBag[];
+    activeReservation: ActiveReservationBag | null;
+};
+
+type GetWeekSlotsResponse = { days: DaySlotsBag[] };
+
+type HoldUpsertResponse = {
+    resultCode: number;
+    holdToken: string;
+    availableAfter: number;
+    expiresDateTime: string;
+};
+
+type ConfirmResponse = {
+    resultCode: number;
+    reservationId: number;
+    reservationCode: string;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const busy = ref<boolean>(false);           // acciones pesadas (confirm/cancel)
+const holdBusy = ref<boolean>(false);       // solo hold
+const holdUpdating = ref<boolean>(false);   // texto UI "Actualizando…"
+
+const statusHtml = ref<string>(config.statusHtml || "");
+
+const campusOptions = ref<ListItemBag[]>(config.campuses || []);
+const activeReservation = ref<ActiveReservationBag | null>(config.activeReservation || null);
+const replacing = ref<boolean>(false);
+
+// stepper
+const step = ref<number>(1);
+
+const campusId = ref<number | null>(null);
+
+const days = ref<DaySlotsBag[]>([]);
+const weekBusy = ref<boolean>(false);
+const weekError = ref<string>("");
+
+const selectedSlotId = ref<number | null>(null);
+const selectedScheduleId = ref<number | null>(null);
+const selectedOccurrenceDate = ref<string>("");
+
+const quantity = ref<number>(1);
+
+const holdToken = ref<string>("");
+const holdExpiresAt = ref<string>("");
+const holdError = ref<string>("");
+
+let holdDebounceTimer: number | null = null;
+let holdRequestSeq = 0;
+let holdInFlightSeq = 0;
+
+// Modal + Toast
+const showCancelModal = ref<boolean>(false);
+
+type ToastKind = "success" | "danger" | "info";
+const toast = ref<{ show: boolean; kind: ToastKind; message: string }>({
+    show: false,
+    kind: "info",
+    message: ""
+});
+
+let toastTimer: number | null = null;
+
+function showToast(kind: ToastKind, message: string) {
+    toast.value = { show: true, kind, message };
+
+    if (toastTimer != null) {
+        window.clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+
+    toastTimer = window.setTimeout(() => {
+        toast.value.show = false;
+        toastTimer = null;
+    }, 2800);
+}
+
+function openCancelModal() {
+    if (!activeReservation.value) return;
+    showCancelModal.value = true;
+}
+
+function closeCancelModal() {
+    showCancelModal.value = false;
+}
+
+function qrUrl(code: string): string {
+    const dim = 240;
+    return `/GetQRCode.ashx?data=${encodeURIComponent(code)}&size=${dim}`;
+}
+
+const campusValue = computed<string>({
+    get() { return campusId.value == null ? "" : String(campusId.value); },
+    set(v: string) {
+        const n = Number(v);
+        campusId.value = v ? (Number.isFinite(n) ? n : null) : null;
+    }
+});
+
+const campusNameSelected = computed<string>(() => {
+    if (!campusId.value) return "";
+    const found = campusOptions.value.find(x => x.value === String(campusId.value));
+    return found?.text || "";
+});
+
+function resetHold() {
+    holdToken.value = "";
+    holdExpiresAt.value = "";
+    holdError.value = "";
+    holdUpdating.value = false;
+}
+
+function resetSelection() {
+    days.value = [];
+    weekError.value = "";
+    selectedSlotId.value = null;
+    selectedScheduleId.value = null;
+    selectedOccurrenceDate.value = "";
+    quantity.value = 1;
+    resetHold();
+}
+
+/* ===========================
+   Ordenar slots por hora
+   =========================== */
+function parseTimeFromScheduleName(name: string): number {
+    const m = (name || "").match(/(\d{1,2})\s*:\s*(\d{2})/);
+    if (!m) return 9999;
+
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+
+    if (!Number.isFinite(h) || !Number.isFinite(min)) return 9999;
+    return h * 60 + min;
+}
+
+function sortDaysAndSlots(input: DaySlotsBag[]): DaySlotsBag[] {
+    const daysCopy = (input || []).map(d => ({
+        ...d,
+        slots: [...(d.slots || [])].sort((a, b) => {
+            return parseTimeFromScheduleName(a.scheduleName) - parseTimeFromScheduleName(b.scheduleName);
+        })
+    }));
+
+    daysCopy.sort((a, b) => (a.occurrenceDate || "").localeCompare(b.occurrenceDate || ""));
+    return daysCopy;
+}
+
+/**
+ * Carga los slots de la semana para el campus actual.
+ * - force=true: siempre llama al backend aunque el campusId no haya cambiado.
+ * - force=false: evita recargar si ya hay data o hay request en progreso.
+ */
+async function loadWeekSlots(force: boolean) {
+    if (!campusId.value) return;
+
+    if (!force && (weekBusy.value || days.value.length > 0 || weekError.value)) return;
+
+    weekBusy.value = true;
+    weekError.value = "";
+
+    try {
+        const res = await invokeBlockAction<any>("GetWeekSlots", { bag: { campusId: campusId.value } });
+
+        if (!res.isSuccess) {
+            weekError.value = res.errorMessage || "No se pudieron cargar los horarios.";
+            days.value = [];
+            return;
+        }
+
+        const data = res.data as GetWeekSlotsResponse;
+        days.value = sortDaysAndSlots(data?.days || []);
+    } catch {
+        weekError.value = "Error cargando horarios.";
+        days.value = [];
+    } finally {
+        weekBusy.value = false;
+    }
+}
+
+// Cuando el usuario cambia de campus desde el dropdown, recargamos
+watch(campusId, async () => {
+    resetSelection();
+    if (!campusId.value) return;
+    await loadWeekSlots(true);
+});
+
+function startReplaceFlow() {
+    replacing.value = true;
+    statusHtml.value = "";
+    step.value = 1;
+    resetSelection();
+
+    // FIX bug: campusId puede no cambiar, entonces forzamos carga
+    void loadWeekSlots(true);
+}
+
+async function goStep2() {
+    if (!campusId.value) return;
+    step.value = 2;
+
+    if (days.value.length === 0 && !weekBusy.value) {
+        await loadWeekSlots(true);
+    }
+}
+
+function goStep3() {
+    if (!selectedSlotId.value) return;
+    step.value = 3;
+}
+
+function selectSlot(s: SlotBag) {
+    if (!s.isAvailable) return;
+
+    selectedSlotId.value = s.slotId;
+    selectedScheduleId.value = s.scheduleId ?? null;
+    selectedOccurrenceDate.value = s.occurrenceDate;
+    quantity.value = 1;
+
+    resetHold();
+    scheduleHoldUpsert();
+}
+
+function incQty() {
+    if (quantity.value >= 8) return;
+    quantity.value++;
+    scheduleHoldUpsert();
+}
+
+function decQty() {
+    if (quantity.value <= 1) return;
+    quantity.value--;
+    scheduleHoldUpsert();
+}
+
+/* ===========================
+   Hold: última petición gana
+   =========================== */
+function scheduleHoldUpsert() {
+    holdError.value = "";
+
+    if (!campusId.value || !selectedOccurrenceDate.value || !selectedScheduleId.value) return;
+
+    holdUpdating.value = true;
+
+    if (holdDebounceTimer != null) {
+        window.clearTimeout(holdDebounceTimer);
+        holdDebounceTimer = null;
+    }
+
+    holdDebounceTimer = window.setTimeout(() => {
+        holdDebounceTimer = null;
+        void doHoldUpsertLatest();
+    }, 250);
+}
+
+async function doHoldUpsertLatest() {
+    if (!campusId.value || !selectedOccurrenceDate.value || !selectedScheduleId.value) return;
+
+    const mySeq = ++holdRequestSeq;
+    holdInFlightSeq = mySeq;
+
+    holdBusy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("HoldUpsert", {
+            bag: {
+                campusId: campusId.value,
+                occurrenceDate: selectedOccurrenceDate.value,
+                scheduleId: selectedScheduleId.value,
+                quantity: quantity.value,
+                holdMinutes: 2
+            }
+        });
+
+        if (mySeq !== holdInFlightSeq) return;
+
+        if (!res.isSuccess) {
+            holdError.value = res.errorMessage || "No se pudo crear el hold.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+            return;
+        }
+
+        const data = res.data as HoldUpsertResponse;
+
+        if (data.resultCode !== 1) {
+            holdError.value = data.resultCode === 0
+                ? "Ya no hay cupo suficiente para esa cantidad."
+                : "El slot no existe o no está activo.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+            return;
+        }
+
+        holdToken.value = data.holdToken || "";
+        holdExpiresAt.value = data.expiresDateTime || "";
+
+        // refresco silencioso (sin bloquear)
+        void refreshWeekSilent();
+    } catch {
+        if (mySeq === holdInFlightSeq) {
+            holdError.value = "Error creando el hold.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+        }
+    } finally {
+        if (mySeq === holdInFlightSeq) {
+            holdBusy.value = false;
+            holdUpdating.value = false;
+        }
+    }
+}
+
+async function refreshWeekSilent() {
+    if (!campusId.value) return;
+
+    try {
+        const res = await invokeBlockAction<any>("GetWeekSlots", { bag: { campusId: campusId.value } });
+
+        if (res.isSuccess && res.data?.days) {
+            days.value = sortDaysAndSlots(res.data.days as DaySlotsBag[]);
+
+            if (selectedSlotId.value) {
+                const still = findSlotById(selectedSlotId.value);
+                if (!still || !still.isAvailable) {
+                    selectedSlotId.value = null;
+                    selectedScheduleId.value = null;
+                    selectedOccurrenceDate.value = "";
+                    resetHold();
+                    step.value = 2;
+                }
+            }
+        }
+    } catch {
+    }
+}
+
+function findSlotById(slotId: number): SlotBag | null {
+    for (const d of days.value) {
+        const s = d.slots.find(x => x.slotId === slotId);
+        if (s) return s;
+    }
+    return null;
+}
+
+const holdStatusText = computed<string>(() => {
+    if (!selectedSlotId.value) return "—";
+    if (holdError.value) return "Falló";
+    if (holdUpdating.value) return "Actualizando…";
+    if (!holdToken.value) return "—";
+    return "Activo (vence pronto)";
+});
+
+const selectedSummary = computed<null | { campusName: string; occurrenceDateText: string; scheduleName: string }>(() => {
+    if (!selectedSlotId.value) return null;
+
+    const slot = findSlotById(selectedSlotId.value);
+    if (!slot) return null;
+
+    const day = days.value.find(d => d.occurrenceDate === slot.occurrenceDate);
+
+    return {
+        campusName: campusNameSelected.value || "Campus",
+        occurrenceDateText: day?.occurrenceDateText || slot.occurrenceDate,
+        scheduleName: slot.scheduleName
+    };
+});
+
+async function confirm() {
+    holdError.value = "";
+
+    if (!holdToken.value) {
+        holdError.value = "No hay hold vigente. Intenta de nuevo.";
+        return;
+    }
+
+    busy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("ConfirmReservation", {
+            bag: {
+                holdToken: holdToken.value,
+                forceReplaceExisting: true
+            }
+        });
+
+        if (!res.isSuccess) {
+            holdError.value = res.errorMessage || "No se pudo confirmar.";
+            return;
+        }
+
+        const data = res.data as ConfirmResponse;
+
+        if (data.resultCode !== 1) {
+            holdError.value = "No se pudo confirmar: ya no hay cupo o el hold venció.";
+            void refreshWeekSilent();
+            resetHold();
+            return;
+        }
+
+        await refreshActive();
+        replacing.value = false;
+        resetSelection();
+        step.value = 1;
+    } catch {
+        holdError.value = "Error confirmando reserva.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function refreshActive() {
+    try {
+        const res = await invokeBlockAction<any>("GetActiveReservation", {});
+        if (res.isSuccess) {
+            activeReservation.value = (res.data?.activeReservation || null) as ActiveReservationBag | null;
+        }
+    } catch {
+    }
+}
+
+// Cancelación (modal + toast)
+async function confirmCancelReservation() {
+    if (!activeReservation.value) return;
+
+    busy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("CancelReservation", {
+            bag: { reservationId: activeReservation.value.reservationId }
+        });
+
+        if (!res.isSuccess) {
+            showToast("danger", res.errorMessage || "No se pudo cancelar la reserva.");
+            return;
+        }
+
+        const resultCode = Number(res.data?.resultCode ?? 0);
+
+        if (resultCode !== 1) {
+            showToast("danger", "No se pudo cancelar. Intenta de nuevo.");
+            return;
+        }
+
+        showCancelModal.value = false;
+        activeReservation.value = null;
+        replacing.value = false;
+        resetSelection();
+        step.value = 1;
+
+        showToast("success", "Reserva cancelada.");
+    } catch {
+        showToast("danger", "Error cancelando reserva.");
+    } finally {
+        busy.value = false;
+    }
+}
+</script>
+
+
+
+<style>
+.sswrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 10px 8px;
+}
+
+/* Stepper */
+.ssStepper {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+    padding: 10px 8px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.ssStep {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+.ssDot {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.18);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: #fff;
+}
+.ssStepText {
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: rgba(0,0,0,0.65);
+}
+.ssLine {
+    height: 2px;
+    background: rgba(0,0,0,0.10);
+    border-radius: 999px;
+}
+
+.ssStep.active .ssDot {
+    border-color: rgba(0,0,0,0.45);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+}
+.ssStep.active .ssStepText { color: rgba(0,0,0,0.90); }
+
+.ssStep.done .ssDot {
+    background: rgba(0,0,0,0.08);
+    border-color: rgba(0,0,0,0.25);
+}
+.ssLine.done { background: rgba(0,0,0,0.25); }
+
+/* Screens */
+.ssCard { margin-top: 12px; }
+
+.ssScreenTitle {
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.ssScreenSub { font-size: 12px; margin-bottom: 12px; }
+
+.ssFormGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.ssNav {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.ssSummaryPill {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.06);
+    margin-bottom: 10px;
+}
+.ssPillLabel {
+    font-size: 11px;
+    font-weight: 800;
+    color: rgba(0,0,0,0.55);
+}
+.ssPillValue {
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(0,0,0,0.85);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Slots */
+.ssSlots { margin-top: 6px; }
+.ssDayBlock { margin-bottom: 14px; }
+.ssDayTitle {
+    font-weight: 800;
+    font-size: 13px;
+    margin: 10px 0 8px;
+    color: rgba(0,0,0,0.75);
+}
+
+.ssSlotBtn {
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(0,0,0,0.12);
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+.ssSlotBtn.isSelected {
+    border-color: rgba(0,0,0,0.35);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+}
+.ssSlotBtn.isDisabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.ssSlotTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.ssSlotName { font-weight: 800; }
+.ssSlotAvail {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.06);
+    white-space: nowrap;
+}
+.ssSlotAvail.ok { background: rgba(0, 128, 0, 0.10); }
+.ssSlotAvail.bad { background: rgba(255, 0, 0, 0.10); }
+.ssSlotMeta { font-size: 12px; margin-top: 4px; }
+
+/* Qty + Confirm */
+.ssQtyWrap {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+}
+.ssQtyTitle { font-weight: 800; margin-bottom: 8px; }
+
+.ssQtyRow {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    gap: 10px;
+    align-items: center;
+    max-width: 280px;
+}
+.ssQtyBtn {
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    background: #fff;
+    font-size: 18px;
+    font-weight: 900;
+}
+.ssQtyVal {
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: 16px;
+}
+
+.ssConfirmRow {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.ssAlert { margin-top: 10px; }
+.ssSmall { font-size: 12px; margin-top: 8px; }
+
+/* Summary card in step 3 */
+.ssSummaryCard {
+    border: 1px solid rgba(0,0,0,0.08);
+    background: rgba(0,0,0,0.03);
+    border-radius: 12px;
+    padding: 10px 10px;
+    margin-bottom: 10px;
+}
+.ssSummaryRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+}
+.ssLabel { font-size: 12px; font-weight: 800; color: rgba(0,0,0,0.60); }
+.ssVal { font-size: 13px; font-weight: 800; }
+
+/* Active reservation (same as before, compact) */
+.ssCardTitle {
+    font-weight: 800;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.ssInfoGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.ssQrWrap {
+    margin-top: 12px;
+    display: grid;
+    place-items: center;
+    gap: 8px;
+}
+.ssQrImg {
+    width: 240px;
+    height: 240px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.10);
+}
+.ssCode {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    word-break: break-all;
+    text-align: center;
+    padding: 0 8px;
+}
+.ssActions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+@media (min-width: 576px) {
+    .ssConfirmRow { grid-template-columns: 1fr 1fr; }
+    .ssActions { grid-template-columns: 1fr 1fr; }
+    .ssInfoGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 576px) {
+    .sswrap { padding: 10px 6px; }
+}
+
+/* Modal */
+.ssModalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: grid;
+    place-items: center;
+    z-index: 9999;
+    padding: 14px;
+}
+
+.ssModalCard {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+}
+
+.ssModalTitle {
+    font-size: 16px;
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+
+.ssModalText {
+    font-size: 13px;
+    color: rgba(0,0,0,0.70);
+    line-height: 1.35;
+}
+
+.ssModalSummary {
+    margin-top: 10px;
+    border: 1px solid rgba(0,0,0,0.08);
+    background: rgba(0,0,0,0.03);
+    border-radius: 12px;
+    padding: 10px 10px;
+}
+
+.ssModalRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 0;
+}
+
+.ssModalLabel {
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(0,0,0,0.60);
+}
+
+.ssModalVal {
+    font-size: 12px;
+    font-weight: 900;
+    color: rgba(0,0,0,0.85);
+    text-align: right;
+}
+
+.ssModalActions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* Toast */
+.ssToast {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    width: calc(100% - 24px);
+    max-width: 420px;
+    border-radius: 12px;
+    padding: 12px 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.18);
+    border: 1px solid rgba(0,0,0,0.10);
+    background: #fff;
+}
+
+.ssToast.success { border-left: 6px solid rgba(0, 128, 0, 0.55); }
+.ssToast.danger  { border-left: 6px solid rgba(255, 0, 0, 0.55); }
+.ssToast.info    { border-left: 6px solid rgba(0, 0, 0, 0.35); }
+
+.ssToastText {
+    font-size: 13px;
+    font-weight: 800;
+    color: rgba(0,0,0,0.85);
+}
+
+/* Centra el bloque del contador dentro de la pantalla */
+.ssQtyRow {
+    margin: 0 auto;          /* centra el contenedor */
+    justify-content: center; /* por si cambia a flex en algún momento */
+}
+
+/* Centra el número dentro del recuadro */
+.ssQtyVal {
+    text-align: center;
+}
+
+/* (Opcional) Centra también el título "Cantidad" */
+.ssQtyTitle {
+    text-align: center;
+}
+
+</style>
