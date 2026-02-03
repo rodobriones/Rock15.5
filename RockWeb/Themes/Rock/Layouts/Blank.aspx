@@ -5,7 +5,7 @@
 <html>
 <head runat="server">
     <title></title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <script src="<%# System.Web.Optimization.Scripts.Url("~/Scripts/Bundles/RockJQueryLatest") %>"></script>
 
     <link rel="stylesheet" href="<%# ResolveRockUrl("~~/Styles/bootstrap.css", true) %>" />
@@ -13,13 +13,17 @@
 
     <style>
         html, body {
-            height: auto;
-            width: 100%;
-            min-width: 100%;
-            margin: 0;
-            padding: 0;
-            vertical-align: top;
-        }
+    height: auto;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+main.container-fluid {
+    padding-left: 0;
+    padding-right: 0;
+}
+
     </style>
 
 </head>
