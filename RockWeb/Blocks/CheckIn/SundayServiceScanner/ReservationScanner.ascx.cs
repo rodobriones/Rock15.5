@@ -122,6 +122,15 @@ namespace RockWeb.Blocks.CheckIn.SundayServiceScanner
             ShowScannerPanel();
         }
 
+        /// <summary>
+        /// Maneja el click del botón del modal de éxito.
+        /// </summary>
+        protected void mdSuccess_ScanNextClick( object sender, EventArgs e )
+        {
+            mdSuccess.Hide();
+            ShowScannerPanel();
+        }
+
         #endregion
 
         #region Methods
@@ -133,9 +142,9 @@ namespace RockWeb.Blocks.CheckIn.SundayServiceScanner
         {
             // Resetear paneles
             pnlScanner.Visible = false;
-            pnlSuccess.Visible = false;
             pnlError.Visible = false;
             pnlNoActiveSchedule.Visible = false;
+            mdSuccess.Hide();
 
             // Detectar slot activo
             var activeSlot = GetCurrentActiveSlot();
@@ -284,14 +293,16 @@ WHERE Id = @ReservationId
         /// </summary>
         private void ShowSuccess( ReservationInfo reservation, ActiveSlotInfo slot )
         {
-            pnlScanner.Visible = false;
             pnlError.Visible = false;
             pnlNoActiveSchedule.Visible = false;
-            pnlSuccess.Visible = true;
+            pnlScanner.Visible = true;
+            hfScannerReady.Value = "false";
 
             lPersonName.Text = string.Format( "{0} {1}", reservation.NickName, reservation.LastName );
             lQuantity.Text = reservation.Quantity.ToString();
             lScheduleName.Text = slot.ScheduleName;
+
+            mdSuccess.Show();
         }
 
         /// <summary>
@@ -300,7 +311,6 @@ WHERE Id = @ReservationId
         private void ShowError( string message )
         {
             pnlScanner.Visible = false;
-            pnlSuccess.Visible = false;
             pnlNoActiveSchedule.Visible = false;
             pnlError.Visible = true;
 
