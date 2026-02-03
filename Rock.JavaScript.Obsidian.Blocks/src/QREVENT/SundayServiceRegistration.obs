@@ -73,6 +73,12 @@
                                         <div class="ssCode">{{ activeReservation.reservationCode }}</div>
                                     </div>
 
+                                    <div class="ssDownloadWrap">
+                                        <RockButton btnType="default" @click="downloadPdf" :disabled="busy">
+                                            📥 Descargar PDF
+                                        </RockButton>
+                                    </div>
+
                                     <div class="ssActions">
                                         <RockButton btnType="danger" @click="openCancelModal" :disabled="busy">
                                             Cancelar reserva
@@ -102,7 +108,10 @@
                                         </div>
 
                                         <div class="ssNav">
-                                            <div></div>
+                                            <RockButton v-if="replacing" btnType="default" @click="cancelReplaceFlow" :disabled="busy">
+                                                Volver a mi reserva
+                                            </RockButton>
+                                            <div v-else></div>
                                             <RockButton
                                                 btnType="primary"
                                                 @click="goStep2"
@@ -206,12 +215,12 @@
                                             </div>
 
                                             <div class="ssConfirmRow">
-                                                <RockButton btnType="primary" @click="confirm" :disabled="holdBusy || !holdToken">
-                                                    {{ busy ? "Procesando…" : "Confirmar reserva" }}
-                                                </RockButton>
-
                                                 <RockButton btnType="default" @click="step = 2" :disabled="busy">
                                                     Atrás
+                                                </RockButton>
+
+                                                <RockButton btnType="primary" @click="confirm" :disabled="holdBusy || !holdToken">
+                                                    {{ busy ? "Procesando…" : "Confirmar reserva" }}
                                                 </RockButton>
                                             </div>
                                         </div>
@@ -410,6 +419,138 @@ function qrUrl(code: string): string {
     return `/GetQRCode.ashx?data=${encodeURIComponent(code)}&size=${dim}`;
 }
 
+function downloadPdf() {
+    if (!activeReservation.value) return;
+
+    const res = activeReservation.value;
+    const qrSize = 300;
+    const qrSrc = `/GetQRCode.ashx?data=${encodeURIComponent(res.reservationCode)}&size=${qrSize}`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reserva ${res.reservationCode}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 800;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .info-item .label {
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .info-item .value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111827;
+        }
+        .qr-section {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .qr-img {
+            width: ${qrSize}px;
+            height: ${qrSize}px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+        }
+        .code {
+            margin-top: 12px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #374151;
+            word-break: break-all;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #9CA3AF;
+        }
+        @media print {
+            body { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">VidaReal.tv</div>
+    
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="label">Campus</div>
+            <div class="value">${res.campusName}</div>
+        </div>
+        <div class="info-item">
+            <div class="label">Día</div>
+            <div class="value">${res.occurrenceDateText}</div>
+        </div>
+        <div class="info-item">
+            <div class="label">Horario</div>
+            <div class="value">${res.scheduleName}</div>
+        </div>
+        <div class="info-item">
+            <div class="label">Cantidad</div>
+            <div class="value">${res.quantity}</div>
+        </div>
+    </div>
+    
+    <div class="qr-section">
+        <img class="qr-img" src="${qrSrc}" alt="QR Reserva">
+        <div class="code">${res.reservationCode}</div>
+    </div>
+    
+    <div class="footer">
+        Presenta este código QR al ingresar
+    </div>
+</body>
+</html>`;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+        showToast("danger", "No se pudo abrir la ventana. Permite ventanas emergentes.");
+        return;
+    }
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    // Esperar a que cargue la imagen antes de imprimir
+    const img = printWindow.document.querySelector(".qr-img") as HTMLImageElement;
+    if (img) {
+        img.onload = () => {
+            printWindow.focus();
+            printWindow.print();
+        };
+        img.onerror = () => {
+            printWindow.focus();
+            printWindow.print();
+        };
+    } else {
+        printWindow.focus();
+        printWindow.print();
+    }
+}
+
 const campusValue = computed<string>({
     get() { return campusId.value == null ? "" : String(campusId.value); },
     set(v: string) {
@@ -503,6 +644,12 @@ function startReplaceFlow() {
     step.value = 1;
     resetSelection();
     void loadWeekSlots(true);
+}
+
+function cancelReplaceFlow() {
+    replacing.value = false;
+    resetSelection();
+    step.value = 1;
 }
 
 async function goStep2() {
@@ -1138,11 +1285,18 @@ async function confirmCancelReservation() {
 }
 
 .ssQrImg {
-    width: 240px;
-    height: 240px;
+    width: 280px;
+    height: 280px;
     border-radius: var(--vr-radius-lg);
     border: 1px solid rgba(17,24,39,.10);
     background: var(--vr-surface);
+}
+
+@media (min-width: 576px) {
+    .ssQrImg {
+        width: 240px;
+        height: 240px;
+    }
 }
 
 .ssCode {
@@ -1151,6 +1305,12 @@ async function confirmCancelReservation() {
     word-break: break-all;
     text-align: center;
     padding: 0 8px;
+}
+
+.ssDownloadWrap {
+    margin-top: 16px;
+    display: grid;
+    place-items: center;
 }
 
 .ssActions {
