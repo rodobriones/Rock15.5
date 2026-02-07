@@ -82,7 +82,7 @@ namespace Rock.Blocks.QREVENT
                 {
                     notLogged = true,
                     statusHtml = "",
-                    campuses = new List<ListItemBag>(),
+                    campuses = new List<CampusOptionBag>(),
                     activeReservation = null
                 };
             }
@@ -545,15 +545,18 @@ ORDER BY
         /// <returns>
         /// Lista de campus formateada para dropdown, incluyendo una opción vacía inicial.
         /// </returns>
-        private List<ListItemBag> GetCampusOptionsWithAvailability( DateTime startDate, DateTime endDateExclusive )
+        private List<CampusOptionBag> GetCampusOptionsWithAvailability( DateTime startDate, DateTime endDateExclusive )
         {
             using ( var rockContext = new RockContext() )
             {
+                // AttributeId 8543 = Imagen del Campus
                 var sql = @"
 SELECT
     c.Id,
-    c.[Name]
+    c.[Name],
+    av.Value AS AttributeValue
 FROM dbo.Campus c
+LEFT JOIN dbo.AttributeValue av ON av.EntityId = c.Id AND av.AttributeId = 8543
 WHERE
     ISNULL(c.IsActive, 1) = 1
     AND EXISTS (
@@ -571,25 +574,41 @@ ORDER BY
                 var pStart = new SqlParameter( "@StartDate", startDate.Date );
                 var pEnd = new SqlParameter( "@EndDate", endDateExclusive.Date );
 
-                var rows = rockContext.Database.SqlQuery<CampusRowLite>( sql, pStart, pEnd ).ToList();
+                // Clase interna para mapear resultado SQL
+                var rows = rockContext.Database.SqlQuery<CampusRowWithAttr>( sql, pStart, pEnd ).ToList();
 
-                // Crear lista con opción vacía inicial para el dropdown
-                var list = new List<ListItemBag>
-                {
-                    new ListItemBag { Text = "—", Value = "" }
-                };
+                // Crear lista
+                var list = new List<CampusOptionBag>();
 
                 foreach ( var r in rows )
                 {
-                    list.Add( new ListItemBag
+                    string imgUrl = null;
+                    if ( !string.IsNullOrWhiteSpace( r.AttributeValue ) )
                     {
-                        Text = !string.IsNullOrWhiteSpace( r.Name ) ? r.Name : ( "Campus " + r.Id ),
-                        Value = r.Id.ToString()
+                        // Asumimos que es un GUID de archivo
+                        if ( Guid.TryParse( r.AttributeValue, out Guid g ) )
+                        {
+                            imgUrl = $"/GetImage.ashx?guid={g}";
+                        }
+                    }
+
+                    list.Add( new CampusOptionBag
+                    {
+                        text = !string.IsNullOrWhiteSpace( r.Name ) ? r.Name : ( "Campus " + r.Id ),
+                        value = r.Id.ToString(),
+                        imageUrl = imgUrl
                     } );
                 }
 
                 return list;
             }
+        }
+
+        private class CampusRowWithAttr
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public string AttributeValue { get; set; }
         }
 
         #endregion
@@ -614,12 +633,33 @@ ORDER BY
             /// <summary>
             /// Lista de campus disponibles para selección.
             /// </summary>
-            public List<ListItemBag> campuses { get; set; }
+            public List<CampusOptionBag> campuses { get; set; }
 
             /// <summary>
             /// Reserva activa del usuario si existe.
             /// </summary>
             public ActiveReservationBag activeReservation { get; set; }
+        }
+
+        /// <summary>
+        /// DTO para opciones de campus con imagen.
+        /// </summary>
+        public class CampusOptionBag
+        {
+            /// <summary>
+            /// ID del campus (Value).
+            /// </summary>
+            public string value { get; set; }
+
+            /// <summary>
+            /// Nombre del campus (Text).
+            /// </summary>
+            public string text { get; set; }
+
+            /// <summary>
+            /// URL de la imagen del campus.
+            /// </summary>
+            public string imageUrl { get; set; }
         }
 
         /// <summary>

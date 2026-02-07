@@ -128,6 +128,7 @@ namespace RockWeb.Blocks.CheckIn.SundayServiceScanner
         protected void mdSuccess_ScanNextClick( object sender, EventArgs e )
         {
             mdSuccess.Hide();
+            mdAlreadyUsed.Hide();
             ShowScannerPanel();
         }
 
@@ -145,6 +146,7 @@ namespace RockWeb.Blocks.CheckIn.SundayServiceScanner
             pnlError.Visible = false;
             pnlNoActiveSchedule.Visible = false;
             mdSuccess.Hide();
+            mdAlreadyUsed.Hide();
 
             // Detectar slot activo
             var activeSlot = GetCurrentActiveSlot();
@@ -238,7 +240,7 @@ WHERE r.ReservationCode = @ReservationCode
                             ShowError( "Esta reservación fue cancelada." );
                             return;
                         case 3: // Ya registrado
-                            ShowError( "Esta reservación ya fue registrada anteriormente." );
+                            ShowAlreadyUsed( reservation );
                             return;
                         case 4: // Expirado
                             ShowError( "Esta reservación ha expirado." );
@@ -303,6 +305,24 @@ WHERE Id = @ReservationId
             lScheduleName.Text = slot.ScheduleName;
 
             mdSuccess.Show();
+            QueueAutoNext();
+        }
+
+        /// <summary>
+        /// Muestra el modal de reservación ya registrada.
+        /// </summary>
+        private void ShowAlreadyUsed( ReservationInfo reservation )
+        {
+            pnlError.Visible = false;
+            pnlNoActiveSchedule.Visible = false;
+            pnlScanner.Visible = true;
+            hfScannerReady.Value = "false";
+
+            lAlreadyUsedName.Text = string.Format( "{0} {1}", reservation.NickName, reservation.LastName );
+            lAlreadyUsedSchedule.Text = CurrentActiveSlot?.ScheduleName ?? string.Empty;
+
+            mdAlreadyUsed.Show();
+            QueueAutoNext();
         }
 
         /// <summary>
@@ -315,6 +335,16 @@ WHERE Id = @ReservationId
             pnlError.Visible = true;
 
             lErrorMessage.Text = message;
+        }
+
+        /// <summary>
+        /// Programa el cierre automático del modal y vuelve al escaneo.
+        /// </summary>
+        private void QueueAutoNext()
+        {
+            string postback = Page.ClientScript.GetPostBackEventReference( lbAutoNext, string.Empty );
+            string script = "setTimeout(function(){ " + postback + "; }, 1600);";
+            ScriptManager.RegisterStartupScript( upnlContent, upnlContent.GetType(), "ss-autonext", script, true );
         }
 
         /// <summary>

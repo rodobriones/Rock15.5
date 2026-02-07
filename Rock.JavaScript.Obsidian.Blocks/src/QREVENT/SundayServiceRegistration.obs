@@ -30,11 +30,16 @@
                                 <div class="ssLine" :class="{ done: step > 1 }"></div>
                                 <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
                                     <div class="ssDot">2</div>
-                                    <div class="ssStepText">Horario</div>
+                                    <div class="ssStepText">Cantidad</div>
                                 </div>
                                 <div class="ssLine" :class="{ done: step > 2 }"></div>
-                                <div class="ssStep" :class="{ active: step === 3 }">
+                                <div class="ssStep" :class="{ active: step === 3, done: step > 3 }">
                                     <div class="ssDot">3</div>
+                                    <div class="ssStepText">Horario</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 3 }"></div>
+                                <div class="ssStep" :class="{ active: step === 4 }">
+                                    <div class="ssDot">4</div>
                                     <div class="ssStepText">Confirmar</div>
                                 </div>
                             </div>
@@ -99,102 +104,39 @@
                                         <div class="ssScreenTitle">Selecciona tu campus</div>
                                         <div class="ssScreenSub text-muted">Elige el campus para ver horarios disponibles.</div>
 
-                                        <div class="ssFormGrid">
-                                            <DropDownList
-                                                v-model="campusValue"
-                                                :items="campusOptions"
-                                                label="Campus"
-                                                :disabled="busy" />
+                                        <div class="ssCampusGrid">
+                                            <div
+                                                v-for="c in campusOptions"
+                                                :key="c.value"
+                                                role="button"
+                                                tabindex="0"
+                                                class="ssCampusCard"
+                                                :class="{ isSelected: String(c.value) === String(campusId), isDisabled: busy }"
+                                                @click="!busy && selectCampus(c)"
+                                                @keydown.enter="!busy && selectCampus(c)">
+                                                <div class="ssCampusImg">
+                                                    <img v-if="c.imageUrl" :src="c.imageUrl" alt="Campus" class="ssCampusRealImg" />
+                                                    <div v-else class="ssCampusInitials">{{ campusInitials(c.text) }}</div>
+                                                </div>
+                                                <div class="ssCampusName">{{ c.text }}</div>
+                                            </div>
                                         </div>
 
-                                        <div class="ssNav">
+                                        <div class="ssNav ssNavSingle">
                                             <RockButton v-if="replacing" btnType="default" @click="cancelReplaceFlow" :disabled="busy">
                                                 Volver a mi reserva
-                                            </RockButton>
-                                            <div v-else></div>
-                                            <RockButton
-                                                btnType="primary"
-                                                @click="goStep2"
-                                                :disabled="busy || !campusId">
-                                                Siguiente
                                             </RockButton>
                                         </div>
                                     </div>
 
-                                    <!-- STEP 2: Horario -->
+                                    <!-- STEP 2: Cantidad -->
                                     <div v-else-if="step === 2" class="ssScreen">
-                                        <div class="ssScreenTitle">Selecciona horario</div>
-                                        <div class="ssScreenSub text-muted">Horarios disponibles para esta semana.</div>
+                                        <div class="ssScreenTitle">Cantidad de personas</div>
+                                        <div class="ssScreenSub text-muted">Maximo 8 personas.</div>
 
                                         <div class="ssSummaryPill" v-if="campusNameSelected">
                                             <div class="ssPillLabel">Campus</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
-                                        </div>
-
-                                        <div v-if="weekBusy" class="text-muted ssSmall">Cargando horarios…</div>
-
-                                        <div v-if="weekError" class="ssAlert">
-                                            <NotificationBox alertType="danger">{{ weekError }}</NotificationBox>
-                                        </div>
-
-                                        <div v-if="!weekBusy && !weekError && days.length === 0" class="text-muted ssSmall">
-                                            No hay horarios disponibles para este campus en la semana.
-                                        </div>
-
-                                        <div v-if="days.length > 0" class="ssSlots">
-                                            <div v-for="d in days" :key="d.occurrenceDate" class="ssDayBlock">
-                                                <div class="ssDayTitle">{{ d.occurrenceDateText }}</div>
-
-                                                <button
-                                                    v-for="s in d.slots"
-                                                    :key="s.slotId"
-                                                    type="button"
-                                                    class="ssSlotBtn"
-                                                    :class="{
-                                                        isSelected: s.slotId === selectedSlotId,
-                                                        isDisabled: !s.isAvailable
-                                                    }"
-                                                    :disabled="busy || !s.isAvailable"
-                                                    @click="selectSlot(s)">
-                                                    <div class="ssSlotTop">
-                                                        <div class="ssSlotName">{{ s.scheduleName }}</div>
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div class="ssNav">
-                                            <RockButton btnType="default" @click="step = 1" :disabled="busy">
-                                                Atrás
-                                            </RockButton>
-
-                                            <RockButton
-                                                btnType="primary"
-                                                @click="goStep3"
-                                                :disabled="busy || !selectedSlotId">
-                                                Siguiente
-                                            </RockButton>
-                                        </div>
-                                    </div>
-
-                                    <!-- STEP 3: Cantidad + Confirmar -->
-                                    <div v-else class="ssScreen">
-                                        <div class="ssScreenTitle">Cantidad y confirmación</div>
-                                        <div class="ssScreenSub text-muted">Máximo 8 personas.</div>
-
-                                        <div class="ssSummaryCard" v-if="selectedSummary">
-                                            <div class="ssSummaryRow">
-                                                <div class="ssLabel">Campus</div>
-                                                <div class="ssVal">{{ selectedSummary.campusName }}</div>
-                                            </div>
-                                            <div class="ssSummaryRow">
-                                                <div class="ssLabel">Día</div>
-                                                <div class="ssVal">{{ selectedSummary.occurrenceDateText }}</div>
-                                            </div>
-                                            <div class="ssSummaryRow">
-                                                <div class="ssLabel">Horario</div>
-                                                <div class="ssVal">{{ selectedSummary.scheduleName }}</div>
-                                            </div>
                                         </div>
 
                                         <div class="ssQtyWrap">
@@ -205,24 +147,114 @@
                                                 <div class="ssQtyVal">{{ quantity }}</div>
                                                 <button class="ssQtyBtn" type="button" @click="incQty" :disabled="holdBusy || quantity >= 8">+</button>
                                             </div>
+                                        </div>
 
-                                            <div class="ssSmall text-muted">
-                                                Hold: {{ holdStatusText }}
+                                        <div class="ssNav">
+                                            <RockButton btnType="default" @click="step = 1" :disabled="busy">
+                                                Atras
+                                            </RockButton>
+
+                                            <RockButton
+                                                btnType="primary"
+                                                @click="goStep3"
+                                                :disabled="busy || !campusId">
+                                                Siguiente
+                                            </RockButton>
+                                        </div>
+                                    </div>
+
+                                    <!-- STEP 3: Horario -->
+                                    <div v-else-if="step === 3" class="ssScreen">
+                                        <div class="ssScreenTitle">Selecciona horario</div>
+                                        <div class="ssScreenSub text-muted">Horarios disponibles para esta semana.</div>
+
+                                        <div class="ssSummaryPill" v-if="campusNameSelected">
+                                            <div class="ssPillLabel">Campus</div>
+                                            <div class="ssPillValue">{{ campusNameSelected }}</div>
+                                        </div>
+
+                                        <div class="ssSummaryPill">
+                                            <div class="ssPillLabel">Cantidad</div>
+                                            <div class="ssPillValue">{{ quantity }}</div>
+                                        </div>
+
+                                        <div v-if="weekBusy" class="text-muted ssSmall">Cargando horarios...</div>
+
+                                        <div v-if="weekError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ weekError }}</NotificationBox>
+                                        </div>
+
+                                        <div v-if="!weekBusy && !weekError && availableDays.length === 0" class="text-muted ssSmall">
+                                            No hay horarios con cupo disponible para este campus en la semana.
+                                        </div>
+
+                                        <div v-if="availableDays.length > 0" class="ssSlots">
+                                            <div v-for="d in availableDays" :key="d.occurrenceDate" class="ssDayBlock">
+                                                <div class="ssDayTitle">{{ d.occurrenceDateText }}</div>
+
+                                                <button
+                                                    v-for="s in d.slots"
+                                                    :key="s.slotId"
+                                                    type="button"
+                                                    class="ssSlotBtn"
+                                                    :class="{ isSelected: s.slotId === selectedSlotId }"
+                                                    :disabled="busy"
+                                                    @click="selectSlot(s)">
+                                                    <div class="ssSlotTop">
+                                                        <div class="ssSlotName">{{ s.scheduleName }}</div>
+                                                        <div class="ssSlotCap">Cupo: {{ s.available }}</div>
+                                                    </div>
+                                                </button>
                                             </div>
+                                        </div>
 
-                                            <div v-if="holdError" class="ssAlert">
-                                                <NotificationBox alertType="danger">{{ holdError }}</NotificationBox>
+                                        <div class="ssNav">
+                                            <RockButton btnType="default" @click="step = 2" :disabled="busy">
+                                                Atras
+                                            </RockButton>
+                                        </div>
+                                    </div>
+
+                                    <!-- STEP 4: Confirmar -->
+                                    <div v-else class="ssScreen">
+                                        <div class="ssScreenTitle">Confirmar reserva</div>
+                                        <div class="ssScreenSub text-muted">Revisa los detalles antes de confirmar.</div>
+
+                                        <div v-if="selectedSummary" class="ssSummaryCard">
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Campus</div>
+                                                <div class="ssVal">{{ selectedSummary.campusName }}</div>
                                             </div>
-
-                                            <div class="ssConfirmRow">
-                                                <RockButton btnType="default" @click="step = 2" :disabled="busy">
-                                                    Atrás
-                                                </RockButton>
-
-                                                <RockButton btnType="primary" @click="confirm" :disabled="holdBusy || !holdToken">
-                                                    {{ busy ? "Procesando…" : "Confirmar reserva" }}
-                                                </RockButton>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Dia</div>
+                                                <div class="ssVal">{{ selectedSummary.occurrenceDateText }}</div>
                                             </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Horario</div>
+                                                <div class="ssVal">{{ selectedSummary.scheduleName }}</div>
+                                            </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Cantidad</div>
+                                                <div class="ssVal">{{ quantity }}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ssSmall text-muted">
+                                            Hold: {{ holdStatusText }}
+                                        </div>
+
+                                        <div v-if="holdError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ holdError }}</NotificationBox>
+                                        </div>
+
+                                        <div class="ssConfirmRow">
+                                            <RockButton btnType="default" @click="step = 3" :disabled="busy">
+                                                Atras
+                                            </RockButton>
+
+                                            <RockButton btnType="primary" @click="confirm" :disabled="holdBusy || !holdToken">
+                                                {{ busy ? "Procesando..." : "Confirmar reserva" }}
+                                            </RockButton>
                                         </div>
                                     </div>
                                 </div>
@@ -283,11 +315,10 @@
 import { computed, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-import DropDownList from "@Obsidian/Controls/dropDownList";
 import RockButton from "@Obsidian/Controls/rockButton";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
 
-type ListItemBag = { text: string; value: string };
+type CampusOptionBag = { text: string; value: string; imageUrl?: string };
 
 type SlotBag = {
     slotId: number;
@@ -326,7 +357,7 @@ type ActiveReservationBag = {
 type InitBag = {
     notLogged: boolean;
     statusHtml: string;
-    campuses: ListItemBag[];
+    campuses: CampusOptionBag[];
     activeReservation: ActiveReservationBag | null;
 };
 
@@ -354,7 +385,7 @@ const holdUpdating = ref<boolean>(false);
 
 const statusHtml = ref<string>(config.statusHtml || "");
 
-const campusOptions = ref<ListItemBag[]>(config.campuses || []);
+const campusOptions = ref<CampusOptionBag[]>(config.campuses || []);
 const activeReservation = ref<ActiveReservationBag | null>(config.activeReservation || null);
 const replacing = ref<boolean>(false);
 
@@ -515,19 +546,37 @@ function downloadImage() {
     qrImg.src = qrSrc;
 }
 
-const campusValue = computed<string>({
-    get() { return campusId.value == null ? "" : String(campusId.value); },
-    set(v: string) {
-        const n = Number(v);
-        campusId.value = v ? (Number.isFinite(n) ? n : null) : null;
-    }
-});
-
 const campusNameSelected = computed<string>(() => {
     if (!campusId.value) return "";
     const found = campusOptions.value.find(x => x.value === String(campusId.value));
     return found?.text || "";
 });
+
+const availableDays = computed<DaySlotsBag[]>(() => {
+    return (days.value || [])
+        .map(d => ({
+            ...d,
+            slots: (d.slots || []).filter(s => s.isAvailable)
+        }))
+        .filter(d => d.slots.length > 0);
+});
+
+function campusInitials(name: string): string {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    const first = parts[0]?.charAt(0) || "";
+    const second = parts.length > 1 ? parts[1]?.charAt(0) || "" : (parts[0]?.charAt(1) || "");
+    return (first + second).toUpperCase();
+}
+
+function selectCampus(c: CampusOptionBag) {
+    if (busy.value) return;
+    const n = Number(c.value);
+    campusId.value = Number.isFinite(n) ? n : null;
+    if (campusId.value) {
+        step.value = 2;
+    }
+}
 
 function resetHold() {
     holdToken.value = "";
@@ -616,18 +665,13 @@ function cancelReplaceFlow() {
     step.value = 1;
 }
 
-async function goStep2() {
+async function goStep3() {
     if (!campusId.value) return;
-    step.value = 2;
+    step.value = 3;
 
     if (days.value.length === 0 && !weekBusy.value) {
         await loadWeekSlots(true);
     }
-}
-
-function goStep3() {
-    if (!selectedSlotId.value) return;
-    step.value = 3;
 }
 
 function selectSlot(s: SlotBag) {
@@ -636,10 +680,12 @@ function selectSlot(s: SlotBag) {
     selectedSlotId.value = s.slotId;
     selectedScheduleId.value = s.scheduleId ?? null;
     selectedOccurrenceDate.value = s.occurrenceDate;
-    quantity.value = 1;
 
     resetHold();
     scheduleHoldUpsert();
+    
+    // Avanzar al paso 4 (Confirmar)
+    step.value = 4;
 }
 
 function incQty() {
@@ -978,7 +1024,8 @@ async function confirmCancelReservation() {
     padding: 10px 8px 12px;
     border-bottom: 1px solid rgba(17,24,39,.06);
     display: grid;
-    grid-template-columns: auto 1fr auto 1fr auto;
+    /* 4 steps = 4 autos + 3 frs lines */
+    grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
     align-items: center;
     gap: 8px;
 }
@@ -989,6 +1036,11 @@ async function confirmCancelReservation() {
     gap: 8px;
     align-items: center;
     min-width: 0;
+}
+
+@media (max-width: 576px) {
+    .ssStepText { display: none; }
+    .ssStepper { gap: 4px; }
 }
 
 .ssDot {
@@ -1068,12 +1120,104 @@ async function confirmCancelReservation() {
     gap: 12px;
 }
 
+.ssCampusGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    justify-content: center;
+}
+
+@media (max-width: 576px) {
+    .ssCampusGrid {
+        /* Tarjetas mas grandes en movil (casi full width si solo hay una) */
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .ssCampusImg {
+        height: 170px;
+        flex: 0 0 170px;
+    }
+}
+
+.ssCampusCard {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* Controlamos espacio con margin/padding */
+    align-items: stretch;
+    text-align: left;
+    padding: 0; 
+    border: 1px solid var(--vr-border);
+    background: var(--vr-surface);
+    border-radius: var(--vr-radius-lg);
+    box-shadow: var(--vr-shadow-soft);
+    cursor: pointer;
+    overflow: hidden; 
+    padding-bottom: 12px; 
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: auto !important; /* Force auto height to avoid button constraints */
+}
+
+.ssCampusCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(17,24,39,.12);
+}
+
+.ssCampusCard.isDisabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    pointer-events: none;
+}
+
+.ssCampusCard.isSelected {
+    border-color: rgba(37,99,235,.55);
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+
+.ssCampusImg {
+    width: 100%;
+    /* Altura fija para uniformidad, o aspect-ratio si el navegador lo soporta bien */
+    height: 140px; 
+    flex: 0 0 140px; /* Prevent flexing */
+    background: linear-gradient(135deg, rgba(37,99,235,.10), rgba(17,24,39,.04));
+    display: grid;
+    place-items: center;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+    overflow: hidden;
+}
+
+.ssCampusInitials {
+    font-weight: 900;
+    font-size: 24px;
+    color: var(--vr-text);
+    letter-spacing: 1px;
+}
+
+.ssCampusName {
+    padding: 10px 12px;
+    color: var(--vr-text);
+    margin-top: 0;
+    background: var(--vr-surface);
+    line-height: 1.2;
+}
+
+.ssCampusRealImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
 .ssNav {
     margin-top: 14px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     align-items: center;
+}
+
+.ssNavSingle {
+    grid-template-columns: 1fr;
 }
 
 .ssSummaryPill {
@@ -1146,6 +1290,12 @@ async function confirmCancelReservation() {
 .ssSlotName {
     font-weight: 900;
     color: var(--vr-text);
+}
+
+.ssSlotCap {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--vr-muted);
 }
 
 /* Qty + Confirm */
