@@ -1,0 +1,1484 @@
+<template>
+    <Panel type="block" title="Cybersource Donation Entry">
+        <template #default>
+            <div class="cyWrap">
+                <NotificationBox v-if="config.notLogged" alertType="warning">
+                    Debes iniciar sesion para realizar donaciones.
+                </NotificationBox>
+
+                <div v-else class="cyScreen">
+                    <header class="cyTopBar">
+                        <div class="cyTopBrand">
+                            <span class="cyTopLogo">DAR</span>
+                            <span class="cyTopName">Cybersource Giving</span>
+                        </div>
+                        <div class="cyTopMeta" :class="config.mode === 'live' ? 'isLive' : 'isTest'">
+                            {{ config.mode === "live" ? "Live" : "Test" }}
+                        </div>
+                    </header>
+
+                    <section class="cyAmountHero">
+                        <p class="cyAmountLabel">Cantidad</p>
+                        <div class="cyAmountValue">
+                            <span class="cyAmountCurrency">{{ normalizeCurrency(form.currency) === "GTQ" ? "Q" : "$" }}</span>
+                            <input
+                                v-model="heroAmountInputText"
+                                class="cyAmountNumberInput"
+                                :class="{ isInvalid: !!fieldErrors.amount }"
+                                :style="{ width: heroAmountInputWidth }"
+                                type="text"
+                                inputmode="decimal"
+                                placeholder="0.00"
+                                aria-label="Monto de donacion"
+                                @input="onHeroAmountInput"
+                                @blur="onHeroAmountBlur" />
+                        </div>
+                        <div class="cyHeroControls">
+                            <div class="cyCurrencySwitch" role="group" aria-label="Seleccionar moneda">
+                                <button
+                                    type="button"
+                                    class="cyCurrencyBtn"
+                                    :class="{ isActive: form.currency === 'GTQ' }"
+                                    @click.prevent="form.currency = 'GTQ'; fieldErrors.currency = ''">
+                                    GTQ
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cyCurrencyBtn"
+                                    :class="{ isActive: form.currency === 'USD' }"
+                                    @click.prevent="form.currency = 'USD'; fieldErrors.currency = ''">
+                                    USD
+                                </button>
+                            </div>
+                        </div>
+
+                        <div v-if="Number(form.amount || 0) <= 0 || fieldErrors.amount || fieldErrors.currency" class="cyAmountAlert">
+                            {{ fieldErrors.amount || fieldErrors.currency || "Por favor ingrese el monto" }}
+                        </div>
+                    </section>
+
+                    <div class="cyStage">
+                        <section class="cyMainCard">
+                            <div class="cyPromptRow">
+                                <p class="cyPromptLabel">Tipo de regalo</p>
+                                <div class="cyGiftToggle" role="group" aria-label="Tipo de regalo">
+                                    <button type="button" class="cyGiftBtn isActive" @click.prevent>Dar una vez</button>
+                                    <button type="button" class="cyGiftBtn" @click.prevent>Configurar recurrente</button>
+                                </div>
+                            </div>
+
+                            <div class="cySubmenu" role="tablist" aria-label="Secciones de pago">
+                                <button
+                                    type="button"
+                                    class="cySubmenuBtn"
+                                    :class="{ isActive: activeSubmenu === 'donation' }"
+                                    @click="activeSubmenu = 'donation'">
+                                    Donacion
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cySubmenuBtn"
+                                    :class="{ isActive: activeSubmenu === 'history' }"
+                                    @click="activeSubmenu = 'history'; loadHistory()">
+                                    Historial de pagos
+                                </button>
+                            </div>
+
+                            <div v-show="activeSubmenu === 'donation'">
+                                <section class="cySection">
+                                    <div class="cySectionHead">
+                                        <h4 class="cySectionTitle">Datos de donacion</h4>
+                                        <p class="cySectionText">Selecciona fondo y agrega una nota opcional.</p>
+                                    </div>
+
+                                    <div class="cyGrid">
+                                        <label class="cyField">
+                                            <span>Cuenta</span>
+                                            <select
+                                                v-model.number="form.accountId"
+                                                class="form-control"
+                                                :class="{ isInvalid: !!fieldErrors.accountId }"
+                                                @change="fieldErrors.accountId = ''">
+                                                <option :value="0">Selecciona una cuenta...</option>
+                                                <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.publicName }}</option>
+                                            </select>
+                                            <small v-if="fieldErrors.accountId" class="cyFieldError">{{ fieldErrors.accountId }}</small>
+                                        </label>
+
+                                        <label class="cyField cyWide">
+                                            <span>Nota (opcional)</span>
+                                            <input
+                                                v-model="form.note"
+                                                class="form-control"
+                                                :class="{ isInvalid: !!fieldErrors.note }"
+                                                type="text"
+                                                maxlength="250"
+                                                placeholder="Ejemplo: Ofrenda especial"
+                                                @input="fieldErrors.note = ''" />
+                                            <small v-if="fieldErrors.note" class="cyFieldError">{{ fieldErrors.note }}</small>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="cySection">
+                                    <div class="cySectionHead">
+                                        <h4 class="cySectionTitle">Tarjeta</h4>
+                                        <p class="cySectionText">Completa la informacion de pago segura.</p>
+                                    </div>
+
+                                    <div class="cyCardInputs">
+                                        <label class="cyCardField">
+                                            <span>Numero de tarjeta</span>
+                                            <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cardNumber }">
+                                                <input
+                                                    v-model="form.cardNumber"
+                                                    class="cyInput"
+                                                    type="text"
+                                                    maxlength="24"
+                                                    inputmode="numeric"
+                                                    autocomplete="cc-number"
+                                                    placeholder="4111 1111 1111 1111"
+                                                    @input="onCardNumberInput" />
+                                                <span class="cyCardBrandTag" :class="`brand-${cardBrand}`">{{ cardBrandLabel }}</span>
+                                            </div>
+                                            <small v-if="fieldErrors.cardNumber" class="cyFieldError">{{ fieldErrors.cardNumber }}</small>
+                                        </label>
+
+                                        <div class="cyCardRow">
+                                            <label class="cyCardField">
+                                                <span>Vencimiento</span>
+                                                <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.expDate }">
+                                                    <input
+                                                        v-model="form.expDate"
+                                                        class="cyInput"
+                                                        type="text"
+                                                        maxlength="5"
+                                                        inputmode="numeric"
+                                                        autocomplete="cc-exp"
+                                                        placeholder="MM/AA"
+                                                        @input="onExpDateInput" />
+                                                </div>
+                                                <small class="cyFieldHint">Formato: 05/30</small>
+                                                <small v-if="fieldErrors.expDate" class="cyFieldError">{{ fieldErrors.expDate }}</small>
+                                            </label>
+
+                                            <label class="cyCardField">
+                                                <span>CVV</span>
+                                                <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cvv }">
+                                                    <input
+                                                        v-model="form.cvv"
+                                                        class="cyInput"
+                                                        type="password"
+                                                        maxlength="4"
+                                                        inputmode="numeric"
+                                                        autocomplete="cc-csc"
+                                                        :placeholder="`CVV (${expectedCvvLength})`"
+                                                        @input="onCvvInput" />
+                                                </div>
+                                                <small class="cyFieldHint">{{ expectedCvvLength }} digitos para {{ cardBrandLabel }}</small>
+                                                <small v-if="fieldErrors.cvv" class="cyFieldError">{{ fieldErrors.cvv }}</small>
+                                            </label>
+                                        </div>
+
+                                        <label class="cyCardField">
+                                            <span>Nombre del tarjetahabiente</span>
+                                            <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cardName }">
+                                                <input
+                                                    v-model="form.cardName"
+                                                    class="cyInput"
+                                                    type="text"
+                                                    maxlength="120"
+                                                    autocomplete="cc-name"
+                                                    placeholder="Nombre como aparece en la tarjeta"
+                                                    @input="fieldErrors.cardName = ''" />
+                                            </div>
+                                            <small v-if="fieldErrors.cardName" class="cyFieldError">{{ fieldErrors.cardName }}</small>
+                                        </label>
+
+                                    </div>
+                                </section>
+
+                                <div class="cyPreviewBar" :class="`brand-${cardBrand}`">
+                                    <span>{{ cardBrandLabel }}</span>
+                                    <strong>{{ cardPreviewNumber }}</strong>
+                                    <small>{{ amountPreview }}</small>
+                                </div>
+
+                                <div class="cyActions">
+                                    <RockButton btnType="primary" :disabled="busy" @click="submitPayment">
+                                        {{ busy ? "Procesando..." : "Siguiente" }}
+                                    </RockButton>
+                                    <p class="cyActionMeta">Nunca guardamos CVV ni numero completo de tarjeta.</p>
+                                </div>
+
+                                <NotificationBox v-if="errorMessage" alertType="danger" class="cyAlert">
+                                    {{ errorMessage }}
+                                </NotificationBox>
+
+                                <NotificationBox v-if="successMessage" alertType="success" class="cyAlert">
+                                    {{ successMessage }}
+                                </NotificationBox>
+
+                                <div v-if="lastResult" class="cyResult">
+                                    <div><strong>Modo:</strong> {{ lastResult.mode }}</div>
+                                    <div><strong>Respuesta:</strong> {{ lastResult.responseCode }}</div>
+                                    <div><strong>Moneda:</strong> {{ normalizeCurrency(lastResult.currency) }}</div>
+                                    <div><strong>Autorizacion:</strong> {{ lastResult.authorizationNumber || "-" }}</div>
+                                    <div><strong>Referencia:</strong> {{ lastResult.referenceNumber || "-" }}</div>
+                                    <div><strong>Auditoria:</strong> {{ lastResult.auditNumber || "-" }}</div>
+                                    <div><strong>Id transaccion:</strong> {{ lastResult.transactionId ?? "-" }}</div>
+                                </div>
+                            </div>
+
+                            <section v-show="activeSubmenu === 'history'" class="cyHistoryCard cyHistoryPanel">
+                                <div class="cyHistoryHeader">
+                                    <h4 class="cyHistoryTitle">Mi historial de pagos</h4>
+                                    <RockButton btnType="default" :disabled="busyHistory" @click="loadHistory">
+                                        {{ busyHistory ? "Cargando..." : "Actualizar" }}
+                                    </RockButton>
+                                </div>
+
+                                <div v-if="history.length === 0" class="cyEmpty">No se encontraron pagos Cybersource.</div>
+
+                                <div v-else class="cyHistoryTableWrap">
+                                    <table class="table table-bordered cyHistoryTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Monto</th>
+                                                <th>Moneda</th>
+                                                <th>Cuenta</th>
+                                                <th>Estado</th>
+                                                <th>Ref</th>
+                                                <th>Audit</th>
+                                                <th>Tarjeta</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="item in history" :key="item.transactionId">
+                                                <td>{{ formatDate(item.transactionDateTime) }}</td>
+                                                <td>{{ formatMoney(item.amount, item.currency) }}</td>
+                                                <td>{{ normalizeCurrency(item.currency) }}</td>
+                                                <td>{{ item.accountName || "-" }}</td>
+                                                <td>
+                                                    <span class="cyStatusBadge" :class="statusClass(item.status)">{{ item.status || "-" }}</span>
+                                                    <small class="cyStatusCode">{{ item.responseCode || "-" }}</small>
+                                                </td>
+                                                <td>{{ item.referenceNumber || "-" }}</td>
+                                                <td>{{ item.auditNumber || "-" }}</td>
+                                                <td>{{ item.accountNumberMasked || "-" }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type CardBrand = "visa" | "mastercard" | "amex" | "discover" | "unknown";
+
+type AccountOptionBag = {
+    id: number;
+    publicName: string;
+};
+
+type PaymentHistoryBag = {
+    transactionId: number;
+    transactionDateTime: string;
+    amount: number;
+    accountName: string;
+    transactionCode: string;
+    responseCode: string;
+    status: string;
+    statusMessage: string;
+    referenceNumber: string;
+    auditNumber: string;
+    authorizationNumber: string;
+    currency: string;
+    mode: string;
+    accountNumberMasked: string;
+    summary: string;
+};
+
+type InitBag = {
+    notLogged: boolean;
+    defaultCurrency: string;
+    mode: string;
+    accounts: AccountOptionBag[];
+    history: PaymentHistoryBag[];
+};
+
+type ProcessPaymentResult = {
+    success: boolean;
+    message: string;
+    responseCode: string;
+    authorizationNumber: string;
+    referenceNumber: string;
+    auditNumber: string;
+    currency: string;
+    mode: string;
+    transactionId?: number;
+    history: PaymentHistoryBag[];
+};
+
+type ExpiryParse = {
+    month: number;
+    year: number;
+    valid: boolean;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const accounts = ref<AccountOptionBag[]>(config.accounts || []);
+const history = ref<PaymentHistoryBag[]>(config.history || []);
+
+const busy = ref(false);
+const busyHistory = ref(false);
+const errorMessage = ref("");
+const successMessage = ref("");
+const lastResult = ref<ProcessPaymentResult | null>(null);
+const activeSubmenu = ref<"donation" | "history">("donation");
+
+const fieldErrors = reactive({
+    accountId: "",
+    amount: "",
+    currency: "",
+    note: "",
+    cardName: "",
+    cardNumber: "",
+    expDate: "",
+    cvv: ""
+});
+
+const form = reactive({
+    accountId: accounts.value.length > 0 ? accounts.value[0].id : 0,
+    amount: 10,
+    note: "",
+    currency: (config.defaultCurrency || "GTQ").toUpperCase(),
+    cardName: "",
+    cardNumber: "",
+    expDate: "",
+    cvv: ""
+});
+const heroAmountInputText = ref(Number(form.amount || 0).toFixed(2));
+const heroAmountInputWidth = computed(() => {
+    const length = String(heroAmountInputText.value || "").length;
+    const widthInCh = Math.min(Math.max(length + 0.8, 4.8), 11);
+    return `${widthInCh}ch`;
+});
+
+const cardNumberDigits = computed(() => (form.cardNumber || "").replace(/[^\d]/g, ""));
+
+const cardBrand = computed<CardBrand>(() => detectCardBrand(cardNumberDigits.value));
+
+const cardBrandLabel = computed<string>(() => {
+    if (cardBrand.value === "visa") return "Visa";
+    if (cardBrand.value === "mastercard") return "Mastercard";
+    if (cardBrand.value === "amex") return "American Express";
+    if (cardBrand.value === "discover") return "Discover";
+    return "Tarjeta";
+});
+
+const expectedCvvLength = computed<number>(() => (cardBrand.value === "amex" ? 4 : 3));
+
+const amountPreview = computed<string>(() => {
+    const amount = Number(form.amount || 0);
+    const currency = form.currency === "USD" ? "USD" : "GTQ";
+
+    return amount.toLocaleString(undefined, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+});
+
+const cardPreviewNumber = computed<string>(() => {
+    const preview = formatCardNumberDigits(cardNumberDigits.value, cardBrand.value);
+    return preview || "#### #### #### ####";
+});
+
+const cardPreviewName = computed<string>(() => {
+    const name = (form.cardName || "").trim();
+    return name ? name.toUpperCase() : "NOMBRE TITULAR";
+});
+
+const cardPreviewExp = computed<string>(() => {
+    return form.expDate || "MM/YY";
+});
+
+function detectCardBrand(pan: string): CardBrand {
+    if (!pan) return "unknown";
+
+    if (/^4/.test(pan)) return "visa";
+    if (/^(5[1-5]|2(?:2[2-9]|[3-6]\d|7[01]|720))/.test(pan)) return "mastercard";
+    if (/^3[47]/.test(pan)) return "amex";
+    if (/^(6011|65|64[4-9])/.test(pan)) return "discover";
+
+    return "unknown";
+}
+
+function luhnCheck(pan: string): boolean {
+    if (!/^\d{12,19}$/.test(pan)) {
+        return false;
+    }
+
+    let sum = 0;
+    let shouldDouble = false;
+
+    for (let i = pan.length - 1; i >= 0; i--) {
+        let digit = Number(pan.charAt(i));
+
+        if (shouldDouble) {
+            digit *= 2;
+            if (digit > 9) {
+                digit -= 9;
+            }
+        }
+
+        sum += digit;
+        shouldDouble = !shouldDouble;
+    }
+
+    return sum % 10 === 0;
+}
+
+function formatCardNumberDigits(digits: string, brand: CardBrand): string {
+    const max = brand === "amex" ? 15 : 19;
+    const clean = digits.slice(0, max);
+
+    if (brand === "amex") {
+        const p1 = clean.slice(0, 4);
+        const p2 = clean.slice(4, 10);
+        const p3 = clean.slice(10, 15);
+        return [p1, p2, p3].filter(Boolean).join(" ");
+    }
+
+    return clean.match(/.{1,4}/g)?.join(" ") || clean;
+}
+
+function parseExpiry(value: string): ExpiryParse {
+    const digits = (value || "").replace(/[^\d]/g, "");
+
+    if (digits.length !== 4) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    const month = Number(digits.slice(0, 2));
+    const yy = Number(digits.slice(2, 4));
+
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    const year = 2000 + yy;
+    return { month, year, valid: true };
+}
+
+function isExpired(month: number, year: number): boolean {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (year < currentYear) {
+        return true;
+    }
+
+    if (year === currentYear && month < currentMonth) {
+        return true;
+    }
+
+    return false;
+}
+
+function clearSensitive(): void {
+    form.cardNumber = "";
+    form.expDate = "";
+    form.cvv = "";
+}
+
+function onCardNumberInput(): void {
+    fieldErrors.cardNumber = "";
+    const digits = (form.cardNumber || "").replace(/[^\d]/g, "");
+    const brand = detectCardBrand(digits);
+    form.cardNumber = formatCardNumberDigits(digits, brand);
+}
+
+function onExpDateInput(): void {
+    fieldErrors.expDate = "";
+
+    const digits = (form.expDate || "").replace(/[^\d]/g, "").slice(0, 4);
+    if (digits.length <= 2) {
+        form.expDate = digits;
+        return;
+    }
+
+    form.expDate = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function onCvvInput(): void {
+    fieldErrors.cvv = "";
+    form.cvv = (form.cvv || "").replace(/[^\d]/g, "").slice(0, 4);
+}
+
+function onHeroAmountInput(): void {
+    fieldErrors.amount = "";
+
+    const raw = String(heroAmountInputText.value || "")
+        .replace(",", ".")
+        .replace(/[^\d.]/g, "");
+
+    const firstDot = raw.indexOf(".");
+    const normalized = firstDot >= 0
+        ? raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, "")
+        : raw;
+
+    const parts = normalized.split(".");
+    const whole = (parts[0] || "").slice(0, 7);
+    const fraction = parts.length > 1 ? (parts[1] || "").slice(0, 2) : "";
+
+    heroAmountInputText.value = parts.length > 1 ? `${whole}.${fraction}` : whole;
+
+    const parsed = Number(heroAmountInputText.value);
+    form.amount = Number.isFinite(parsed) ? parsed : 0;
+}
+
+function onHeroAmountBlur(): void {
+    const text = String(heroAmountInputText.value || "").trim();
+    if (!text) {
+        form.amount = 0;
+        return;
+    }
+
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) {
+        form.amount = 0;
+        heroAmountInputText.value = "";
+        return;
+    }
+
+    form.amount = parsed;
+    heroAmountInputText.value = parsed.toFixed(2);
+}
+
+function clearAllFieldErrors(): void {
+    fieldErrors.accountId = "";
+    fieldErrors.amount = "";
+    fieldErrors.currency = "";
+    fieldErrors.note = "";
+    fieldErrors.cardName = "";
+    fieldErrors.cardNumber = "";
+    fieldErrors.expDate = "";
+    fieldErrors.cvv = "";
+}
+
+function validateForm(): boolean {
+    clearAllFieldErrors();
+
+    let isValid = true;
+
+    if (!Number.isFinite(form.accountId) || form.accountId <= 0) {
+        fieldErrors.accountId = "Selecciona una cuenta.";
+        isValid = false;
+    }
+
+    if (!Number.isFinite(form.amount) || Number(form.amount) <= 0) {
+        fieldErrors.amount = "Ingresa un monto valido mayor que cero.";
+        isValid = false;
+    }
+
+    if (form.currency !== "GTQ" && form.currency !== "USD") {
+        fieldErrors.currency = "Solo se permite GTQ o USD.";
+        isValid = false;
+    }
+
+    if ((form.note || "").length > 250) {
+        fieldErrors.note = "Maximo 250 caracteres.";
+        isValid = false;
+    }
+
+    if ((form.cardName || "").trim().length < 3) {
+        fieldErrors.cardName = "Ingresa el nombre del titular.";
+        isValid = false;
+    }
+
+    if (!luhnCheck(cardNumberDigits.value)) {
+        fieldErrors.cardNumber = "Numero de tarjeta invalido.";
+        isValid = false;
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        fieldErrors.expDate = "Usa el formato MM/YY.";
+        isValid = false;
+    } else if (isExpired(expiry.month, expiry.year)) {
+        fieldErrors.expDate = "La tarjeta esta vencida.";
+        isValid = false;
+    }
+
+    const cvv = (form.cvv || "").replace(/[^\d]/g, "");
+    const validCvvLength = cardBrand.value === "amex" ? cvv.length === 4 : cvv.length === 3;
+    if (!validCvvLength) {
+        fieldErrors.cvv = `El CVV debe tener ${expectedCvvLength.value} digitos.`;
+        isValid = false;
+    }
+
+    return isValid;
+}
+
+async function submitPayment(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    errorMessage.value = "";
+    successMessage.value = "";
+
+    if (!validateForm()) {
+        errorMessage.value = "Corrige los campos marcados antes de procesar.";
+        return;
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        errorMessage.value = "Fecha de vencimiento invalida.";
+        return;
+    }
+
+    busy.value = true;
+
+    try {
+        const response = await invokeBlockAction<any>("ProcessPayment", {
+            bag: {
+                accountId: Number(form.accountId || 0),
+                amount: Number(form.amount || 0),
+                note: (form.note || "").trim(),
+                currency: (form.currency || "GTQ").toUpperCase(),
+                cardName: (form.cardName || "").trim(),
+                cardNumber: cardNumberDigits.value,
+                expMonth: expiry.month,
+                expYear: expiry.year,
+                cvv: (form.cvv || "").trim()
+            }
+        });
+
+        if (!response.isSuccess) {
+            errorMessage.value = response.errorMessage || "La solicitud de pago fallo.";
+            return;
+        }
+
+        const data = response.data as ProcessPaymentResult;
+        lastResult.value = data;
+        history.value = data.history || [];
+
+        if (data.success) {
+            successMessage.value = data.message || "Pago aprobado.";
+            form.note = "";
+        } else {
+            errorMessage.value = data.message || "Pago rechazado.";
+        }
+    } catch {
+        errorMessage.value = "Error inesperado al procesar el pago.";
+    } finally {
+        clearSensitive();
+        busy.value = false;
+    }
+}
+
+async function loadHistory(): Promise<void> {
+    if (busyHistory.value) {
+        return;
+    }
+
+    busyHistory.value = true;
+
+    try {
+        const response = await invokeBlockAction<any>("GetPaymentHistory", {});
+        if (response.isSuccess) {
+            history.value = response.data?.history || [];
+        }
+    } finally {
+        busyHistory.value = false;
+    }
+}
+
+function formatDate(value: string): string {
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString();
+}
+
+function normalizeCurrency(value?: string): string {
+    const upper = String(value || form.currency || "USD").toUpperCase();
+    return upper === "GTQ" ? "GTQ" : "USD";
+}
+
+function formatMoney(value: number, currencyCode?: string): string {
+    const amount = Number(value || 0);
+    const currency = normalizeCurrency(currencyCode);
+
+    return amount.toLocaleString(undefined, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function statusClass(status?: string): string {
+    const s = String(status || "").toUpperCase();
+
+    if (s === "APPROVED" || s === "SUCCESS" || s === "COMPLETED") {
+        return "isGood";
+    }
+
+    if (s === "DECLINED" || s === "FAILED" || s === "REJECTED") {
+        return "isBad";
+    }
+
+    return "isNeutral";
+}
+
+</script>
+
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+
+.cyWrap {
+    --cy-black: #090909;
+    --cy-gray-100: #f3f3f3;
+    --cy-gray-200: #e5e5e5;
+    --cy-gray-300: #d5d5d5;
+    --cy-gray-500: #7d7d7d;
+    --cy-text: #1f2933;
+    --cy-danger: #c22016;
+    --cy-success: #0f8f53;
+    --cy-radius-xl: 22px;
+    --cy-radius-lg: 14px;
+    --cy-radius-pill: 999px;
+
+    background: linear-gradient(#000 0 315px, #ececec 315px 100%);
+    border-radius: 18px;
+    color: var(--cy-text);
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    overflow: hidden;
+}
+
+.cyScreen {
+    min-height: 100%;
+}
+
+.cyTopBar {
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+}
+
+.cyTopBrand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cyTopLogo {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    background: #fff;
+    color: #121212;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Manrope, sans-serif;
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.cyTopName {
+    color: #fff;
+    font-family: Manrope, sans-serif;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.cyTopMeta {
+    border-radius: var(--cy-radius-pill);
+    border: 1px solid #ffffff38;
+    padding: 6px 10px;
+    color: #fff;
+    font-family: Manrope, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.cyTopMeta.isLive {
+    background: #163b28;
+    border-color: #2c8b5e;
+}
+
+.cyTopMeta.isTest {
+    background: #1a2b42;
+    border-color: #4d709b;
+}
+
+.cyAmountHero {
+    color: #fff;
+    text-align: center;
+    padding: 18px 12px 60px;
+}
+
+.cyAmountLabel {
+    margin: 0;
+    color: #d9d9d9;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+}
+
+.cyAmountValue {
+    margin: 8px auto 0;
+    width: fit-content;
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 6px;
+    font-family: Manrope, sans-serif;
+}
+
+.cyAmountCurrency {
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #efefef;
+}
+
+.cyAmountNumberInput {
+    font-size: clamp(52px, 12vw, 120px);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    font-family: Manrope, sans-serif;
+    color: #8f8f8f;
+    min-width: 2.3ch;
+    max-width: min(72vw, 540px);
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    text-align: left;
+}
+
+.cyAmountNumberInput::placeholder {
+    color: #676767;
+}
+
+.cyAmountNumberInput.isInvalid {
+    color: #f1a8a4;
+}
+
+.cyHeroControls {
+    margin: 12px auto 0;
+    width: min(420px, 94vw);
+    display: flex;
+    justify-content: center;
+}
+
+.cyCurrencySwitch {
+    background: #111111;
+    border: 1px solid #3e3e3e;
+    border-radius: var(--cy-radius-pill);
+    padding: 3px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    width: 100%;
+}
+
+.cyCurrencyBtn {
+    min-height: 38px;
+    border: 0;
+    border-radius: var(--cy-radius-pill);
+    background: transparent;
+    color: #cfcfcf;
+    font-family: Manrope, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.cyCurrencyBtn.isActive {
+    background: #ffffff;
+    color: #0f0f0f;
+}
+
+.cyAmountAlert {
+    margin: 14px auto 0;
+    width: fit-content;
+    max-width: min(92vw, 380px);
+    border-radius: 10px;
+    background: #f6f6f6;
+    border: 1px solid #d8d8d8;
+    color: var(--cy-danger);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
+.cyStage {
+    width: min(960px, calc(100% - 18px));
+    margin: -36px auto 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+.cyMainCard {
+    background: var(--cy-gray-100);
+    border: 1px solid var(--cy-gray-300);
+    border-radius: var(--cy-radius-xl);
+    box-shadow: 0 14px 28px rgba(8, 8, 8, 0.12);
+}
+
+.cyMainCard {
+    padding: 14px;
+    animation: cyRise 0.35s ease-out both;
+}
+
+.cyPromptRow {
+    margin-bottom: 12px;
+}
+
+.cyPromptLabel {
+    margin: 0 0 7px;
+    font-size: 14px;
+    color: #2e2e2e;
+}
+
+.cySubmenu {
+    margin-bottom: 12px;
+    border: 1px solid #bdbdbd;
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.cySubmenuBtn {
+    border: 0;
+    border-bottom: 1px solid #bdbdbd;
+    background: #ededed;
+    color: #333;
+    min-height: 44px;
+    font-family: Manrope, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cySubmenuBtn:last-child {
+    border-bottom: 0;
+}
+
+.cySubmenuBtn.isActive {
+    background: #000;
+    color: #fff;
+}
+
+.cyGiftToggle {
+    border: 1px solid #bdbdbd;
+    border-radius: 8px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.cyGiftBtn {
+    border: 0;
+    border-bottom: 1px solid #bdbdbd;
+    background: #ececec;
+    color: #3a3a3a;
+    min-height: 50px;
+    font-family: Manrope, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cyGiftBtn:last-child {
+    border-bottom: 0;
+}
+
+.cyGiftBtn.isActive {
+    background: #000;
+    color: #fff;
+}
+
+.cySection {
+    margin-top: 12px;
+    background: #fff;
+    border: 1px solid #d7d7d7;
+    border-radius: var(--cy-radius-lg);
+    padding: 12px;
+}
+
+.cySectionHead {
+    margin-bottom: 10px;
+}
+
+.cySectionTitle {
+    margin: 0;
+    font-family: Manrope, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: #222;
+    text-transform: none;
+}
+
+.cySectionText {
+    margin: 4px 0 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.cyGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.cyWide {
+    grid-column: auto;
+}
+
+.cyField,
+.cyCardField {
+    display: grid;
+    gap: 6px;
+}
+
+.cyField > span,
+.cyCardField > span {
+    color: #4a4a4a;
+    font-family: Manrope, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyField .form-control,
+.cyInput {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #bfbfbf;
+    border-radius: 10px;
+    background: #fff;
+    color: #1e1e1e;
+    font-size: 14px;
+    padding: 10px 12px;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cyField .form-control:focus,
+.cyInput:focus {
+    outline: none;
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.cyField .form-control.isInvalid {
+    border-color: #dc6e66;
+}
+
+.cyCardInputs {
+    display: grid;
+    gap: 10px;
+}
+
+.cyCardRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.cyInputWrap {
+    border: 1px solid #bfbfbf;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.cyInputWrap:focus-within {
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.cyInputWrap.isInvalid {
+    border-color: #dc6e66;
+}
+
+.cyInputWrap .cyInput {
+    border: 0;
+    box-shadow: none;
+    min-height: 42px;
+    padding: 0;
+}
+
+.cyCardBrandTag {
+    flex: 0 0 auto;
+    border-radius: var(--cy-radius-pill);
+    border: 1px solid #bfc6cf;
+    background: #edf1f7;
+    color: #405061;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 7px;
+}
+
+.cyCardBrandTag.brand-visa {
+    background: #eaf1ff;
+    border-color: #bcd2ff;
+    color: #1e44a8;
+}
+
+.cyCardBrandTag.brand-mastercard {
+    background: #fff1e8;
+    border-color: #ffd7c2;
+    color: #9a3412;
+}
+
+.cyCardBrandTag.brand-amex {
+    background: #e8fbff;
+    border-color: #b7effa;
+    color: #0f6f88;
+}
+
+.cyCardBrandTag.brand-discover {
+    background: #fff4ec;
+    border-color: #fed7aa;
+    color: #c2410c;
+}
+
+.cyFieldHint {
+    color: #727272;
+    font-size: 12px;
+}
+
+.cyFieldError {
+    color: var(--cy-danger);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cyPreviewBar {
+    margin-top: 12px;
+    border-radius: 12px;
+    border: 1px solid #cecece;
+    background: #fff;
+    padding: 10px 12px;
+    display: grid;
+    gap: 3px;
+}
+
+.cyPreviewBar span {
+    color: #4e4e4e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.cyPreviewBar strong {
+    color: #1d1d1d;
+    font-size: 15px;
+    font-family: Manrope, sans-serif;
+    font-weight: 800;
+}
+
+.cyPreviewBar small {
+    color: #5f5f5f;
+    font-size: 12px;
+}
+
+.cyActions {
+    margin-top: 14px;
+    display: grid;
+    gap: 8px;
+}
+
+.cyActions .btn-primary,
+.cyActions .rock-button.btn-primary {
+    width: 100%;
+    min-height: 56px;
+    border-radius: var(--cy-radius-pill) !important;
+    border: 1px solid #000 !important;
+    background: #000 !important;
+    color: #fff !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 32px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.01em;
+    padding: 8px 20px !important;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.cyActions .btn-primary:hover,
+.cyActions .rock-button.btn-primary:hover {
+    background: #101010 !important;
+}
+
+.cyActionMeta {
+    margin: 0;
+    color: #5e5e5e;
+    font-size: 12px;
+}
+
+.cyAlert {
+    margin-top: 10px;
+}
+
+.cyResult {
+    margin-top: 10px;
+    border: 1px solid #d0d0d0;
+    border-radius: 12px;
+    background: #f8f8f8;
+    padding: 10px;
+    display: grid;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.cyHistoryCard {
+    border: 1px solid #d7d7d7;
+    border-radius: 12px;
+    background: #fff;
+    padding: 12px;
+}
+
+.cyHistoryTitle {
+    margin: 0;
+    font-family: Manrope, sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    color: #242424;
+    text-transform: none;
+}
+
+.cyHistoryPanel {
+    margin-top: 12px;
+}
+
+.cyHistoryHeader {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.cyHistoryCard .btn-default,
+.cyHistoryCard .rock-button.btn-default {
+    border-radius: var(--cy-radius-pill) !important;
+    border: 1px solid #b6b6b6 !important;
+    background: #fff !important;
+    color: #262626 !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding: 7px 14px !important;
+}
+
+.cyHistoryTableWrap {
+    overflow-x: auto;
+    border: 1px solid #dfdfdf;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.cyHistoryTable {
+    margin-bottom: 0;
+    min-width: 720px;
+    font-size: 12px;
+}
+
+.cyHistoryTable thead th {
+    background: #f2f2f2;
+    border-bottom: 1px solid #dfdfdf;
+    color: #3a3a3a;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.cyStatusBadge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--cy-radius-pill);
+    padding: 2px 8px;
+    border: 1px solid #d1d5db;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyStatusBadge.isGood {
+    background: #ecfdf3;
+    color: #067647;
+    border-color: #abe7c0;
+}
+
+.cyStatusBadge.isBad {
+    background: #fef3f2;
+    color: #b42318;
+    border-color: #fecdc9;
+}
+
+.cyStatusBadge.isNeutral {
+    background: #f3f4f6;
+    color: #344054;
+    border-color: #d4d8df;
+}
+
+.cyStatusCode {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+    font-size: 11px;
+}
+
+.cyEmpty {
+    color: #666;
+    font-size: 13px;
+}
+
+@keyframes cyRise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (min-width: 680px) {
+    .cyTopBar {
+        padding: 16px 20px;
+    }
+
+    .cyAmountHero {
+        padding-bottom: 76px;
+    }
+
+    .cySubmenu {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .cySubmenuBtn {
+        border-bottom: 0;
+        border-right: 1px solid #bdbdbd;
+    }
+
+    .cySubmenuBtn:last-child {
+        border-right: 0;
+    }
+
+    .cyGiftToggle {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .cyGiftBtn {
+        border-bottom: 0;
+        border-right: 1px solid #bdbdbd;
+    }
+
+    .cyGiftBtn:last-child {
+        border-right: 0;
+    }
+
+    .cyGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cyWide {
+        grid-column: 1 / span 2;
+    }
+
+    .cyCardRow {
+        grid-template-columns: 1.2fr 1fr;
+    }
+}
+
+@media (min-width: 1080px) {
+    .cyMainCard {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 460px) {
+    .cyTopLogo {
+        width: 40px;
+        height: 40px;
+    }
+
+    .cyTopName {
+        font-size: 17px;
+    }
+
+    .cyAmountCurrency {
+        font-size: 28px;
+        margin-top: 10px;
+    }
+
+    .cyActions .btn-primary,
+    .cyActions .rock-button.btn-primary {
+        font-size: 28px !important;
+    }
+}
+</style>

@@ -1,0 +1,650 @@
+<template>
+    <Panel type="block" title="Custom Giving Entry">
+        <template #default>
+            <div class="cgPage">
+                <NotificationBox v-if="criticalError" alertType="danger">{{ criticalError }}</NotificationBox>
+
+                <template v-else>
+                    <div class="cgStepper">
+                        <div class="cgStep" :class="{ active: step === 1, done: step > 1 }">1. Monto</div>
+                        <div class="cgStep" :class="{ active: step === 2, done: step > 2 }">2. Pago</div>
+                        <div class="cgStep" :class="{ active: step === 3, done: step > 3 }">3. Donante</div>
+                        <div class="cgStep" :class="{ active: step === 4, done: step > 4 }">4. Confirmar</div>
+                        <div class="cgStep" :class="{ active: step === 5 }">5. Listo</div>
+                    </div>
+
+                    <div v-if="step === 1" class="cgCard">
+                        <h4>Selecciona montos y opciones</h4>
+
+                        <CurrencyBox
+                            v-for="account in accounts"
+                            :key="account.idKey"
+                            :label="account.publicName"
+                            v-model="form.accountAmounts[account.idKey]" />
+
+                        <DropDownList
+                            label="Campus"
+                            v-model="form.campusGuid"
+                            :items="campuses"
+                            :showBlankItem="false" />
+
+                        <DropDownList
+                            label="Frecuencia"
+                            v-model="form.frequencyValueGuid"
+                            :items="frequencies"
+                            :showBlankItem="false" />
+
+                        <DatePicker label="Fecha de inicio" v-model="form.giftDate" />
+
+                        <Toggle v-if="allowBusinessGiving" v-model="form.isGivingAsPerson" class="margin-t-md">
+                            <template #on>Persona</template>
+                            <template #off>Negocio</template>
+                        </Toggle>
+
+                        <TextBox
+                            v-if="enableCommentEntry"
+                            :label="commentEntryLabel || 'Comment'"
+                            v-model="form.comment" />
+
+                        <Toggle v-if="allowAnonymousGiving" v-model="form.isGiveAnonymously">
+                            <template #on>Mostrar nombre</template>
+                            <template #off>Anónimo</template>
+                        </Toggle>
+
+                        <NotificationBox v-if="stepOneError" alertType="validation">{{ stepOneError }}</NotificationBox>
+
+                        <div class="cgActions">
+                            <RockButton btnType="primary" @click="goToPayment">Continuar</RockButton>
+                        </div>
+                    </div>
+
+                    <div v-else-if="step === 2" class="cgCard">
+                        <h4>Método de pago</h4>
+                        <div class="cgSummary">Total: <strong>{{ totalAmountFormatted }}</strong></div>
+
+                        <!-- ePay Inline Card Form -->
+                        <div class="epay-wrapper">
+                            <!-- Card Preview -->
+                            <div class="epay-card-preview">
+                                <div class="epay-card-brand">{{ cardBrand }}</div>
+                                <div class="epay-card-number">{{ cardNumberPreview }}</div>
+                                <div class="epay-card-bottom">
+                                    <div class="epay-card-name">{{ cardholderNamePreview }}</div>
+                                    <div class="epay-card-exp">{{ cardExpPreview }}</div>
+                                </div>
+                            </div>
+
+                            <!-- Error global -->
+                            <NotificationBox v-if="paymentError" alertType="danger">{{ paymentError }}</NotificationBox>
+
+                            <!-- Formulario -->
+                            <TextBox
+                                label="Nombre del titular"
+                                v-model="ePayForm.cardholderName"
+                                @update:modelValue="clearPaymentError" />
+
+                            <TextBox
+                                label="Número de tarjeta"
+                                v-model="ePayForm.cardNumber"
+                                inputmode="numeric"
+                                @update:modelValue="onCardNumberChange" />
+
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <NumberUpDown
+                                        label="Mes"
+                                        v-model="ePayForm.expMonth"
+                                        :min="1"
+                                        :max="12" />
+                                </div>
+                                <div class="col-md-3">
+                                    <NumberUpDown
+                                        label="Año"
+                                        v-model="ePayForm.expYear"
+                                        :min="2024"
+                                        :max="2044" />
+                                </div>
+                                <div class="col-md-3">
+                                    <TextBox
+                                        label="CVV"
+                                        v-model="ePayForm.cvv"
+                                        type="password"
+                                        :maxlength="cardCvvLength"
+                                        inputmode="numeric" />
+                                </div>
+                                <div class="col-md-3">
+                                    <DropDownList
+                                        label="Cuotas"
+                                        v-model="ePayForm.installments"
+                                        :items="installmentOptions"
+                                        :showBlankItem="true"
+                                        blankValue="0" />
+                                </div>
+                            </div>
+
+                            <div class="cgActions">
+                                <RockButton @click="step = 1">Atrás</RockButton>
+                                <RockButton btnType="primary" class="pull-right" :isLoading="loading" @click="processEPayPayment">
+                                    Procesar pago
+                                </RockButton>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else-if="step === 3" class="cgCard">
+                        <h4>Datos del donante</h4>
+
+                        <template v-if="config.isAuthenticated && form.isGivingAsPerson">
+                            <div class="form-control-static">{{ config.currentPersonFullName || 'Usuario autenticado' }}</div>
+                        </template>
+
+                        <template v-else>
+                            <TextBox label="Nombre" v-model="form.firstName" />
+                            <TextBox label="Apellido" v-model="form.lastName" />
+                            <TextBox label="Email" v-model="form.email" />
+                        </template>
+
+                        <TextBox v-if="!form.isGivingAsPerson" label="Nombre del negocio" v-model="form.businessName" />
+
+                        <TextBox label="Teléfono" v-model="form.phoneNumber" />
+
+                        <NotificationBox v-if="stepThreeError" alertType="validation">{{ stepThreeError }}</NotificationBox>
+
+                        <div class="cgActions">
+                            <RockButton @click="step = 2">Atrás</RockButton>
+                            <RockButton btnType="primary" class="pull-right" @click="goToConfirm">Siguiente</RockButton>
+                        </div>
+                    </div>
+
+                    <div v-else-if="step === 4" class="cgCard">
+                        <h4>Confirmación</h4>
+
+                        <div class="cgSummaryLine"><span>Total</span><strong>{{ totalAmountFormatted }}</strong></div>
+                        <div class="cgSummaryLine"><span>Tipo</span><strong>{{ form.isGivingAsPerson ? 'Persona' : 'Negocio' }}</strong></div>
+                        <div class="cgSummaryLine"><span>Anónimo</span><strong>{{ form.isGiveAnonymously ? 'Sí' : 'No' }}</strong></div>
+
+                        <NotificationBox v-if="submitError" alertType="danger">{{ submitError }}</NotificationBox>
+
+                        <div class="cgActions">
+                            <RockButton @click="step = 3">Atrás</RockButton>
+                            <RockButton btnType="primary" class="pull-right" :isLoading="loading" @click="submitGift">
+                                Procesar donación
+                            </RockButton>
+                        </div>
+                    </div>
+
+                    <div v-else class="cgCard">
+                        <h4>Donación procesada</h4>
+                        <NotificationBox alertType="success">{{ successMessage }}</NotificationBox>
+                        <div class="cgActions">
+                            <RockButton btnType="primary" @click="startNew">Nueva donación</RockButton>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from "vue";
+
+import Panel from "@Obsidian/Controls/panel";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton";
+import CurrencyBox from "@Obsidian/Controls/currencyBox";
+import DropDownList from "@Obsidian/Controls/dropDownList";
+import DatePicker from "@Obsidian/Controls/datePicker.obs";
+import Toggle from "@Obsidian/Controls/toggle";
+import TextBox from "@Obsidian/Controls/textBox";
+import NumberUpDown from "@Obsidian/Controls/numberUpDown";
+
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+import { newGuid } from "@Obsidian/Utility/guid";
+import { asFormattedString } from "@Obsidian/Utility/numberUtils";
+import { onMounted } from "vue";
+
+type ListItemBag = { text?: string; value?: string };
+type AccountBag = { id: number; idKey: string; publicName: string };
+type GatewayControlBag = { fileUrl?: string; settings?: Record<string, unknown> };
+
+type InitBag = {
+    isAuthenticated: boolean;
+    currentPersonFullName?: string;
+    allowBusinessGiving: boolean;
+    allowAnonymousGiving: boolean;
+    allowScheduled: boolean;
+    enableCommentEntry: boolean;
+    commentEntryLabel?: string;
+    accounts: AccountBag[];
+    campuses: ListItemBag[];
+    frequencies: ListItemBag[];
+    gatewayControl: GatewayControlBag;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const step = ref<number>(1);
+const loading = ref<boolean>(false);
+const criticalError = ref<string>("");
+const stepOneError = ref<string>("");
+const stepThreeError = ref<string>("");
+const submitError = ref<string>("");
+const successMessage = ref<string>("");
+
+const paymentError = ref<string>("");
+const transactionGuid = ref<string>(newGuid());
+
+// ePay form
+const ePayForm = ref({
+    cardholderName: "",
+    cardNumber: "",
+    expMonth: 0,
+    expYear: 0,
+    cvv: "",
+    installments: "0"
+});
+
+const installmentOptions = ref<Array<{value: string, text: string}>>([]);
+
+const form = ref({
+    isGivingAsPerson: true,
+    email: "",
+    phoneNumber: "",
+    phoneCountryCode: "1",
+    accountAmounts: {} as Record<string, number>,
+    street1: "",
+    street2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "US",
+    firstName: "",
+    lastName: "",
+    businessName: "",
+    comment: "",
+    referenceNumber: "",
+    campusGuid: config.campuses?.length ? config.campuses[0].value || "" : "",
+    businessGuid: "",
+    frequencyValueGuid: config.frequencies?.length ? config.frequencies[0].value || "" : "",
+    giftDate: new Date().toISOString().slice(0, 10),
+    isGiveAnonymously: false
+});
+
+const accounts = computed<AccountBag[]>(() => config.accounts || []);
+const campuses = computed<ListItemBag[]>(() => config.campuses || []);
+const frequencies = computed<ListItemBag[]>(() => config.frequencies || []);
+const allowBusinessGiving = computed<boolean>(() => !!config.allowBusinessGiving);
+const allowAnonymousGiving = computed<boolean>(() => !!config.allowAnonymousGiving);
+const enableCommentEntry = computed<boolean>(() => !!config.enableCommentEntry);
+const commentEntryLabel = computed<string>(() => config.commentEntryLabel || "Comment");
+
+// ePay Validators inline
+function detectBrand(cardNumber: string): { name: string; cvvLength: number } {
+    const digits = cardNumber.replace(/\D/g, "");
+    if (/^4\d{0,}$/.test(digits)) return { name: "VISA", cvvLength: 3 };
+    if (/^(5[1-5]\d{0,}|2(2[2-9]|[3-6]\d|7[01]|720)\d{0,})$/.test(digits)) return { name: "MASTERCARD", cvvLength: 3 };
+    if (/^3[47]\d{0,}$/.test(digits)) return { name: "AMEX", cvvLength: 4 };
+    return { name: "TARJETA", cvvLength: 3 };
+}
+
+function formatCardNumber(value: string, brand: string): string {
+    const digits = value.replace(/\D/g, "");
+    if (brand === "AMEX") return digits.replace(/(\d{4})(\d{6})(\d{5})/, "$1 $2 $3").trim();
+    return digits.replace(/(\d{4})/g, "$1 ").trim();
+}
+
+function validateLuhn(cardNumber: string): boolean {
+    const digits = cardNumber.replace(/\D/g, "");
+    if (digits.length < 13 || digits.length > 19) return false;
+    let sum = 0;
+    let shouldDouble = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+        let digit = Number(digits[i]);
+        if (shouldDouble) {
+            digit *= 2;
+            if (digit > 9) digit -= 9;
+        }
+        sum += digit;
+        shouldDouble = !shouldDouble;
+    }
+    return sum % 10 === 0;
+}
+
+function validateExpiration(month: number, year: number): boolean {
+    if (month < 1 || month > 12) return false;
+    const fullYear = year < 100 ? 2000 + year : year;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    if (fullYear < currentYear || fullYear > currentYear + 20) return false;
+    if (fullYear === currentYear && month < currentMonth) return false;
+    return true;
+}
+
+// Card preview computeds
+const cardBrand = computed(() => detectBrand(ePayForm.value.cardNumber).name);
+const cardNumberPreview = computed(() => {
+    const digits = ePayForm.value.cardNumber.replace(/\D/g, "");
+    if (digits.length === 0) return "•••• •••• •••• ••••";
+    const formatted = formatCardNumber(ePayForm.value.cardNumber, cardBrand.value);
+    return formatted || "•••• •••• •••• ••••";
+});
+const cardholderNamePreview = computed(() => ePayForm.value.cardholderName.trim() || "NOMBRE TITULAR");
+const cardExpPreview = computed(() => {
+    if (ePayForm.value.expMonth > 0 && ePayForm.value.expYear > 0) {
+        const month = String(ePayForm.value.expMonth).padStart(2, "0");
+        const year = String(ePayForm.value.expYear).slice(-2);
+        return `${month}/${year}`;
+    }
+    return "MM/YY";
+});
+const cardCvvLength = computed(() => detectBrand(ePayForm.value.cardNumber).cvvLength);
+
+const totalAmount = computed<number>(() => {
+    let total = 0;
+    for (const key in form.value.accountAmounts) {
+        total += Number(form.value.accountAmounts[key] || 0);
+    }
+    return total;
+});
+
+const totalAmountFormatted = computed<string>(() => `$${asFormattedString(totalAmount.value, 2)}`);
+
+function goToPayment(): void {
+    stepOneError.value = "";
+
+    if (totalAmount.value <= 0) {
+        stepOneError.value = "Debes capturar al menos un monto mayor a 0.";
+        return;
+    }
+
+    if (!form.value.campusGuid) {
+        stepOneError.value = "Selecciona un campus.";
+        return;
+    }
+
+    if (!form.value.frequencyValueGuid) {
+        stepOneError.value = "Selecciona una frecuencia.";
+        return;
+    }
+
+    step.value = 2;
+}
+
+function onCardNumberChange() {
+    clearPaymentError();
+    const formatted = formatCardNumber(ePayForm.value.cardNumber, cardBrand.value);
+    ePayForm.value.cardNumber = formatted;
+}
+
+function clearPaymentError() {
+    paymentError.value = "";
+}
+
+async function processEPayPayment(): Promise<void> {
+    paymentError.value = "";
+
+    // Validaciones
+    if (!validateLuhn(ePayForm.value.cardNumber)) {
+        paymentError.value = "Número de tarjeta inválido";
+        return;
+    }
+
+    if (!validateExpiration(ePayForm.value.expMonth, ePayForm.value.expYear)) {
+        paymentError.value = "Tarjeta vencida o fecha inválida";
+        return;
+    }
+
+    if (!ePayForm.value.cardholderName.trim()) {
+        paymentError.value = "Nombre del titular es requerido";
+        return;
+    }
+
+    if (!ePayForm.value.cvv || ePayForm.value.cvv.length < 3) {
+        paymentError.value = "CVV inválido";
+        return;
+    }
+
+    loading.value = true;
+
+    try {
+        const payload = {
+            transactionGuid: transactionGuid.value,
+            cardNumber: ePayForm.value.cardNumber.replace(/\D/g, ""),
+            expMonth: ePayForm.value.expMonth,
+            expYear: ePayForm.value.expYear,
+            cvv: ePayForm.value.cvv,
+            cardholderName: ePayForm.value.cardholderName,
+            installments: Number(ePayForm.value.installments) || 0,
+            auditNumber: "",
+            email: form.value.email,
+            phoneNumber: form.value.phoneNumber,
+            firstName: form.value.firstName,
+            lastName: form.value.lastName,
+            isGiveAnonymously: form.value.isGiveAnonymously,
+            accountAmounts: form.value.accountAmounts,
+            campusGuid: form.value.campusGuid
+        };
+
+        const response = await invokeBlockAction<any>("ProcessEPayPayment", { bag: payload });
+
+        if (!response.isSuccess) {
+            paymentError.value = response.errorMessage || "No se pudo procesar el pago";
+            return;
+        }
+
+        // Limpiar datos sensibles
+        ePayForm.value.cardNumber = "";
+        ePayForm.value.cvv = "";
+
+        successMessage.value = response.data?.message || "Pago procesado exitosamente";
+        step.value = 5;  // Success
+    } catch (e: any) {
+        paymentError.value = e?.message || "Error inesperado procesando el pago";
+    } finally {
+        loading.value = false;
+    }
+}
+
+// Cargar cuotas al montar
+onMounted(async () => {
+    try {
+        const response = await invokeBlockAction<any>("GetEPayInstallments");
+        if (response.isSuccess && response.data?.installments) {
+            installmentOptions.value = response.data.installments.map((i: any) => ({
+                value: String(i.value),
+                text: i.text
+            }));
+        }
+    } catch (e) {
+        console.error("Error loading installments:", e);
+    }
+});
+
+function goToConfirm(): void {
+    stepThreeError.value = "";
+
+    if (!form.value.isGivingAsPerson && !form.value.businessName.trim()) {
+        stepThreeError.value = "El nombre del negocio es obligatorio.";
+        return;
+    }
+
+    if (!(config.isAuthenticated && form.value.isGivingAsPerson)) {
+        if (!form.value.firstName.trim() || !form.value.lastName.trim() || !form.value.email.trim()) {
+            stepThreeError.value = "Nombre, apellido y email son obligatorios.";
+            return;
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(form.value.email.trim())) {
+            stepThreeError.value = "Por favor ingresa un email válido.";
+            return;
+        }
+    }
+
+    step.value = 4;
+}
+
+async function submitGift(): Promise<void> {
+    submitError.value = "";
+    loading.value = true;
+
+    try {
+        const payload = {
+            transactionGuid: transactionGuid.value,
+            isGivingAsPerson: form.value.isGivingAsPerson,
+            email: form.value.email,
+            phoneNumber: form.value.phoneNumber,
+            phoneCountryCode: form.value.phoneCountryCode,
+            accountAmounts: form.value.accountAmounts,
+            street1: form.value.street1,
+            street2: form.value.street2,
+            city: form.value.city,
+            state: form.value.state,
+            postalCode: form.value.postalCode,
+            country: form.value.country,
+            firstName: form.value.firstName,
+            lastName: form.value.lastName,
+            businessName: form.value.businessName,
+            comment: form.value.comment,
+            referenceNumber: form.value.referenceNumber,
+            campusGuid: form.value.campusGuid || null,
+            businessGuid: form.value.businessGuid || null,
+            frequencyValueGuid: form.value.frequencyValueGuid,
+            giftDate: form.value.giftDate,
+            isGiveAnonymously: form.value.isGiveAnonymously
+        };
+
+        const response = await invokeBlockAction<any>("ProcessGiving", { bag: payload });
+        if (!response.isSuccess) {
+            submitError.value = response.errorMessage || "No se pudo procesar la donación.";
+            return;
+        }
+
+        successMessage.value = response.data?.message || "Donación procesada.";
+        step.value = 5;
+    }
+    catch (e: any) {
+        submitError.value = e?.message || "Error inesperado procesando la donación.";
+    }
+    finally {
+        loading.value = false;
+    }
+}
+
+function startNew(): void {
+    transactionGuid.value = newGuid();
+    form.value.referenceNumber = "";
+    form.value.accountAmounts = {};
+    form.value.comment = "";
+    form.value.isGiveAnonymously = false;
+    step.value = 1;
+    successMessage.value = "";
+    submitError.value = "";
+}
+</script>
+
+<style>
+.cgPage {
+    max-width: 920px;
+    margin: 0 auto;
+}
+
+.cgStepper {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-bottom: 12px;
+}
+
+.cgStep {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #d9e2ec;
+    background: #fff;
+    font-size: 12px;
+    text-align: center;
+}
+
+.cgStep.active {
+    border-color: #1769aa;
+    color: #1769aa;
+    font-weight: 600;
+}
+
+.cgStep.done {
+    background: #e8f3fb;
+}
+
+.cgCard {
+    background: #fff;
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.cgSummary {
+    margin-bottom: 10px;
+}
+
+.cgSummaryLine {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #eef2f7;
+    padding: 8px 0;
+}
+
+.cgActions {
+    margin-top: 12px;
+}
+
+/* ePay Inline Form Styles */
+.epay-wrapper {
+    margin-top: 20px;
+}
+
+.epay-card-preview {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 24px;
+    color: white;
+    margin-bottom: 20px;
+    min-height: 200px;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.epay-card-brand {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 40px;
+    opacity: 0.9;
+}
+
+.epay-card-number {
+    font-size: 24px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+}
+
+.epay-card-bottom {
+    display: flex;
+    justify-content: space-between;
+}
+
+.epay-card-name {
+    font-size: 14px;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.epay-card-exp {
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    opacity: 0.9;
+}
+</style>

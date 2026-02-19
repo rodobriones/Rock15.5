@@ -1,0 +1,677 @@
+<template>
+    <Panel type="block" title="Check-in Celebremos QR">
+        <template #default>
+            <div class="vrPage">
+                <div class="vrTopBar">
+                    <div class="vrBrand">VidaReal.tv</div>
+                    <div class="vrTopActions" aria-hidden="true">
+                        <span class="vrIconBtn"></span>
+                        <span class="vrIconBtn"></span>
+                        <span class="vrIconBtn"></span>
+                    </div>
+                </div>
+
+                <div class="vrContainer">
+                    <div class="sswrap">
+                        <NotificationBox v-if="config.notLogged" alertType="warning">
+                            Debes iniciar sesión para usar este módulo.
+                        </NotificationBox>
+
+                        <div v-else>
+                            <div class="ssStepper">
+                                <div class="ssStep" :class="{ active: step === 1, done: step > 1 }">
+                                    <div class="ssDot">1</div>
+                                    <div class="ssStepText">Sede</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 1 }"></div>
+                                <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
+                                    <div class="ssDot">2</div>
+                                    <div class="ssStepText">Grupo</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 2 }"></div>
+                                <div class="ssStep" :class="{ active: step === 3, done: step > 3 }">
+                                    <div class="ssDot">3</div>
+                                    <div class="ssStepText">Paso</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 3 }"></div>
+                                <div class="ssStep" :class="{ active: step === 4 }">
+                                    <div class="ssDot">4</div>
+                                    <div class="ssStepText">Escanear</div>
+                                </div>
+                            </div>
+
+                            <div class="card ssCard">
+                                <div class="card-body">
+                                    <div v-if="step === 1" class="ssScreen">
+                                        <div class="ssScreenTitle">Selecciona sede</div>
+                                        <div class="ssScreenSub text-muted">Elige la sede para continuar.</div>
+
+                                        <div class="ssList">
+                                            <button
+                                                v-for="c in campusOptions"
+                                                :key="c.value"
+                                                type="button"
+                                                class="ssListBtn"
+                                                :class="{ isSelected: String(c.value) === String(campusId) }"
+                                                :disabled="busy"
+                                                @click="selectCampus(c)">
+                                                <div class="ssListTitle">{{ c.text }}</div>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div v-else-if="step === 2" class="ssScreen">
+                                        <div class="ssScreenTitle">Selecciona grupo</div>
+                                        <div class="ssScreenSub text-muted">Se muestran los grupos Celebremos de la sede.</div>
+
+                                        <div class="ssSummaryPill" v-if="campusNameSelected">
+                                            <div class="ssPillLabel">Sede</div>
+                                            <div class="ssPillValue">{{ campusNameSelected }}</div>
+                                        </div>
+
+                                        <div v-if="groupsBusy" class="text-muted ssSmall">Cargando grupos...</div>
+                                        <div v-if="groupsError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ groupsError }}</NotificationBox>
+                                        </div>
+
+                                        <div v-if="!groupsBusy && !groupsError && groups.length === 0" class="text-muted ssSmall">
+                                            No hay grupos Celebremos para esta sede.
+                                        </div>
+
+                                        <div class="ssList">
+                                            <button
+                                                v-for="g in groups"
+                                                :key="g.groupId"
+                                                type="button"
+                                                class="ssListBtn"
+                                                :class="{ isSelected: g.groupId === groupId }"
+                                                @click="selectGroup(g)">
+                                                <div class="ssListTitle">{{ g.groupName }}</div>
+                                            </button>
+                                        </div>
+
+                                        <div class="ssNav">
+                                            <RockButton btnType="default" @click="step = 1">Atrás</RockButton>
+                                        </div>
+                                    </div>
+
+                                    <div v-else-if="step === 3" class="ssScreen">
+                                        <div class="ssScreenTitle">Selecciona el paso</div>
+                                        <div class="ssScreenSub text-muted">Selecciona el paso que se marcara como complete.</div>
+
+                                        <div class="ssSummaryPill" v-if="campusNameSelected">
+                                            <div class="ssPillLabel">Sede</div>
+                                            <div class="ssPillValue">{{ campusNameSelected }}</div>
+                                        </div>
+                                        <div class="ssSummaryPill" v-if="groupNameSelected">
+                                            <div class="ssPillLabel">Grupo</div>
+                                            <div class="ssPillValue">{{ groupNameSelected }}</div>
+                                        </div>
+
+                                        <div v-if="stepsBusy" class="text-muted ssSmall">Cargando pasos...</div>
+                                        <div v-if="stepsError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ stepsError }}</NotificationBox>
+                                        </div>
+
+                                        <div v-if="!stepsBusy && !stepsError && steps.length === 0" class="text-muted ssSmall">
+                                            No hay pasos disponibles.
+                                        </div>
+
+                                        <div class="ssList">
+                                            <button
+                                                v-for="s in steps"
+                                                :key="s.stepTypeId"
+                                                type="button"
+                                                class="ssListBtn"
+                                                :class="{ isSelected: s.stepTypeId === stepTypeId }"
+                                                @click="selectStepType(s)">
+                                                <div class="ssListTitle">{{ s.stepName }}</div>
+                                            </button>
+                                        </div>
+
+                                        <div class="ssNav">
+                                            <RockButton btnType="default" @click="step = 2">Atrás</RockButton>
+                                        </div>
+                                    </div>
+
+                                    <div v-else class="ssScreen">
+                                        <div class="ssScreenTitle">Escaneo QR</div>
+                                        <div class="ssScreenSub text-muted">
+                                            Escanea el QR de la app VidaReal.
+                                        </div>
+
+                                        <div class="ssSummaryPill" v-if="campusNameSelected">
+                                            <div class="ssPillLabel">Sede</div>
+                                            <div class="ssPillValue">{{ campusNameSelected }}</div>
+                                        </div>
+                                        <div class="ssSummaryPill" v-if="groupNameSelected">
+                                            <div class="ssPillLabel">Grupo</div>
+                                            <div class="ssPillValue">{{ groupNameSelected }}</div>
+                                        </div>
+                                        <div class="ssSummaryPill" v-if="stepNameSelected">
+                                            <div class="ssPillLabel">Paso</div>
+                                            <div class="ssPillValue">{{ stepNameSelected }}</div>
+                                        </div>
+
+                                        <div class="qrvideoShell">
+                                            <video ref="videoRef" muted playsinline class="qrvideo"></video>
+                                            <div class="qroverlay">
+                                                <div class="qrframe"></div>
+                                                <div v-if="!scanning" class="qroverText">
+                                                    <div class="qroverTitle">Cámara apagada</div>
+                                                    <div class="qroverSub">Pulsa “Iniciar cámara”.</div>
+                                                </div>
+                                                <div v-else class="qroverHint">Apunta al QR dentro del recuadro</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="qractionRow">
+                                            <RockButton btnType="primary" @click="startScan" :disabled="scanning || busy">
+                                                {{ scanning ? "Escaneando..." : "Iniciar cámara" }}
+                                            </RockButton>
+                                            <RockButton btnType="default" @click="stopScan" :disabled="!scanning">
+                                                Detener
+                                            </RockButton>
+                                            <RockButton btnType="default" @click="goBackToStepSelect" :disabled="busy">
+                                                Cambiar paso
+                                            </RockButton>
+                                        </div>
+
+                                        <div class="qrbanner" :class="bannerClass">
+                                            <div class="qrbannerTop">
+                                                <div class="qrbannerIcon">{{ bannerIcon }}</div>
+                                                <div class="qrbannerText">
+                                                    <div class="qrbannerTitle">{{ bannerTitle }}</div>
+                                                    <div v-if="bannerName" class="qrbannerSub text-muted">{{ bannerName }}</div>
+                                                </div>
+                                            </div>
+                                            <div v-if="lastCode" class="qrbannerCode text-muted">QR: {{ lastCode }}</div>
+                                            <div v-if="busy" class="qrbannerBusy text-muted">Procesando...</div>
+                                        </div>
+
+                                        <div v-if="err" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ err }}</NotificationBox>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="modalOpen" class="qrmodalBack" @click="closeModal">
+                <div class="qrmodal" @click.stop>
+                    <div class="qrmodalTitle">{{ modalTitle }}</div>
+                    <div class="qrmodalMsg">{{ modalMessage }}</div>
+                    <div class="qrmodalFoot text-muted">Se cerrará automáticamente...</div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel";
+import RockButton from "@Obsidian/Controls/rockButton";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type CampusOptionBag = { text: string; value: string };
+type GroupOptionBag = { groupId: number; groupName: string; campusId?: number | null };
+type StepOptionBag = { stepTypeId: number; stepName: string };
+type InitBag = { notLogged: boolean; campuses: CampusOptionBag[] };
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const step = ref<number>(1);
+const busy = ref<boolean>(false);
+const err = ref<string>("");
+
+const campusOptions = ref<CampusOptionBag[]>(config.campuses || []);
+const campusId = ref<number | null>(null);
+const groupId = ref<number | null>(null);
+const stepTypeId = ref<number | null>(null);
+
+const groups = ref<GroupOptionBag[]>([]);
+const groupsBusy = ref<boolean>(false);
+const groupsError = ref<string>("");
+
+const steps = ref<StepOptionBag[]>([]);
+const stepsBusy = ref<boolean>(false);
+const stepsError = ref<string>("");
+
+const scanning = ref<boolean>(false);
+const videoRef = ref<HTMLVideoElement | null>(null);
+let zxingReader: any = null;
+
+const bannerStatus = ref<string>("");
+const bannerName = ref<string>("");
+const bannerTitle = ref<string>("Listo para escanear");
+const lastCode = ref<string>("");
+
+let lastScanAt = 0;
+const scanCooldownMs = 900;
+let scanHoldUntil = 0;
+const postResultHoldMs = 2800;
+
+const modalOpen = ref<boolean>(false);
+const modalTitle = ref<string>("");
+const modalMessage = ref<string>("");
+let modalTimer: number | null = null;
+
+const campusNameSelected = computed<string>(() => {
+    if (!campusId.value) return "";
+    return campusOptions.value.find(c => Number(c.value) === campusId.value)?.text || "";
+});
+
+const groupNameSelected = computed<string>(() => {
+    if (!groupId.value) return "";
+    return groups.value.find(g => g.groupId === groupId.value)?.groupName || "";
+});
+
+const stepNameSelected = computed<string>(() => {
+    if (!stepTypeId.value) return "";
+    return steps.value.find(s => s.stepTypeId === stepTypeId.value)?.stepName || "";
+});
+
+const bannerClass = computed(() => {
+    if (!bannerStatus.value) return "qrbanner--idle";
+    if (bannerStatus.value === "checked_in") return "qrbanner--ok";
+    if (bannerStatus.value === "already_used") return "qrbanner--warn";
+    return "qrbanner--bad";
+});
+
+const bannerIcon = computed(() => {
+    if (!bannerStatus.value) return "◎";
+    if (bannerStatus.value === "checked_in") return "✓";
+    if (bannerStatus.value === "already_used") return "!";
+    return "×";
+});
+
+function showModal(title: string, message: string) {
+    modalTitle.value = title;
+    modalMessage.value = message;
+    modalOpen.value = true;
+
+    if (modalTimer) window.clearTimeout(modalTimer);
+    modalTimer = window.setTimeout(() => {
+        modalOpen.value = false;
+        modalTimer = null;
+    }, 2800);
+}
+
+function closeModal() {
+    modalOpen.value = false;
+    if (modalTimer) {
+        window.clearTimeout(modalTimer);
+        modalTimer = null;
+    }
+}
+
+function resetAfterCampus() {
+    groupId.value = null;
+    stepTypeId.value = null;
+    groups.value = [];
+    steps.value = [];
+    clearBanner();
+}
+
+function resetAfterGroup() {
+    stepTypeId.value = null;
+    steps.value = [];
+    clearBanner();
+}
+
+function clearBanner() {
+    bannerStatus.value = "";
+    bannerName.value = "";
+    bannerTitle.value = "Listo para escanear";
+    lastCode.value = "";
+}
+
+async function selectCampus(c: CampusOptionBag) {
+    const id = Number(c.value);
+    if (!Number.isFinite(id)) return;
+
+    campusId.value = id;
+    resetAfterCampus();
+    await loadGroups();
+    step.value = 2;
+}
+
+async function loadGroups() {
+    groupsBusy.value = true;
+    groupsError.value = "";
+
+    try {
+        const res = await invokeBlockAction<any>("GetGroups", {});
+        if (!res.isSuccess || !res.data) {
+            groupsError.value = res.errorMessage || "No se pudieron cargar los grupos.";
+            groups.value = [];
+            return;
+        }
+
+        groups.value = (res.data.groups || []) as GroupOptionBag[];
+    } catch {
+        groupsError.value = "Error cargando grupos.";
+        groups.value = [];
+    } finally {
+        groupsBusy.value = false;
+    }
+}
+
+async function selectGroup(g: GroupOptionBag) {
+    groupId.value = g.groupId;
+    resetAfterGroup();
+    await loadSteps();
+    step.value = 3;
+}
+
+async function loadSteps() {
+    stepsBusy.value = true;
+    stepsError.value = "";
+
+    try {
+        const res = await invokeBlockAction<any>("GetSteps", {});
+        if (!res.isSuccess || !res.data) {
+            stepsError.value = res.errorMessage || "No se pudieron cargar los pasos.";
+            steps.value = [];
+            return;
+        }
+
+        steps.value = (res.data.steps || []) as StepOptionBag[];
+    } catch {
+        stepsError.value = "Error cargando pasos.";
+        steps.value = [];
+    } finally {
+        stepsBusy.value = false;
+    }
+}
+
+function selectStepType(s: StepOptionBag) {
+    stepTypeId.value = s.stepTypeId;
+    step.value = 4;
+    clearBanner();
+}
+
+async function goBackToStepSelect() {
+    await stopScan();
+    step.value = 3;
+}
+
+async function getZxingModule(): Promise<any> {
+    const systemJs = (window as any).System;
+    if (!systemJs?.import) {
+        throw new Error("SystemJS no disponible.");
+    }
+
+    return await systemJs.import("/Obsidian/Blocks/QREVENT/vendor/zxing.lib.js");
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function setBanner(status: string, title: string, name: string, code: string) {
+    bannerStatus.value = status || "";
+    bannerTitle.value = title || "Resultado";
+    bannerName.value = name || "";
+    lastCode.value = code || "";
+}
+
+async function startScan() {
+    err.value = "";
+
+    if (!campusId.value || !stepTypeId.value) {
+        err.value = "Completa Sede y Paso antes de escanear.";
+        return;
+    }
+
+    if (!videoRef.value) {
+        err.value = "No se encontró el elemento de video.";
+        return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        err.value = "Tu navegador no soporta cámara.";
+        return;
+    }
+
+    try {
+        await stopScanInternal(true);
+
+        let stream: MediaStream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { exact: "environment" } },
+                audio: false
+            });
+        } catch {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: "environment" } },
+                audio: false
+            });
+        }
+
+        videoRef.value.srcObject = stream;
+        await videoRef.value.play();
+
+        const mod = await getZxingModule();
+        zxingReader = new mod.BrowserQRCodeReader();
+        scanning.value = true;
+        setBanner("", "Escaneando...", "", "");
+
+        scanLoop();
+    } catch (e: any) {
+        const msg = String(e?.name || e?.message || "");
+        if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+            err.value = "Permiso de cámara denegado.";
+        } else {
+            err.value = "No se pudo iniciar la cámara.";
+        }
+        scanning.value = false;
+    }
+}
+
+async function stopScan() {
+    await stopScanInternal(false);
+}
+
+async function stopScanInternal(keepState: boolean) {
+    zxingReader = null;
+
+    try {
+        if (videoRef.value) {
+            const src: any = videoRef.value.srcObject;
+            if (src?.getTracks) {
+                src.getTracks().forEach((t: any) => t.stop());
+            }
+            videoRef.value.srcObject = null;
+        }
+    } catch {
+    }
+
+    if (!keepState) {
+        scanning.value = false;
+    }
+}
+
+function scanLoop() {
+    if (!scanning.value || !videoRef.value || !zxingReader) return;
+
+    zxingReader.decodeOnceFromVideoElement(videoRef.value)
+        .then(async (result: any) => {
+            const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
+            if (!raw) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+
+            const now = Date.now();
+            if (now < scanHoldUntil || now - lastScanAt < scanCooldownMs) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+
+            lastScanAt = now;
+            try { navigator.vibrate?.(35); } catch {}
+
+            scanning.value = false;
+            await submitQr(raw);
+            scanHoldUntil = Date.now() + postResultHoldMs;
+            await sleep(postResultHoldMs);
+            scanning.value = true;
+            if (scanning.value) scanLoop();
+        })
+        .catch((e: any) => {
+            const msg = String(e?.name || e?.message || e || "");
+            if (msg.toLowerCase().includes("notfound")) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+
+            err.value = "Error leyendo QR. Reinicia la cámara.";
+            scanning.value = false;
+        });
+}
+
+async function submitQr(code: string) {
+    if (busy.value) return;
+    if (!campusId.value || !stepTypeId.value) return;
+
+    busy.value = true;
+    err.value = "";
+
+    try {
+        const bag = {
+            campusId: campusId.value,
+            stepTypeId: stepTypeId.value,
+            qrCode: code
+        };
+
+        const res = await invokeBlockAction<any>("ProcessCheckIn", { bag });
+        if (!res.isSuccess || !res.data) {
+            setBanner("error", res.errorMessage || "Error al validar", "", code);
+            showModal("Error", res.errorMessage || "No se pudo marcar asistencia.");
+            return;
+        }
+
+        const status = String(res.data.status || "");
+        const name = String(res.data.name || "");
+        const message = String(res.data.message || "");
+
+        setBanner(status, message || "Resultado", name, code);
+
+        if (status === "checked_in") {
+            showModal("Asistencia marcada", `${name ? name + " • " : ""}${message}`);
+        } else if (status === "already_used") {
+            showModal("Ya estaba marcado", `${name ? name + " • " : ""}${message}`);
+        } else if (status === "invalid_qr") {
+            showModal("QR inválido", message || "No se pudo interpretar PersonId.");
+        } else {
+            showModal("No autorizado", message || "No se pudo registrar.");
+        }
+    } catch {
+        setBanner("error", "Error al validar", "", code);
+        showModal("Error", "Error procesando el código.");
+    } finally {
+        busy.value = false;
+    }
+}
+
+onBeforeUnmount(() => {
+    stopScan();
+    closeModal();
+});
+</script>
+
+<style>
+:root{
+    --vr-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    --vr-bg: #F4F6FB;
+    --vr-surface: #FFFFFF;
+    --vr-text: #111827;
+    --vr-muted: #6B7280;
+    --vr-border: rgba(17,24,39,.10);
+    --vr-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
+    --vr-radius-xl: 18px;
+    --vr-radius-lg: 14px;
+}
+
+.vrPage { font-family: var(--vr-font); background: var(--vr-bg); min-height: 100vh; color: var(--vr-text); }
+.vrTopBar { height: 54px; display:flex; align-items:center; justify-content:space-between; padding:0 14px; border-bottom:1px solid rgba(17,24,39,.06); position: sticky; top: 0; background: var(--vr-bg); z-index: 40; }
+.vrBrand { font-weight: 800; font-size: 18px; }
+.vrTopActions { display:flex; gap:10px; }
+.vrIconBtn { width: 26px; height: 26px; border-radius: 999px; background: rgba(17,24,39,.06); border: 1px solid rgba(17,24,39,.06); }
+.vrContainer { max-width: 980px; margin: 0 auto; padding: 10px 10px 24px; }
+.text-muted { color: var(--vr-muted) !important; }
+.sswrap { max-width: 980px; margin: 0 auto; }
+
+.panel-block .panel-heading { display: none !important; }
+.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; }
+
+.ssStepper { position: sticky; top: 54px; z-index: 20; background: var(--vr-bg); padding: 10px 8px 12px; border-bottom: 1px solid rgba(17,24,39,.06); display:grid; grid-template-columns:auto 1fr auto 1fr auto 1fr auto; align-items:center; gap:8px; }
+.ssStep { display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; min-width:0; }
+.ssDot { width:26px; height:26px; border-radius:999px; border:1px solid rgba(17,24,39,.22); display:grid; place-items:center; font-size:12px; font-weight:800; background:var(--vr-surface); }
+.ssStepText { font-size:12px; font-weight:800; color:var(--vr-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ssLine { height:2px; background:rgba(17,24,39,.12); border-radius:999px; }
+.ssStep.active .ssStepText { color:var(--vr-text); }
+.ssStep.active .ssDot { border-color: rgba(17,24,39,.45); }
+.ssLine.done { background: rgba(17,24,39,.28); }
+
+.ssCard { margin-top:12px; background:var(--vr-surface); border:1px solid var(--vr-border); border-radius:var(--vr-radius-xl); box-shadow:var(--vr-shadow-soft); overflow:hidden; }
+.ssCard .card-body { padding: 14px; }
+.ssScreenTitle { font-size:16px; font-weight:900; margin-bottom:4px; }
+.ssScreenSub { font-size:12px; margin-bottom:12px; }
+.ssSmall { font-size:12px; }
+.ssAlert { margin-top: 10px; }
+
+
+.ssList { display:grid; gap:10px; }
+.ssListBtn { width:100%; text-align:left; border:1px solid var(--vr-border); border-radius:12px; background:#fff; padding:12px; }
+.ssListBtn.isSelected { border-color: rgba(37,99,235,.55); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+.ssListTitle { font-weight:800; }
+
+.ssSummaryPill { margin-bottom:8px; border:1px solid var(--vr-border); background:#fff; border-radius:999px; padding:6px 10px; display:inline-flex; gap:8px; align-items:center; }
+.ssPillLabel { font-size:11px; color:var(--vr-muted); font-weight:700; text-transform:uppercase; }
+.ssPillValue { font-size:12px; font-weight:800; }
+.ssNav { margin-top: 12px; display:flex; gap:8px; }
+
+.qrvideoShell { margin-top: 8px; position:relative; border-radius:16px; overflow:hidden; background:#000; border:1px solid #1e1e1e; }
+.qrvideo { width:100%; height:340px; object-fit:cover; display:block; }
+.qroverlay { position:absolute; inset:0; pointer-events:none; }
+.qrframe { position:absolute; left:50%; top:50%; width:min(72vw,320px); height:min(72vw,320px); transform:translate(-50%,-50%); border-radius:16px; border:2px solid rgba(255,255,255,.65); box-shadow:0 0 0 9999px rgba(0,0,0,.25); }
+.qroverText { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; text-align:center; padding:18px; }
+.qroverTitle { font-weight:800; font-size:16px; }
+.qroverSub { margin-top:4px; font-size:12px; opacity:.85; }
+.qroverHint { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); background:rgba(0,0,0,.55); color:#fff; font-size:12px; padding:6px 10px; border-radius:999px; }
+
+.qractionRow { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+.qrbanner { margin-top:12px; border-radius:14px; border:1px solid #e7e7ea; background:#fafafa; padding:12px; }
+.qrbannerTop { display:flex; gap:10px; align-items:flex-start; }
+.qrbannerIcon { width:28px; height:28px; border-radius:10px; display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid #e7e7ea; font-weight:900; }
+.qrbannerTitle { font-weight:900; font-size:16px; }
+.qrbannerCode { margin-top:6px; font-size:12px; }
+.qrbannerBusy { margin-top:6px; font-size:12px; }
+.qrbanner--ok { border-color: rgba(40,167,69,.35); background: rgba(40,167,69,.08); }
+.qrbanner--warn { border-color: rgba(240,173,78,.45); background: rgba(240,173,78,.10); }
+.qrbanner--bad { border-color: rgba(220,53,69,.35); background: rgba(220,53,69,.08); }
+
+.qrmodalBack { position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; padding:16px; z-index:9999; }
+.qrmodal { width:min(520px,92vw); background:#fff; border-radius:14px; border:1px solid #e7e7ea; box-shadow:0 18px 40px rgba(0,0,0,.20); padding:14px; }
+.qrmodalTitle { font-weight:900; font-size:16px; }
+.qrmodalMsg { margin-top:6px; font-size:13px; }
+.qrmodalFoot { margin-top:10px; font-size:12px; }
+
+@media (max-width: 576px) {
+    .ssStepText { display: none; }
+    .ssStepper { gap: 4px; }
+}
+</style>
+
+
+
+

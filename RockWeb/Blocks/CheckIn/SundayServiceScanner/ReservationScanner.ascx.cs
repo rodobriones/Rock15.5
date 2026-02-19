@@ -298,7 +298,7 @@ WHERE Id = @ReservationId
             pnlError.Visible = false;
             pnlNoActiveSchedule.Visible = false;
             pnlScanner.Visible = true;
-            hfScannerReady.Value = "false";
+            hfScannerReady.Value = "true"; // Cámara arranca en background mientras el modal es visible
 
             lPersonName.Text = string.Format( "{0} {1}", reservation.NickName, reservation.LastName );
             lQuantity.Text = reservation.Quantity.ToString();
@@ -316,7 +316,7 @@ WHERE Id = @ReservationId
             pnlError.Visible = false;
             pnlNoActiveSchedule.Visible = false;
             pnlScanner.Visible = true;
-            hfScannerReady.Value = "false";
+            hfScannerReady.Value = "true"; // Cámara arranca en background mientras el modal es visible
 
             lAlreadyUsedName.Text = string.Format( "{0} {1}", reservation.NickName, reservation.LastName );
             lAlreadyUsedSchedule.Text = CurrentActiveSlot?.ScheduleName ?? string.Empty;

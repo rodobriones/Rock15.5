@@ -25,7 +25,7 @@
                             <div v-if="!activeReservation || replacing" class="ssStepper">
                                 <div class="ssStep" :class="{ active: step === 1, done: step > 1 }">
                                     <div class="ssDot">1</div>
-                                    <div class="ssStepText">Campus</div>
+                                    <div class="ssStepText">Sede</div>
                                 </div>
                                 <div class="ssLine" :class="{ done: step > 1 }"></div>
                                 <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
@@ -53,7 +53,7 @@
 
                                     <div class="ssInfoGrid">
                                         <div>
-                                            <div class="ssLabel">Campus</div>
+                                            <div class="ssLabel">Sede</div>
                                             <div class="ssVal">{{ activeReservation.campusName }}</div>
                                         </div>
                                         <div>
@@ -75,7 +75,6 @@
                                             class="ssQrImg"
                                             :src="qrUrl(activeReservation.reservationCode)"
                                             alt="QR Reserva" />
-                                        <div class="ssCode">{{ activeReservation.reservationCode }}</div>
                                     </div>
 
                                     <div class="ssDownloadWrap">
@@ -101,8 +100,8 @@
                                 <div class="card-body">
                                     <!-- STEP 1: Campus -->
                                     <div v-if="step === 1" class="ssScreen">
-                                        <div class="ssScreenTitle">Selecciona tu campus</div>
-                                        <div class="ssScreenSub text-muted">Elige el campus para ver horarios disponibles.</div>
+                                        <div class="ssScreenTitle">Selecciona tu sede</div>
+                                        <div class="ssScreenSub text-muted">Elige la sede para ver horarios disponibles.</div>
 
                                         <div class="ssCampusGrid">
                                             <div
@@ -135,7 +134,7 @@
                                         <div class="ssScreenSub text-muted">Maximo 8 personas.</div>
 
                                         <div class="ssSummaryPill" v-if="campusNameSelected">
-                                            <div class="ssPillLabel">Campus</div>
+                                            <div class="ssPillLabel">Sede</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
                                         </div>
 
@@ -149,8 +148,8 @@
                                             </div>
                                         </div>
 
-                                        <div class="ssNav">
-                                            <RockButton btnType="default" @click="step = 1" :disabled="busy">
+                                        <div class="ssNav" :class="{ ssNavSingle: campusOptions.length === 1 }">
+                                            <RockButton v-if="campusOptions.length > 1" btnType="default" @click="step = 1" :disabled="busy">
                                                 Atras
                                             </RockButton>
 
@@ -169,7 +168,7 @@
                                         <div class="ssScreenSub text-muted">Horarios disponibles para esta semana.</div>
 
                                         <div class="ssSummaryPill" v-if="campusNameSelected">
-                                            <div class="ssPillLabel">Campus</div>
+                                            <div class="ssPillLabel">Sede</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
                                         </div>
 
@@ -200,10 +199,7 @@
                                                     :class="{ isSelected: s.slotId === selectedSlotId }"
                                                     :disabled="busy"
                                                     @click="selectSlot(s)">
-                                                    <div class="ssSlotTop">
-                                                        <div class="ssSlotName">{{ s.scheduleName }}</div>
-                                                        <div class="ssSlotCap">Cupo: {{ s.available }}</div>
-                                                    </div>
+                                                    <div class="ssSlotName">{{ s.scheduleName }}</div>
                                                 </button>
                                             </div>
                                         </div>
@@ -222,7 +218,7 @@
 
                                         <div v-if="selectedSummary" class="ssSummaryCard">
                                             <div class="ssSummaryRow">
-                                                <div class="ssLabel">Campus</div>
+                                                <div class="ssLabel">Sede</div>
                                                 <div class="ssVal">{{ selectedSummary.campusName }}</div>
                                             </div>
                                             <div class="ssSummaryRow">
@@ -239,7 +235,18 @@
                                             </div>
                                         </div>
 
-                                        <div class="ssSmall text-muted">
+                                        <!-- Barra de progreso del hold -->
+                                        <div v-if="holdToken && holdTimeRemaining > 0" class="ssHoldProgress">
+                                            <div class="ssHoldProgressLabel">
+                                                <span>Reservado</span>
+                                                <span class="ssHoldTime">{{ holdCountdownText }}</span>
+                                            </div>
+                                            <div class="ssHoldProgressBar">
+                                                <div class="ssHoldProgressFill" :style="{ width: holdProgressPercent + '%' }"></div>
+                                            </div>
+                                        </div>
+
+                                        <div v-else-if="!holdToken && !holdError" class="ssSmall text-muted">
                                             Hold: {{ holdStatusText }}
                                         </div>
 
@@ -271,7 +278,7 @@
 
                                 <div class="ssModalSummary" v-if="activeReservation">
                                     <div class="ssModalRow">
-                                        <div class="ssModalLabel">Campus</div>
+                                        <div class="ssModalLabel">Sede</div>
                                         <div class="ssModalVal">{{ activeReservation.campusName }}</div>
                                     </div>
                                     <div class="ssModalRow">
@@ -300,6 +307,22 @@
                             </div>
                         </div>
 
+                        <!-- Modal Tiempo Expirado -->
+                        <div v-if="showExpiredModal" class="ssModalOverlay" @click.self="closeExpiredModal">
+                            <div class="ssModalCard">
+                                <div class="ssModalTitle">⏱️ Tiempo expirado</div>
+                                <div class="ssModalText">
+                                    El tiempo de reserva ha expirado. Por favor, intenta seleccionar tu horario nuevamente.
+                                </div>
+
+                                <div class="ssModalActions" style="grid-template-columns: 1fr;">
+                                    <RockButton btnType="primary" @click="closeExpiredModal">
+                                        Entendido
+                                    </RockButton>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Toast -->
                         <div v-if="toast.show" class="ssToast" :class="toast.kind">
                             <div class="ssToastText">{{ toast.message }}</div>
@@ -312,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import RockButton from "@Obsidian/Controls/rockButton";
@@ -406,12 +429,15 @@ const quantity = ref<number>(1);
 const holdToken = ref<string>("");
 const holdExpiresAt = ref<string>("");
 const holdError = ref<string>("");
+const holdTimeRemaining = ref<number>(0); // segundos restantes
 
 let holdDebounceTimer: number | null = null;
+let holdCountdownTimer: number | null = null;
 let holdRequestSeq = 0;
 let holdInFlightSeq = 0;
 
 const showCancelModal = ref<boolean>(false);
+const showExpiredModal = ref<boolean>(false);
 
 type ToastKind = "success" | "danger" | "info";
 const toast = ref<{ show: boolean; kind: ToastKind; message: string }>({
@@ -443,6 +469,19 @@ function openCancelModal() {
 
 function closeCancelModal() {
     showCancelModal.value = false;
+}
+
+function closeExpiredModal() {
+    showExpiredModal.value = false;
+    resetSelection();
+
+    // Si solo hay un campus, seleccionarlo automáticamente y ir al paso 2
+    if (campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    } else {
+        step.value = 1;
+    }
 }
 
 function qrUrl(code: string): string {
@@ -519,16 +558,10 @@ function downloadImage() {
         
         ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-        // Código
-        ctx.fillStyle = "#374151";
-        ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(res.reservationCode, canvasWidth / 2, qrY + qrSize + 25);
-
         // Footer
         ctx.fillStyle = "#9CA3AF";
         ctx.font = "12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-        ctx.fillText("Presenta este código QR al ingresar", canvasWidth / 2, canvasHeight - 25);
+        ctx.fillText("Presenta este código QR al ingresar", canvasWidth / 2, qrY + qrSize + 35);
 
         // Descargar
         const link = document.createElement("a");
@@ -556,7 +589,7 @@ const availableDays = computed<DaySlotsBag[]>(() => {
     return (days.value || [])
         .map(d => ({
             ...d,
-            slots: (d.slots || []).filter(s => s.isAvailable)
+            slots: (d.slots || []).filter(s => s.isAvailable && s.available >= quantity.value)
         }))
         .filter(d => d.slots.length > 0);
 });
@@ -583,6 +616,48 @@ function resetHold() {
     holdExpiresAt.value = "";
     holdError.value = "";
     holdUpdating.value = false;
+    holdTimeRemaining.value = 0;
+
+    if (holdCountdownTimer != null) {
+        window.clearInterval(holdCountdownTimer);
+        holdCountdownTimer = null;
+    }
+}
+
+function startHoldCountdown(expiresIso: string) {
+    // Limpiar timer anterior si existe
+    if (holdCountdownTimer != null) {
+        window.clearInterval(holdCountdownTimer);
+        holdCountdownTimer = null;
+    }
+
+    const expiresDate = new Date(expiresIso);
+
+    const updateRemaining = () => {
+        const now = new Date();
+        const diffMs = expiresDate.getTime() - now.getTime();
+        const diffSec = Math.floor(diffMs / 1000);
+
+        if (diffSec <= 0) {
+            holdTimeRemaining.value = 0;
+            if (holdCountdownTimer != null) {
+                window.clearInterval(holdCountdownTimer);
+                holdCountdownTimer = null;
+            }
+            // Mostrar modal de expiración
+            holdToken.value = "";
+            holdError.value = "";
+            showExpiredModal.value = true;
+        } else {
+            holdTimeRemaining.value = diffSec;
+        }
+    };
+
+    // Actualizar inmediatamente
+    updateRemaining();
+
+    // Actualizar cada segundo
+    holdCountdownTimer = window.setInterval(updateRemaining, 1000);
 }
 
 function resetSelection() {
@@ -760,6 +835,11 @@ async function doHoldUpsertLatest() {
         holdToken.value = data.holdToken || "";
         holdExpiresAt.value = data.expiresDateTime || "";
 
+        // Iniciar el countdown
+        if (data.expiresDateTime) {
+            startHoldCountdown(data.expiresDateTime);
+        }
+
         void refreshWeekSilent();
     } catch {
         if (mySeq === holdInFlightSeq) {
@@ -784,7 +864,9 @@ async function refreshWeekSilent() {
         if (res.isSuccess && res.data?.days) {
             days.value = sortDaysAndSlots(res.data.days as DaySlotsBag[]);
 
-            if (selectedSlotId.value) {
+            // Solo validar disponibilidad si NO tenemos un hold activo
+            // Si tenemos hold válido, significa que ya tomamos el cupo
+            if (selectedSlotId.value && !holdToken.value) {
                 const still = findSlotById(selectedSlotId.value);
                 if (!still || !still.isAvailable) {
                     selectedSlotId.value = null;
@@ -807,12 +889,33 @@ function findSlotById(slotId: number): SlotBag | null {
     return null;
 }
 
+const holdCountdownText = computed<string>(() => {
+    if (holdTimeRemaining.value <= 0) return "00:00";
+
+    const mins = Math.floor(holdTimeRemaining.value / 60);
+    const secs = holdTimeRemaining.value % 60;
+
+    const minsStr = String(mins).padStart(2, "0");
+    const secsStr = String(secs).padStart(2, "0");
+
+    return `${minsStr}:${secsStr}`;
+});
+
+// Porcentaje de tiempo restante (0-100%)
+const holdProgressPercent = computed<number>(() => {
+    const totalSeconds = 120; // 2 minutos = 120 segundos
+    if (holdTimeRemaining.value <= 0) return 0;
+    if (holdTimeRemaining.value >= totalSeconds) return 100;
+    return (holdTimeRemaining.value / totalSeconds) * 100;
+});
+
 const holdStatusText = computed<string>(() => {
     if (!selectedSlotId.value) return "—";
     if (holdError.value) return "Falló";
     if (holdUpdating.value) return "Actualizando…";
     if (!holdToken.value) return "—";
-    return "Activo (vence pronto)";
+    if (holdTimeRemaining.value > 0) return `Reservado (${holdCountdownText.value})`;
+    return "Activo";
 });
 
 const selectedSummary = computed<null | { campusName: string; occurrenceDateText: string; scheduleName: string }>(() => {
@@ -909,15 +1012,43 @@ async function confirmCancelReservation() {
         activeReservation.value = null;
         replacing.value = false;
         resetSelection();
-        step.value = 1;
 
         showToast("success", "Reserva cancelada.");
     } catch {
         showToast("danger", "Error cancelando reserva.");
     } finally {
         busy.value = false;
+
+        // Si solo hay un campus, seleccionarlo automáticamente y ir al paso 2
+        if (campusOptions.value.length === 1) {
+            const singleCampus = campusOptions.value[0];
+            const n = Number(singleCampus.value);
+            campusId.value = Number.isFinite(n) ? n : null;
+            if (campusId.value) {
+                step.value = 2;
+            }
+        } else {
+            step.value = 1;
+        }
     }
 }
+
+// Auto-selección de campus si solo hay uno disponible
+onMounted(() => {
+    // Si no hay reserva activa y solo hay 1 campus, seleccionarlo automáticamente
+    if (!activeReservation.value && !replacing.value && campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    }
+});
+
+// También auto-seleccionar cuando se inicia el flujo de reemplazo
+watch(replacing, (newVal) => {
+    if (newVal && step.value === 1 && campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    }
+});
 </script>
 
 <style>
@@ -952,6 +1083,22 @@ async function confirmCancelReservation() {
     min-height: 100vh;
     padding-bottom: 18px;
     color: var(--vr-text);
+    /* Prevenir zoom en móvil al hacer doble click */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Permitir selección de texto en campos de entrada y texto informativo */
+.vrPage input,
+.vrPage textarea,
+.vrPage .ssCode,
+.vrPage .ssModalText,
+.vrPage .ssScreenSub {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
 }
 
 .vrTopBar {
@@ -1288,7 +1435,7 @@ async function confirmCancelReservation() {
 }
 
 .ssSlotName {
-    font-weight: 900;
+    font-weight: 600;
     color: var(--vr-text);
 }
 
@@ -1350,6 +1497,46 @@ async function confirmCancelReservation() {
 .ssAlert { margin-top: 10px; }
 .ssSmall { font-size: 12px; margin-top: 8px; }
 
+/* Barra de progreso del hold */
+.ssHoldProgress {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.ssHoldProgressLabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--vr-text);
+}
+
+.ssHoldTime {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--vr-accent);
+}
+
+.ssHoldProgressBar {
+    width: 100%;
+    height: 8px;
+    background: rgba(17,24,39,.08);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+
+.ssHoldProgressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #10B981 0%, #3B82F6 50%, #2563EB 100%);
+    border-radius: 999px;
+    transition: width 0.5s linear;
+    box-shadow: 0 0 8px rgba(37,99,235,.35);
+}
+
 /* Summary card in step 3 */
 .ssSummaryCard {
     border: 1px solid rgba(17,24,39,.08);
@@ -1396,14 +1583,20 @@ async function confirmCancelReservation() {
     display: grid;
     place-items: center;
     gap: 8px;
+    padding: 20px;
+    background: #FFFFFF;
+    border-radius: var(--vr-radius-xl);
+    box-shadow: 0 4px 12px rgba(17,24,39,.12);
 }
 
 .ssQrImg {
     width: 260px;
     height: 260px;
-    border-radius: var(--vr-radius-lg);
-    border: 1px solid rgba(17,24,39,.10);
-    background: var(--vr-surface);
+    border-radius: var(--vr-radius-md);
+    border: 3px solid #FFFFFF;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 1px rgba(17,24,39,.15), 0 2px 8px rgba(17,24,39,.08);
+    padding: 12px;
 }
 
 @media (min-width: 576px) {

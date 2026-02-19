@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(msbuild:*)",
+      "Bash(npm run build:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}

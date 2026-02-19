@@ -87,6 +87,8 @@
     <Content Include="src\Group\GroupAttendanceDetail\groupLocationSchedulePicker.partial.obs" />
     <Content Include="src\Group\GroupAttendanceDetail\initialsFilter.partial.obs" />
     <Content Include="src\Group\GroupAttendanceDetail\searchFilter.partial.obs" />
+    <Content Include="src\QREVENT\CelebremosQrCheckIn.obs" />
+    <Content Include="src\QREVENT\ReservationScanner.obs" />
     <Content Include="src\QREVENT\qrScanner.obs" />
     <Content Include="src\Security\accountEntry.obs" />
     <Content Include="src\Security\AccountEntry\completedStep.partial.obs" />

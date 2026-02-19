@@ -1,0 +1,794 @@
+<template>
+    <Panel type="block" title="Reservation Scanner">
+        <template #default>
+            <div class="rsPage">
+                <div class="rsTopBar">
+                    <div class="rsBrand">VidaReal.tv</div>
+                    <div class="rsTopActions" aria-hidden="true">
+                        <span class="rsIconBtn"></span>
+                        <span class="rsIconBtn"></span>
+                        <span class="rsIconBtn"></span>
+                    </div>
+                </div>
+
+                <!-- No active slot -->
+                <div v-if="!activeSlot" class="rsNoSlot">
+                    <div class="rsNoSlotInner">
+                        <div class="rsNoSlotIcon"><i class="fa fa-clock"></i></div>
+                        <div class="rsNoSlotTitle">Sin Horario Activo</div>
+                        <div class="rsNoSlotSub">No hay ningún horario de servicio activo en este momento.</div>
+                        <div v-if="nextScheduleInfo" class="rsNoSlotNext">{{ nextScheduleInfo }}</div>
+                        <button class="rsBtn rsBtnDefault" @click="refreshSlot" :disabled="polling">
+                            {{ polling ? "Verificando..." : "Verificar de nuevo" }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active slot: scanner -->
+                <div v-else class="rsBody">
+                    <div class="rsScheduleBar">
+                        <span class="rsScheduleDot"></span>
+                        <span class="rsScheduleText">{{ activeSlot.scheduleName }} - {{ activeSlot.occurrenceTime }}</span>
+                    </div>
+
+                    <div class="rsCameraWrap">
+                        <video ref="videoRef" muted playsinline class="rsVideo"></video>
+                        <div class="rsOverlay">
+                            <div class="rsScanBox">
+                                <span class="rsCorner rsCorner--tl"></span>
+                                <span class="rsCorner rsCorner--tr"></span>
+                                <span class="rsCorner rsCorner--bl"></span>
+                                <span class="rsCorner rsCorner--br"></span>
+                                <div class="rsScanLine"></div>
+                            </div>
+                        </div>
+                        <div v-if="!scanning && !cameraStarting" class="rsOverlayText">
+                            <div class="rsOverlayTitle">Iniciando cámara...</div>
+                        </div>
+                        <div v-else-if="scanning" class="rsOverlayHint">Apunta al QR de la reservación</div>
+                    </div>
+
+                    <!-- Result banner -->
+                    <div class="rsBanner" :class="bannerClass">
+                        <div class="rsBannerTop">
+                            <div class="rsBannerIcon">{{ bannerIcon }}</div>
+                            <div class="rsBannerText">
+                                <div class="rsBannerTitle">{{ bannerTitle }}</div>
+                                <div v-if="bannerName" class="rsBannerSub">{{ bannerName }}</div>
+                            </div>
+                        </div>
+                        <div v-if="busy" class="rsBannerBusy">Procesando...</div>
+                    </div>
+
+                    <div v-if="err" class="rsErr">
+                        <NotificationBox alertType="danger">{{ err }}</NotificationBox>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success / Result modal -->
+            <div v-if="modalOpen" class="rsModalBack" @click="closeModal">
+                <div class="rsModal" :class="modalColorClass" @click.stop>
+                    <div class="rsModalStrip" :class="modalStripClass"></div>
+                    <div class="rsModalBody">
+                        <div class="rsModalIcon" :class="modalIconClass">
+                            <i :class="modalIconFa"></i>
+                        </div>
+                        <div class="rsModalTitle" :class="modalTitleColor">{{ modalTitle }}</div>
+                        <div v-if="modalName" class="rsModalPerson">{{ modalName }}</div>
+                        <div class="rsModalMsg">{{ modalMessage }}</div>
+                        <div v-if="modalQuantity > 0" class="rsModalMeta" :class="modalMetaClass">
+                            <span><strong>Cantidad:</strong> {{ modalQuantity }}</span>
+                            <span v-if="modalSchedule"><strong>Horario:</strong> {{ modalSchedule }}</span>
+                        </div>
+                        <div class="rsModalFoot">Se cerrará automáticamente...</div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, computed } from "vue";
+import Panel from "@Obsidian/Controls/panel";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type ActiveSlotBag = {
+    slotId: number;
+    scheduleId: number;
+    scheduleName: string;
+    occurrenceTime: string;
+};
+
+type InitBag = {
+    activeSlot: ActiveSlotBag | null;
+    nextScheduleInfo: string | null;
+};
+
+type ScanResult = {
+    status: string;
+    name: string;
+    message: string;
+    scheduleName: string;
+    quantity: number;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const activeSlot = ref<ActiveSlotBag | null>(config.activeSlot || null);
+const nextScheduleInfo = ref<string>(config.nextScheduleInfo || "");
+const polling = ref(false);
+
+const scanning = ref(false);
+const cameraStarting = ref(false);
+const busy = ref(false);
+const err = ref("");
+const videoRef = ref<HTMLVideoElement | null>(null);
+let zxingReader: any = null;
+let currentDeviceId: string | null = null;
+
+const bannerStatus = ref("");
+const bannerName = ref("");
+const bannerTitle = ref("Listo para escanear");
+
+let lastScanAt = 0;
+const scanCooldownMs = 900;
+let scanHoldUntil = 0;
+const postResultHoldMs = 2500;
+
+const modalOpen = ref(false);
+const modalTitle = ref("");
+const modalMessage = ref("");
+const modalName = ref("");
+const modalQuantity = ref(0);
+const modalSchedule = ref("");
+let modalTimer: number | null = null;
+
+const bannerClass = computed(() => {
+    if (!bannerStatus.value) return "rsBanner--idle";
+    if (bannerStatus.value === "checked_in") return "rsBanner--ok";
+    if (bannerStatus.value === "already_used") return "rsBanner--warn";
+    return "rsBanner--bad";
+});
+
+const bannerIcon = computed(() => {
+    if (!bannerStatus.value) return "\u25CE";
+    if (bannerStatus.value === "checked_in") return "\u2713";
+    if (bannerStatus.value === "already_used") return "!";
+    return "\u00D7";
+});
+
+const modalIconClass = computed(() => {
+    if (bannerStatus.value === "checked_in") return "rsModalIcon--success";
+    if (bannerStatus.value === "already_used") return "rsModalIcon--warning";
+    return "rsModalIcon--danger";
+});
+
+const modalIconFa = computed(() => {
+    if (bannerStatus.value === "checked_in") return "fa fa-check";
+    if (bannerStatus.value === "already_used") return "fa fa-exclamation";
+    return "fa fa-times";
+});
+
+const modalColorClass = computed(() => {
+    if (bannerStatus.value === "checked_in") return "rsModal--success";
+    if (bannerStatus.value === "already_used") return "rsModal--warning";
+    return "rsModal--danger";
+});
+
+const modalStripClass = computed(() => {
+    if (bannerStatus.value === "checked_in") return "rsModalStrip--success";
+    if (bannerStatus.value === "already_used") return "rsModalStrip--warning";
+    return "rsModalStrip--danger";
+});
+
+const modalTitleColor = computed(() => {
+    if (bannerStatus.value === "checked_in") return "rsModalTitle--success";
+    if (bannerStatus.value === "already_used") return "rsModalTitle--warning";
+    return "rsModalTitle--danger";
+});
+
+const modalMetaClass = computed(() => {
+    if (bannerStatus.value === "checked_in") return "rsModalMeta--success";
+    if (bannerStatus.value === "already_used") return "rsModalMeta--warning";
+    return "rsModalMeta--danger";
+});
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function setBanner(status: string, title: string, name: string) {
+    bannerStatus.value = status || "";
+    bannerTitle.value = title || "Resultado";
+    bannerName.value = name || "";
+}
+
+function showModal(title: string, message: string, name: string, quantity: number, schedule: string) {
+    modalTitle.value = title;
+    modalMessage.value = message;
+    modalName.value = name;
+    modalQuantity.value = quantity;
+    modalSchedule.value = schedule;
+    modalOpen.value = true;
+
+    if (modalTimer) window.clearTimeout(modalTimer);
+    modalTimer = window.setTimeout(() => {
+        modalOpen.value = false;
+        modalTimer = null;
+    }, postResultHoldMs);
+}
+
+function closeModal() {
+    modalOpen.value = false;
+    if (modalTimer) {
+        window.clearTimeout(modalTimer);
+        modalTimer = null;
+    }
+}
+
+async function refreshSlot() {
+    polling.value = true;
+    try {
+        const res = await invokeBlockAction<any>("GetActiveSlot", {});
+        if (res.isSuccess && res.data) {
+            activeSlot.value = res.data.activeSlot || null;
+            nextScheduleInfo.value = res.data.nextScheduleInfo || "";
+        }
+    } catch { /* ignore */ }
+    polling.value = false;
+}
+
+// --- Camera & QR ---
+
+function getSelectedCameraDeviceId(): string | null {
+    try {
+        const id = localStorage.getItem("CameraDeviceId") || (localStorage as any).CameraDeviceId;
+        return id && id.trim() ? id.trim() : null;
+    } catch { return null; }
+}
+
+function onStorageChange(e: StorageEvent) {
+    if (e.key !== "CameraDeviceId") return;
+    const newId = (e.newValue || "").trim();
+    if (newId && newId !== currentDeviceId) {
+        // Camera was changed in Rock check-in app, restart with new device
+        restartWithNewCamera();
+    }
+}
+
+async function restartWithNewCamera() {
+    if (!activeSlot.value) return;
+    await stopScanInternal(false);
+    await sleep(300);
+    startScan();
+}
+
+// Poll localStorage for same-window changes (storage event only fires cross-tab)
+let cameraCheckInterval: number | null = null;
+
+function startCameraChangePolling() {
+    if (cameraCheckInterval) return;
+    cameraCheckInterval = window.setInterval(() => {
+        const newId = getSelectedCameraDeviceId();
+        if (newId && newId !== currentDeviceId && scanning.value) {
+            restartWithNewCamera();
+        }
+    }, 1500);
+}
+
+function stopCameraChangePolling() {
+    if (cameraCheckInterval) {
+        window.clearInterval(cameraCheckInterval);
+        cameraCheckInterval = null;
+    }
+}
+
+async function getZxingModule(): Promise<any> {
+    const systemJs = (window as any).System;
+    if (!systemJs?.import) {
+        throw new Error("SystemJS no disponible.");
+    }
+    return await systemJs.import("/Obsidian/Blocks/QREVENT/vendor/zxing.lib.js");
+}
+
+async function startScan() {
+    err.value = "";
+    cameraStarting.value = true;
+
+    if (!videoRef.value) {
+        err.value = "No se encontró el elemento de video.";
+        cameraStarting.value = false;
+        return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        err.value = "Tu navegador no soporta cámara.";
+        cameraStarting.value = false;
+        return;
+    }
+
+    try {
+        await stopScanInternal(true);
+
+        const savedDeviceId = getSelectedCameraDeviceId();
+        currentDeviceId = savedDeviceId;
+
+        let stream: MediaStream;
+        if (savedDeviceId) {
+            // Use the camera selected in Rock's check-in app
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: savedDeviceId } },
+                audio: false
+            });
+        } else {
+            // Fallback: prefer back camera
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } },
+                    audio: false
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false
+                });
+            }
+        }
+
+        videoRef.value.srcObject = stream;
+        await videoRef.value.play();
+
+        // Optimize camera
+        try {
+            const track = stream.getVideoTracks()[0];
+            if (track && typeof (track as any).getCapabilities === "function") {
+                const caps = (track as any).getCapabilities();
+                const adv: any = {};
+                if (caps.focusMode?.indexOf("continuous") !== -1) adv.focusMode = "continuous";
+                if (caps.exposureMode?.indexOf("continuous") !== -1) adv.exposureMode = "continuous";
+                if (caps.whiteBalanceMode?.indexOf("continuous") !== -1) adv.whiteBalanceMode = "continuous";
+                if (Object.keys(adv).length > 0) {
+                    await track.applyConstraints({ advanced: [adv] } as any).catch(() => {});
+                }
+            }
+        } catch { /* ignore */ }
+
+        const mod = await getZxingModule();
+        zxingReader = new mod.BrowserQRCodeReader();
+        scanning.value = true;
+        cameraStarting.value = false;
+        setBanner("", "Escaneando...", "");
+
+        scanLoop();
+    } catch (e: any) {
+        cameraStarting.value = false;
+        const msg = String(e?.name || e?.message || "");
+        if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+            err.value = "Permiso de cámara denegado.";
+        } else {
+            err.value = "No se pudo iniciar la cámara.";
+        }
+        scanning.value = false;
+    }
+}
+
+async function stopScan() {
+    await stopScanInternal(false);
+}
+
+async function stopScanInternal(keepState: boolean) {
+    zxingReader = null;
+
+    try {
+        if (videoRef.value) {
+            const src: any = videoRef.value.srcObject;
+            if (src?.getTracks) {
+                src.getTracks().forEach((t: any) => t.stop());
+            }
+            videoRef.value.srcObject = null;
+        }
+    } catch { /* ignore */ }
+
+    if (!keepState) {
+        scanning.value = false;
+    }
+}
+
+function scanLoop() {
+    if (!scanning.value || !videoRef.value || !zxingReader) return;
+
+    zxingReader.decodeOnceFromVideoElement(videoRef.value)
+        .then(async (result: any) => {
+            const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
+            if (!raw) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+
+            const now = Date.now();
+            if (now < scanHoldUntil || now - lastScanAt < scanCooldownMs) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+
+            lastScanAt = now;
+            try { navigator.vibrate?.(35); } catch { /* ignore */ }
+
+            scanning.value = false;
+            await submitQr(raw);
+            scanHoldUntil = Date.now() + postResultHoldMs;
+            await sleep(postResultHoldMs);
+            scanning.value = true;
+            if (scanning.value) scanLoop();
+        })
+        .catch(async (e: any) => {
+            const msg = String(e?.name || e?.message || e || "");
+            if (msg.toLowerCase().includes("notfound")) {
+                if (scanning.value) scanLoop();
+                return;
+            }
+            // Auto-retry on transient error
+            await sleep(1000);
+            if (scanning.value) scanLoop();
+        });
+}
+
+async function submitQr(code: string) {
+    if (busy.value) return;
+
+    busy.value = true;
+    err.value = "";
+
+    try {
+        const bag = { reservationCode: code };
+        const res = await invokeBlockAction<ScanResult>("ProcessScan", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            setBanner("error", res.errorMessage || "Error al validar", "");
+            showModal("Error", res.errorMessage || "No se pudo procesar.", "", 0, "");
+            return;
+        }
+
+        const d = res.data;
+        setBanner(d.status, d.message || "Resultado", d.name);
+
+        if (d.status === "checked_in") {
+            showModal("Asistencia marcada", d.message, d.name, d.quantity, d.scheduleName);
+        } else if (d.status === "already_used") {
+            showModal("Reserva ya registrada", d.message, d.name, d.quantity, d.scheduleName);
+        } else if (d.status === "invalid_qr") {
+            showModal("QR inválido", d.message, "", 0, "");
+        } else {
+            showModal("No autorizado", d.message || "No se pudo registrar.", d.name, d.quantity, d.scheduleName);
+        }
+    } catch {
+        setBanner("error", "Error al validar", "");
+        showModal("Error", "Error procesando el código.", "", 0, "");
+    } finally {
+        busy.value = false;
+    }
+}
+
+// Auto-start camera when slot is active
+onMounted(async () => {
+    window.addEventListener("storage", onStorageChange);
+    startCameraChangePolling();
+
+    if (activeSlot.value) {
+        await nextTick();
+        startScan();
+    }
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener("storage", onStorageChange);
+    stopCameraChangePolling();
+    stopScan();
+    closeModal();
+});
+</script>
+
+<style>
+:root {
+    --rs-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    --rs-bg: #F4F6FB;
+    --rs-surface: #FFFFFF;
+    --rs-text: #111827;
+    --rs-muted: #6B7280;
+    --rs-border: rgba(17,24,39,.10);
+    --rs-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
+    --rs-radius-xl: 18px;
+    --rs-radius-lg: 14px;
+    --rs-accent: #2563EB;
+    --rs-success: #10B981;
+    --rs-warning: #F59E0B;
+    --rs-danger: #EF4444;
+}
+
+.panel-block .panel-heading { display: none !important; }
+.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+
+.rsPage {
+    font-family: var(--rs-font);
+    background: var(--rs-bg);
+    height: 100vh;
+    overflow: hidden;
+    color: var(--rs-text);
+    display: flex;
+    flex-direction: column;
+}
+
+html, body { overflow: hidden !important; height: 100vh !important; margin: 0 !important; padding: 0 !important; }
+
+.rsTopBar {
+    height: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    background: var(--rs-bg);
+    z-index: 50;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+}
+
+.rsBrand { font-weight: 800; letter-spacing: .2px; color: var(--rs-text); font-size: 18px; }
+.rsTopActions { display: flex; gap: 10px; }
+.rsIconBtn { width: 26px; height: 26px; border-radius: 999px; background: rgba(17,24,39,.06); border: 1px solid rgba(17,24,39,.06); }
+
+/* No active slot */
+.rsNoSlot {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.rsNoSlotInner { text-align: center; max-width: 400px; }
+.rsNoSlotIcon { font-size: 48px; color: var(--rs-muted); margin-bottom: 12px; }
+.rsNoSlotTitle { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+.rsNoSlotSub { font-size: 14px; color: var(--rs-muted); margin-bottom: 8px; }
+.rsNoSlotNext { font-size: 13px; color: var(--rs-muted); margin-bottom: 16px; }
+
+/* Body with scanner */
+.rsBody {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.rsScheduleBar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--rs-surface);
+    border-bottom: 1px solid rgba(17,24,39,.06);
+    font-size: 13px;
+    font-weight: 700;
+}
+.rsScheduleDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--rs-success);
+    flex-shrink: 0;
+}
+
+/* Camera */
+.rsCameraWrap {
+    flex: 1;
+    background: #000;
+    overflow: hidden;
+    position: relative;
+}
+.rsVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rsOverlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rsScanBox {
+    width: 55%;
+    max-width: 250px;
+    aspect-ratio: 1;
+    position: relative;
+    border-radius: 18px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+}
+
+.rsCorner {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: #fff;
+    border-style: solid;
+    border-width: 0;
+}
+.rsCorner--tl { top: -2px; left: -2px; border-top-width: 3.5px; border-left-width: 3.5px; border-radius: 14px 0 0 0; }
+.rsCorner--tr { top: -2px; right: -2px; border-top-width: 3.5px; border-right-width: 3.5px; border-radius: 0 14px 0 0; }
+.rsCorner--bl { bottom: -2px; left: -2px; border-bottom-width: 3.5px; border-left-width: 3.5px; border-radius: 0 0 0 14px; }
+.rsCorner--br { bottom: -2px; right: -2px; border-bottom-width: 3.5px; border-right-width: 3.5px; border-radius: 0 0 14px 0; }
+
+.rsScanLine {
+    position: absolute;
+    left: 8%; right: 8%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(37,99,235,.85), transparent);
+    border-radius: 2px;
+    animation: rsScanAnim 2.2s ease-in-out infinite;
+}
+
+@keyframes rsScanAnim {
+    0%, 100% { top: 12%; opacity: .6; }
+    50% { top: 88%; opacity: 1; }
+}
+
+.rsOverlayText {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    padding: 18px;
+    z-index: 5;
+}
+.rsOverlayTitle { font-weight: 800; font-size: 16px; }
+.rsOverlaySub { margin-top: 4px; font-size: 12px; opacity: .85; }
+.rsOverlayHint {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.55);
+    color: #fff;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    z-index: 5;
+}
+
+/* Banner */
+.rsBanner {
+    margin: 8px 14px;
+    border-radius: 14px;
+    border: 1px solid #e7e7ea;
+    background: #fafafa;
+    padding: 12px;
+}
+.rsBannerTop { display: flex; gap: 10px; align-items: flex-start; }
+.rsBannerIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid #e7e7ea;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+.rsBannerTitle { font-weight: 900; font-size: 14px; }
+.rsBannerSub { font-size: 12px; color: var(--rs-muted); margin-top: 2px; }
+.rsBannerBusy { margin-top: 6px; font-size: 12px; color: var(--rs-muted); }
+.rsBanner--ok { border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
+.rsBanner--warn { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.10); }
+.rsBanner--bad { border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+
+.rsBtn {
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-family: var(--rs-font);
+    font-weight: 700;
+    font-size: 14px;
+    border: 1px solid var(--rs-border);
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.rsBtn:disabled { opacity: .5; cursor: default; }
+.rsBtnDefault { background: #F3F4F6; border-color: #E5E7EB; color: #374151; }
+.rsBtnDefault:hover:not(:disabled) { background: #E5E7EB; }
+
+.rsErr { padding: 0 14px 8px; }
+
+/* Modal */
+.rsModalBack {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+    animation: rsModalFadeIn .2s ease;
+}
+@keyframes rsModalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.rsModal {
+    width: min(520px, 92vw);
+    background: #fff;
+    border-radius: var(--rs-radius-xl);
+    box-shadow: 0 24px 64px rgba(0,0,0,.22);
+    overflow: hidden;
+    text-align: center;
+    animation: rsModalSlideUp .25s ease;
+    border: 2px solid transparent;
+}
+@keyframes rsModalSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rsModal--success { border-color: var(--rs-success); }
+.rsModal--warning { border-color: var(--rs-warning); }
+.rsModal--danger { border-color: var(--rs-danger); }
+
+.rsModalStrip { height: 6px; width: 100%; }
+.rsModalStrip--success { background: linear-gradient(90deg, #10B981, #34D399, #10B981); }
+.rsModalStrip--warning { background: linear-gradient(90deg, #F59E0B, #FBBF24, #F59E0B); }
+.rsModalStrip--danger { background: linear-gradient(90deg, #EF4444, #F87171, #EF4444); }
+
+.rsModalBody { padding: 24px 24px 20px; }
+
+.rsModalIcon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 28px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+.rsModalIcon--success { background: linear-gradient(135deg, #10B981, #34D399); color: #fff; }
+.rsModalIcon--warning { background: linear-gradient(135deg, #F59E0B, #FBBF24); color: #fff; }
+.rsModalIcon--danger { background: linear-gradient(135deg, #EF4444, #F87171); color: #fff; }
+
+.rsModalTitle { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+.rsModalTitle--success { color: #059669; }
+.rsModalTitle--warning { color: #D97706; }
+.rsModalTitle--danger { color: #DC2626; }
+
+.rsModalPerson { font-size: 18px; font-weight: 800; margin-bottom: 6px; color: var(--rs-text); }
+.rsModalMsg { font-size: 14px; color: var(--rs-muted); line-height: 1.5; margin-bottom: 14px; }
+
+.rsModalMeta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    padding: 14px 18px;
+    border-radius: var(--rs-radius-lg);
+}
+.rsModalMeta--success { background: rgba(16,185,129,.08); color: #065F46; border: 1px solid rgba(16,185,129,.25); }
+.rsModalMeta--warning { background: rgba(245,158,11,.08); color: #92400E; border: 1px solid rgba(245,158,11,.25); }
+.rsModalMeta--danger { background: rgba(239,68,68,.08); color: #991B1B; border: 1px solid rgba(239,68,68,.25); }
+
+.rsModalFoot { font-size: 12px; color: var(--rs-muted); opacity: .7; }
+</style>

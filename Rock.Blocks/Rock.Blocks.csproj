@@ -60,9 +60,21 @@
       <Link>Properties\AssemblySharedInfo.cs</Link>
     </Compile>
     <Compile Include="Crm\FamilyPreRegistration.cs" />
+    <Compile Include="Dar\CybersourceDonationEntry.cs" />
+    <Compile Include="Layout\Footer.cs" />
+    <Compile Include="Layout\Header.cs" />
     <Compile Include="Engagement\SignUp\SignUpDetail.cs" />
     <Compile Include="FamilyHub\FamilyHub..cs" />
     <Compile Include="Group\GroupAttendanceDetail.cs" />
+    <Compile Include="QREVENT\CelebremosQrCheckIn.cs" />
+    <Compile Include="QREVENT\ReservationScanner.cs" />
+    <Compile Include="QREVENT\CustomGivingEntry.cs" />
+    <Compile Include="QREVENT\EPay\EPayConfiguration.cs" />
+    <Compile Include="QREVENT\EPay\EPayResponseCodes.cs" />
+    <Compile Include="QREVENT\EPay\EPaySoapClient.cs" />
+    <Compile Include="QREVENT\EPay\EPayValidators.cs" />
+    <Compile Include="QREVENT\EPay\Models\EPayAuthorizationRequest.cs" />
+    <Compile Include="QREVENT\EPay\Models\EPayAuthorizationResponse.cs" />
     <Compile Include="QREVENT\QRScanner.cs" />
     <Compile Include="QREVENT\SundayServiceRegistration.cs" />
     <Compile Include="Reporting\ServiceMetricsEntry.cs" />
@@ -142,12 +154,16 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
+    <None Include="QREVENT\CustomGivingEntry_DEPLOYMENT.md" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Finance\" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="DefaultTvApplication.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="QREVENT\CustomGivingEntry_Migration.sql" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
