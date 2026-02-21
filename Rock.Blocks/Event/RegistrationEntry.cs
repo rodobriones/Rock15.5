@@ -404,7 +404,8 @@ namespace Rock.Blocks.Event
                 // Parse the original query string and replace/insert our session key.
                 var queryString = uri.Query.ParseQueryString();
                 queryString.Remove( PageParameterKey.RegistrationSessionGuid );
-                queryString.Add( PageParameterKey.RegistrationSessionGuid, session.Guid.ToString() );
+                queryString.Remove( ReturnUrlSessionPrefix );
+                queryString.Add( ReturnUrlSessionPrefix, session.Guid.ToString() );
 
                 // Create the new return URI with the updated query string.
                 var returnUri = new UriBuilder( uri )

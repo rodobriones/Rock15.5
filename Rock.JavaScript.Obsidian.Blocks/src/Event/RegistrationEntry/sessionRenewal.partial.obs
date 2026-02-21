@@ -2,8 +2,8 @@
 <template>
     <Dialog :modelValue="isModalVisible" :dismissible="false">
         <template #header>
-            <h4 v-if="isLoading || spotsSecured === null">{{ registrationEntryTerms.registrationSingularTitleCase }} Timed Out</h4>
-            <h4 v-else>Request Extension</h4>
+            <h4 v-if="isLoading || spotsSecured === null">{{ t("headingTimedOut", { registration: registrationEntryTerms.registrationSingularTitleCase }) }}</h4>
+            <h4 v-else>{{ t("actionRequestExtension") }}</h4>
         </template>
         <template #default>
             <LoadingIndicator v-if="isLoading" />
@@ -35,22 +35,22 @@
         </template>
         <template v-if="!isLoading" #footer>
             <template v-if="!hasWaitlist && spotsSecured === 0">
-                <RockButton btnType="link" @click="restart">Close</RockButton>
+                <RockButton btnType="link" @click="restart">{{ t("actionClose") }}</RockButton>
             </template>
             <template v-else-if="spotsSecured !== null">
-                <RockButton btnType="primary" @click="close">Yes</RockButton>
-                <RockButton btnType="link" @click="restart">No, cancel {{ registrationEntryTerms.registrationSingularLowerCase }}</RockButton>
+                <RockButton btnType="primary" @click="close">{{ t("actionYes") }}</RockButton>
+                <RockButton btnType="link" @click="restart">{{ t("labelNoCancelRegistration", { registration: registrationEntryTerms.registrationSingularLowerCase }) }}</RockButton>
             </template>
             <template v-else>
-                <RockButton btnType="primary" @click="requestRenewal">Yes</RockButton>
-                <RockButton btnType="link" @click="restart">No, cancel {{ registrationEntryTerms.registrationSingularLowerCase }}</RockButton>
+                <RockButton btnType="primary" @click="requestRenewal">{{ t("actionYes") }}</RockButton>
+                <RockButton btnType="link" @click="restart">{{ t("labelNoCancelRegistration", { registration: registrationEntryTerms.registrationSingularLowerCase }) }}</RockButton>
             </template>
         </template>
     </Dialog>
 </template>
 <script setup lang="ts">
     import { computed, nextTick, PropType, ref, watch } from "vue";
-    import { CurrentRegistrationEntryState, RegistrationEntryTerms, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, getRegistrationEntryText, RegistrationEntryTerms, use } from "./utils.partial";
     import Dialog from "@Obsidian/Controls/dialog.obs";
     import LoadingIndicator from "@Obsidian/Controls/loadingIndicator.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
@@ -76,6 +76,7 @@
     const registrationEntryState = use(CurrentRegistrationEntryState);
     const invokeBlockAction = useInvokeBlockAction();
     const registrationEntryTerms = use(RegistrationEntryTerms);
+    const t = getRegistrationEntryText;
 
     // #region Values
 

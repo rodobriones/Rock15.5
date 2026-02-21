@@ -30,7 +30,7 @@
         <template #edit>
             <NotificationBox v-if="validationMessage"
                              alertType="validation">
-                <p>Please correct the following:</p>
+                <p>{{ pleaseCorrectHeading }}</p>
                 <span v-html="validationMessage"></span>
             </NotificationBox>
             <EditPanel v-model="financialAccountEditBag" :options="options" @propertyChanged="baseBlock.onPropertyChanged" />
@@ -56,6 +56,8 @@
 
     const config = useConfigurationValues<DetailBlockBox<FinancialAccountBag, FinancialAccountDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
+    const isSpanishUiLanguage = (typeof document !== "undefined" ? document.documentElement.lang : (typeof navigator !== "undefined" ? navigator.language : "en")).toLowerCase().startsWith("es");
+    const pleaseCorrectHeading = isSpanishUiLanguage ? "Por favor corrige lo siguiente:" : "Please correct the following:";
 
     // #region Values
 

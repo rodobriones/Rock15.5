@@ -98,6 +98,18 @@
             default: 0
         },
 
+        /** Date format for bootstrap-datepicker syntax (for example: dd/mm/yyyy). */
+        format: {
+            type: String as PropType<string | null>,
+            default: null
+        },
+
+        /** Datepicker language key (for example: en, es). */
+        language: {
+            type: String as PropType<string | null>,
+            default: null
+        },
+
         /**
          * The container to attach the popup to, if not specified it will
          * default to the document body.
@@ -145,11 +157,24 @@
         return props.id || defaultId;
     });
 
+    const datePickerFormat = computed(() => {
+        return props.format || currentLocaleDateFormatter.datePickerFormat;
+    });
+
+    const aspDateFormat = computed(() => {
+        if (!props.format) {
+            return currentLocaleDateFormatter.aspDateFormat;
+        }
+
+        // Bootstrap-datepicker month token is "m", Luxon month token is "M".
+        return props.format.replace(/m/g, "M");
+    });
+
     const asRockDateOrNull = computed(() => {
         let date: DateTime | undefined = undefined;
 
         if (internalValue.value) {
-            date = DateTime.fromFormat(internalValue.value, currentLocaleDateFormatter.aspDateFormat);
+            date = DateTime.fromFormat(internalValue.value, aspDateFormat.value);
         }
 
         if (date?.isValid) {
@@ -187,7 +212,8 @@
             id: input.id,
             startView: props.startView,
             showOnFocus: !props.disableShowOnFocus,
-            format: currentLocaleDateFormatter.datePickerFormat,
+            format: datePickerFormat.value,
+            language: props.language || undefined,
             todayHighlight: !props.disableHighlightToday,
             forceParse: !props.disableForceParse,
             onChangeScript: () => {
@@ -209,7 +235,7 @@
 
     function onDateInputChange(e: Event): void {
         const newVal = DateTime.fromISO((e.target as HTMLInputElement)?.value ?? "")
-            ?.toFormat(currentLocaleDateFormatter.aspDateFormat);
+            ?.toFormat(aspDateFormat.value);
 
         internalValue.value = newVal;
     }
@@ -230,7 +256,7 @@
         }
 
         if (date?.isValid) {
-            internalValue.value = date.toFormat(currentLocaleDateFormatter.aspDateFormat);
+            internalValue.value = date.toFormat(aspDateFormat.value);
         }
         else {
             internalValue.value = null;

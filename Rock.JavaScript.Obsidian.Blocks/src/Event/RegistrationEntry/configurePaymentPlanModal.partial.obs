@@ -2,24 +2,24 @@
 <template>
     <Modal v-model="internalIsShown"
            :isSaveButtonDisabled="!wipPaymentPlanConfiguration?.endDate"
-           :saveText="wipPaymentPlanConfiguration?.endDate ? 'Apply' : ''"
-           title="Set Up Payment Plan"
+           :saveText="wipPaymentPlanConfiguration?.endDate ? t('actionApply') : ''"
+           :title="t('messageSetUpPaymentPlan')"
            v-model:submit="submit"
            @save="onConfigurePaymentPlan"
            @closeModal="onCancel">
         <template v-if="paymentPlanDeadlineDate?.isLaterThan(RockDateTime.now())">
-            <StaticFormControl :modelValue="`The total amount of ${balanceDue} is payable by ${paymentPlanDeadlineDate.toASPString('MMMM dd, yyyy')}.`" />
+            <StaticFormControl :modelValue="t('messagePaymentPlanTotalDue', { balanceDue: `${balanceDue ?? ''}`, deadline: paymentPlanDeadlineDate.toASPString('MMMM dd, yyyy') })" />
 
             <hr />
 
             <div class="row">
                 <div class="col">
-                    <NotificationBox v-if="isPaymentFrequencyWarningShown" alertType="danger">The selected payment frequency is not compatible with the chosen start date. Please adjust the frequency or select a different start date to proceed.</NotificationBox>
+                    <NotificationBox v-if="isPaymentFrequencyWarningShown" alertType="danger">{{ t("messagePaymentFrequencyIncompatible") }}</NotificationBox>
 
                     <DropDownList :modelValue="paymentFrequencyGuidOrEmptyString"
                                   @update:modelValue="onUpdatePaymentFrequencyGuid"
                                   :items="paymentPlanFrequencyItems"
-                                  label="Select Your Desired Payment Frequency"
+                                  :label="t('labelSelectPaymentFrequency')"
                                   rules="required" />
                 </div>
             </div>
@@ -28,7 +28,7 @@
                 <div class="col">
                     <DatePicker :modelValue="startDateIsoString"
                                 @update:modelValue="onUpdateStartDateIsoString"
-                                label="Start Date"
+                                :label="t('labelStartDate')"
                                 :disallowPastDateSelection="true"
                                 :rules="['required', validateStartDate]" />
                 </div>
@@ -38,12 +38,12 @@
                 <div class="col-sm-6">
                     <CurrencyBox :modelValue="amountToPayTodayPlusAdjustmentCurrency?.number ?? 0"
                                  @update:modelValue="onUpdateAmountToPayToday"
-                                 label="Amount To Pay Today"
+                                 :label="t('amountToPayToday')"
                                  :rules="amountToPayTodayRules"
                                  @blur="onBlurAmountToPayToday">
 
                         <template #append>
-                            <small>A minimum of {{ wipPaymentPlanConfiguration?.minAmountToPayToday }} is due today.</small>
+                            <small>{{ t('messageMinimumDueToday', { amount: `${wipPaymentPlanConfiguration?.minAmountToPayToday ?? ''}` }) }}</small>
                         </template>
                     </CurrencyBox>
                 </div>
@@ -52,7 +52,7 @@
                     <DropDownList :modelValue="numberOfPayments + ''"
                                   @update:modelValue="onUpdateNumberOfPaymentsStringOrEmpty"
                                   :items="numberOfPaymentsItems"
-                                  label="Number of Payments"
+                                   :label="t('labelNumberOfPayments')"
                                   rules="required"
                                   :showBlankItem="false" />
                 </div>
@@ -65,17 +65,17 @@
 
             <div :class="['row', !areAmountFieldsShown ? 'collapse' : '']">
                 <div class="col-sm-6">
-                    <RockLabel>Plan Summary</RockLabel>
+                    <RockLabel>{{ t("labelPlanSummary") }}</RockLabel>
                     <p>
-                        Amount Due Today<br />
+                        {{ t("labelAmountDueToday") }}<br />
                         {{ wipPaymentPlanConfiguration?.amountToPayTodayPlusAdjustment }}<small v-if="amountToPayTodaySuffix">&nbsp;({{ amountToPayTodaySuffix }})</small>
                     </p>
                     <p v-if="wipPaymentPlanConfiguration?.amountPerPayment.isGreaterThan(0)">{{ wipPaymentPlanConfiguration.paymentPlanFrequency.getNPaymentsOfAmountMessage(wipPaymentPlanConfiguration.numberOfPayments, wipPaymentPlanConfiguration.amountPerPayment) }}</p>
                 </div>
 
                 <div v-if="paymentDates.length" class="col-sm-6">
-                    <RockLabel>Payment Schedule</RockLabel>
-                    <p>Below are the dates and amounts that will be automatically charged to your chosen payment method.</p>
+                    <RockLabel>{{ t("labelPaymentSchedule") }}</RockLabel>
+                    <p>{{ t("messagePaymentScheduleDescription") }}</p>
                     <div v-for="paymentDate in paymentDates" :key="paymentDate.toMilliseconds()" class="row">
                         <div class="col-sm-3 col-xs-6 text-right">{{ paymentDate.toASPString("d") }}</div>
                         <div class="col-xs-6">{{ wipPaymentPlanConfiguration?.amountPerPayment }}</div>
@@ -84,13 +84,15 @@
             </div>
         </template>
         <template v-else>
-            A payment deadline date is required to create a payment plan.
+            {{ t("messagePaymentDeadlineRequired") }}
         </template>
     </Modal>
 </template>
 
 <script setup lang="ts">
     import { PropType, computed, ref, watch, nextTick } from "vue";
+    import { getRegistrationEntryText, isSpanishUiLanguage } from "./utils.partial";
+    const t = getRegistrationEntryText;
     import { useConfigurePaymentPlanFeature } from "./paymentPlans.partial";
     import { PaymentPlanConfiguration, PaymentPlanFrequency } from "./types.partial";
     import CurrencyBox from "@Obsidian/Controls/currencyBox.obs";
@@ -177,10 +179,10 @@
             return "";
         }
         else if (wipPaymentPlanConfiguration.value.balanceDue.isEqualTo(amountToPayToday.value ?? 0)) {
-            return `pay in full`;
+            return t("labelPayInFull");
         }
         else if (!wipPaymentPlanConfiguration.value.amountToPayTodayAdjustment.isZero) {
-            return `added ${wipPaymentPlanConfiguration.value.amountToPayTodayAdjustment} to evenly distribute the remaining payments`;
+            return t("messageAmountAdjustedForEvenDistribution", { amount: `${wipPaymentPlanConfiguration.value.amountToPayTodayAdjustment}` });
         }
         else {
             return "";

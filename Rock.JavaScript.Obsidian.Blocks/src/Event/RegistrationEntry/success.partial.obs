@@ -1,45 +1,33 @@
 ﻿<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div>
+    <div class="registrationentry-success">
         <NotificationBox v-if="showRegistrationFullNotification" class="text-left" alertType="warning">
-            <strong>{{ registrationEntryTerms.registrationSingularTitleCase }} Full</strong>
+            <strong>{{ t("headingRegistrationFull", { registration: registrationEntryTerms.registrationSingularTitleCase }) }}</strong>
             <p>
-                No payment was processed. Due to high demand there is no longer space available for this {{ registrationEntryTerms.registrationSingularLowerCase }}.
+                {{ t("messageRegistrationNoCapacity", { registration: registrationEntryTerms.registrationSingularLowerCase }) }}
             </p>
         </NotificationBox>
         <NotificationBox v-if="showSomeRegistrantsWaitListedNotification" class="text-left" alertType="warning">
-            <strong>Unfortunately</strong>
+            <strong>{{ t("labelUnfortunately") }}</strong>
             <p>{{ someRegistrantsWaitListedMessage }}</p>
         </NotificationBox>
         <NotificationBox v-if="showAllRegistrantsWaitListedNotification" class="text-left" alertType="warning">
-            <strong>Unfortunately</strong>
+            <strong>{{ t("labelUnfortunately") }}</strong>
             <p>{{ allRegistrantsWaitListedMessage }}</p>
         </NotificationBox>
-        <div v-html="messageHtml"></div>
-        <SaveFinancialAccountForm v-if="gatewayGuid && transactionCode && gatewayPersonIdentifier && enableSaveAccount"
-                                  :gatewayGuid="gatewayGuid"
-                                  :transactionCode="transactionCode"
-                                  :gatewayPersonIdentifier="gatewayPersonIdentifier"
-                                  saveAccountCheckBoxLabel="Save account information for future payments"
-                                  class="well">
-            <template #header>
-                <h3>Make Payments Even Easier</h3>
-            </template>
-        </SaveFinancialAccountForm>
+        <div class="registrationentry-success-message well" v-html="messageHtml"></div>
     </div>
 </template>
 
 <script setup lang="ts">
     import { computed } from "vue";
-    import { CurrentRegistrationEntryState, RegistrationEntryTerms, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, getRegistrationEntryText, isSpanishUiLanguage, RegistrationEntryTerms, use } from "./utils.partial";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-    import SaveFinancialAccountForm from "@Obsidian/Controls/saveFinancialAccountForm.obs";
-    import { Guid } from "@Obsidian/Types";
-    import { toGuidOrNull } from "@Obsidian/Utility/guid";
     import { pluralConditional } from "@Obsidian/Utility/stringUtils";
 
     const registrationEntryState = use(CurrentRegistrationEntryState);
     const registrationEntryTerms = use(RegistrationEntryTerms);
+    const t = getRegistrationEntryText;
 
     // #region Computed Values
 
@@ -58,7 +46,8 @@
             registrantSingularLowerCase,
             registrantPluralLowerCase
         } = registrationEntryTerms.value;
-        return `No payment was processed. Due to high demand there is no longer space available. The ${pluralConditional(waitListedCount.value, `${registrantSingularLowerCase} was`, `${waitListedCount.value} ${registrantPluralLowerCase} were`)} added to the waitlist.`;
+        const waitlistedCountPhrase = pluralConditional(waitListedCount.value, `${registrantSingularLowerCase} was`, `${waitListedCount.value} ${registrantPluralLowerCase} were`);
+        return t("messageRegistrationAllWaitlisted", { waitlistedCountPhrase });
     });
 
     const someRegistrantsWaitListedMessage = computed<string>(() => {
@@ -68,15 +57,25 @@
             registrantPluralLowerCase
         } = registrationEntryTerms.value;
 
-        return `This ${registrationSingularLowerCase} only had capacity for ${pluralConditional(registeredCount.value, `1 ${registrantSingularLowerCase}`, `${registeredCount.value} ${registrantPluralLowerCase}`)}. The first ${pluralConditional(registeredCount.value, `${registrantSingularLowerCase} you added was`, `${registeredCount.value} ${registrantPluralLowerCase} you added were`)} registered for ${registrationEntryState.viewModel.instanceName}. The remaining ${pluralConditional(waitListedCount.value, `${registrantSingularLowerCase} was`, `${waitListedCount.value} ${registrantPluralLowerCase} were`)} added to the waitlist.`;
+        const registeredCountPhrase = pluralConditional(registeredCount.value, `1 ${registrantSingularLowerCase}`, `${registeredCount.value} ${registrantPluralLowerCase}`);
+        const firstWaitlistedPhrase = pluralConditional(registeredCount.value, `${registrantSingularLowerCase} you added was`, `${registeredCount.value} ${registrantPluralLowerCase} you added were`);
+        const remainingWaitlistedPhrase = pluralConditional(waitListedCount.value, `${registrantSingularLowerCase} was`, `${waitListedCount.value} ${registrantPluralLowerCase} were`);
+
+        return t("messageRegistrationSomeWaitlisted", {
+            registration: registrationSingularLowerCase,
+            registeredCountPhrase,
+            firstWaitlistedPhrase,
+            instanceName: registrationEntryState.viewModel.instanceName || '',
+            remainingWaitlistedPhrase
+        });
     });
 
     /** Should the "registration full" notification be shown? */
     const showRegistrationFullNotification = computed<boolean>(() => {
         // Show if there are no spots remaining and no one was wait-listed nor registered.
         return registrationEntryState.successViewModel?.spotsRemaining === 0
-            && registeredCount.value === 0
-            && waitListedCount.value === 0;
+            && waitListedCount.value === 0
+            && registeredCount.value === 0;
     });
 
     /** Should the "all registrants wait-listed" notification be shown? */
@@ -95,31 +94,102 @@
             && registeredCount.value > 0;
     });
 
+    const rawMessageHtml = computed<string>(() => {
+        return registrationEntryState.successViewModel?.messageHtml || t("messageRegistrationDefaultSuccess", { registration: registrationEntryTerms.value.registrationSingularLowerCase });
+    });
+
     /** The success lava markup */
     const messageHtml = computed<string>(() => {
-        return registrationEntryState.successViewModel?.messageHtml || `You have successfully completed this ${registrationEntryTerms.value.registrationSingularLowerCase}`;
-    });
+        let html = rawMessageHtml.value;
 
-    /** The financial gateway record's guid */
-    const gatewayGuid = computed<Guid | null>(() => {
-        return toGuidOrNull(registrationEntryState.viewModel.gatewayGuid);
-    });
+        // Hide sensitive payment references (account mask / reference number)
+        // in the final success message.
+        html = html.replace(/\(\s*Acct\s*#:[^)]*?(?:Ref\s*#:[^)]*?)?\)/gi, "");
 
-    /** The transaction code that can be used to create a saved account */
-    const transactionCode = computed<string>(() => {
-        return registrationEntryState.viewModel.isRedirectGateway ?
-            "" :
-            registrationEntryState.successViewModel?.transactionCode || "";
-    });
+        if (!isSpanishUiLanguage()) {
+            return html;
+        }
 
-    /** The token returned for the payment method */
-    const gatewayPersonIdentifier = computed<string>(() => {
-        return registrationEntryState.successViewModel?.gatewayPersonIdentifier || "";
-    });
+        const replacements: Record<string, string> = {
+            "Congratulations": "Felicidades",
+            "You have successfully completed this": "Has completado exitosamente este",
+            "Total Cost:": "Costo total:",
+            "Balance Due:": "Saldo pendiente:",
+            "A confirmation email has been sent to": "Se envio un correo de confirmacion a",
+            "If you have any questions please contact": "Si tienes preguntas, por favor contacta a"
+        };
 
-    const enableSaveAccount = computed<boolean>(() => {
-        return registrationEntryState.viewModel.enableSaveAccount && registrationEntryState.savedAccountGuid === null;
+        for (const sourceText of Object.keys(replacements)) {
+            html = html.split(sourceText).join(replacements[sourceText]);
+        }
+
+        html = html
+            .replace(/\bTe haz\b/gi, "Te has")
+            .replace(/\bperson\b/gi, registrationEntryTerms.value.registrantSingularLowerCase)
+            .replace(/\bpeople\b/gi, registrationEntryTerms.value.registrantPluralLowerCase)
+            .replace(/\bregistration\b/gi, registrationEntryTerms.value.registrationSingularLowerCase)
+            .replace(/\bregistrations\b/gi, registrationEntryTerms.value.registrationPluralLowerCase)
+            .replace(/Pagado(?=[Q$])/g, "Pagado ");
+
+        return html;
     });
 
     // #endregion
 </script>
+
+<style scoped>
+.registrationentry-success {
+    display: grid;
+    gap: 14px;
+}
+
+.registrationentry-success-message {
+    border: 1px solid #d2d6dc;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+    margin: 0;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.registrationentry-success-message::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #1d4ed8 0%, #0ea5e9 45%, #22c55e 100%);
+}
+
+.registrationentry-success-message :deep(ul) {
+    padding-left: 24px;
+}
+
+.registrationentry-success-message :deep(li) {
+    margin-bottom: 6px;
+}
+
+.registrationentry-success-message :deep(*) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+@media (max-width: 767px) {
+    .registrationentry-success {
+        gap: 10px;
+    }
+
+    .registrationentry-success-message {
+        border-radius: 12px;
+        padding: 14px 12px;
+        box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .registrationentry-success-message :deep(ul) {
+        padding-left: 18px;
+    }
+}
+</style>

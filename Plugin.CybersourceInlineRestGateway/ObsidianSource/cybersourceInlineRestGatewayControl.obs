@@ -1,0 +1,549 @@
+<template>
+    <div class="csirWrap" :id="controlId">
+        <div class="csirHeader">
+            <div class="csirTitleWrap">
+                <span class="csirBadge">Pago seguro</span>
+                <h4 class="csirTitle">Tarjeta de credito</h4>
+                <p class="csirSubtitle">Ingresa los datos de la tarjeta para completar el pago.</p>
+            </div>
+        </div>
+
+        <div class="csirCardPreview" :class="`brand-${cardBrand}`">
+            <span class="csirPreviewBrand">{{ cardBrandLabel }}</span>
+            <strong class="csirPreviewNumber">{{ cardPreviewNumber }}</strong>
+            <div class="csirPreviewMeta">
+                <span>{{ cardPreviewName }}</span>
+                <span>{{ cardPreviewExp }}</span>
+            </div>
+        </div>
+
+        <div class="csirFields">
+            <label class="csirField">
+                <span>Numero de tarjeta</span>
+                <div class="csirInputWrap" :class="{ isInvalid: !!fieldErrors.cardNumber }">
+                    <input
+                        v-model="form.cardNumber"
+                        class="csirInput"
+                        type="text"
+                        maxlength="24"
+                        inputmode="numeric"
+                        autocomplete="cc-number"
+                        placeholder="4111 1111 1111 1111"
+                        @input="onCardNumberInput" />
+                    <span class="csirBrandTag" :class="`brand-${cardBrand}`">{{ cardBrandLabel }}</span>
+                </div>
+                <small v-if="fieldErrors.cardNumber" class="csirError">{{ fieldErrors.cardNumber }}</small>
+            </label>
+
+            <div class="csirRow">
+                <label class="csirField">
+                    <span>Vencimiento</span>
+                    <div class="csirInputWrap" :class="{ isInvalid: !!fieldErrors.expDate }">
+                        <input
+                            v-model="form.expDate"
+                            class="csirInput"
+                            type="text"
+                            maxlength="5"
+                            inputmode="numeric"
+                            autocomplete="cc-exp"
+                            placeholder="MM/YY"
+                            @input="onExpDateInput" />
+                    </div>
+                    <small class="csirHint">Formato: MM/YY</small>
+                    <small v-if="fieldErrors.expDate" class="csirError">{{ fieldErrors.expDate }}</small>
+                </label>
+
+                <label class="csirField">
+                    <span>CVV</span>
+                    <div class="csirInputWrap" :class="{ isInvalid: !!fieldErrors.cvv }">
+                        <input
+                            v-model="form.cvv"
+                            class="csirInput"
+                            type="password"
+                            maxlength="4"
+                            inputmode="numeric"
+                            autocomplete="cc-csc"
+                            :placeholder="`CVV (${expectedCvvLength})`"
+                            @input="onCvvInput" />
+                    </div>
+                    <small class="csirHint">{{ expectedCvvLength }} digitos para {{ cardBrandLabel }}</small>
+                    <small v-if="fieldErrors.cvv" class="csirError">{{ fieldErrors.cvv }}</small>
+                </label>
+            </div>
+
+            <label class="csirField" v-if="props.settings.promptForNameOnCard !== false">
+                <span>Nombre del titular</span>
+                <div class="csirInputWrap" :class="{ isInvalid: !!fieldErrors.cardName }">
+                    <input
+                        v-model="form.cardName"
+                        class="csirInput"
+                        type="text"
+                        maxlength="120"
+                        autocomplete="cc-name"
+                        placeholder="Nombre como aparece en la tarjeta"
+                        @input="fieldErrors.cardName = ''" />
+                </div>
+                <small v-if="fieldErrors.cardName" class="csirError">{{ fieldErrors.cardName }}</small>
+            </label>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, PropType, reactive } from "vue";
+import { newGuid } from "@Obsidian/Utility/guid";
+import { onSubmitPayment } from "@Obsidian/Core/Controls/financialGateway";
+import { GatewayEmitStrings } from "@Obsidian/Enums/Controls/gatewayEmitStrings";
+import { FormError } from "@Obsidian/Utility/form";
+
+type CardBrand = "visa" | "mastercard" | "amex" | "discover" | "unknown";
+
+type Settings = {
+    gatewayGuid?: string;
+    tokenizeEndpoint?: string;
+    promptForNameOnCard?: boolean;
+};
+
+type ExpiryParse = {
+    month: number;
+    year: number;
+    valid: boolean;
+};
+
+const props = defineProps({
+    settings: {
+        type: Object as PropType<Settings>,
+        required: true
+    }
+});
+
+const emit = defineEmits<{
+    (e: typeof GatewayEmitStrings.Success, value: string): void;
+    (e: typeof GatewayEmitStrings.Validation, value: FormError[]): void;
+    (e: typeof GatewayEmitStrings.Error, value: string): void;
+}>();
+
+const controlId = `csir-${newGuid().replace(/-/g, "")}`;
+
+const form = reactive({
+    cardNumber: "",
+    expDate: "",
+    cvv: "",
+    cardName: ""
+});
+
+const fieldErrors = reactive({
+    cardNumber: "",
+    expDate: "",
+    cvv: "",
+    cardName: ""
+});
+
+const cardNumberDigits = computed(() => (form.cardNumber || "").replace(/[^\d]/g, ""));
+
+const cardBrand = computed<CardBrand>(() => detectCardBrand(cardNumberDigits.value));
+
+const cardBrandLabel = computed<string>(() => {
+    if (cardBrand.value === "visa") return "Visa";
+    if (cardBrand.value === "mastercard") return "Mastercard";
+    if (cardBrand.value === "amex") return "American Express";
+    if (cardBrand.value === "discover") return "Discover";
+    return "Tarjeta";
+});
+
+const expectedCvvLength = computed<number>(() => (cardBrand.value === "amex" ? 4 : 3));
+
+const cardPreviewNumber = computed<string>(() => {
+    const preview = formatCardNumberDigits(cardNumberDigits.value, cardBrand.value);
+    return preview || "#### #### #### ####";
+});
+
+const cardPreviewName = computed<string>(() => {
+    const name = (form.cardName || "").trim();
+    return name ? name.toUpperCase() : "NOMBRE TITULAR";
+});
+
+const cardPreviewExp = computed<string>(() => form.expDate || "MM/YY");
+
+function detectCardBrand(pan: string): CardBrand {
+    if (!pan) return "unknown";
+    if (/^4/.test(pan)) return "visa";
+    if (/^(5[1-5]|2(?:2[2-9]|[3-6]\d|7[01]|720))/.test(pan)) return "mastercard";
+    if (/^3[47]/.test(pan)) return "amex";
+    if (/^(6011|65|64[4-9])/.test(pan)) return "discover";
+    return "unknown";
+}
+
+function luhnCheck(pan: string): boolean {
+    if (!/^\d{12,19}$/.test(pan)) {
+        return false;
+    }
+
+    let sum = 0;
+    let shouldDouble = false;
+
+    for (let i = pan.length - 1; i >= 0; i--) {
+        let digit = Number(pan.charAt(i));
+
+        if (shouldDouble) {
+            digit *= 2;
+            if (digit > 9) {
+                digit -= 9;
+            }
+        }
+
+        sum += digit;
+        shouldDouble = !shouldDouble;
+    }
+
+    return sum % 10 === 0;
+}
+
+function formatCardNumberDigits(digits: string, brand: CardBrand): string {
+    const max = brand === "amex" ? 15 : 19;
+    const clean = digits.slice(0, max);
+
+    if (brand === "amex") {
+        const p1 = clean.slice(0, 4);
+        const p2 = clean.slice(4, 10);
+        const p3 = clean.slice(10, 15);
+        return [p1, p2, p3].filter(Boolean).join(" ");
+    }
+
+    return clean.match(/.{1,4}/g)?.join(" ") || clean;
+}
+
+function parseExpiry(value: string): ExpiryParse {
+    const digits = (value || "").replace(/[^\d]/g, "");
+
+    if (digits.length !== 4) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    const month = Number(digits.slice(0, 2));
+    const yy = Number(digits.slice(2, 4));
+
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    return { month, year: 2000 + yy, valid: true };
+}
+
+function isExpired(month: number, year: number): boolean {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (year < currentYear) {
+        return true;
+    }
+
+    if (year === currentYear && month < currentMonth) {
+        return true;
+    }
+
+    return false;
+}
+
+function clearFieldErrors(): void {
+    fieldErrors.cardNumber = "";
+    fieldErrors.expDate = "";
+    fieldErrors.cvv = "";
+    fieldErrors.cardName = "";
+}
+
+function onCardNumberInput(): void {
+    fieldErrors.cardNumber = "";
+    const digits = (form.cardNumber || "").replace(/[^\d]/g, "");
+    form.cardNumber = formatCardNumberDigits(digits, cardBrand.value);
+}
+
+function onExpDateInput(): void {
+    fieldErrors.expDate = "";
+    const digits = (form.expDate || "").replace(/[^\d]/g, "").slice(0, 4);
+
+    if (digits.length <= 2) {
+        form.expDate = digits;
+        return;
+    }
+
+    form.expDate = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function onCvvInput(): void {
+    fieldErrors.cvv = "";
+    form.cvv = (form.cvv || "").replace(/[^\d]/g, "").slice(0, 4);
+}
+
+function validate(): FormError[] {
+    clearFieldErrors();
+
+    const validationErrors: FormError[] = [];
+
+    if (!luhnCheck(cardNumberDigits.value)) {
+        fieldErrors.cardNumber = "Numero de tarjeta invalido.";
+        validationErrors.push({ name: "Card Number", text: fieldErrors.cardNumber });
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        fieldErrors.expDate = "Usa el formato MM/YY.";
+        validationErrors.push({ name: "Expiration Date", text: fieldErrors.expDate });
+    }
+    else if (isExpired(expiry.month, expiry.year)) {
+        fieldErrors.expDate = "La tarjeta esta vencida.";
+        validationErrors.push({ name: "Expiration Date", text: fieldErrors.expDate });
+    }
+
+    const cvv = (form.cvv || "").replace(/[^\d]/g, "");
+    const validCvvLength = cardBrand.value === "amex" ? cvv.length === 4 : cvv.length === 3;
+    if (!validCvvLength) {
+        fieldErrors.cvv = `El CVV debe tener ${expectedCvvLength.value} digitos.`;
+        validationErrors.push({ name: "CVV", text: fieldErrors.cvv });
+    }
+
+    if (props.settings.promptForNameOnCard !== false && (form.cardName || "").trim().length < 3) {
+        fieldErrors.cardName = "Ingresa el nombre del titular.";
+        validationErrors.push({ name: "Name on Card", text: fieldErrors.cardName });
+    }
+
+    return validationErrors;
+}
+
+async function submit(): Promise<void> {
+    const validationErrors = validate();
+    if (validationErrors.length > 0) {
+        emit(GatewayEmitStrings.Validation, validationErrors);
+        return;
+    }
+
+    const endpoint = (props.settings.tokenizeEndpoint || "").toString();
+    const gatewayGuid = (props.settings.gatewayGuid || "").toString();
+
+    if (!endpoint || !gatewayGuid) {
+        emit(GatewayEmitStrings.Error, "Gateway settings are incomplete (tokenize endpoint / gateway guid).");
+        return;
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        emit(GatewayEmitStrings.Error, "Expiration date is invalid.");
+        return;
+    }
+
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+                gatewayGuid,
+                cardNumber: cardNumberDigits.value,
+                expirationMonth: expiry.month,
+                expirationYear: expiry.year,
+                securityCode: (form.cvv || "").trim(),
+                nameOnCard: (form.cardName || "").trim()
+            })
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `Tokenization failed. HTTP ${response.status}`);
+        }
+
+        const result = await response.json() as { token?: string; Token?: string; };
+        const token = (result?.token || result?.Token || "").toString();
+
+        if (!token) {
+            emit(GatewayEmitStrings.Error, "Gateway did not return a payment token.");
+            return;
+        }
+
+        emit(GatewayEmitStrings.Success, token);
+    }
+    catch (e) {
+        const message = e instanceof Error ? e.message : "Unknown error";
+        emit(GatewayEmitStrings.Error, `Error creating payment token. ${message}`);
+    }
+}
+
+onSubmitPayment(submit);
+</script>
+
+<style>
+.csirWrap {
+    --csir-bg: #f3f3f3;
+    --csir-border: #d6d6d6;
+    --csir-text: #1f2933;
+    --csir-muted: #6b7280;
+    --csir-danger: #c22016;
+    --csir-radius-lg: 14px;
+    --csir-radius-md: 10px;
+    --csir-radius-pill: 999px;
+
+    background: var(--csir-bg);
+    border: 1px solid var(--csir-border);
+    border-radius: var(--csir-radius-lg);
+    color: var(--csir-text);
+    padding: 12px;
+}
+
+.csirHeader {
+    margin-bottom: 10px;
+}
+
+.csirBadge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #bdbdbd;
+    border-radius: var(--csir-radius-pill);
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #3b3b3b;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: #ffffff;
+}
+
+.csirTitle {
+    margin: 8px 0 0;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.csirSubtitle {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--csir-muted);
+}
+
+.csirCardPreview {
+    margin-bottom: 12px;
+    border-radius: 12px;
+    border: 1px solid #cecece;
+    background: #ffffff;
+    padding: 10px 12px;
+    display: grid;
+    gap: 4px;
+}
+
+.csirCardPreview.brand-visa { border-color: #bcd2ff; background: #eaf1ff; }
+.csirCardPreview.brand-mastercard { border-color: #ffd7c2; background: #fff1e8; }
+.csirCardPreview.brand-amex { border-color: #b7effa; background: #e8fbff; }
+.csirCardPreview.brand-discover { border-color: #fed7aa; background: #fff4ec; }
+
+.csirPreviewBrand {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #505050;
+}
+
+.csirPreviewNumber {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.csirPreviewMeta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #555;
+}
+
+.csirFields {
+    display: grid;
+    gap: 10px;
+}
+
+.csirRow {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.csirField {
+    display: grid;
+    gap: 6px;
+}
+
+.csirField > span {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #4a4a4a;
+}
+
+.csirInputWrap {
+    border: 1px solid #bfbfbf;
+    border-radius: var(--csir-radius-md);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.csirInputWrap:focus-within {
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.csirInputWrap.isInvalid {
+    border-color: #dc6e66;
+}
+
+.csirInput {
+    width: 100%;
+    min-height: 42px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-size: 14px;
+    box-shadow: none;
+    outline: none;
+}
+
+.csirBrandTag {
+    flex: 0 0 auto;
+    border-radius: var(--csir-radius-pill);
+    border: 1px solid #bfc6cf;
+    background: #edf1f7;
+    color: #405061;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 7px;
+}
+
+.csirBrandTag.brand-visa { background: #eaf1ff; border-color: #bcd2ff; color: #1e44a8; }
+.csirBrandTag.brand-mastercard { background: #fff1e8; border-color: #ffd7c2; color: #9a3412; }
+.csirBrandTag.brand-amex { background: #e8fbff; border-color: #b7effa; color: #0f6f88; }
+.csirBrandTag.brand-discover { background: #fff4ec; border-color: #fed7aa; color: #c2410c; }
+
+.csirHint {
+    font-size: 12px;
+    color: #727272;
+}
+
+.csirError {
+    font-size: 12px;
+    color: var(--csir-danger);
+    font-weight: 600;
+}
+
+@media (min-width: 600px) {
+    .csirRow {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>

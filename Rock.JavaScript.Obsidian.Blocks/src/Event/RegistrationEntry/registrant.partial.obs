@@ -1,15 +1,25 @@
 ﻿<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <div class="registrationentry-registrant-details">
-        <RockForm @submit="onNext" :formResetKey="formResetKey">
+        <RockForm @submit="onNext" :formResetKey="formResetKey" :hideErrors="true" @visibleValidationChanged="onVisibleValidationChanged">
+            <NotificationBox v-if="translatedValidationErrors.length" alertType="validation">
+                {{ t("headingPleaseCorrectTheFollowing") }}
+                <ul>
+                    <li v-for="(error, index) in translatedValidationErrors" :key="`registrant-validation-${index}`">
+                        <strong>{{ error.name }}</strong>
+                        {{ error.text }}
+                    </li>
+                </ul>
+            </NotificationBox>
+
             <template v-if="isDataForm">
                 <template v-if="currentFormIndex === 0">
                     <div v-if="familyOptions.length > 1" class="well">
-                        <RadioButtonList :label="`${firstName || registrationEntryTerms.registrantSingularTitleCase} is in the same ${viewModel.familyTerm || 'immediate family'} as`" rules="required" :modelValue="currentRegistrant.familyGuid ?? undefined" @update:modelValue="onSetFamilyGuid" :items="familyOptions" validationTitle="Family" />
+                        <RadioButtonList :label="t('labelIsInSameFamilyAs', { person: firstName || registrationEntryTerms.registrantSingularTitleCase, familyTerm: viewModel.familyTerm || t('labelImmediateFamily') })" rules="required" :modelValue="currentRegistrant.familyGuid ?? undefined" @update:modelValue="onSetFamilyGuid" :items="familyOptions" :validationTitle="t('labelFamily')" />
                     </div>
                     <div v-if="isFamilyMembersDropDownVisible" class="row">
                         <div class="col-md-6">
-                            <DropDownList :modelValue="currentRegistrant.personGuid ?? ''" @update:modelValue="onSetPersonGuid" :items="familyMemberOptions" :label="props.currentRegistrant.isNewFamily ? 'Guest to Register' : 'Family Member to Register'" :showBlankItem="false" />
+                            <DropDownList :modelValue="currentRegistrant.personGuid ?? ''" @update:modelValue="onSetPersonGuid" :items="familyMemberOptions" :label="props.currentRegistrant.isNewFamily ? t('labelGuestToRegister') : t('labelFamilyMemberToRegister')" :showBlankItem="false" />
                         </div>
                     </div>
                 </template>
@@ -38,7 +48,7 @@
             </template>
 
             <div v-if="isSignatureForm" class="registrant-signature-document styled-scroll">
-                <h2 class="signature-header">Please Sign the {{ registrationEntryTerms.signatureDocumentSingularTitleCase }} for {{ firstName }}</h2>
+                <h2 class="signature-header">{{ t("headingPleaseSignDocumentFor", { document: registrationEntryTerms.signatureDocumentSingularTitleCase, name: firstName }) }}</h2>
                 <div class="signaturedocument-container">
                     <iframe src="javascript: window.frameElement.getAttribute('srcdoc');" onload="this.style.height = this.contentWindow.document.body.scrollHeight + 'px'" class="signaturedocument-iframe" border="0" frameborder="0" :srcdoc="signatureSource"></iframe>
                 </div>
@@ -51,12 +61,12 @@
             <div class="actions row">
                 <div class="col-xs-6">
                     <RockButton v-if="showPrevious" btnType="default" @click="onPrevious">
-                        Previous
+                        {{ t("actionPrevious") }}
                     </RockButton>
                 </div>
                 <div class="col-xs-6 text-right">
                     <RockButton v-if="isNextVisible" btnType="primary" type="submit" :disabled="isNextDisabled">
-                        Next
+                        {{ t("actionNext") }}
                     </RockButton>
                 </div>
             </div>
@@ -68,7 +78,7 @@
     import FeeField from "./feeField.partial.obs";
     import RegistrantAttributeField from "./registrantAttributeField.partial.obs";
     import RegistrantPersonField from "./registrantPersonField.partial.obs";
-    import { convertComparisonValue, CurrentRegistrationEntryState, GetPersistSessionArgs, getRegistrantBasicInfo, OriginalFormFieldValues, RegistrationEntryTerms, scrollToTopAfterNextRender, use } from "./utils.partial";
+    import { convertComparisonValue, CurrentRegistrationEntryState, GetPersistSessionArgs, getRegistrantBasicInfo, getRegistrationEntryText, isSpanishUiLanguage, OriginalFormFieldValues, RegistrationEntryTerms, scrollToTopAfterNextRender, use } from "./utils.partial";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import ElectronicSignature from "@Obsidian/Controls/electronicSignature.obs";
     import ItemsWithPreAndPostHtml from "@Obsidian/Controls/itemsWithPreAndPostHtml.obs";
@@ -84,6 +94,7 @@
     import { ItemWithPreAndPostHtml } from "@Obsidian/Types/Controls/itemsWithPreAndPostHtml";
     import { useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { getFieldType } from "@Obsidian/Utility/fieldTypes";
+    import { FormError } from "@Obsidian/Utility/form";
     import { areEqual, emptyGuid, newGuid, toGuidOrNull } from "@Obsidian/Utility/guid";
     import { RegistrantBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationEntry/registrantBag";
     import { RegistrationEntryFamilyMemberBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationEntry/registrationEntryFamilyMemberBag";
@@ -121,6 +132,7 @@
     const registrationEntryState = use(CurrentRegistrationEntryState);
     const getRegistrationEntryBlockArgs = use(GetPersistSessionArgs);
     const registrationEntryTerms = use(RegistrationEntryTerms);
+    const t = getRegistrationEntryText;
     const newFamilyGuid = newGuid();
 
     // Make sure current registrant properties are initialized.
@@ -157,6 +169,7 @@
     const signatureToken = ref<string>("");
     const formResetKey = ref<string>("");
     const isNextDisabled = ref<boolean>(false);
+    const visibleValidationErrors = ref<FormError[]>([]);
 
     // #endregion
 
@@ -324,7 +337,7 @@
             ? newFamilyGuid
             : props.currentRegistrant.familyGuid;
         options.push({
-            text: "None of the above",
+            text: t("labelNoneOfTheAbove"),
             value: familyGuid
         });
 
@@ -365,7 +378,7 @@
         if (props.currentRegistrant.isNewFamily) {
             return [
                 {
-                    text: "Guest",
+                    text: t("labelGuestToRegister"),
                     value: null
                 }
             ];
@@ -383,7 +396,7 @@
             })) ?? [];
 
         let newFamilyMemberOption = {
-            text: "New Family Member",
+            text: t("labelNewFamilyMember"),
             value: null
         };
 
@@ -402,6 +415,32 @@
         }
 
         return viewModel.value.familyMembers?.filter(fm => fm.guid)?.find(fm => areEqual(fm.guid, personGuid)) || null;
+    });
+
+    const translatedValidationErrors = computed<FormError[]>(() => {
+        return visibleValidationErrors.value.map(error => {
+            let translatedName = error.name ?? "";
+            let translatedText = error.text ?? "";
+
+            if (isSpanishUiLanguage()) {
+                switch (translatedName) {
+                    case "First Name":
+                        translatedName = t("labelFirstName");
+                        break;
+
+                    case "Last Name":
+                        translatedName = t("labelLastName");
+                        break;
+                }
+
+                translatedText = translatedText.replace(/\bis required\.?/gi, `${t("messageFieldIsRequired")}.`);
+            }
+
+            return {
+                name: translatedName,
+                text: translatedText
+            };
+        });
     });
 
     // #endregion
@@ -619,6 +658,11 @@
      */
     function clearFormErrors(): void {
         formResetKey.value = newGuid();
+        visibleValidationErrors.value = [];
+    }
+
+    function onVisibleValidationChanged(errors: FormError[]): void {
+        visibleValidationErrors.value = errors;
     }
 
     async function onSigned(): Promise<void> {

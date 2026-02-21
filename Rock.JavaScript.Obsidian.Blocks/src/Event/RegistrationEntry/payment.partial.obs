@@ -2,9 +2,9 @@
 <template>
     <div class="registrationentry-payment">
         <RockForm @submit="onNext">
-            <h4>Payment Information</h4>
-            <div>
-                Payment Amount: {{ amountToPayText }}
+            <h4>{{ t("headingPaymentInformation") }}</h4>
+            <div class="payment-amount-pill">
+                {{ t("labelPaymentAmount") }}: {{ amountToPayText }}
             </div>
 
             <hr />
@@ -29,7 +29,15 @@
                     <transition name="rockslide">
                         <div v-if="showGateway" class="hosted-gateway-container payment-method-entry">
                             <NotificationBox v-if="gatewayErrorMessage" alertType="danger">{{ gatewayErrorMessage }}</NotificationBox>
-                            <RockValidation :errors="gatewayValidationFields" />
+                            <NotificationBox v-if="gatewayValidationFields.length > 0" alertType="validation">
+                                {{ t("headingPleaseCorrectTheFollowing") }}
+                                <ul>
+                                    <li v-for="error in gatewayValidationFields">
+                                        <strong>{{ error.name }}</strong>
+                                        {{ error.text }}
+                                    </li>
+                                </ul>
+                            </NotificationBox>
                             <div class="hosted-payment-control">
                                 <GatewayControl
                                                 :gatewayControlModel="gatewayControlModel"
@@ -50,11 +58,11 @@
 
             <div class="actions text-right">
                 <RockButton class="pull-left" btnType="default" @click="onPrevious" :isLoading="loading" autoDisable>
-                    Previous
+                    {{ t("actionPrevious") }}
                 </RockButton>
 
                 <RockButton v-if="gatewayControlModel" btnType="primary" type="submit" :isLoading="loading" autoDisable>
-                    Pay
+                    {{ t("actionPay") }}
                 </RockButton>
             </div>
         </RockForm>
@@ -62,21 +70,22 @@
 </template>
 <script setup lang="ts">
     import { computed, ref } from "vue";
-    import { CurrentRegistrationEntryState, GetPersistSessionArgs, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, GetPersistSessionArgs, getRegistrationEntryText, isSpanishUiLanguage, use } from "./utils.partial";
     import Captcha from "@Obsidian/Controls/captcha.obs";
     import GatewayControl from "@Obsidian/Controls/gatewayControl.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RockForm from "@Obsidian/Controls/rockForm.obs";
-    import RockValidation from "@Obsidian/Controls/rockValidation.obs";
     import { provideSubmitPayment, usePaymentEvents } from "@Obsidian/Core/Controls/financialGateway";
     import { useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { FormError } from "@Obsidian/Utility/form";
     import { newGuid, toGuidOrNull } from "@Obsidian/Utility/guid";
+    import { toCurrencyOrNull } from "@Obsidian/Utility/numberUtils";
     import { BlockActionContextBag } from "@Obsidian/ViewModels/Blocks/blockActionContextBag";
     import { RegistrationEntrySuccessBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationEntry/registrationEntrySuccessBag";
     import { GatewayControlBag } from "@Obsidian/ViewModels/Controls/gatewayControlBag";
     import { SavedFinancialAccountListItemBag } from "@Obsidian/ViewModels/Finance/savedFinancialAccountListItemBag";
+    import { CurrencyInfoBag } from "@Obsidian/ViewModels/Utility/currencyInfoBag";
     import { RegistrationEntryInitializationBox } from "@Obsidian/ViewModels/Blocks/Event/RegistrationEntry/registrationEntryInitializationBox";
 
     const submitPayment = provideSubmitPayment();
@@ -84,6 +93,7 @@
     const getRegistrationEntryBlockArgs = use(GetPersistSessionArgs);
     const invokeBlockAction = useInvokeBlockAction();
     const registrationEntryState = use(CurrentRegistrationEntryState);
+    const t = getRegistrationEntryText;
     const disableCaptchaSupport = ref(registrationEntryState.viewModel.disableCaptchaSupport);
     const captchaElement = ref<InstanceType<typeof Captcha> | undefined>();
     const uniqueId = newGuid();
@@ -141,7 +151,7 @@
 
         options.push({
             value: "",
-            text: "New Payment Method"
+            text: t("labelNewPaymentMethod")
         });
 
         return options;
@@ -157,9 +167,19 @@
         return registrationEntryState.amountToPayToday;
     });
 
+    /** Organization currency formatting information. */
+    const currencyInfo = computed<CurrencyInfoBag>(() => {
+        return registrationEntryState.viewModel.currencyInfo ?? {
+            decimalPlaces: 2,
+            symbol: "$",
+            symbolLocation: "Left"
+        };
+    });
+
     /** The amount to pay as a friendly text string. */
     const amountToPayText = computed<string>(() => {
-        return `$${registrationEntryState.amountToPayToday.toFixed(2)}`;
+        return toCurrencyOrNull(registrationEntryState.amountToPayToday, currencyInfo.value)
+            ?? `$${registrationEntryState.amountToPayToday.toFixed(2)}`;
     });
 
     /** The URL to return to if the gateway control needs to perform a redirect. */
@@ -184,14 +204,21 @@
     /** User clicked the "finish" button */
     async function onNext(): Promise<void> {
         loading.value = true;
+        gatewayErrorMessage.value = "";
+        gatewayValidationFields.value = [];
+        submitErrorMessage.value = "";
 
         // If there is a cost, then the gateway will need to be used to pay
         if (registrationEntryState.amountToPayToday || registrationEntryState.paymentPlan?.amountPerPayment) {
             if (showGateway.value) {
                 // Otherwise, this is a traditional gateway
-                gatewayErrorMessage.value = "";
-                gatewayValidationFields.value = [];
-                submitPayment();
+                try {
+                    submitPayment();
+                }
+                catch {
+                    loading.value = false;
+                    gatewayErrorMessage.value = t("messageUnexpectedError");
+                }
             }
             else if (selectedSavedAccount.value !== "") {
                 registrationEntryState.savedAccountGuid = toGuidOrNull(selectedSavedAccount.value);
@@ -203,7 +230,7 @@
                 }
             }
             else {
-                submitErrorMessage.value = "Please select a valid payment option.";
+                submitErrorMessage.value = t("messageSelectValidPaymentOption");
                 loading.value = false;
 
                 return;
@@ -240,7 +267,7 @@
      */
     function onGatewayControlError(message: string): void {
         loading.value = false;
-        gatewayErrorMessage.value = message;
+        gatewayErrorMessage.value = message || t("messageUnexpectedError");
     }
 
     /**
@@ -249,7 +276,37 @@
      */
     function onGatewayControlValidation(invalidFields: FormError[]): void {
         loading.value = false;
-        gatewayValidationFields.value = invalidFields;
+        
+        // Translate gateway fields if needed
+        gatewayValidationFields.value = invalidFields.map(f => {
+            let translatedName = f.name || "";
+            let translatedText = f.text || "";
+
+            if (isSpanishUiLanguage()) {
+                switch (translatedName) {
+                    case "Card Number": translatedName = "Numero de tarjeta"; break;
+                    case "Expiration Date": translatedName = "Fecha de expiracion"; break;
+                    case "CVV": translatedName = "CVV"; break;
+                    case "Name on Card": translatedName = "Nombre en la tarjeta"; break;
+                }
+                
+                // Handle English default error messages from Rock's internal gateway logic just in case
+                if (translatedText.includes("is required")) {
+                    translatedText = "es requerido.";
+                } else if (translatedText.includes("invalid")) {
+                    translatedText = "invalido.";
+                } else if (translatedText.includes("invalid format")) {
+                    translatedText = "formato invalido.";
+                } else if (translatedText.includes("3 digits")) {
+                    translatedText = "debe tener 3 digitos.";
+                }
+            }
+
+            return {
+                name: translatedName,
+                text: translatedText
+            };
+        });
     }
 
     /**
@@ -316,7 +373,7 @@
         }, actionContext);
 
         if (result.isError || !result.data) {
-            const errorMessage = result.errorMessage || "Unknown error";
+            const errorMessage = result.errorMessage || t("messageUnexpectedError");
             submitErrorMessage.value = errorMessage;
 
             dispatchPaymentEvent({ type: "failure", errorMessage });
@@ -332,3 +389,129 @@
 
     // #endregion
 </script>
+
+<style scoped>
+.registrationentry-payment h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.payment-amount-pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(161, 186, 219, 0.72);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(236, 245, 255, 0.9), rgba(225, 238, 255, 0.8));
+    color: #1d3b66;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 8px 14px;
+}
+
+.payment-method-options {
+    display: grid;
+    gap: 12px;
+}
+
+.payment-method {
+    margin: 0;
+}
+
+.payment-method > label {
+    display: block;
+    border: 1px solid #c5d4e7;
+    border-radius: 16px;
+    background: #fff;
+    padding: 12px 12px 10px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.payment-method > label:hover {
+    border-color: #8fb0d8;
+    box-shadow: 0 12px 22px rgba(30, 64, 175, 0.12);
+    transform: translateY(-2px);
+}
+
+.payment-method > label input[type="radio"] {
+    accent-color: #1d4ed8;
+}
+
+.payment-method-account {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: center;
+    border: 1px solid #d7e1ee;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    padding: 10px;
+    margin-top: 8px;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.payment-method > label input[type="radio"]:checked + .payment-method-account {
+    border-color: #8db2f0;
+    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
+    background: linear-gradient(180deg, #f6faff 0%, #eaf2ff 100%);
+}
+
+.payment-method-image {
+    width: 34px;
+    height: 22px;
+    object-fit: contain;
+}
+
+.payment-method-name {
+    color: #1e2a3d;
+    font-weight: 700;
+    display: block;
+}
+
+.payment-method-description {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.hosted-gateway-container {
+    border: 1px solid #c4d4ea;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 22px rgba(37, 99, 235, 0.09);
+    padding: 14px;
+}
+
+.hosted-payment-control {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+@media (max-width: 767px) {
+    .payment-amount-pill {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+        padding: 9px 12px;
+    }
+
+    .payment-method > label {
+        border-radius: 12px;
+        padding: 10px;
+    }
+
+    .payment-method-account {
+        grid-template-columns: 1fr;
+        row-gap: 8px;
+        text-align: left;
+    }
+
+    .payment-method-image {
+        width: 42px;
+        height: 26px;
+    }
+
+    .hosted-gateway-container {
+        border-radius: 12px;
+        padding: 10px;
+    }
+}
+</style>

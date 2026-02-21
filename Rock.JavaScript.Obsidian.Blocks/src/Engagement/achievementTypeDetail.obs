@@ -7,7 +7,7 @@
     <Panel type="block" :title="panelName">
         <template #default>
             <div v-if="validationError" class="alert alert-validation">
-                Please correct the following:
+                {{ pleaseCorrectHeading }}
                 <div v-html="validationError" />
             </div>
             <ViewPanel v-if="panelMode == DetailPanelMode.View"
@@ -105,6 +105,8 @@
 
     const config = useConfigurationValues<DetailBlockBox<AchievementTypeBag, AchievementTypeDetailOptionsBag>>();
     const invokeBlockAction = useInvokeBlockAction();
+    const isSpanishUiLanguage = (typeof document !== "undefined" ? document.documentElement.lang : (typeof navigator !== "undefined" ? navigator.language : "en")).toLowerCase().startsWith("es");
+    const pleaseCorrectHeading = isSpanishUiLanguage ? "Por favor corrige lo siguiente:" : "Please correct the following:";
 
     // #region Values
 

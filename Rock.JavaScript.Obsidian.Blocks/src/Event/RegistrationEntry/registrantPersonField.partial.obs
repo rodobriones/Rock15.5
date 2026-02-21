@@ -5,7 +5,7 @@
 </template>
 <script setup lang="ts">
     import { computed, PropType, watch } from "vue";
-    import { CurrentRegistrationEntryState, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, getRegistrationEntryText, use } from "./utils.partial";
     import AddressControl from "@Obsidian/Controls/addressControl.obs";
     import BirthdayPicker from "@Obsidian/Controls/birthdayPicker.obs";
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
@@ -35,6 +35,7 @@
     });
 
     const registrationEntryState = use(CurrentRegistrationEntryState);
+    const t = getRegistrationEntryText;
 
     // #region Values
 
@@ -101,80 +102,80 @@
 
         switch (props.field.personFieldType) {
             case RegistrationPersonFieldType.FirstName:
-                componentProps.label = "First Name";
+                componentProps.label = t("labelFirstName");
                 componentProps.rules = [componentProps.rules, "nospecialcharacters", "noemojisorspecialfonts"];
                 break;
 
             case RegistrationPersonFieldType.LastName:
-                componentProps.label = "Last Name";
+                componentProps.label = t("labelLastName");
                 componentProps.rules = [componentProps.rules, "nospecialcharacters", "noemojisorspecialfonts"];
                 break;
 
             case RegistrationPersonFieldType.MiddleName:
-                componentProps.label = "Middle Name";
+                componentProps.label = t("labelMiddleName");
                 break;
 
             case RegistrationPersonFieldType.Campus:
-                componentProps.label = "Campus";
+                componentProps.label = t("labelCampus");
                 componentProps.items = [...registrationEntryState.viewModel.campuses ?? []];
                 break;
 
             case RegistrationPersonFieldType.Email:
-                componentProps.label = "Email";
+                componentProps.label = t("labelEmail");
                 break;
 
             case RegistrationPersonFieldType.Gender:
                 break;
 
             case RegistrationPersonFieldType.Birthdate:
-                componentProps.label = "Birth Date";
+                componentProps.label = t("labelBirthDate");
                 break;
 
             case RegistrationPersonFieldType.AnniversaryDate:
-                componentProps.label = "Anniversary Date";
+                componentProps.label = t("labelAnniversaryDate");
                 break;
 
             case RegistrationPersonFieldType.Address:
-                componentProps.label = "Address";
+                componentProps.label = t("labelAddress");
                 break;
 
             case RegistrationPersonFieldType.MaritalStatus:
-                componentProps.label = "Marital Status";
+                componentProps.label = t("labelMaritalStatus");
                 componentProps.items = [...registrationEntryState.viewModel.maritalStatuses ?? []];
                 break;
 
             case RegistrationPersonFieldType.ConnectionStatus:
-                componentProps.label = "Connection Status";
+                componentProps.label = t("labelConnectionStatus");
                 componentProps.items = [...registrationEntryState.viewModel.connectionStatuses ?? []];
                 break;
 
             case RegistrationPersonFieldType.Grade:
-                componentProps.label = "Grade";
+                componentProps.label = t("labelGrade");
                 componentProps.items = [...registrationEntryState.viewModel.grades ?? []];
                 break;
 
             case RegistrationPersonFieldType.HomePhone:
-                componentProps.label = "Home Phone";
+                componentProps.label = t("labelHomePhone");
                 componentProps.hideSms = true;
                 break;
 
             case RegistrationPersonFieldType.WorkPhone:
-                componentProps.label = "Work Phone";
+                componentProps.label = t("labelWorkPhone");
                 componentProps.hideSms = true;
                 break;
 
             case RegistrationPersonFieldType.MobilePhone:
-                componentProps.label = "Mobile Phone";
+                componentProps.label = t("labelMobilePhone");
                 componentProps.hideSms = !registrationEntryState.viewModel.showSmsOptIn;
                 break;
 
             case RegistrationPersonFieldType.Race:
-                componentProps.label = "Race";
+                componentProps.label = t("labelRace");
                 componentProps.items = [...registrationEntryState.viewModel.races ?? []];
                 break;
 
             case RegistrationPersonFieldType.Ethnicity:
-                componentProps.label = "Ethnicity";
+                componentProps.label = t("labelEthnicity");
                 componentProps.items = [...registrationEntryState.viewModel.ethnicities ?? []];
                 break;
         }

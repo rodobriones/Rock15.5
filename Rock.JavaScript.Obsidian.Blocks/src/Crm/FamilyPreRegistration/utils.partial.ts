@@ -1,4 +1,4 @@
-// <copyright>
+﻿// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -27,6 +27,164 @@ import { ValidationResult, ValidationRuleFunction } from "@Obsidian/ValidationRu
 import { FamilyPreRegistrationPersonBag } from "@Obsidian/ViewModels/Blocks/Crm/FamilyPreRegistration/familyPreRegistrationPersonBag";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { Ref, WritableComputedRef, computed, reactive, toRefs } from "vue";
+
+const familyPreRegistrationText: Record<string, { en: string; es: string; }> = {
+    actionAdd: { en: "Add {label}", es: "Agregar {label}" },
+    actionClear: { en: "Clear", es: "Limpiar" },
+    actionSave: { en: "Save", es: "Guardar" },
+    headingFirstLabel: { en: "First {label}", es: "Primer {label}" },
+    headingSecondLabel: { en: "Second {label}", es: "Segundo {label}" },
+    labelAddress: { en: "Address", es: "Direccion" },
+    labelAdultDefault: { en: "Adult", es: "Adulto" },
+    labelBirthDate: { en: "Birth Date", es: "Fecha de nacimiento" },
+    labelCampus: { en: "Campus", es: "Campus" },
+    labelChildDefault: { en: "Child", es: "Ni\u00f1o" },
+    labelCommunicationPreference: { en: "Communication Preference", es: "Preferencia de comunicacion" },
+    labelConfirmPassword: { en: "Confirm Password", es: "Confirmar contrasena" },
+    labelEmail: { en: "Email", es: "Correo electronico" },
+    labelFirstName: { en: "First Name", es: "Nombre" },
+    labelGender: { en: "Gender", es: "Sexo" },
+    labelGrade: { en: "Grade", es: "Grado" },
+    labelLastName: { en: "Last Name", es: "Apellido" },
+    labelLanguage: { en: "Language", es: "Idioma" },
+    labelMaritalStatus: { en: "Marital Status", es: "Estado civil" },
+    labelMobilePhone: { en: "Mobile Phone", es: "Telefono movil" },
+    labelPassword: { en: "Password", es: "Contrasena" },
+    labelPlannedVisitDate: { en: "Planned Visit Date", es: "Fecha de visita planeada" },
+    labelPlannedVisitTime: { en: "Planned Visit Time", es: "Hora de visita planeada" },
+    labelProfilePhoto: { en: "Profile Photo", es: "Foto de perfil" },
+    labelRelationshipTo: { en: "Relationship to {label}", es: "Relacion con {label}" },
+    optionGenderUnknown: { en: "Unknown", es: "Sin especificar" },
+    optionGenderMale: { en: "Male", es: "Masculino" },
+    optionGenderFemale: { en: "Female", es: "Femenino" },
+    labelSms: { en: "SMS", es: "SMS" },
+    labelSuffix: { en: "Suffix", es: "Sufijo" },
+    labelUsername: { en: "Username", es: "Usuario" },
+    messagePleaseCorrectTheFollowing: { en: "Please correct the following:", es: "Por favor corrige lo siguiente:" },
+    messageUnexpectedErrorAddingLabel: { en: "An unexpected error occurred while adding a {label}. Please try again.", es: "Ocurrio un error inesperado al agregar {label}. Intentalo de nuevo." },
+    messageUnexpectedErrorRequest: { en: "An error has occurred while processing your request. Your organization's administrators have been notified of this problem.", es: "Ocurrio un error mientras procesabamos tu solicitud. Los administradores de tu organizacion ya fueron notificados." },
+    messageUsernameAvailable: { en: "The selected username is available.", es: "El usuario seleccionado esta disponible." },
+    messageUsernameInUse: { en: "The username you selected is already in use.", es: "El usuario que seleccionaste ya esta en uso." },
+    titleAddLabel: { en: "Add {label}", es: "Agregar {label}" },
+    titleError: { en: "Error", es: "Error" },
+    titleFamilyPreRegistration: { en: "Family Pre-Registration", es: "Pre-registro familiar" },
+    titleLabelInformation: { en: "{label} Information", es: "Informacion de {label}" },
+    titleVisitInformation: { en: "Visit Information", es: "Informacion de visita" },
+    validationAndPasswordDoNotMatch: { en: "and Password do not match", es: "y las contrasenas no coinciden" },
+    validationCannotContainEmojisOrSpecialFonts: { en: "cannot contain emojis or special fonts.", es: "no puede contener emojis o fuentes especiales." },
+    validationCannotContainSpecialCharacters: { en: "cannot contain special characters such as quotes, parentheses, etc.", es: "no puede contener caracteres especiales como comillas, parentesis, etc." },
+    validationIsRequired: { en: "is required", es: "es requerido" },
+    validationIsRequiredForLabel: { en: "is required for {label}", es: "es requerido para {label}" },
+    validationMustHaveADay: { en: "must have a day", es: "debe tener un dia" },
+    validationMustHaveAMonth: { en: "must have a month", es: "debe tener un mes" },
+    validationMustHaveAYear: { en: "must have a year", es: "debe tener un ano" },
+    validationMustNotEqual: { en: "must not equal {compare}", es: "no debe ser igual a {compare}" },
+    validationForLabel: { en: "for {label}", es: "para {label}" }
+};
+
+export type FamilyPreRegistrationUiLanguage = "es" | "en";
+
+const familyPreRegistrationUiLanguageStorageKey = "rock.obsidian.uiLanguage";
+let familyPreRegistrationUiLanguageOverride: FamilyPreRegistrationUiLanguage | null = null;
+
+function normalizeFamilyPreRegistrationUiLanguage(language: string | null | undefined): FamilyPreRegistrationUiLanguage | null {
+    if (!language) {
+        return null;
+    }
+
+    const normalizedLanguage = language.toLowerCase();
+    if (normalizedLanguage.startsWith("es")) {
+        return "es";
+    }
+
+    if (normalizedLanguage.startsWith("en")) {
+        return "en";
+    }
+
+    return null;
+}
+
+/** Gets the Family Pre-Registration UI language. Defaults to Spanish (`es`). */
+export function getFamilyPreRegistrationUiLanguage(): FamilyPreRegistrationUiLanguage {
+    if (familyPreRegistrationUiLanguageOverride) {
+        return familyPreRegistrationUiLanguageOverride;
+    }
+
+    if (typeof localStorage !== "undefined") {
+        try {
+            const storedLanguage = normalizeFamilyPreRegistrationUiLanguage(localStorage.getItem(familyPreRegistrationUiLanguageStorageKey));
+            if (storedLanguage) {
+                return storedLanguage;
+            }
+        }
+        catch {
+            // Ignore storage access errors.
+        }
+    }
+
+    return "es";
+}
+
+/** Sets and persists the Family Pre-Registration UI language. */
+export function setFamilyPreRegistrationUiLanguage(language: FamilyPreRegistrationUiLanguage): void {
+    familyPreRegistrationUiLanguageOverride = language;
+
+    if (typeof localStorage !== "undefined") {
+        try {
+            localStorage.setItem(familyPreRegistrationUiLanguageStorageKey, language);
+        }
+        catch {
+            // Ignore storage access errors.
+        }
+    }
+}
+
+/** Determines if the UI should prefer Spanish text. */
+export function isSpanishUiLanguage(): boolean {
+    return getFamilyPreRegistrationUiLanguage() === "es";
+}
+
+/**
+ * Gets a translated Family Pre-Registration string for the current browser language.
+ * Supports `en` and `es`; defaults to `es`.
+ */
+export function getFamilyPreRegistrationText(key: string, replacements?: Record<string, string | number>): string {
+    const dictionaryEntry = familyPreRegistrationText[key];
+    let text = dictionaryEntry
+        ? (isSpanishUiLanguage() ? dictionaryEntry.es : dictionaryEntry.en)
+        : key;
+
+    if (replacements) {
+        for (const replacementKey of Object.keys(replacements)) {
+            const token = `{${replacementKey}}`;
+            text = text.split(token).join(`${replacements[replacementKey]}`);
+        }
+    }
+
+    return text;
+}
+
+/**
+ * Gets a localized numbered caption for labels such as "first child".
+ */
+export function getLocalizedNumberedLabel(position: number, label: string): string {
+    if (isSpanishUiLanguage()) {
+        const spanishOrdinalByPosition: Record<number, string> = {
+            1: "Primer",
+            2: "Segundo",
+            3: "Tercer"
+        };
+
+        const spanishOrdinal = spanishOrdinalByPosition[position];
+        if (spanishOrdinal) {
+            return `${spanishOrdinal} ${label}`;
+        }
+
+        return `${label} ${position}`;
+    }
+
+    return `${getNumberAsOrdinalString(position)} ${label}`;
+}
 
 /**
  * Helper that converts a person bag to a person request bag that can be used to pre-register the person.
@@ -527,18 +685,18 @@ export function required(value: unknown, params?: unknown[]): ValidationResult {
         const allowEmptyString = !!(options.allowEmptyString);
 
         if (!allowEmptyString && !(value?.trim())) {
-            return "is required";
+            return getFamilyPreRegistrationText("validationIsRequired");
         }
 
         return true;
     }
 
     if (typeof value === "number" && value === 0) {
-        return "is required";
+        return getFamilyPreRegistrationText("validationIsRequired");
     }
 
     if (Array.isArray(value) && value.length === 0) {
-        return "is required";
+        return getFamilyPreRegistrationText("validationIsRequired");
     }
 
     // Special case for booleans, required rule is ignored. Otherwise things
@@ -548,7 +706,7 @@ export function required(value: unknown, params?: unknown[]): ValidationResult {
     }
 
     if (!value) {
-        return "is required";
+        return getFamilyPreRegistrationText("validationIsRequired");
     }
 
     return true;
@@ -561,7 +719,7 @@ export function noSpecialCharacters(value: unknown): ValidationResult {
     if (typeof value === "string") {
         // Checks if a string contains special characters
         if (getSpecialCharacterPattern().test(value)) {
-            return "cannot contain special characters such as quotes, parentheses, etc.";
+            return getFamilyPreRegistrationText("validationCannotContainSpecialCharacters");
         }
     }
 
@@ -575,7 +733,7 @@ export function noEmojisOrSpecialFonts(value: unknown): ValidationResult {
     if (typeof value === "string") {
         // Checks if a string contains emojis or special fonts.
         if (getEmojiPattern().test(value) || getSpecialFontPattern().test(value)) {
-            return "cannot contain emojis or special fonts.";
+            return getFamilyPreRegistrationText("validationCannotContainEmojisOrSpecialFonts");
         }
     }
 
@@ -591,11 +749,11 @@ export function monthAndDayRequiredRule(value: unknown, _params?: unknown): Vali
     }
 
     if (!getMonth(value)) {
-        return "must have a month";
+        return getFamilyPreRegistrationText("validationMustHaveAMonth");
     }
 
     if (!getDay(value)) {
-        return "must have a day";
+        return getFamilyPreRegistrationText("validationMustHaveADay");
     }
 
     return true;
@@ -612,15 +770,15 @@ export function monthAndDayAndYearRequiredRule(value: unknown, _params?: unknown
     }
 
     if (!getYear(value)) {
-        return "must have a year";
+        return getFamilyPreRegistrationText("validationMustHaveAYear");
     }
 
     if (!getMonth(value)) {
-        return "must have a month";
+        return getFamilyPreRegistrationText("validationMustHaveAMonth");
     }
 
     if (!getDay(value)) {
-        return "must have a day";
+        return getFamilyPreRegistrationText("validationMustHaveADay");
     }
 
     return true;
@@ -680,7 +838,7 @@ export function createNotEqualRule(compare: unknown): ValidationRuleFunction {
             return true;
         }
 
-        return `must not equal ${compare}`;
+        return getFamilyPreRegistrationText("validationMustNotEqual", { compare: `${compare}` });
     };
 }
 
@@ -713,3 +871,4 @@ export function createRuleWithReplacement(rule: ValidationRuleFunction, replacem
         return result;
     };
 }
+

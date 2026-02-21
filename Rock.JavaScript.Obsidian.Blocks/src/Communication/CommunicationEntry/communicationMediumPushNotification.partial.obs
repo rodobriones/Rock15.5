@@ -1,7 +1,7 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <NotificationBox v-if="errorMessage"
-                     heading="Please correct the following:"
+                     :heading="pleaseCorrectHeading"
                      alertType="validation">
         <ul>
             <li>{{ errorMessage }}</li>
@@ -254,6 +254,8 @@
     const config = useConfigurationValues<CommunicationEntryInitializationBox>();
     const breakpointHelper = useBreakpointHelper();
     const invokeBlockAction = useInvokeBlockAction();
+    const isSpanishUiLanguage = (typeof document !== "undefined" ? document.documentElement.lang : (typeof navigator !== "undefined" ? navigator.language : "en")).toLowerCase().startsWith("es");
+    const pleaseCorrectHeading = isSpanishUiLanguage ? "Por favor corrige lo siguiente:" : "Please correct the following:";
 
     enum OpenAction {
         OpenHomepage = "Open Homepage",

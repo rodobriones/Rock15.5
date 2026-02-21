@@ -10,7 +10,7 @@
                  :label="registrationEntryTerms.discountCodeSingularTitleCase">
             <template #inputGroupAppend>
                 <RockButton v-if="isDiscountCodeAllowed" btnSize="sm" :disabled="isDisabled" :isLoading="loading" class="margin-l-sm" @click="tryDiscountCode(false)">
-                    Apply
+                    {{ t("actionApply") }}
                 </RockButton>
             </template>
         </TextBox>
@@ -18,7 +18,7 @@
 </template>
 <script setup lang="ts">
     import { computed, onMounted, ref, watch } from "vue";
-    import { CurrentRegistrationEntryState, GetPersistSessionArgs, RegistrationEntryTerms, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, GetPersistSessionArgs, RegistrationEntryTerms, getRegistrationEntryText, use } from "./utils.partial";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import TextBox from "@Obsidian/Controls/textBox.obs";
@@ -40,6 +40,7 @@
     const invokeBlockAction = useInvokeBlockAction();
     const registrationEntryState = use(CurrentRegistrationEntryState);
     const registrationEntryTerms = use(RegistrationEntryTerms);
+    const t = getRegistrationEntryText;
 
     // #region Values
 
@@ -117,7 +118,10 @@
                         discountCodeWarningMessage.value = result.errorMessage;
                     }
                     else if (discountCodeInput.value != "") {
-                        discountCodeWarningMessage.value = `'${discountCodeInput.value}' is not a valid ${registrationEntryTerms.value.discountCodeSingularTitleCase}.`;
+                        discountCodeWarningMessage.value = t("discountCodeInvalid", {
+                            code: discountCodeInput.value,
+                            term: registrationEntryTerms.value.discountCodeSingularLowerCase
+                        });
                     }
                 }
             }
@@ -183,3 +187,25 @@
         await tryDiscountCode(true);
     });
 </script>
+
+<style scoped>
+@media (max-width: 767px) {
+    :deep(.pull-right) {
+        float: none !important;
+    }
+
+    :deep(.input-width-md),
+    :deep(.input-width-sm) {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    :deep(.input-group) {
+        width: 100%;
+    }
+
+    :deep(.input-group .btn) {
+        white-space: normal;
+    }
+}
+</style>

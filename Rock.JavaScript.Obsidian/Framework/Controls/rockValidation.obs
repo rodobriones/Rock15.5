@@ -1,7 +1,7 @@
 ﻿<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <NotificationBox v-show="hasErrors" alertType="validation">
-        Please correct the following:
+        {{ headingText }}
         <ul>
             <li v-for="error of errors">
                 <strong>{{ error.name }}</strong>
@@ -25,4 +25,18 @@
     });
 
     const hasErrors = computed((): boolean => props.errors.length > 0);
+
+    function isSpanishUiLanguage(): boolean {
+        const docLanguage = typeof document !== "undefined" ? document.documentElement.lang : "";
+        const browserLanguage = typeof navigator !== "undefined" ? navigator.language : "";
+        const language = (docLanguage || browserLanguage || "en").toLowerCase();
+
+        return language.startsWith("es");
+    }
+
+    const headingText = computed((): string => {
+        return isSpanishUiLanguage()
+            ? "Por favor corrige lo siguiente:"
+            : "Please correct the following:";
+    });
 </script>

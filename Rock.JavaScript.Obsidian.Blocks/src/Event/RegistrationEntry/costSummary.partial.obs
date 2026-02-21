@@ -4,13 +4,13 @@
         <div class="fee-table">
             <div class="row hidden-xs fee-header">
                 <div :class="{ 'col-sm-6': hasDiscount, 'col-sm-9': !hasDiscount }">
-                    <strong>Description</strong>
+                    <strong>{{ t("labelDescription") }}</strong>
                 </div>
                 <div class="col-sm-3 fee-value">
-                    <strong>Amount</strong>
+                    <strong>{{ t("labelAmount") }}</strong>
                 </div>
                 <div v-if="hasDiscount" class="col-sm-3 fee-value">
-                    <strong>Discounted Amount</strong>
+                    <strong>{{ t("discountedAmount") }}</strong>
                 </div>
             </div>
             <div v-for="lineItem in augmentedLineItems" class="row" :class="lineItem.isFee ? 'fee-row-fee' : 'fee-row-cost'">
@@ -18,25 +18,25 @@
                     {{ lineItem.description }} {{ registrationEntryState.viewModel.isPaymentPlanConfigured ? "(Payment Plan)" : "" }}
                 </div>
                 <div class="col-sm-3 fee-value">
-                    <span class="visible-xs-inline">Amount:</span>
-                    {{ `${currencyInfo.symbol} ${lineItem.amountFormatted}` }}
+                    <span class="visible-xs-inline">{{ t("messageAmount") }}</span>
+                    {{ lineItem.amountFormatted }}
                 </div>
                 <div v-if="hasDiscount" class="col-sm-3 fee-value">
                     <HelpBlock v-if="lineItem.discountHelp" :text="lineItem.discountHelp" />
-                    <span class="visible-xs-inline">Discounted Amount:</span>
-                    {{ `${currencyInfo.symbol} ${lineItem.discountedAmountFormatted}` }}
+                    <span class="visible-xs-inline">{{ t("messageDiscountedAmount") }}</span>
+                    {{ lineItem.discountedAmountFormatted }}
                 </div>
             </div>
             <div class="row fee-row-total">
                 <div :class="{ 'col-sm-6 fee-caption': hasDiscount, 'col-sm-9 fee-caption': !hasDiscount }">
-                    Total
+                    {{ t("labelTotal") }}
                 </div>
                 <div class="col-sm-3 fee-value">
-                    <span class="visible-xs-inline">Amount:</span>
+                    <span class="visible-xs-inline">{{ t("messageAmount") }}</span>
                     {{ totalFormatted }}
                 </div>
                 <div v-if="hasDiscount" class="col-sm-3 fee-value">
-                    <span class="visible-xs-inline">Discounted Amount:</span>
+                    <span class="visible-xs-inline">{{ t("messageDiscountedAmount") }}</span>
                     {{ discountedTotalFormatted }}
                 </div>
             </div>
@@ -44,7 +44,7 @@
         <div class="row fee-totals">
             <div class="col-sm-offset-8 col-sm-4 fee-totals-options">
                 <div class="form-group static-control">
-                    <label class="control-label">Total Cost</label>
+                    <label class="control-label">{{ t("labelTotalCost") }}</label>
                     <div class="control-wrapper">
                         <div class="form-control-static">
                             {{ discountedTotalFormatted }}
@@ -53,7 +53,7 @@
                 </div>
 
                 <div v-if="amountPreviouslyPaid" class="form-group static-control">
-                    <label class="control-label">Previously Paid</label>
+                    <label class="control-label">{{ t("labelPreviouslyPaid") }}</label>
                     <div class="control-wrapper">
                         <div class="form-control-static">
                             {{ amountPreviouslyPaidFormatted }}
@@ -63,7 +63,7 @@
 
                 <template v-if="registrationEntryState.viewModel.session?.activePaymentPlan">
                     <div class="form-group static-control">
-                        <label class="control-label">Payment Plan</label>
+                        <label class="control-label">{{ t("labelPaymentPlan") }}</label>
                         <div class="control-wrapper">
                             <div class="form-control-static">
                                 <div>
@@ -72,7 +72,7 @@
                                 <RockButton btnType="link"
                                             btnSize="xs"
                                             :disabled="isDeletePaymentPlanModalShown"
-                                            @click="isDeletePaymentPlanModalShown = true">Delete</RockButton>
+                                            @click="isDeletePaymentPlanModalShown = true">{{ t("actionDelete") }}</RockButton>
                             </div>
                         </div>
                     </div>
@@ -82,7 +82,7 @@
 
                 <template v-if="showAmountDueToday && maxAmountCanBePaid && !isPaymentPlanConfigured">
                     <div class="form-group static-control">
-                        <label class="control-label">Minimum Due Today</label>
+                        <label class="control-label">{{ t("labelMinimumDueToday") }}</label>
                         <div class="control-wrapper">
                             <div class="form-control-static">
                                 {{ amountDueTodayFormatted }}
@@ -90,14 +90,14 @@
                         </div>
                     </div>
 
-                    <CurrencyBox label="Amount To Pay Today"
+                    <CurrencyBox :label="t('amountToPayToday')"
                                  :rules="amountToPayTodayRules"
                                  v-model="registrationEntryState.amountToPayToday"
                                  formGroupClasses="form-right"
                                  inputGroupClasses="input-width-md amount-to-pay" />
 
                     <div class="form-group static-control">
-                        <label class="control-label">Amount Remaining After Payment</label>
+                        <label class="control-label">{{ t("amountRemainingAfterPayment") }}</label>
                         <div class="control-wrapper">
                             <div class="form-control-static">
                                 {{ amountRemainingFormatted }}
@@ -106,12 +106,12 @@
                     </div>
 
                     <div v-if="isPaymentPlanConfigurationSupported && !isPaymentPlanConfigured && !registrationEntryState.viewModel.session?.activePaymentPlan" class="form-group">
-                        <RockButton btnType="default" btnSize="sm" @click="onOpenConfigurePaymentPlanModal" :disabled="registrationEntryState.amountToPayToday >= discountedTotal">Set Up Payment Plan</RockButton>
+                        <RockButton btnType="default" btnSize="sm" @click="onOpenConfigurePaymentPlanModal" :disabled="registrationEntryState.amountToPayToday >= discountedTotal">{{ t("messageSetUpPaymentPlan") }}</RockButton>
                     </div>
                 </template>
 
                 <div v-else-if="!registrationEntryState.viewModel.session?.activePaymentPlan" class="form-group static-control">
-                    <label class="control-label">Amount Due</label>
+                    <label class="control-label">{{ t("amountDue") }}</label>
                     <div class="control-wrapper">
                         <div class="form-control-static">
                             {{ maxAmountCanBePaidFormatted }}
@@ -120,11 +120,11 @@
                 </div>
 
                 <div v-if="isPaymentPlanConfigured" class="payment-plan well">
-                    <RockLabel class="primary-label">Payment Plan</RockLabel>
-                    <StaticFormControl label="Amount Due Today" :modelValue="toCurrencyOrNull(registrationEntryState.amountToPayToday, currencyInfo) ?? '(invalid)'" />
+                    <RockLabel class="primary-label">{{ t("labelPaymentPlan") }}</RockLabel>
+                    <StaticFormControl :label="t('labelAmountDueToday')" :modelValue="toCurrencyOrNull(registrationEntryState.amountToPayToday, currencyInfo) ?? '(invalid)'" />
                     <StaticFormControl :label="`${registrationEntryState.paymentPlan?.transactionFrequencyText} Payment Amount`" :modelValue="`${toCurrencyOrNull(registrationEntryState.paymentPlan?.amountPerPayment ?? 0, currencyInfo) ?? '(invalid)'} x ${registrationEntryState.paymentPlan?.numberOfPayments ?? 0}`" />
-                    <RockButton v-if="isPaymentPlanConfigurationSupported" btnType="default" btnSize="xs" @click="onOpenConfigurePaymentPlanModal">Change</RockButton>
-                    <RockButton v-if="isPaymentPlanConfigurationSupported" btnType="link" btnSize="xs" @click="onCancelPaymentPlanConfiguration">Cancel</RockButton>
+                    <RockButton v-if="isPaymentPlanConfigurationSupported" btnType="default" btnSize="xs" @click="onOpenConfigurePaymentPlanModal">{{ t("actionChange") }}</RockButton>
+                    <RockButton v-if="isPaymentPlanConfigurationSupported" btnType="link" btnSize="xs" @click="onCancelPaymentPlanConfiguration">{{ t("actionCancel") }}</RockButton>
                 </div>
             </div>
         </div>
@@ -134,9 +134,9 @@
                                v-model="isConfigurePaymentPlanModalShown" />
 
     <Modal v-model="isDeletePaymentPlanModalShown"
-           saveText="Delete"
+           :saveText="t('actionDelete')"
            @save="onDeletePaymentPlan">
-        <p>Are you sure you want to delete this payment plan?</p>
+        <p>{{ t("messageDeletePaymentPlanConfirmation") }}</p>
     </Modal>
 </template>
 
@@ -144,13 +144,93 @@
 .payment-plan :deep(.control-label:not(.primary-label)) {
     font-weight: normal;
 }
+
+@media (max-width: 767px) {
+    .fee-table {
+        overflow: hidden;
+    }
+
+    .fee-table .row,
+    .fee-totals {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .fee-table .fee-value,
+    .fee-table .fee-caption,
+    .fee-totals-options {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .fee-totals > [class*="col-"] {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .fee-totals-options {
+        margin-top: 10px;
+        width: 100%;
+        max-width: 100%;
+        text-align: left !important;
+        overflow-wrap: anywhere;
+    }
+
+    .fee-totals-options :deep(.form-group.static-control) {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+    }
+
+    .fee-totals-options .form-group.static-control > .control-label {
+        float: none !important;
+        width: 100% !important;
+        text-align: left !important;
+        margin-bottom: 2px;
+    }
+
+    .fee-totals-options .form-group.static-control > .control-wrapper {
+        float: none !important;
+        width: 100% !important;
+        text-align: left !important;
+        clear: both;
+    }
+
+    .fee-totals-options .form-group.static-control > .control-wrapper > .form-control-static {
+        padding-top: 0;
+        text-align: left !important;
+    }
+
+    .fee-totals-options :deep(.control-label),
+    .fee-totals-options :deep(.form-control-static),
+    .fee-totals-options :deep(.control-wrapper) {
+        display: block;
+        width: 100%;
+        float: none !important;
+        padding-left: 0;
+        padding-right: 0;
+        text-align: left !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .fee-totals-options :deep(.amount-to-pay) {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .payment-plan {
+        margin-top: 10px;
+    }
+}
 </style>
 
 <script setup lang="ts">
     import { computed, ref, watch } from "vue";
     import ConfigurePaymentPlanModal from "./configurePaymentPlanModal.partial.obs";
     import { useConfigurePaymentPlanFeature } from "./paymentPlans.partial";
-    import { GetPersistSessionArgs, CurrentRegistrationEntryState, use, RegistrationCostSummary } from "./utils.partial";
+    import { GetPersistSessionArgs, CurrentRegistrationEntryState, use, RegistrationCostSummary, getRegistrationEntryText } from "./utils.partial";
     import CurrencyBox from "@Obsidian/Controls/currencyBox.obs";
     import HelpBlock from "@Obsidian/Controls/helpBlock.obs";
     import Loading from "@Obsidian/Controls/loading.obs";
@@ -184,6 +264,7 @@
     const getRegistrationEntryBlockArgs = use(GetPersistSessionArgs);
     const invokeBlockAction = useInvokeBlockAction();
     const registrationEntryState = use(CurrentRegistrationEntryState);
+    const t = getRegistrationEntryText;
     const { updateRegistrationCostSummary } = use(RegistrationCostSummary);
     const {
         cancel,
@@ -212,19 +293,12 @@
 
     /** Line items with some extra info computed for table rendering */
     const augmentedLineItems = computed<AugmentedLineItem[]>(() => {
-        const currencyInfoWithoutSymbol: CurrencyInfoBag = {
-            ...currencyInfo.value,
-            symbol: ""
-        };
-
         return lineItems.value.map(li => ({
             ...li,
             isFee: li.type === RegistrationCostSummaryType.Fee,
-            discountHelp: (hasDiscount.value && li.cost === li.discountedCost) ? "This item is not eligible for the discount." : "",
-            // Ignore the currency symbol when formatting.
-            // It will be prepended with a space in the template.
-            amountFormatted: toCurrencyOrNull(li.cost, currencyInfoWithoutSymbol) ?? "(invalid)",
-            discountedAmountFormatted: toCurrencyOrNull(li.discountedCost, currencyInfoWithoutSymbol) ?? "(invalid)"
+            discountHelp: (hasDiscount.value && li.cost === li.discountedCost) ? t("itemNotEligibleForDiscount") : "",
+            amountFormatted: toCurrencyOrNull(li.cost, currencyInfo.value) ?? "(invalid)",
+            discountedAmountFormatted: toCurrencyOrNull(li.discountedCost, currencyInfo.value) ?? "(invalid)"
         } as AugmentedLineItem));
     });
 
@@ -470,7 +544,7 @@
                     await onShowPaymentPlanDeleteConfirmation();
                 }
                 else {
-                    deletePaymentPlanErrorMessage.value = result.errorMessage ?? "An unknown error occurred while attempting to delete the payment plan.";
+                    deletePaymentPlanErrorMessage.value = result.errorMessage ?? t("messageNoPaymentPlanToDelete");
                 }
             }
         }

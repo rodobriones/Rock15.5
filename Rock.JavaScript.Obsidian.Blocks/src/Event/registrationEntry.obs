@@ -1,55 +1,75 @@
 ﻿<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 
 <template>
-    <div>
+    <div class="registration-entry-shell">
         <NotificationBox v-if="notFound" alertType="warning">
-            <strong>Sorry</strong>
+            <strong>{{ t("headingSorry") }}</strong>
             <p>{{ notFoundMessage }}</p>
         </NotificationBox>
         <NotificationBox v-else-if="mustLogin" alertType="warning">
-            <strong>Please log in</strong>
-            <p>You must be logged in to access this {{ terms.registrationSingularLowerCase }}.</p>
+            <strong>{{ t("headingPleaseLogIn") }}</strong>
+            <p>{{ t("messageMustBeLoggedIn", { registration: terms.registrationSingularLowerCase }) }}</p>
         </NotificationBox>
         <NotificationBox v-else-if="isUnauthorized" alertType="warning">
-            <strong>Sorry</strong>
-            <p>You are not allowed to view or edit the selected {{ terms.registrationSingularLowerCase }} since you are not the one who created the {{ terms.registrationSingularLowerCase }}.</p>
+            <strong>{{ t("headingSorry") }}</strong>
+            <p>{{ t("messageNotAllowedToView", { registration: terms.registrationSingularLowerCase }) }}</p>
         </NotificationBox>
         <NotificationBox v-else-if="isInvalidGateway" alertType="warning">
-            <strong>Incorrect Configuration</strong>
-            <p>This {{ terms.registrationSingularLowerCase }} has costs/{{ terms.feePluralLowerCase }} associated with it but the configured payment gateway is not supported.</p>
+            <strong>{{ t("headingIncorrectConfiguration") }}</strong>
+            <p>{{ t("messageGatewayNotSupported", { registration: terms.registrationSingularLowerCase, fees: terms.feePluralLowerCase }) }}</p>
         </NotificationBox>
         <NotificationBox v-else-if="preventNewRegistration" class="text-left" alertType="warning">
-            <strong>{{ terms.registrationSingularTitleCase }} Full</strong>
+            <strong>{{ t("headingRegistrationFull", { registration: terms.registrationSingularTitleCase }) }}</strong>
             <p>
-                There are not any more {{ terms.registrationPluralLowerCase }} available for {{ config.instanceName }}.
+                {{ t("messageNoMoreRegistrations", { registrations: terms.registrationPluralLowerCase, instanceName: config.instanceName || '' }) }}
             </p>
         </NotificationBox>
         <template v-else>
             <h1 v-if="currentStep !== steps.intro" v-html="stepTitleHtml"></h1>
+            <div v-if="config.hideProgressBar !== true && currentStep !== steps.success" class="registration-mobile-step d-md-none">
+                <span class="registration-mobile-step-pill">{{ mobileStepTitle }}</span>
+                <span class="registration-mobile-step-count">{{ progressTrackerIndex + 1 }} / {{ progressTrackerItems.length }}</span>
+            </div>
             <ProgressTracker v-if="config.hideProgressBar !== true && currentStep !== steps.success" :items="progressTrackerItems" :currentIndex="progressTrackerIndex">
                 <template #aside>
                     <div v-if="secondsBeforeExpiration >= 0" v-show="secondsBeforeExpiration <= (30 * 60)" class="remaining-time flex-grow-1 flex-md-grow-0">
                         <NotificationBox v-if="hasSessionRenewalSuccess" alertType="success" class="m-0 pt-3" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;">
-                            <h4>Success</h4>
+                            <h4>{{ t("statusSuccess") }}</h4>
                         </NotificationBox>
-                        <span class="remaining-time-title">Time left before timeout</span>
+                        <span class="remaining-time-title">{{ t("labelTimeLeftBeforeTimeout") }}</span>
                         <p class="remaining-time-countdown">
                             <CountdownTimer v-model="secondsBeforeExpiration" />
                         </p>
                     </div>
                 </template>
             </ProgressTracker>
-            <RegistrationEntryIntro v-if="currentStep === steps.intro" @next="onIntroNext" />
-            <RegistrationEntryRegistrationStart v-else-if="currentStep === steps.registrationStartForm" @next="onRegistrationStartNext" @previous="onRegistrationStartPrevious" />
-            <RegistrationEntryRegistrants v-else-if="currentStep === steps.perRegistrantForms" @next="onRegistrantNext" @previous="onRegistrantPrevious" />
-            <RegistrationEntryRegistrationEnd v-else-if="currentStep === steps.registrationEndForm" @next="onRegistrationEndNext" @previous="onRegistrationEndPrevious" />
-            <RegistrationEntrySummary v-else-if="currentStep === steps.review" @next="onSummaryNext" @previous="onSummaryPrevious" />
-            <RegistrationEntryPayment v-else-if="currentStep === steps.payment" @next="onPaymentNext" @previous="onPaymentPrevious" />
-            <RegistrationEntrySuccess v-else-if="currentStep === steps.success" />
-            <NotificationBox v-else alertType="danger">Invalid State: '{{ currentStep }}'</NotificationBox>
+            <Transition name="re-step" mode="out-in">
+                <div :key="currentStep">
+                    <RegistrationEntryIntro v-if="currentStep === steps.intro" @next="onIntroNext" />
+                    <RegistrationEntryRegistrationStart v-else-if="currentStep === steps.registrationStartForm" @next="onRegistrationStartNext" @previous="onRegistrationStartPrevious" />
+                    <RegistrationEntryRegistrants v-else-if="currentStep === steps.perRegistrantForms" @next="onRegistrantNext" @previous="onRegistrantPrevious" />
+                    <RegistrationEntryRegistrationEnd v-else-if="currentStep === steps.registrationEndForm" @next="onRegistrationEndNext" @previous="onRegistrationEndPrevious" />
+                    <RegistrationEntrySummary v-else-if="currentStep === steps.review" @next="onSummaryNext" @previous="onSummaryPrevious" />
+                    <RegistrationEntryPayment v-else-if="currentStep === steps.payment" @next="onPaymentNext" @previous="onPaymentPrevious" />
+                    <RegistrationEntrySuccess v-else-if="currentStep === steps.success" />
+                    <NotificationBox v-else alertType="danger">{{ t("messageInvalidState", { state: currentStep }) }}</NotificationBox>
+                </div>
+            </Transition>
 
             <SessionRenewal :isSessionExpired="isSessionExpired" @success="onSessionRenewalSuccess" />
         </template>
+        <div class="re-language-switcher"
+             :class="{ 'is-open': isLanguageSelectorOpen }"
+             @mouseleave="isLanguageSelectorOpen = false">
+            <button type="button"
+                    class="re-language-button"
+                    :class="{ 'is-active': uiLanguage === 'en' }"
+                    @click="onLanguageSelected('en')">EN</button>
+            <button type="button"
+                    class="re-language-button"
+                    :class="{ 'is-active': uiLanguage === 'es' }"
+                    @click="onLanguageSelected('es')">ES</button>
+        </div>
     </div>
 </template>
 
@@ -64,7 +84,7 @@
     import RegistrationEntrySuccess from "./RegistrationEntry/success.partial.obs";
     import RegistrationEntrySummary from "./RegistrationEntry/summary.partial.obs";
     import { PaymentPlanConfiguration, RegistrationCostSummaryInfo, RegistrationEntryState, RegistrationEntryTerminology, Step } from "./RegistrationEntry/types.partial";
-    import { CurrentRegistrationEntryState, PersistSession, GetPersistSessionArgs, getDefaultRegistrantInfo, getForcedFamilyGuid, scrollToTopAfterNextRender, RegistrationCostSummary, getRegistrantBasicInfo, OriginalFormFieldValues, ConfigurePaymentPlan, RegistrationEntryTerms } from "./RegistrationEntry/utils.partial";
+    import { CurrentRegistrationEntryState, PersistSession, GetPersistSessionArgs, getDefaultRegistrantInfo, getForcedFamilyGuid, getRegistrationEntryUiLanguage, setRegistrationEntryUiLanguage, isSpanishUiLanguage, localizeRegistrationEntryTerm, scrollToTopAfterNextRender, RegistrationCostSummary, getRegistrantBasicInfo, OriginalFormFieldValues, ConfigurePaymentPlan, RegistrationEntryTerms, getRegistrationEntryText } from "./RegistrationEntry/utils.partial";
     import CountdownTimer from "@Obsidian/Controls/countdownTimer.obs";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import ProgressTracker from "@Obsidian/Controls/progressTracker.obs";
@@ -73,7 +93,7 @@
     import { onConfigurationValuesChanged, useConfigurationValues, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { newGuid } from "@Obsidian/Utility/guid";
     import { List } from "@Obsidian/Utility/linq";
-    import NumberFilter, { toWord } from "@Obsidian/Utility/numberUtils";
+    import { toWord } from "@Obsidian/Utility/numberUtils";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { isNullOrWhiteSpace, toTitleCase } from "@Obsidian/Utility/stringUtils";
     import { CurrentPersonBag } from "@Obsidian/ViewModels/Crm/currentPersonBag";
@@ -95,8 +115,11 @@
     const invokeBlockAction = useInvokeBlockAction();
     const reloadBlock = useReloadBlock();
     const config = useConfigurationValues<RegistrationEntryInitializationBox>();
+    const t = getRegistrationEntryText;
+    const uiLanguage = ref<"es" | "en">(getRegistrationEntryUiLanguage());
+    const isLanguageSelectorOpen = ref(false);
     const notFound = !!config.registrationInstanceNotFoundMessage || !config.registrationAttributesStart;
-    const notFoundMessage = config.registrationInstanceNotFoundMessage || "The selected registration could not be found or is no longer active.";
+    const notFoundMessage = config.registrationInstanceNotFoundMessage || t("messageNotFound");
     const hasPreAttributes = (config.registrationAttributesStart?.length ?? 0) > 0;
     const hasPostAttributes = (config.registrationAttributesEnd?.length ?? 0) > 0;
 
@@ -222,16 +245,23 @@
     });
 
     const currentRegistrantTitle = computed<string>(() => {
-        const ordinal = NumberFilter.toOrdinal(registrationEntryState.value.currentRegistrantIndex + 1);
+        const registrantIndex = registrationEntryState.value.currentRegistrantIndex + 1;
         const { registrantSingularTitleCase } = terms.value;
+        const hasMultipleRegistrants = registrationEntryState.value.registrants.length > 1;
 
-        let title = toTitleCase(
-            registrationEntryState.value.registrants.length <= 1 ?
-                registrantSingularTitleCase :
-                ordinal + " " + registrantSingularTitleCase);
+        let title = registrantSingularTitleCase;
+
+        if (hasMultipleRegistrants) {
+            if (isSpanishUiLanguage()) {
+                title = `${registrantSingularTitleCase} ${registrantIndex}`;
+            }
+            else {
+                title = toTitleCase(`${toWord(registrantIndex)} ${registrantSingularTitleCase}`);
+            }
+        }
 
         if (registrationEntryState.value.currentRegistrantFormIndex > 0) {
-            title += " (cont)";
+            title += isSpanishUiLanguage() ? " (cont.)" : " (cont)";
         }
 
         return title;
@@ -251,11 +281,17 @@
         }
 
         if (currentStep.value === Step.Review) {
-            return "Review Registration";
+            return t("labelReviewRegistration");
         }
 
         if (currentStep.value === Step.Success) {
-            return registrationEntryState.value.successViewModel?.titleHtml || "Congratulations";
+            const rawTitle = registrationEntryState.value.successViewModel?.titleHtml || "Congratulations";
+
+            if (isSpanishUiLanguage()) {
+                return rawTitle.replace(/\bCongratulations\b/gi, "Felicidades");
+            }
+
+            return rawTitle;
         }
 
         return "";
@@ -269,7 +305,7 @@
         if (registrationEntryState.value.firstStep === Step.Intro) {
             items.push({
                 key: "Start",
-                title: "Start",
+                title: t("stepStart"),
                 subtitle: registrationSingularTitleCase
             });
         }
@@ -305,7 +341,7 @@
                 items.push({
                     key: `Registrant-${registrant.guid}`,
                     title: registrantSingularTitleCase,
-                    subtitle: toTitleCase(toWord(i + 1))
+                    subtitle: isSpanishUiLanguage() ? `${i + 1}` : toTitleCase(toWord(i + 1))
                 });
             }
         }
@@ -320,11 +356,25 @@
 
         items.push({
             key: "Finalize",
-            title: "Finalize",
+            title: t("stepFinalize"),
             subtitle: registrationSingularTitleCase
         });
 
         return items;
+    });
+
+    const mobileStepTitle = computed<string>(() => {
+        const currentItem = progressTrackerItems.value[progressTrackerIndex.value];
+
+        if (currentItem?.title) {
+            return currentItem.title;
+        }
+
+        if (currentStep.value === Step.Review) {
+            return t("labelReviewRegistration");
+        }
+
+        return t("stepStart");
     });
 
     /**
@@ -366,19 +416,28 @@
     });
 
     const terms = computed<RegistrationEntryTerminology>(() => {
+        const discountCodeTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.discountCodeTerm ?? "discount code");
+        const pluralFeeTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.pluralFeeTerm ?? "fees");
+        const feeTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.feeTerm ?? "fee");
+        const pluralRegistrantTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.pluralRegistrantTerm ?? "registrants");
+        const registrantTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.registrantTerm ?? "registrant");
+        const pluralRegistrationTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.pluralRegistrationTerm ?? "registrations");
+        const registrationTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.registrationTerm ?? "registration");
+        const signatureDocumentTerm = localizeRegistrationEntryTerm(registrationEntryState.value.viewModel.signatureDocumentTerm ?? "release");
+
         return {
-            discountCodeSingularLowerCase: registrationEntryState.value.viewModel.discountCodeTerm?.toLowerCase() ?? "discount code",
-            discountCodeSingularTitleCase: toTitleCase(registrationEntryState.value.viewModel.discountCodeTerm ?? null) || "Discount Code",
-            feePluralLowerCase: registrationEntryState.value.viewModel.pluralFeeTerm?.toLowerCase() || "fees",
-            feePluralTitleCase: toTitleCase(registrationEntryState.value.viewModel.pluralFeeTerm ?? null) || "Fees",
-            feeSingularLowerCase: registrationEntryState.value.viewModel.feeTerm?.toLowerCase() || "fee",
-            registrantPluralLowerCase: registrationEntryState.value.viewModel.pluralRegistrantTerm?.toLowerCase() || "registrants",
-            registrantSingularLowerCase: registrationEntryState.value.viewModel.registrantTerm?.toLowerCase() || "registrant",
-            registrantSingularTitleCase: toTitleCase(registrationEntryState.value.viewModel.registrantTerm ?? null) || "Registrant",
-            registrationPluralLowerCase: registrationEntryState.value.viewModel.pluralRegistrationTerm?.toLowerCase() || "registrations",
-            registrationSingularLowerCase: registrationEntryState.value.viewModel.registrationTerm?.toLowerCase() || "registration",
-            registrationSingularTitleCase: toTitleCase(registrationEntryState.value.viewModel.registrationTerm ?? null) || "Registration",
-            signatureDocumentSingularTitleCase: toTitleCase(registrationEntryState.value.viewModel.signatureDocumentTerm ?? null) || "Release",
+            discountCodeSingularLowerCase: discountCodeTerm.toLowerCase(),
+            discountCodeSingularTitleCase: toTitleCase(discountCodeTerm) || "Discount Code",
+            feePluralLowerCase: pluralFeeTerm.toLowerCase(),
+            feePluralTitleCase: toTitleCase(pluralFeeTerm) || "Fees",
+            feeSingularLowerCase: feeTerm.toLowerCase(),
+            registrantPluralLowerCase: pluralRegistrantTerm.toLowerCase(),
+            registrantSingularLowerCase: registrantTerm.toLowerCase(),
+            registrantSingularTitleCase: toTitleCase(registrantTerm) || "Registrant",
+            registrationPluralLowerCase: pluralRegistrationTerm.toLowerCase(),
+            registrationSingularLowerCase: registrationTerm.toLowerCase(),
+            registrationSingularTitleCase: toTitleCase(registrationTerm) || "Registration",
+            signatureDocumentSingularTitleCase: toTitleCase(signatureDocumentTerm) || "Release",
         };
     });
 
@@ -532,6 +591,16 @@
         scrollToTopAfterNextRender();
     }
 
+    function onLanguageSelected(language: "es" | "en"): void {
+        if (uiLanguage.value === language) {
+            isLanguageSelectorOpen.value = !isLanguageSelectorOpen.value;
+            return;
+        }
+
+        setRegistrationEntryUiLanguage(language);
+        location.reload();
+    }
+
     const handlePageShow = (e: PageTransitionEvent): void => {
         const isBackForward = e.persisted || (window.performance?.getEntriesByType("navigation")[0] as PerformanceNavigationTiming)?.type === "back_forward";
         if (isBackForward) {
@@ -580,7 +649,7 @@
     // Provide the same dependencies with simple string keys for dependent plugins.
     provide("registrationEntryState", registrationEntryState.value);
     provide("getRegistrationEntryBlockArgs", getRegistrationEntryBlockArgs);
-    provide("persistSession", getRegistrationEntryBlockArgs);
+    provide("persistSession", persistSession);
 
     provide(RegistrationCostSummary, {
         // Provide a read-only version of the registrationCostSummary so
@@ -622,3 +691,513 @@
     onConfigurationValuesChanged(useReloadBlock());
 
 </script>
+
+<style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+
+.registration-entry-shell {
+    --re-bg-top: #f8fbff;
+    --re-bg-light: #f4f6fb;
+    --re-bg-base: #eef3f9;
+    --re-surface: rgba(255, 255, 255, 0.88);
+    --re-border: rgba(17, 24, 39, 0.1);
+    --re-heading: #111827;
+    --re-text: #374151;
+    --re-primary: #2563eb;
+    --re-primary-hover: #1d4ed8;
+    --re-radius-xl: 18px;
+    --re-radius-lg: 14px;
+
+    background:
+        radial-gradient(840px 220px at -8% -10%, rgba(37, 99, 235, 0.09) 0%, rgba(37, 99, 235, 0) 72%),
+        radial-gradient(760px 200px at 110% -12%, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0) 76%),
+        linear-gradient(180deg, var(--re-bg-top) 0 180px, var(--re-bg-light) 180px 64%, var(--re-bg-base) 100%);
+    border-radius: var(--re-radius-xl);
+    border: 1px solid var(--re-border);
+    box-shadow: 0 10px 30px rgba(17, 24, 39, 0.1);
+    padding: 20px;
+    color: var(--re-text);
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.registration-entry-shell::before {
+    content: "";
+    position: absolute;
+    inset: -22% -8%;
+    background:
+        radial-gradient(420px 180px at 16% 32%, rgba(37, 99, 235, 0.1), transparent 72%),
+        radial-gradient(360px 160px at 82% 24%, rgba(17, 24, 39, 0.06), transparent 74%);
+    filter: blur(1px);
+    animation: registration-entry-orbit 18s ease-in-out infinite alternate;
+    z-index: 0;
+}
+
+.registration-entry-shell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 44%);
+    opacity: 0.45;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.registration-entry-shell > * {
+    position: relative;
+    z-index: 1;
+}
+
+.registration-entry-shell :deep(h1),
+.registration-entry-shell :deep(h2),
+.registration-entry-shell :deep(h3),
+.registration-entry-shell :deep(h4) {
+    font-family: "Manrope", "Segoe UI", sans-serif;
+    color: var(--re-heading);
+    font-weight: 800;
+}
+
+.registration-entry-shell :deep(h1) {
+    margin: 2px 0 16px;
+    font-size: clamp(1.75rem, 2.7vw, 2.35rem);
+    letter-spacing: -0.02em;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.registration-entry-shell :deep(.progress-tracker) {
+    margin-top: 6px !important;
+    margin-bottom: 18px !important;
+    align-items: center;
+    gap: 14px;
+}
+
+.registration-mobile-step {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.registration-mobile-step-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.14);
+    background: rgba(255, 255, 255, 0.9);
+    color: #111827;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.registration-mobile-step-count {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.registration-entry-shell :deep(.progress-tracker-container) {
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.1);
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 6px 18px rgba(17, 24, 39, 0.08);
+    backdrop-filter: blur(4px);
+    padding: 8px 12px;
+}
+
+.registration-entry-shell :deep(.progress-steps) {
+    align-items: center;
+    gap: 10px;
+}
+
+.registration-entry-shell :deep(.progress-step-link) {
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.1);
+    background: rgba(255, 255, 255, 0.9);
+    min-height: 38px;
+    padding: 4px 9px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.registration-entry-shell :deep(.progress-step-link:hover) {
+    transform: translateY(-1px);
+    border-color: rgba(37, 99, 235, 0.4);
+    box-shadow: 0 8px 16px rgba(17, 24, 39, 0.08);
+}
+
+.registration-entry-shell :deep(.progress-tracker-icon) {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 2px solid rgba(17, 24, 39, 0.2);
+    background: #fff;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.registration-entry-shell :deep(.progress-tracker-icon.current) {
+    border-color: rgba(37, 99, 235, 0.55);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.16);
+    animation: registration-entry-pulse 1.9s ease-in-out infinite;
+}
+
+.registration-entry-shell :deep(.progress-tracker-icon.upcoming) {
+    border-style: solid;
+    border-color: rgba(17, 24, 39, 0.18);
+    background: #fff;
+}
+
+.registration-entry-shell :deep(.progress-tracker-title) {
+    color: #111827;
+    font-weight: 700;
+}
+
+.registration-entry-shell :deep(.progress-tracker-subtitle) {
+    color: #6b7280;
+    margin: 0;
+    font-size: 11px;
+}
+
+.registration-entry-shell :deep(.progress-tracker-arrow) {
+    display: none !important;
+}
+
+.registration-entry-shell :deep(.registrationentry-intro),
+.registration-entry-shell :deep(.registrationentry-registration-attributes),
+.registration-entry-shell :deep(.registrationentry-registrant),
+.registration-entry-shell :deep(.registrationentry-registrant-details),
+.registration-entry-shell :deep(.registrationentry-summary),
+.registration-entry-shell :deep(.registrationentry-payment),
+.registration-entry-shell :deep(.registrationentry-success) {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.9) 100%);
+    border: 1px solid var(--re-border);
+    border-radius: var(--re-radius-xl);
+    box-shadow:
+        0 6px 18px rgba(17, 24, 39, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    padding: 22px;
+    backdrop-filter: blur(10px);
+}
+
+.re-step-enter-active,
+.re-step-leave-active {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.re-step-enter-from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+}
+
+.re-step-leave-to {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+}
+
+@media (hover: hover) {
+    .registration-entry-shell :deep(.registrationentry-intro),
+    .registration-entry-shell :deep(.registrationentry-registration-attributes),
+    .registration-entry-shell :deep(.registrationentry-registrant),
+    .registration-entry-shell :deep(.registrationentry-registrant-details),
+    .registration-entry-shell :deep(.registrationentry-summary),
+    .registration-entry-shell :deep(.registrationentry-payment),
+    .registration-entry-shell :deep(.registrationentry-success) {
+        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-intro:hover),
+    .registration-entry-shell :deep(.registrationentry-registration-attributes:hover),
+    .registration-entry-shell :deep(.registrationentry-registrant:hover),
+    .registration-entry-shell :deep(.registrationentry-registrant-details:hover),
+    .registration-entry-shell :deep(.registrationentry-summary:hover),
+    .registration-entry-shell :deep(.registrationentry-payment:hover),
+    .registration-entry-shell :deep(.registrationentry-success:hover) {
+        transform: translateY(-2px);
+        border-color: rgba(37, 99, 235, 0.28);
+        box-shadow:
+            0 10px 24px rgba(17, 24, 39, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+}
+
+.registration-entry-shell :deep(.well) {
+    border: 1px solid rgba(17, 24, 39, 0.1);
+    border-radius: var(--re-radius-lg);
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.registration-entry-shell :deep(.alert) {
+    border-radius: 14px;
+    border-width: 1px;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.registration-entry-shell :deep(.form-control),
+.registration-entry-shell :deep(textarea.form-control) {
+    border-radius: 12px;
+    border-color: rgba(17, 24, 39, 0.18);
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.registration-entry-shell :deep(.form-control:focus),
+.registration-entry-shell :deep(textarea.form-control:focus) {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+}
+
+.registration-entry-shell :deep(.actions) {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(189, 205, 225, 0.55);
+}
+
+.registration-entry-shell :deep(.actions .btn-primary),
+.registration-entry-shell :deep(.actions .rock-button.btn-primary) {
+    min-height: 46px;
+    border-radius: 999px !important;
+    border: 1px solid rgba(37, 99, 235, 0.92) !important;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    color: #fff !important;
+    font-family: "Manrope", "Segoe UI", sans-serif !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.01em;
+    padding-inline: 22px !important;
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.24);
+}
+
+.registration-entry-shell :deep(.actions .btn-primary:hover),
+.registration-entry-shell :deep(.actions .rock-button.btn-primary:hover) {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+    box-shadow: 0 12px 20px rgba(37, 99, 235, 0.28);
+}
+
+.registration-entry-shell :deep(.actions .btn-default),
+.registration-entry-shell :deep(.actions .rock-button.btn-default) {
+    min-height: 46px;
+    border-radius: 999px !important;
+    border: 1px solid rgba(17, 24, 39, 0.18) !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    color: #111827 !important;
+    font-family: "Manrope", "Segoe UI", sans-serif !important;
+    font-weight: 700 !important;
+    padding-inline: 20px !important;
+    backdrop-filter: blur(8px);
+}
+
+.registration-entry-shell :deep(.remaining-time) {
+    border: 1px solid rgba(17, 24, 39, 0.14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 246, 251, 0.9) 100%);
+    border-radius: 14px;
+    box-shadow: 0 8px 18px rgba(17, 24, 39, 0.08);
+    padding: 10px 14px;
+    min-width: 220px;
+}
+
+.registration-entry-shell :deep(.remaining-time-title) {
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.re-language-switcher {
+    position: fixed;
+    right: 0;
+    bottom: 22px;
+    width: 54px;
+    height: 54px;
+    display: flex;
+    justify-content: flex-end;
+    overflow: hidden;
+    border-radius: 8px 0 0 8px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.22);
+    z-index: 1100;
+    transition: width 0.18s ease;
+}
+
+.re-language-switcher:hover,
+.re-language-switcher:focus-within,
+.re-language-switcher.is-open {
+    width: 108px;
+}
+
+.re-language-button {
+    width: 54px;
+    height: 54px;
+    border: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+    background: #b7b8f6;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 28px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.re-language-button.is-active {
+    background: #3b43f6;
+}
+
+@keyframes registration-entry-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes registration-entry-orbit {
+    0% {
+        transform: translate3d(-1.5%, -1%, 0) scale(1);
+    }
+
+    100% {
+        transform: translate3d(1.5%, 1.2%, 0) scale(1.03);
+    }
+}
+
+@keyframes registration-entry-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.18);
+    }
+
+    50% {
+        box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .registration-entry-shell::before,
+    .registration-entry-shell :deep(.progress-tracker-icon.current),
+    .registration-entry-shell :deep(.registrationentry-intro),
+    .registration-entry-shell :deep(.registrationentry-registration-attributes),
+    .registration-entry-shell :deep(.registrationentry-registrant),
+    .registration-entry-shell :deep(.registrationentry-registrant-details),
+    .registration-entry-shell :deep(.registrationentry-summary),
+    .registration-entry-shell :deep(.registrationentry-payment),
+    .registration-entry-shell :deep(.registrationentry-success) {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+@media (max-width: 767px) {
+    .registration-entry-shell {
+        border-radius: 16px;
+        padding: 10px;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-intro),
+    .registration-entry-shell :deep(.registrationentry-registration-attributes),
+    .registration-entry-shell :deep(.registrationentry-registrant),
+    .registration-entry-shell :deep(.registrationentry-registrant-details),
+    .registration-entry-shell :deep(.registrationentry-summary),
+    .registration-entry-shell :deep(.registrationentry-payment),
+    .registration-entry-shell :deep(.registrationentry-success) {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .registration-entry-shell :deep(.progress-tracker) {
+        margin-bottom: 12px !important;
+    }
+
+    .registration-entry-shell :deep(h1) {
+        margin-bottom: 10px;
+        font-size: clamp(1.35rem, 6vw, 1.75rem);
+    }
+
+    .registration-entry-shell :deep(.remaining-time) {
+        min-width: 0;
+        width: 100%;
+        padding: 8px 10px;
+    }
+
+    .registration-entry-shell :deep(.actions.text-right),
+    .registration-entry-shell :deep(.actions.row) {
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 10px;
+        margin-left: 0;
+        margin-right: 0;
+        text-align: left !important;
+    }
+
+    .registration-entry-shell :deep(.actions.row > [class*="col-"]) {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 100%;
+        padding-left: 0;
+        padding-right: 0;
+        text-align: left !important;
+    }
+
+    .registration-entry-shell :deep(.actions .pull-left),
+    .registration-entry-shell :deep(.pull-left),
+    .registration-entry-shell :deep(.pull-right) {
+        float: none !important;
+    }
+
+    .registration-entry-shell :deep(.actions .btn),
+    .registration-entry-shell :deep(.actions .rock-button) {
+        width: 100%;
+        justify-content: center;
+        white-space: normal;
+    }
+
+    .registration-entry-shell :deep(.input-width-md),
+    .registration-entry-shell :deep(.input-width-sm) {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-success-message),
+    .registration-entry-shell :deep(.well),
+    .registration-entry-shell :deep(.alert),
+    .registration-entry-shell :deep(.form-group),
+    .registration-entry-shell :deep(.control-label),
+    .registration-entry-shell :deep(.control-wrapper),
+    .registration-entry-shell :deep(.form-control-static) {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-summary) {
+        overflow-x: clip;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-summary .row) {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .registration-entry-shell :deep(.registrationentry-summary .row > [class*="col-"]) {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .re-language-switcher {
+        bottom: 16px;
+    }
+}
+</style>

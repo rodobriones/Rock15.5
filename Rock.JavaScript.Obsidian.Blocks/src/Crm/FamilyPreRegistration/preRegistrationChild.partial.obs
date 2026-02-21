@@ -20,7 +20,7 @@
                           v-model="child.familyRoleGuid"
                           :disabled="disabled"
                           :items="config.childRelationshipTypes ?? undefined"
-                          :label="`Relationship to ${adultLabel}`"
+                          :label="t('labelRelationshipTo', { label: adultLabel })"
                           :rules="requiredRules"
                           :showBlankItem="false" />
         </div>
@@ -31,33 +31,35 @@
         <div class="col-sm-6">
             <StaticFormControl
                                v-if="child.isFirstNameReadOnly"
-                               label="First Name"
+                               :label="t('labelFirstName')"
                                :modelValue="child.firstName" />
             <FirstNameTextBox v-else
                               v-model="child.firstName"
                               :disabled="disabled"
-                              label="First Name"
+                              :label="t('labelFirstName')"
                               :rules="[...requiredRules, ...noSpecialCharactersRules, ...noEmojisOrSpecialFontsRules]" />
         </div>
 
         <div class="col-sm-6">
             <StaticFormControl
                                v-if="child.isLastNameReadOnly"
-                               label="Last Name"
+                               :label="t('labelLastName')"
                                :modelValue="child.lastName" />
             <TextBox v-else
                      v-model="child.lastName"
                      :disabled="disabled"
-                     label="Last Name"
+                     :label="t('labelLastName')"
                      :rules="[...requiredRules, ...noSpecialCharactersRules, ...noEmojisOrSpecialFontsRules]" />
         </div>
     </div>
     <div class="row clearfix">
         <div v-if="config.childGenderField?.isShown" class="col-sm-6">
-            <GenderPicker
+            <DropDownList
                           v-model="child.genderStringValue"
                           :disabled="disabled"
-                          label="Gender"
+                          :items="genderItems"
+                          :label="t('labelGender')"
+                          :showBlankItem="false"
                           :rules="config.childGenderField.isRequired ? requiredGenderRules : ''" />
         </div>
 
@@ -66,7 +68,7 @@
                                 v-model="child.suffixListItemBag"
                                 :definedTypeGuid="DefinedType.PersonSuffix"
                                 :disabled="disabled"
-                                label="Suffix"
+                                :label="t('labelSuffix')"
                                 lazyMode="lazy"
                                 :showBlankItem="true" />
         </div>
@@ -76,7 +78,7 @@
             <BirthdayPicker
                             v-model="child.birthDate"
                             :disabled="disabled"
-                            label="Birth Date"
+                            :label="t('labelBirthDate')"
                             :rules="config.childBirthDateField.isRequired ? requiredBirthdayRules : ''" />
         </div>
 
@@ -84,7 +86,7 @@
             <GradePicker
                          v-model="child.gradeListItemBag"
                          :disabled="disabled"
-                         label="Grade"
+                         :label="t('labelGrade')"
                          lazyMode="lazy"
                          :useGuidAsValue="true"
                          :rules="config.childGradeField.isRequired ? requiredRules : ''"
@@ -97,7 +99,7 @@
                             v-model="child.mobilePhone"
                             v-model:countryCode="child.mobilePhoneCountryCode"
                             :disabled="disabled"
-                            label="Mobile Phone"
+                            :label="t('labelMobilePhone')"
                             :rules="config.childMobilePhoneField.isRequired ? requiredRules : ''" />
         </div>
         <div v-if="config.displaySmsOptIn?.isShowChildren" class="col-sm-6">
@@ -113,7 +115,7 @@
             <EmailBox
                       v-model="child.email"
                       :disabled="disabled"
-                      label="Email"
+                      :label="t('labelEmail')"
                       :rules="config.childEmailField.isRequired ? requiredRules : ''" />
         </div>
 
@@ -123,10 +125,10 @@
                              :disabled="disabled"
                              :horizontal="true"
                              :items="[
-                                 { text: 'Email', value: CommunicationPreference.Email.toString() },
-                                 { text: 'SMS', value: CommunicationPreference.SMS.toString() }
+                                 { text: t('labelEmail'), value: CommunicationPreference.Email.toString() },
+                                 { text: t('labelSms'), value: CommunicationPreference.SMS.toString() }
                              ]"
-                             label="Communication Preference"
+                             :label="t('labelCommunicationPreference')"
                              :rules="config.childCommunicationPreferenceField.isRequired ? requiredRules : ''" />
         </div>
     </div>
@@ -153,7 +155,7 @@
                          v-model="child.profileImageListItemBag"
                          :binaryFileTypeGuid="BinaryFiletype.PersonImage"
                          :disabled="disabled"
-                         label="Profile Photo"
+                         :label="t('labelProfilePhoto')"
                          :rules="config.childProfilePhotoField.isRequired ? requiredRules : ''" />
         </div>
         <div class="col-sm-6"></div><!-- filler/blocker column -->
@@ -181,7 +183,7 @@
 <script setup lang="ts">
     import { computed, PropType, ref, watch } from "vue";
     import { ChildRequestBag } from "./types.partial";
-    import { createNotEqualRule, createPersonViewModel, createRuleWithReplacement, createRuleWithSuffix, getNumberAsOrdinalString, monthAndDayAndYearRequiredRule, required, noSpecialCharacters, noEmojisOrSpecialFonts } from "./utils.partial";
+    import { createNotEqualRule, createPersonViewModel, createRuleWithReplacement, createRuleWithSuffix, getFamilyPreRegistrationText, getLocalizedNumberedLabel, monthAndDayAndYearRequiredRule, required, noSpecialCharacters, noEmojisOrSpecialFonts } from "./utils.partial";
     import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
     import BirthdayPicker from "@Obsidian/Controls/birthdayPicker.obs";
     import CheckBox from "@Obsidian/Controls/checkBox.obs";
@@ -189,7 +191,6 @@
     import DropDownList from "@Obsidian/Controls/dropDownList.obs";
     import EmailBox from "@Obsidian/Controls/emailBox.obs";
     import EthnicityPicker from "@Obsidian/Controls/ethnicityPicker.obs";
-    import GenderPicker from "@Obsidian/Controls/genderPicker.obs";
     import GradePicker from "@Obsidian/Controls/gradePicker.obs";
     import ImageEditor from "@Obsidian/Controls/imageEditor.obs";
     import PhoneNumberBox from "@Obsidian/Controls/phoneNumberBox.obs";
@@ -204,11 +205,12 @@
     import { BinaryFiletype } from "@Obsidian/SystemGuids/binaryFiletype";
     import { DefinedType } from "@Obsidian/SystemGuids/definedType";
     import { useConfigurationValues } from "@Obsidian/Utility/block";
-    import { toTitleCase } from "@Obsidian/Utility/stringUtils";
     import { ValidationRule } from "@Obsidian/ValidationRules";
     import { FamilyPreRegistrationInitializationBox } from "@Obsidian/ViewModels/Blocks/Crm/FamilyPreRegistration/familyPreRegistrationInitializationBox";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 
     const config = useConfigurationValues<FamilyPreRegistrationInitializationBox>();
+    const t = getFamilyPreRegistrationText;
 
     const props = defineProps({
         childNumber: {
@@ -223,12 +225,12 @@
 
         childLabel: {
             type: String as PropType<string>,
-            default: "Child"
+            default: getFamilyPreRegistrationText("labelChildDefault")
         },
 
         adultLabel: {
             type: String as PropType<string>,
-            default: "Adult"
+            default: getFamilyPreRegistrationText("labelAdultDefault")
         },
 
         disabled: {
@@ -251,7 +253,7 @@
     //#region Computed Values
 
     const caption = computed<string>(() => {
-        return toTitleCase(`${getNumberAsOrdinalString(props.childNumber)} ${props.childLabel}`);
+        return getLocalizedNumberedLabel(props.childNumber, props.childLabel);
     });
 
     /*
@@ -261,30 +263,38 @@
      */
 
     const requiredRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(required, `for ${caption.value}`),
+        createRuleWithSuffix(required, t("validationForLabel", { label: caption.value })),
         "required"
     ]);
 
     const requiredGenderRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(required, `for ${caption.value}`),
-        createRuleWithReplacement(createNotEqualRule(Gender.Unknown), `is required for ${caption.value}`),
+        createRuleWithSuffix(required, t("validationForLabel", { label: caption.value })),
+        createRuleWithReplacement(createNotEqualRule(Gender.Unknown), t("validationIsRequiredForLabel", { label: caption.value })),
         "required"
     ]);
 
     const requiredBirthdayRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(monthAndDayAndYearRequiredRule, `for ${caption.value}`),
+        createRuleWithSuffix(monthAndDayAndYearRequiredRule, t("validationForLabel", { label: caption.value })),
         "required"
     ]);
 
     const noSpecialCharactersRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(noSpecialCharacters, `for ${caption.value}`),
+        createRuleWithSuffix(noSpecialCharacters, t("validationForLabel", { label: caption.value })),
         "nospecialcharacters"
     ]);
 
     const noEmojisOrSpecialFontsRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(noEmojisOrSpecialFonts, `for ${caption.value}`),
+        createRuleWithSuffix(noEmojisOrSpecialFonts, t("validationForLabel", { label: caption.value })),
         "noemojisorspecialfonts"
     ]);
+
+    const genderItems = computed<ListItemBag[]>(() => {
+        return [
+            { text: t("optionGenderUnknown"), value: Gender.Unknown.toString() },
+            { text: t("optionGenderMale"), value: Gender.Male.toString() },
+            { text: t("optionGenderFemale"), value: Gender.Female.toString() }
+        ];
+    });
 
     //#endregion
 

@@ -6,7 +6,7 @@
             <Registrar />
 
             <div v-if="hasPaymentCost && hasRegistrantNotOnWaitList">
-                <h4>Payment Summary</h4>
+                <h4>{{ t("headingPaymentSummary") }}</h4>
                 <DiscountCodeForm />
                 <CostSummary />
             </div>
@@ -35,7 +35,7 @@
 
             <div class="actions text-right">
                 <RockButton v-if="viewModel.allowRegistrationUpdates" class="pull-left" btnType="default" @click="onPrevious" :isLoading="loading" autoDisable>
-                    Previous
+                    {{ t("actionPrevious") }}
                 </RockButton>
                 <RockButton btnType="primary" type="submit" :isLoading="loading" autoDisable>
                     {{ finishButtonText }}
@@ -55,6 +55,7 @@
         GetPersistSessionArgs,
         PersistSession,
         RegistrationEntryTerms,
+        getRegistrationEntryText,
         getRegistrantBasicInfo, use
     } from "./utils.partial";
     import Captcha from "@Obsidian/Controls/captcha.obs";
@@ -70,6 +71,7 @@
     const getRegistrationEntryBlockArgs = use(GetPersistSessionArgs);
     const invokeBlockAction = useInvokeBlockAction();
     const registrationEntryState = use(CurrentRegistrationEntryState);
+    const t = getRegistrationEntryText;
     const disableCaptchaSupport = ref(registrationEntryState.viewModel.disableCaptchaSupport);
     const captchaElement = ref<InstanceType<typeof Captcha> | undefined>();
     const persistSession = use(PersistSession);
@@ -169,10 +171,10 @@
     /** The text to be displayed on the "Finish" button */
     const finishButtonText = computed<string>(() => {
         if (isMakingPayment.value) {
-            return viewModel.value.isRedirectGateway ? "Pay" : "Next";
+            return viewModel.value.isRedirectGateway ? t("actionPay") : t("actionNext");
         }
         else {
-            return "Finish";
+            return t("actionFinish");
         }
     });
 
@@ -245,7 +247,7 @@
         }, actionContext);
 
         if (result.isError || !result.data) {
-            submitErrorMessage.value = result.errorMessage || "Unknown error";
+            submitErrorMessage.value = result.errorMessage || t("messageUnexpectedError");
         }
         else {
             registrationEntryState.successViewModel = result.data;
@@ -265,7 +267,7 @@
         });
 
         if (result.isError || !result.data) {
-            submitErrorMessage.value = result.errorMessage || "Unknown error";
+            submitErrorMessage.value = result.errorMessage || t("messageUnexpectedError");
         }
 
         return result.data || "";

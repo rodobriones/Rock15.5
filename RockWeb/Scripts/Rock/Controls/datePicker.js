@@ -13,6 +13,30 @@
                 if (options.format) {
                     dateFormat = options.format;
                 }
+                var language = (options.language || "en").toLowerCase();
+                if (language.indexOf("-") >= 0) {
+                    language = language.split("-")[0];
+                }
+
+                if (language === "es"
+                    && $.fn.datepicker
+                    && $.fn.datepicker.dates
+                    && !$.fn.datepicker.dates.es) {
+                    $.fn.datepicker.dates.es = {
+                        days: ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"],
+                        daysShort: ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"],
+                        daysMin: ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"],
+                        months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+                        monthsShort: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+                        today: "Hoy",
+                        clear: "Limpiar",
+                        titleFormat: "MM yyyy"
+                    };
+                }
+
+                if (!($.fn.datepicker && $.fn.datepicker.dates && $.fn.datepicker.dates[language])) {
+                    language = "en";
+                }
 
                 var $textBox = $('#' + options.id);
 
@@ -22,6 +46,7 @@
                 // uses https://github.com/uxsolutions/bootstrap-datepicker
                 var datePicker = $datePickerInputGroup.datepicker({
                     format: dateFormat,
+                    language: language,
                     assumeNearbyYear: 10,
                     autoclose: true,
                     container: options.container || document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || "body",

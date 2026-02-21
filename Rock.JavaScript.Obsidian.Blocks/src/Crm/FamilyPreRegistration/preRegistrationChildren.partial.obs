@@ -10,7 +10,7 @@
             @remove="$emit('removeChild', child)" />
         <hr>
     </template>
-    <NotificationBox v-if="addChildErrors.length" alertType="danger" :title="`Add ${childLabel}`">
+    <NotificationBox v-if="addChildErrors.length" alertType="danger" :title="t('titleAddLabel', { label: childLabel })">
         <ul>
             <li v-for="error in addChildErrors">{{ error }}</li>
         </ul>
@@ -22,7 +22,7 @@
         :disabled="disabled"
         @click="onAddChildClicked">
         <i class="ti ti-user"></i>
-        <span> Add {{ childLabel }}</span>
+        <span>{{ t("actionAdd", { label: childLabel }) }}</span>
     </RockButton>
 </template>
 
@@ -30,13 +30,14 @@
     import { PropType, ref } from "vue";
     import PreRegistrationChild from "./preRegistrationChild.partial.obs";
     import { ChildRequestBag } from "./types.partial";
-    import { convertPersonToChildRequest } from "./utils.partial";
+    import { convertPersonToChildRequest, getFamilyPreRegistrationText } from "./utils.partial";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import RockButton from "@Obsidian/Controls/rockButton.obs";
     import { useInvokeBlockAction } from "@Obsidian/Utility/block";
     import { FamilyPreRegistrationPersonBag } from "@Obsidian/ViewModels/Blocks/Crm/FamilyPreRegistration/familyPreRegistrationPersonBag";
 
     const invokeBlockAction = useInvokeBlockAction();
+    const t = getFamilyPreRegistrationText;
 
     const props = defineProps({
         modelValue: {
@@ -56,12 +57,12 @@
 
         childLabel: {
             type: String as PropType<string>,
-            default: "Child"
+            default: getFamilyPreRegistrationText("labelChildDefault")
         },
 
         adultLabel: {
             type: String as PropType<string>,
-            default: "Adult"
+            default: getFamilyPreRegistrationText("labelAdultDefault")
         },
     });
 
@@ -93,7 +94,7 @@
             emit("addChild", child);
         }
         else {
-            addChildErrors.value = [result?.errorMessage || `An unexpected error occurred while adding a ${props.childLabel}. Please try again.`];
+            addChildErrors.value = [result?.errorMessage || t("messageUnexpectedErrorAddingLabel", { label: props.childLabel })];
         }
     }
 

@@ -2,10 +2,10 @@
 <template>
     <div class="registrationentry-registrant">
         <NotificationBox v-if="hasWaitlist && !isOnWaitlist" alertType="success">
-            This {{ registrationEntryTerms.registrantSingularLowerCase }} will be fully registered.
+            {{ t("messageRegistrantFullyRegistered", { registrant: registrationEntryTerms.registrantSingularLowerCase }) }}
         </NotificationBox>
         <NotificationBox v-else-if="isOnWaitlist" alertType="warning">
-            This {{ registrationEntryTerms.registrantSingularLowerCase }} will be on the waiting list.
+            {{ t("messageRegistrantOnWaitlist", { registrant: registrationEntryTerms.registrantSingularLowerCase }) }}
         </NotificationBox>
         <template v-for="(r, i) in registrants" :key="r.guid">
             <Registrant v-show="currentRegistrantIndex === i" :currentRegistrant="r" :isWaitList="isOnWaitlist" @next="onNext" @previous="onPrevious" />
@@ -15,13 +15,14 @@
 <script setup lang="ts">
     import { computed, ref } from "vue";
     import Registrant from "./registrant.partial.obs";
-    import { CurrentRegistrationEntryState, PersistSession, RegistrationEntryTerms, scrollToTopAfterNextRender, use } from "./utils.partial";
+    import { CurrentRegistrationEntryState, getRegistrationEntryText, PersistSession, RegistrationEntryTerms, scrollToTopAfterNextRender, use } from "./utils.partial";
     import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import { RegistrantBag } from "@Obsidian/ViewModels/Blocks/Event/RegistrationEntry/registrantBag";
 
     const registrationEntryState = use(CurrentRegistrationEntryState);
     const persistSession = use(PersistSession);
     const registrationEntryTerms = use(RegistrationEntryTerms);
+    const t = getRegistrationEntryText;
 
     const emit = defineEmits<{
         (e: "next"): void,

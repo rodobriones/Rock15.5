@@ -6,6 +6,9 @@
 <head runat="server">
     <title></title>
 
+    <!-- Viewport Responsive -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
     <script src="<%# System.Web.Optimization.Scripts.Url("~/Scripts/Bundles/RockJQueryLatest") %>"></script>
 
     <link rel="stylesheet" href="<%# ResolveRockUrl("~~/Styles/bootstrap.css", true) %>" />
@@ -15,10 +18,23 @@
         html, body {
             height: auto;
             width: 100%;
-            min-width: 100%;
             margin: 0;
             padding: 0;
-            vertical-align: top;
+            overflow-x: hidden; /* evita scroll horizontal */
+        }
+
+        main {
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+
+        /* Prevent iOS from zooming when focusing form fields. */
+        @media (max-width: 991px) {
+            .rock-blank input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+            .rock-blank textarea,
+            .rock-blank select {
+                font-size: 16px !important;
+            }
         }
     </style>
 
@@ -39,15 +55,14 @@
                         <div class="rect5"></div>
                     </div>
                 </div>
-                <div class="updateprogress-bg modal-backdrop">
-                </div>
+                <div class="updateprogress-bg modal-backdrop"></div>
             </ProgressTemplate>
         </asp:UpdateProgress>
 
         <main class="container-fluid">
-            <!-- Start Content Area -->
             <Rock:Zone Name="Main" runat="server" />
         </main>
+
     </form>
 </body>
 </html>
