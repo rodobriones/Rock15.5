@@ -7,6 +7,31 @@
                 </NotificationBox>
 
                 <div v-else class="cyScreen">
+                    <!-- Overlays: Loading and Success Models -->
+                    <div v-if="busy || successMessage" class="cyStateOverlay">
+                        <!-- Loading State -->
+                        <div v-if="busy" class="cyStateModal cyLoadingModal">
+                            <div class="cySpinner"></div>
+                            <h4 class="cyStateTitle">Procesando donación</h4>
+                            <p class="cyStateText">Por favor, no cierres esta ventana.</p>
+                        </div>
+                        
+                        <!-- Success State -->
+                        <div v-else-if="successMessage" class="cyStateModal cySuccessModal">
+                            <div class="cySuccessIcon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <h4 class="cyStateTitle">¡Gracias por tu donación!</h4>
+                            <p class="cyStateText">{{ successMessage }}</p>
+                            <div class="cyStateActions">
+                                <button type="button" class="cyStateBtnPrimary" @click.prevent="resetFormSuccess">Hacer otra donación</button>
+                                <button type="button" class="cyStateBtnSecondary" @click.prevent="goToHistoryFromSuccess">Ver historial</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <header class="cyTopBar">
                         <div class="cyTopBrand">
                             <span class="cyTopLogo">DAR</span>
@@ -59,7 +84,8 @@
 
                     <div class="cyStage">
                         <section class="cyMainCard">
-                            <div class="cyPromptRow">
+                            <!-- Oculto temporalmente a pedido del usuario -->
+                            <div class="cyPromptRow" v-show="false">
                                 <p class="cyPromptLabel">Tipo de regalo</p>
                                 <div class="cyGiftToggle" role="group" aria-label="Tipo de regalo">
                                     <button type="button" class="cyGiftBtn isActive" @click.prevent>Dar una vez</button>
@@ -204,9 +230,67 @@
                                     <small>{{ amountPreview }}</small>
                                 </div>
 
+                                <!-- Receipt Toggle & Flow -->
+                                <section class="cySection cyReceiptSection">
+                                    <div class="cyReceiptToggle">
+                                        <div class="cyReceiptText">
+                                            <h4 class="cyReceiptTitle">¿Deseas tu recibo de donación?</h4>
+                                            <p class="cyReceiptDesc">Activa esta opción para ingresar tu NIT.</p>
+                                        </div>
+                                        <label class="cySwitch">
+                                            <input type="checkbox" v-model="form.wantsReceipt">
+                                            <span class="cySlider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div v-show="form.wantsReceipt" class="cyReceiptForm">
+                                        <div class="cyNitRow">
+                                            <label class="cyField cyNitInput">
+                                                <span>NIT</span>
+                                                <input
+                                                    v-model="form.nit"
+                                                    class="form-control"
+                                                    :class="{ isInvalid: !!fieldErrors.nit }"
+                                                    type="text"
+                                                    inputmode="text"
+                                                    placeholder="Ej: 12345678"
+                                                    @input="onNitInput" />
+                                            </label>
+                                            
+                                            <RockButton class="cyValidateBtn" btnType="default" :disabled="busyNit || !form.nit" @click="validateNit">
+                                                {{ busyNit ? "Validando..." : "Validar NIT" }}
+                                            </RockButton>
+                                        </div>
+                                        <small v-if="fieldErrors.nit" class="cyFieldError" style="display: block; margin-top: -8px; margin-bottom: 12px;">{{ fieldErrors.nit }}</small>
+                                        
+                                        <!-- Readonly Data from NIT -->
+                                        <div v-if="form.nitName || form.nitAddress" class="cyNitResult">
+                                            <label class="cyField">
+                                                <span>Nombre / Razón Social</span>
+                                                <input
+                                                    v-model="form.nitName"
+                                                    class="form-control"
+                                                    type="text"
+                                                    readonly
+                                                    disabled />
+                                            </label>
+                                            
+                                            <label class="cyField" v-if="form.nitAddress">
+                                                <span>Dirección</span>
+                                                <input
+                                                    v-model="form.nitAddress"
+                                                    class="form-control"
+                                                    type="text"
+                                                    readonly
+                                                    disabled />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </section>
+
                                 <div class="cyActions">
-                                    <RockButton btnType="primary" :disabled="busy" @click="submitPayment">
-                                        {{ busy ? "Procesando..." : "Siguiente" }}
+                                    <RockButton btnType="primary" :disabled="busy || (form.wantsReceipt && !form.nitName)" @click="submitPayment">
+                                        {{ busy ? "Procesando..." : "Donar" }}
                                     </RockButton>
                                     <p class="cyActionMeta">Nunca guardamos CVV ni numero completo de tarjeta.</p>
                                 </div>
@@ -215,19 +299,6 @@
                                     {{ errorMessage }}
                                 </NotificationBox>
 
-                                <NotificationBox v-if="successMessage" alertType="success" class="cyAlert">
-                                    {{ successMessage }}
-                                </NotificationBox>
-
-                                <div v-if="lastResult" class="cyResult">
-                                    <div><strong>Modo:</strong> {{ lastResult.mode }}</div>
-                                    <div><strong>Respuesta:</strong> {{ lastResult.responseCode }}</div>
-                                    <div><strong>Moneda:</strong> {{ normalizeCurrency(lastResult.currency) }}</div>
-                                    <div><strong>Autorizacion:</strong> {{ lastResult.authorizationNumber || "-" }}</div>
-                                    <div><strong>Referencia:</strong> {{ lastResult.referenceNumber || "-" }}</div>
-                                    <div><strong>Auditoria:</strong> {{ lastResult.auditNumber || "-" }}</div>
-                                    <div><strong>Id transaccion:</strong> {{ lastResult.transactionId ?? "-" }}</div>
-                                </div>
                             </div>
 
                             <section v-show="activeSubmenu === 'history'" class="cyHistoryCard cyHistoryPanel">
@@ -360,7 +431,8 @@ const fieldErrors = reactive({
     cardName: "",
     cardNumber: "",
     expDate: "",
-    cvv: ""
+    cvv: "",
+    nit: ""
 });
 
 const form = reactive({
@@ -371,8 +443,19 @@ const form = reactive({
     cardName: "",
     cardNumber: "",
     expDate: "",
-    cvv: ""
+    cvv: "",
+    wantsReceipt: false,
+    nit: "",
+    nitName: "",
+    nitAddress: ""
 });
+
+// Idempotency Key for Safe Payment Processing
+const idemKey = ref(generateIdemKey());
+
+function generateIdemKey(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+}
 const heroAmountInputText = ref(Number(form.amount || 0).toFixed(2));
 const heroAmountInputWidth = computed(() => {
     const length = String(heroAmountInputText.value || "").length;
@@ -534,6 +617,16 @@ function onCvvInput(): void {
     form.cvv = (form.cvv || "").replace(/[^\d]/g, "").slice(0, 4);
 }
 
+function onNitInput(): void {
+    fieldErrors.nit = "";
+    // Clean spaces, hyphens and special chars. Keep letters (e.g., K) and numbers.
+    form.nit = (form.nit || "").replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+    
+    // Clear the validated data if the user edits the NIT
+    form.nitName = "";
+    form.nitAddress = "";
+}
+
 function onHeroAmountInput(): void {
     fieldErrors.amount = "";
 
@@ -583,6 +676,7 @@ function clearAllFieldErrors(): void {
     fieldErrors.cardNumber = "";
     fieldErrors.expDate = "";
     fieldErrors.cvv = "";
+    fieldErrors.nit = "";
 }
 
 function validateForm(): boolean {
@@ -598,6 +692,16 @@ function validateForm(): boolean {
     if (!Number.isFinite(form.amount) || Number(form.amount) <= 0) {
         fieldErrors.amount = "Ingresa un monto valido mayor que cero.";
         isValid = false;
+    }
+
+    if (form.wantsReceipt) {
+        if (!form.nit || form.nit.trim() === "") {
+            fieldErrors.nit = "Ingresa un número de NIT.";
+            isValid = false;
+        } else if (!form.nitName) {
+            fieldErrors.nit = "Por favor valida el NIT antes de continuar.";
+            isValid = false;
+        }
     }
 
     if (form.currency !== "GTQ" && form.currency !== "USD") {
@@ -671,7 +775,12 @@ async function submitPayment(): Promise<void> {
                 cardNumber: cardNumberDigits.value,
                 expMonth: expiry.month,
                 expYear: expiry.year,
-                cvv: (form.cvv || "").trim()
+                cvv: (form.cvv || "").trim(),
+                wantsReceipt: form.wantsReceipt,
+                nit: form.wantsReceipt ? form.nit : "",
+                nitName: form.wantsReceipt ? form.nitName : "",
+                nitAddress: form.wantsReceipt ? form.nitAddress : "",
+                idemKey: idemKey.value
             }
         });
 
@@ -687,11 +796,21 @@ async function submitPayment(): Promise<void> {
         if (data.success) {
             successMessage.value = data.message || "Pago aprobado.";
             form.note = "";
+            idemKey.value = generateIdemKey(); // Reset idempotency key for next fresh payment
         } else {
             errorMessage.value = data.message || "Pago rechazado.";
+            
+            // Only regenerate if the error was a validation/input issue, to allow retry. 
+            // If it was a network timeout or unknown state, keeping the same key helps 
+            // the backend prevent a double-charge if the initial request actually made it.
+            if (data.responseCode === "INVALID_INPUT" || data.responseCode === "DECLINED" || data.responseCode === "CONFIG") {
+                idemKey.value = generateIdemKey();
+            }
         }
     } catch {
         errorMessage.value = "Error inesperado al procesar el pago.";
+        // On hard network error from the client, we intentionally do NOT regenerate the key
+        // so that an immediate retry click acts idempotently on the backend.
     } finally {
         clearSensitive();
         busy.value = false;
@@ -712,6 +831,55 @@ async function loadHistory(): Promise<void> {
         }
     } finally {
         busyHistory.value = false;
+    }
+}
+
+function resetFormSuccess(): void {
+    successMessage.value = "";
+    lastResult.value = null;
+    form.amount = 0;
+    heroAmountInputText.value = "";
+    form.note = "";
+    clearAllFieldErrors();
+    activeSubmenu.value = "donation";
+    idemKey.value = generateIdemKey(); // Ensure fresh key
+}
+
+function goToHistoryFromSuccess(): void {
+    successMessage.value = "";
+    activeSubmenu.value = "history";
+    loadHistory();
+}
+
+const busyNit = ref(false);
+
+async function validateNit(): Promise<void> {
+    if (busyNit.value || !form.nit) {
+        return;
+    }
+    
+    busyNit.value = true;
+    fieldErrors.nit = "";
+    
+    try {
+        const response = await invokeBlockAction<any>("ValidateNitInfo", {
+            nit: form.nit
+        });
+        
+        if (response.isSuccess && response.data?.name) {
+            form.nitName = response.data.name;
+            form.nitAddress = response.data.address || "";
+        } else {
+            fieldErrors.nit = response.errorMessage || "NIT inválido o no encontrado.";
+            form.nitName = "";
+            form.nitAddress = "";
+        }
+    } catch {
+        fieldErrors.nit = "Error de conexión al validar NIT.";
+        form.nitName = "";
+        form.nitAddress = "";
+    } finally {
+        busyNit.value = false;
     }
 }
 
@@ -782,6 +950,7 @@ function statusClass(status?: string): string {
     color: var(--cy-text);
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     overflow: hidden;
+    position: relative;
 }
 
 .cyScreen {
@@ -864,16 +1033,16 @@ function statusClass(status?: string): string {
     margin: 8px auto 0;
     width: fit-content;
     display: inline-flex;
-    align-items: flex-end;
-    gap: 6px;
+    align-items: baseline;
+    justify-content: center;
+    gap: 2px;
     font-family: Manrope, sans-serif;
 }
 
 .cyAmountCurrency {
-    font-size: 34px;
-    line-height: 1;
-    font-weight: 600;
-    margin-bottom: 10px;
+    font-size: clamp(52px, 12vw, 120px);
+    line-height: 0.9;
+    font-weight: 500;
     color: #efefef;
 }
 
@@ -904,7 +1073,10 @@ function statusClass(status?: string): string {
 
 .cyHeroControls {
     margin: 12px auto 0;
-    width: min(420px, 94vw);
+    width: 100%;
+    max-width: 420px;
+    padding: 0 16px;
+    box-sizing: border-box;
     display: flex;
     justify-content: center;
 }
@@ -1407,6 +1579,276 @@ function statusClass(status?: string): string {
     }
 }
 
+/* Receipt Flow CSS */
+.cyReceiptSection {
+    background: #fafafa; /* Slightly different background to distinguish */
+}
+
+.cyReceiptToggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.cyReceiptText {
+    flex: 1;
+}
+
+.cyReceiptTitle {
+    margin: 0 0 2px;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #222;
+}
+
+.cyReceiptDesc {
+    margin: 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.cySwitch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.cySwitch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.cySlider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #d1d5db;
+    transition: .3s;
+    border-radius: 26px;
+}
+
+.cySlider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.cySwitch input:checked + .cySlider {
+    background-color: #000;
+}
+
+.cySwitch input:checked + .cySlider:before {
+    transform: translateX(20px);
+}
+
+.cyReceiptForm {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #d7d7d7;
+    animation: cyFadeIn 0.3s ease;
+}
+
+.cyNitRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.cyNitRow > label {
+    margin-bottom: 0 !important;
+}
+
+.cyNitInput {
+    flex: 1;
+}
+
+.cyNitInput input {
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cyValidateBtn {
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 10px !important;
+    border: 1px solid #000 !important;
+    background: #000 !important;
+    color: #fff !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    padding: 0 20px !important;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.cyValidateBtn:hover {
+    background: #1a1a1a !important;
+}
+
+.cyValidateBtn:disabled {
+    background: #9ca3af !important;
+    border-color: #9ca3af !important;
+    cursor: not-allowed;
+}
+
+.cyNitResult {
+    display: grid;
+    gap: 10px;
+}
+
+.cyNitResult input {
+    background: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+    border-color: #e5e7eb;
+}
+
+/* Modals overlays */
+.cyStateOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: cyFadeIn 0.3s ease;
+}
+
+.cyStateModal {
+    background: #fff;
+    border-radius: var(--cy-radius-xl);
+    padding: 34px 24px;
+    width: min(100%, 380px);
+    text-align: center;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cyStateTitle {
+    margin: 20px 0 8px;
+    font-size: 22px;
+    font-weight: 800;
+    font-family: Manrope, sans-serif;
+    color: #111;
+}
+
+.cyStateText {
+    margin: 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.cySpinner {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto;
+    border: 5px solid #eaeaea;
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: cySpin 0.9s linear infinite;
+}
+
+.cySuccessIcon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto;
+    background: #ecfdf3;
+    color: #067647;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cySuccessIcon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.cyStateActions {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cyStateBtnPrimary,
+.cyStateBtnSecondary {
+    width: 100%;
+    min-height: 52px;
+    border-radius: var(--cy-radius-pill);
+    font-weight: 700;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+    border: 0;
+    transition: all 0.2s;
+}
+
+.cyStateBtnPrimary {
+    background: #000;
+    color: #fff;
+    border: 1px solid #000;
+}
+.cyStateBtnPrimary:hover {
+    background: #1a1a1a;
+}
+.cyStateBtnSecondary {
+    background: #fff;
+    color: #111;
+    border: 1px solid #dcdcdc;
+}
+.cyStateBtnSecondary:hover {
+    background: #f0f0f0;
+}
+
+@keyframes cyFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes cyScaleUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cySpin {
+    to { transform: rotate(360deg); }
+}
+
 @media (min-width: 680px) {
     .cyTopBar {
         padding: 16px 20px;
@@ -1469,11 +1911,6 @@ function statusClass(status?: string): string {
 
     .cyTopName {
         font-size: 17px;
-    }
-
-    .cyAmountCurrency {
-        font-size: 28px;
-        margin-top: 10px;
     }
 
     .cyActions .btn-primary,

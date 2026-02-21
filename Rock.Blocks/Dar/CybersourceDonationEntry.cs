@@ -34,6 +34,7 @@ using Rock.Data;
 using Rock.Model;
 using Rock.Security;
 using Rock.Utility;
+using Rock.Transactions;
 using Rock.Web.Cache;
 
 namespace Rock.Blocks.Dar
@@ -98,6 +99,36 @@ namespace Rock.Blocks.Dar
         IsRequired = true,
         Category = AttributeCategory.Finance,
         Order = 5 )]
+
+    [WorkflowTypeField(
+        "Donation Workflow",
+        Key = AttributeKey.DonationWorkflow,
+        Description = "An optional workflow to launch after a successful donation. The FinancialTransaction will be set as the workflow entity.",
+        AllowMultiple = false,
+        IsRequired = false,
+        Category = AttributeCategory.Finance,
+        Order = 6 )]
+
+    #endregion
+
+    #region Block Attributes - NIT API
+
+    [TextField(
+        "NIT API URL",
+        Key = AttributeKey.NitApiUrl,
+        Description = "URL para validar el NIT en la API externa de facturación. (ej: https://apiv2.ifacere-fel.com/api/retornarDatosCliente)",
+        IsRequired = false,
+        Category = AttributeCategory.Gateway, // Assuming Gateways as a good place, or custom
+        Order = 0 )]
+
+    [EncryptedTextField(
+        "NIT API Bearer Token",
+        Key = AttributeKey.NitApiBearerToken,
+        Description = "Token de autorización (Bearer) para la API de validación de NIT.",
+        IsRequired = false,
+        IsPassword = true,
+        Category = AttributeCategory.Gateway,
+        Order = 1 )]
 
     #endregion
 
@@ -267,6 +298,75 @@ namespace Rock.Blocks.Dar
 
         #region Block Actions
 
+        [BlockAction( "ValidateNitInfo" )]
+        public BlockActionResult ValidateNitInfo( string nit )
+        {
+            if ( string.IsNullOrWhiteSpace( nit ) )
+            {
+                return ActionBadRequest( "NIT vacio." );
+            }
+
+            var apiUrl = GetAttributeValue( AttributeKey.NitApiUrl );
+            var apiToken = GetDecryptedAttributeValue( AttributeKey.NitApiBearerToken );
+
+            if ( string.IsNullOrWhiteSpace( apiUrl ) || string.IsNullOrWhiteSpace( apiToken ) )
+            {
+                return ActionBadRequest( "La API de validación de NIT no está configurada en el bloque." );
+            }
+
+            try
+            {
+                var cleanNit = new string( nit.Where( char.IsLetterOrDigit ).ToArray() );
+                string requestXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<RetornaDatosClienteRequest>
+  <nit>{System.Security.SecurityElement.Escape( cleanNit )}</nit>
+</RetornaDatosClienteRequest>";
+
+                using ( var client = new HttpClient { Timeout = TimeSpan.FromSeconds( 15 ) } )
+                {
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Bearer", apiToken );
+                    var content = new StringContent( requestXml, Encoding.UTF8, "application/xml" );
+
+                    var response = client.PostAsync( apiUrl, content ).GetAwaiter().GetResult();
+                    var responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                    if ( !response.IsSuccessStatusCode )
+                    {
+                        return ActionBadRequest( $"Error de API externa (HTTP {(int)response.StatusCode})." );
+                    }
+
+                    string name = "";
+                    string address = "CIUDAD";
+
+                    // Extract values specifically from the received XML format.
+                    var matchName = Regex.Match( responseString, @"<nombre>(.*?)</nombre>", RegexOptions.IgnoreCase | RegexOptions.Singleline );
+                    if ( matchName.Success )
+                    {
+                        name = matchName.Groups[1].Value.Trim();
+                    }
+
+                    var matchAddr = Regex.Match( responseString, @"<direccion>(.*?)</direccion>", RegexOptions.IgnoreCase | RegexOptions.Singleline );
+                    if ( matchAddr.Success )
+                    {
+                        address = matchAddr.Groups[1].Value.Trim();
+                    }
+                    
+                    if ( string.IsNullOrWhiteSpace( name ) )
+                    {
+                         // If we couldn't parse it well but got 200 OK, maybe the structure is different. Let's dump the raw if it's short, or generic text.
+                         name = "Consumidor Final"; // Or let it fail gracefully
+                         return ActionBadRequest( "No se encontró el formato esperado en la respuesta del NIT." );
+                    }
+
+                    return ActionOk( new { name = name, address = address } );
+                }
+            }
+            catch ( Exception ex )
+            {
+                return ActionBadRequest( "Ocurrio un error al consultar el NIT: " + ex.Message );
+            }
+        }
+
         [BlockAction( "GetPaymentHistory" )]
         public BlockActionResult GetPaymentHistory()
         {
@@ -304,6 +404,43 @@ namespace Rock.Blocks.Dar
 
             using ( var rockContext = new RockContext() )
             {
+                // -- IDEMPOTENCY CHECK --
+                // Search for an existing transaction created recently with the same `idemKey`
+                if ( !string.IsNullOrWhiteSpace( bag.idemKey ) )
+                {
+                    var pastHour = RockDateTime.Now.AddHours( -1 );
+                    var idemSearchString = $"IDEM={bag.idemKey}";
+                    
+                    // Look for an exact match in the ForeignKey constructed string during the last hour
+                    var duplicateTx = new FinancialTransactionService( rockContext )
+                        .Queryable()
+                        .Where( t => 
+                            t.AuthorizedPersonAliasId == currentPerson.PrimaryAliasId &&
+                            t.TransactionDateTime >= pastHour &&
+                            t.ForeignKey != null && t.ForeignKey.Contains( idemSearchString ) )
+                        .OrderByDescending( t => t.TransactionDateTime )
+                        .FirstOrDefault();
+
+                    if ( duplicateTx != null )
+                    {
+                        var isApproved = duplicateTx.Status == "Approved";
+
+                        return ActionOk( new ProcessPaymentResponseBag
+                        {
+                            success = isApproved,
+                            message = isApproved ? "Pago aprobado previamente (Recuperado)." : "Pago previamente intentado y fallido.",
+                            responseCode = ExtractForeignKeyValue( duplicateTx.ForeignKey, "RC" ),
+                            authorizationNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "AUTH" ),
+                            referenceNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "REF" ),
+                            auditNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "AUDIT" ),
+                            currency = transactionCurrency,
+                            mode = ExtractForeignKeyValue( duplicateTx.ForeignKey, "MODE" ),
+                            transactionId = duplicateTx.Id,
+                            history = GetPaymentHistoryInternal( rockContext, currentPerson.Id )
+                        } );
+                    }
+                }
+                // -- END IDEMPOTENCY CHECK --
                 var account = GetAllowedAccountById( rockContext, bag.accountId );
                 if ( account == null )
                 {
@@ -439,7 +576,7 @@ namespace Rock.Blocks.Dar
                 StatusMessage = chargeResult.responseMessage,
                 IsSettled = false,
                 ForeignCurrencyCodeValueId = foreignCurrencyCodeValueId,
-                ForeignKey = BuildForeignKey( chargeResult, mode, transactionCurrency )
+                ForeignKey = BuildForeignKey( chargeResult, mode, transactionCurrency, bag.idemKey )
             };
 
             transaction.TransactionDetails.Add( new FinancialTransactionDetail
@@ -471,6 +608,29 @@ namespace Rock.Blocks.Dar
 
             batchService.IncrementControlAmount( batch.Id, transaction.TotalAmount, null );
             rockContext.SaveChanges();
+
+            // Launch workflow if configured
+            var workflowTypeGuid = GetAttributeValue( AttributeKey.DonationWorkflow ).AsGuidOrNull();
+            if ( workflowTypeGuid.HasValue )
+            {
+                var workflowType = WorkflowTypeCache.Get( workflowTypeGuid.Value );
+                if ( workflowType != null && ( workflowType.IsActive ?? true ) )
+                {
+                    try
+                    {
+                        var wfTransaction = new Rock.Transactions.LaunchWorkflowTransaction<FinancialTransaction>(
+                            workflowType.Guid, transaction.Id )
+                        {
+                            InitiatorPersonAliasId = personAliasId
+                        };
+                        wfTransaction.Enqueue();
+                    }
+                    catch ( Exception ex )
+                    {
+                        ExceptionLogService.LogException( ex );
+                    }
+                }
+            }
 
             return transaction.Id;
         }
@@ -1313,17 +1473,25 @@ ORDER BY
             return "ROCK-" + Guid.NewGuid().ToString( "N" ).Substring( 0, 12 ).ToUpperInvariant();
         }
 
-        private string BuildForeignKey( CybersourceChargeResult chargeResult, string mode, string currency )
+        private string BuildForeignKey( CybersourceChargeResult chargeResult, string mode, string currency, string idemKey = "" )
         {
-            return string.Format(
+            var foreignKey = string.Format(
                 CultureInfo.InvariantCulture,
-                "CYBS|MODE={0}|CUR={1}|RC={2}|REF={3}|AUDIT={4}|AUTH={5}",
+                "CYBS|MODE={0}|CUR={1}|RC={2}|REF={3}|AUDIT={4}|AUTH={5}|IDEM={6}",
                 mode ?? string.Empty,
                 currency ?? string.Empty,
                 chargeResult.responseCode ?? string.Empty,
                 chargeResult.referenceNumber ?? string.Empty,
                 chargeResult.auditNumber ?? string.Empty,
-                chargeResult.authorizationNumber ?? string.Empty );
+                chargeResult.authorizationNumber ?? string.Empty,
+                idemKey ?? string.Empty );
+
+            if ( foreignKey.Length > 100 )
+            {
+                foreignKey = foreignKey.Substring( 0, 100 );
+            }
+
+            return foreignKey;
         }
 
         private string GetHistoryCurrency( string foreignKey )
@@ -1482,6 +1650,13 @@ ORDER BY
             public int expYear { get; set; }
             public string cvv { get; set; }
             public string auditNumber { get; set; }
+
+            public bool wantsReceipt { get; set; }
+            public string nit { get; set; }
+            public string nitName { get; set; }
+            public string nitAddress { get; set; }
+
+            public string idemKey { get; set; }
         }
 
         public class ProcessPaymentResponseBag
@@ -1603,6 +1778,11 @@ ORDER BY
             public const string LiveSharedSecretBase64 = "LiveSharedSecretBase64";
 
             public const string TimeoutMs = "TimeoutMs";
+
+            public const string DonationWorkflow = "DonationWorkflow";
+
+            public const string NitApiUrl = "NitApiUrl";
+            public const string NitApiBearerToken = "NitApiBearerToken";
         }
 
         #endregion
