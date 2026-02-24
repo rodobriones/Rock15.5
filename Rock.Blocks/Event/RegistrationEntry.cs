@@ -4591,6 +4591,7 @@ namespace Rock.Blocks.Event
             }
 
             transactionDetail.Amount = paymentInfo.Amount;
+            transactionDetail.FeeCoverageAmount = paymentInfo.FeeCoverageAmount;
             transactionDetail.AccountId = context.RegistrationSettings.FinancialAccountId ?? transactionDetail.AccountId;
             transactionDetail.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Registration ) ).Id;
             transactionDetail.EntityId = context.Registration.Id;
@@ -4712,6 +4713,7 @@ namespace Rock.Blocks.Event
 
             // Add the individual payment details. For the payment plan, it will be a single value for the total amount of the plan.
             transactionDetail.Amount = paymentInfo.Amount;
+            transactionDetail.FeeCoverageAmount = paymentInfo.FeeCoverageAmount;
             transactionDetail.AccountId = context.RegistrationSettings.FinancialAccountId ?? transactionDetail.AccountId;
             transactionDetail.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Registration ) ).Id;
             transactionDetail.EntityId = context.Registration.Id;

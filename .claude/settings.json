@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Rodolfo Rodriguez/Desktop/Rodolfo backuo/Downloads/woocommerce-epay/**)",
+      "Bash(dotnet build:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Repos\\Rock18.1\\Plugin.CybersourceInlineRestGateway\\Dependencies"
+    ]
+  }
+}

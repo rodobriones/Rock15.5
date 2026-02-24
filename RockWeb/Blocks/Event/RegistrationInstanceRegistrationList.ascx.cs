@@ -362,7 +362,8 @@ namespace RockWeb.Blocks.Event
 
                 var payments = _registrationPayments.Where( p => p.EntityId == registration.Id );
                 bool hasPayments = payments.Any();
-                decimal totalPaid = hasPayments ? payments.Select( p => p.Amount ).DefaultIfEmpty().Sum() : 0.0m;
+                decimal totalFeeCoverage = hasPayments ? payments.Select( p => p.FeeCoverageAmount ?? 0.0m ).DefaultIfEmpty().Sum() : 0.0m;
+                decimal totalPaid = hasPayments ? payments.Select( p => p.Amount - ( p.FeeCoverageAmount ?? 0.0m ) ).DefaultIfEmpty().Sum() : 0.0m;
 
                 // Set the Cost
                 decimal discountedCost = registration.DiscountedCost;
@@ -379,6 +380,14 @@ namespace RockWeb.Blocks.Event
                 {
                     lDiscount.Visible = _instanceHasCost && !string.IsNullOrEmpty( discountCode );
                     lDiscount.Text = string.Format( "<span class='label label-default'>{0}</span>", discountCode );
+                }
+
+                var lFee = e.Row.FindControl( "lFee" ) as Literal;
+                if ( lFee != null )
+                {
+                    lFee.Visible = _instanceHasCost || discountedCost > 0.0M || totalFeeCoverage > 0.0m;
+                    var feeCssClass = totalFeeCoverage > 0.0m ? "label-warning" : "label-default";
+                    lFee.Text = $"<span class='label {feeCssClass}'>{totalFeeCoverage.FormatAsCurrency()}</span>";
                 }
 
                 var lBalance = e.Row.FindControl( "lBalance" ) as Literal;
@@ -723,7 +732,7 @@ namespace RockWeb.Blocks.Event
                             .Select( d => new
                             {
                                 RegistrationId = d.EntityId.Value,
-                                Payment = d.Amount
+                                Payment = d.Amount - ( d.FeeCoverageAmount ?? 0.0m )
                             } )
                             .ToList()
                             .GroupBy( d => d.RegistrationId )
@@ -909,6 +918,11 @@ namespace RockWeb.Blocks.Event
             lRegistrationCost.HeaderStyle.HorizontalAlign = HorizontalAlign.Right;
             lRegistrationCost.ItemStyle.HorizontalAlign = HorizontalAlign.Right;
             gRegistrations.Columns.Add( lRegistrationCost );
+
+            var lFee = new RockLiteralField { ID = "lFee", HeaderText = "Fee" };
+            lFee.HeaderStyle.HorizontalAlign = HorizontalAlign.Right;
+            lFee.ItemStyle.HorizontalAlign = HorizontalAlign.Right;
+            gRegistrations.Columns.Add( lFee );
 
             var lBalance = new RockLiteralField { ID = "lBalance", HeaderText = "Balance Due", SortExpression = "BalanceDue" };
             lBalance.HeaderStyle.HorizontalAlign = HorizontalAlign.Right;

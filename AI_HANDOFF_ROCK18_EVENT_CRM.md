@@ -14,6 +14,35 @@ Meta del proyecto:
 
 ---
 
+## Estado actual (2026-02-21)
+
+### Cambios cerrados en Event/RegistrationEntry
+- i18n de mensaje de descuento aplicado (success toast del codigo de descuento) en:
+  - `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/utils.partial.ts`
+  - keys nuevas:
+    - `messageDiscountCodeAppliedToMax`
+    - `messageDiscountCodeAppliedAll`
+- Currency hardcode removido en descuento:
+  - Antes: `"$" + amount`
+  - Ahora: `toCurrencyOrNull(..., registrationEntryState.viewModel.currencyInfo)`
+  - Archivo: `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/discountCodeForm.partial.obs`
+- Build validado:
+  - `cd Rock.JavaScript.Obsidian.Blocks && npm run build:types` OK
+
+### Nota importante sobre mensaje final (Success)
+- El texto final proviene del `SuccessText` del Registration Template (Lava), no solo del front.
+- El front SI hace limpieza/traduccion parcial en:
+  - `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/success.partial.obs`
+- No se dejo fallback automatico para "contacto vacio"; el contacto final debe controlarse en Lava para evitar frases rotas.
+
+### Descuento real vs descuento configurado
+- Si `Costo=10` y `Descuento fijo=15`, el cobro correcto termina en `0` (nunca negativo).
+- Si el Lava imprime `Registration.DiscountedCost` como "Descuento", se vera incorrecto.
+- Para mostrar descuento real usar:
+  - `descuento_real = Registration.TotalCost - Registration.DiscountedCost`
+
+---
+
 ## Alcance de codigo principal
 
 ### Event Registration Entry
@@ -105,6 +134,8 @@ Meta del proyecto:
   - Mostrar equivalente localizado.
 - Mensaje de capacidad/registro lleno no debe mostrarse incorrectamente cuando no aplique.
 - En resumen final, ocultar detalles sensibles no requeridos visualmente (ej. acct/ref cuando se solicite).
+- Mensaje final debe poder mostrar nombre de persona (cuando es 1) en vez de termino generico "persona".
+- Mensaje final debe evitar texto roto de contacto cuando `ContactPerson` o `ContactEmail` vienen vacios.
 
 ---
 
@@ -135,6 +166,29 @@ Stack:
 Contexto:
 - Error del admin/config page, no necesariamente del bloque Vue.
 - Investigar block config o metadata nula en bloque especifico.
+
+## 4) Confusion en "Descuento" del mensaje final
+Sintoma:
+- "Costo total: Q10.00 / Descuento: Q10.00 / Saldo pendiente: Q0.00"
+
+Causa:
+- El Lava estaba mostrando un campo que no representa "ahorro real" para ese texto.
+
+Solucion recomendada:
+- Calcular en Lava:
+  - `descuento_real = Registration.TotalCost | Minus: Registration.DiscountedCost`
+- Mostrar `Descuento` solo si `descuento_real > 0`.
+
+## 5) Texto generico "a persona" en vez de nombre
+Sintoma:
+- "Te has registrado exitosamente a persona ..."
+
+Causa:
+- El encabezado en Lava usa `RegistrantTerm` pluralizado/generico.
+
+Solucion recomendada:
+- Si hay 1 registrante: mostrar `FullName`.
+- Si hay varios: mostrar cantidad + termino plural.
 
 ---
 
@@ -174,6 +228,69 @@ npm run build:types
 - No hardcodear texto final en ingles.
 - Cualquier nuevo texto debe agregar clave EN/ES al diccionario del modulo.
 - Mantener selector ES/EN visible al final de cada bloque.
+- Para mensajes finales de registro, preferir resolver logica en `SuccessText` (Lava del template) y no en regex frontend.
+
+---
+
+## Plantilla Lava recomendada (SuccessText)
+
+Usar esta base en `Registration Template > Registration Confirmation Text`:
+
+```liquid
+{% assign registrants = Registration.Registrants | Where:'OnWaitList', false %}
+{% assign registrantCount = registrants | Size %}
+
+{% if registrantCount == 1 %}
+    {% assign r = registrants | First %}
+    <p>
+        Te has registrado exitosamente a <strong>{{ r.PersonAlias.Person.FullName }}</strong>
+        para {{ RegistrationInstance.Name }}:
+    </p>
+{% elsif registrantCount > 1 %}
+    <p>
+        Te has registrado exitosamente a {{ registrantCount }}
+        {{ RegistrationInstance.RegistrationTemplate.RegistrantTerm | PluralizeForQuantity:registrantCount | Downcase }}
+        para {{ RegistrationInstance.Name }}:
+    </p>
+{% endif %}
+
+{% if registrantCount > 0 %}
+    <ul>
+    {% for registrant in registrants %}
+        <li>
+            <strong>{{ registrant.PersonAlias.Person.FullName }}</strong>
+            {% if registrant.Cost > 0 %} - {{ registrant.Cost | FormatAsCurrency }}{% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+{% endif %}
+
+{% assign descuento_real = Registration.TotalCost | Minus: Registration.DiscountedCost %}
+
+{% if Registration.TotalCost > 0 %}
+<p>
+    Costo total: {{ Registration.TotalCost | FormatAsCurrency }}<br/>
+    {% if descuento_real > 0 %}
+        Descuento: {{ descuento_real | FormatAsCurrency }}<br/>
+    {% endif %}
+    Saldo pendiente: {{ Registration.BalanceDue | FormatAsCurrency }}
+</p>
+{% endif %}
+
+{% assign contactName = RegistrationInstance.ContactPersonAlias.Person.FullName %}
+{% assign contactEmail = RegistrationInstance.ContactEmail %}
+
+<p>
+    Un email de confirmacion ha sido enviado a {{ Registration.ConfirmationEmail }}.
+    {% if contactName != blank and contactEmail != blank %}
+        Si tiene alguna pregunta, por favor pongase en contacto con {{ contactName }} a {{ contactEmail }}.
+    {% elsif contactEmail != blank %}
+        Si tiene alguna pregunta, por favor pongase en contacto a {{ contactEmail }}.
+    {% elsif contactName != blank %}
+        Si tiene alguna pregunta, por favor pongase en contacto con {{ contactName }}.
+    {% endif %}
+</p>
+```
 
 ---
 
@@ -187,4 +304,3 @@ Trabaja sobre Rock18.1 en Event/RegistrationEntry y Crm/FamilyPreRegistration.
 Respeta: idioma por defecto ES, selector ES/EN persistido en localStorage (rock.obsidian.uiLanguage), UX responsive mobile-first, y no romper backend.
 Antes de cambiar codigo, identifica archivos exactos y luego valida con npm run build:types en Framework/Blocks segun corresponda.
 ```
-

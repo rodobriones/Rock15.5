@@ -110,7 +110,7 @@
                     </div>
                 </template>
 
-                <div v-else-if="!registrationEntryState.viewModel.session?.activePaymentPlan" class="form-group static-control">
+                <div v-else-if="!registrationEntryState.viewModel.session?.activePaymentPlan && shouldShowAmountDueSummary" class="form-group static-control">
                     <label class="control-label">{{ t("amountDue") }}</label>
                     <div class="control-wrapper">
                         <div class="form-control-static">
@@ -421,6 +421,11 @@
     /** The max amount that can be paid today as a formatted string */
     const maxAmountCanBePaidFormatted = computed<string>(() => {
         return toCurrencyOrNull(maxAmountCanBePaid.value, currencyInfo.value) ?? "(invalid)";
+    });
+
+    /** Should the explicit "Amount Due" summary be shown (only when it differs from total cost). */
+    const shouldShowAmountDueSummary = computed<boolean>(() => {
+        return Math.abs(maxAmountCanBePaid.value - discountedTotal.value) >= 0.01;
     });
 
     /** The amount that would remain if the user paid the amount indicated in the currency box */

@@ -215,6 +215,14 @@ const registrationEntryText: Record<string, { en: string; es: string; }> = {
     messageAmount: { en: "Amount:", es: "Monto:" },
     messageAmountAdjustedForEvenDistribution: { en: "added {amount} to evenly distribute the remaining payments", es: "se agregaron {amount} para distribuir uniformemente los pagos restantes" },
     messageDiscountedAmount: { en: "Discounted Amount:", es: "Monto con descuento:" },
+    messageDiscountCodeAppliedToMax: {
+        en: "Your {discountText} {discountCodeTerm} was successfully applied to the maximum allowed number of {maxRegistrants} {registrantTerm}.",
+        es: "Tu {discountCodeTerm} de {discountText} se aplico correctamente al maximo permitido de {maxRegistrants} {registrantTerm}."
+    },
+    messageDiscountCodeAppliedAll: {
+        en: "Your {discountText} {discountCodeTerm} for all {registrantPluralTerm} was successfully applied.",
+        es: "Tu {discountCodeTerm} de {discountText} para todas las {registrantPluralTerm} se aplico correctamente."
+    },
     messageFieldIsRequired: { en: "is required", es: "es requerido" },
     messageSetUpPaymentPlan: { en: "Set Up Payment Plan", es: "Configurar plan de pagos" },
     messageDeletePaymentPlanConfirmation: { en: "Are you sure you want to delete this payment plan?", es: "Seguro que deseas eliminar este plan de pagos?" },

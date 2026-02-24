@@ -1773,10 +1773,13 @@ namespace RockWeb.Blocks.Event
         {
             if ( registration != null && registration.TotalCost > 0.0M )
             {
-                hlCost.Visible = true;
-                hlCost.Text = registration.DiscountedCost.FormatAsCurrency();
+                GetRegistrationPaymentSummary( registration, out var totalPaid, out var surchargeTotal );
+                var totalCost = registration.DiscountedCost + surchargeTotal;
+                var balanceDue = ( totalCost - totalPaid ).AsCurrency();
 
-                var balanceDue = registration.BalanceDue;
+                hlCost.Visible = true;
+                hlCost.Text = totalCost.FormatAsCurrency();
+
                 hlBalance.Visible = true;
                 hlBalance.Text = balanceDue.FormatAsCurrency();
                 
@@ -1811,6 +1814,30 @@ namespace RockWeb.Blocks.Event
             {
                 hlCost.Visible = false;
                 hlBalance.Visible = false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the payment summary totals for a registration, including installment surcharge.
+        /// </summary>
+        /// <param name="registration">The registration.</param>
+        /// <param name="totalPaid">The total amount charged.</param>
+        /// <param name="surchargeTotal">The total fee coverage amount charged.</param>
+        private void GetRegistrationPaymentSummary( Registration registration, out decimal totalPaid, out decimal surchargeTotal )
+        {
+            totalPaid = 0.0m;
+            surchargeTotal = 0.0m;
+
+            if ( registration == null || registration.Id <= 0 )
+            {
+                return;
+            }
+
+            var paymentDetails = registration.GetPayments().ToList();
+            if ( paymentDetails.Any() )
+            {
+                totalPaid = paymentDetails.Sum( p => p.Amount );
+                surchargeTotal = paymentDetails.Sum( p => p.FeeCoverageAmount ?? 0.0m );
             }
         }
 
@@ -2299,6 +2326,7 @@ namespace RockWeb.Blocks.Event
         {
             // Get the cost/fee summary
             var costs = new List<RegistrationCostSummaryInfo>();
+            GetRegistrationPaymentSummary( registration, out var totalPaid, out var surchargeTotal );
             foreach ( var registrant in RegistrantsState )
             {
                 if ( registrant.Cost > 0 )
@@ -2384,6 +2412,20 @@ namespace RockWeb.Blocks.Event
                 }
             }
 
+            if ( surchargeTotal > 0.0m )
+            {
+                costs.Add( new RegistrationCostSummaryInfo
+                {
+                    Type = RegistrationCostSummaryType.Fee,
+                    Description = "Recargo por cuotas",
+                    Cost = surchargeTotal,
+                    DiscountedCost = surchargeTotal,
+
+                    // The surcharge isn't associated with a particular registrant.
+                    RegistrationRegistrantGuid = null
+                } );
+            }
+
             // Show Fees Summary
             var hasFees = costs.Any();
 
@@ -2412,12 +2454,14 @@ namespace RockWeb.Blocks.Event
             // Get the totals
 
             // Add row for totals
+            var totalCost = costs.Sum( c => c.Cost );
+            var discountedTotalCost = costs.Sum( c => c.DiscountedCost );
             costs.Add( new RegistrationCostSummaryInfo
             {
                 Type = RegistrationCostSummaryType.Total,
                 Description = "Total",
-                Cost = costs.Sum( c => c.Cost ),
-                DiscountedCost = registration.DiscountedCost,
+                Cost = totalCost,
+                DiscountedCost = discountedTotalCost,
 
                 // The total isn't associated with a particular registrant, so set the registrant guid to null.
                 RegistrationRegistrantGuid = null
@@ -2438,12 +2482,12 @@ namespace RockWeb.Blocks.Event
             }
 
             // Set the totals
-            decimal balanceDue = registration.BalanceDue;
-            lTotalCost.Text = registration.DiscountedCost.FormatAsCurrency();
-            lPreviouslyPaid.Text = registration.TotalPaid.FormatAsCurrency();
+            decimal balanceDue = ( discountedTotalCost - totalPaid ).AsCurrency();
+            lTotalCost.Text = discountedTotalCost.FormatAsCurrency();
+            lPreviouslyPaid.Text = totalPaid.FormatAsCurrency();
             lRemainingDue.Text = balanceDue.FormatAsCurrency();
 
-            if ( registration.BalanceDue > 0.0m &&
+            if ( balanceDue > 0.0m &&
                 registration != null &&
                 registration.RegistrationInstance != null &&
                 registration.RegistrationInstance.AccountId.HasValue &&
@@ -2467,7 +2511,7 @@ namespace RockWeb.Blocks.Event
             {
                 lbAddPayment.Visible = false;
                 lbProcessPayment.Visible = false;
-                nbNoAssociatedPerson.Visible = registration.BalanceDue > 0.0m ? true : false;
+                nbNoAssociatedPerson.Visible = balanceDue > 0.0m;
             }
         }
 

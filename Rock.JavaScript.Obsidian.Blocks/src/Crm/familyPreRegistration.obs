@@ -111,7 +111,7 @@
                                                   :disabled="isSaving || isNavigating"
                                                   :items="genderItems"
                                                   :label="t('labelGender')"
-                                                  :showBlankItem="false"
+                                                  :showBlankItem="!config.adultGenderField.isRequired"
                                                   :rules="config.adultGenderField.isRequired ? adult1RequiredGenderRules : ''" />
                                 </div>
                                 <div class="col-sm-6">
@@ -315,7 +315,7 @@
                                                       :disabled="isSaving || isNavigating"
                                                       :items="genderItems"
                                                       :label="t('labelGender')"
-                                                      :showBlankItem="false"
+                                                      :showBlankItem="!config.adultGenderField.isRequired"
                                                       :rules="isAdult2Entered && config.adultGenderField.isRequired ? adult2RequiredGenderRules : ''" />
                                     </div>
                                     <div v-if="config.adultSuffixField?.isShown" class="col-sm-6">
@@ -674,7 +674,6 @@
 
     const genderItems = computed<ListItemBag[]>(() => {
         return [
-            { text: t("optionGenderUnknown"), value: Gender.Unknown.toString() },
             { text: t("optionGenderMale"), value: Gender.Male.toString() },
             { text: t("optionGenderFemale"), value: Gender.Female.toString() }
         ];

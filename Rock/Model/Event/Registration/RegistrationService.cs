@@ -110,7 +110,8 @@ namespace Rock.Model
         public decimal GetTotalPayments( int registrationId )
         {
             return GetPayments( registrationId )
-                .Select( p => p.Amount ).DefaultIfEmpty()
+                // Fee coverage (e.g. installment surcharge) should not reduce registration balance due.
+                .Select( p => p.Amount - ( p.FeeCoverageAmount ?? 0m ) ).DefaultIfEmpty()
                 .Sum();
         }
 

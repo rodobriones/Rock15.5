@@ -59,7 +59,7 @@
                           :disabled="disabled"
                           :items="genderItems"
                           :label="t('labelGender')"
-                          :showBlankItem="false"
+                          :showBlankItem="!config.childGenderField.isRequired"
                           :rules="config.childGenderField.isRequired ? requiredGenderRules : ''" />
         </div>
 
@@ -290,7 +290,6 @@
 
     const genderItems = computed<ListItemBag[]>(() => {
         return [
-            { text: t("optionGenderUnknown"), value: Gender.Unknown.toString() },
             { text: t("optionGenderMale"), value: Gender.Male.toString() },
             { text: t("optionGenderFemale"), value: Gender.Female.toString() }
         ];
