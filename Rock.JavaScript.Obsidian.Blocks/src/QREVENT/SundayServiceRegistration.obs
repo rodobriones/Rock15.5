@@ -1,0 +1,1934 @@
+<template>
+    <Panel type="block" title="Registro Servicio Dominical" :hasNoBodyPadding="true">
+        <template #default>
+            <!-- ===== Blank Layout: página implícita ===== -->
+            <div class="vrPage">
+                <div class="vrTopBar">
+                    <div class="vrBrand">VidaReal.tv</div>
+
+                </div>
+
+                <div class="vrContainer">
+                    <div class="sswrap">
+                        <NotificationBox v-if="config.notLogged" alertType="warning">
+                            Debes iniciar sesión para registrarte.
+                        </NotificationBox>
+
+                        <div v-else>
+                            <!-- Stepper -->
+                            <div v-if="!activeReservation || replacing" class="ssStepper">
+                                <div class="ssStep" :class="{ active: step === 1, done: step > 1 }">
+                                    <div class="ssDot">1</div>
+                                    <div class="ssStepText">Sede</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 1 }"></div>
+                                <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
+                                    <div class="ssDot">2</div>
+                                    <div class="ssStepText">Cantidad</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 2 }"></div>
+                                <div class="ssStep" :class="{ active: step === 3, done: step > 3 }">
+                                    <div class="ssDot">3</div>
+                                    <div class="ssStepText">Horario</div>
+                                </div>
+                                <div class="ssLine" :class="{ done: step > 3 }"></div>
+                                <div class="ssStep" :class="{ active: step === 4 }">
+                                    <div class="ssDot">4</div>
+                                    <div class="ssStepText">Confirmar</div>
+                                </div>
+                            </div>
+
+                            <div v-if="statusHtml" v-html="statusHtml"></div>
+
+                            <!-- Reserva activa -->
+                            <div v-if="activeReservation && !replacing" class="card ssCard">
+                                <div class="card-body">
+                                    <div class="ssCardTitle">Tu reserva activa</div>
+
+                                    <div class="ssSummaryCard">
+                                        <div class="ssSummaryRow">
+                                            <div class="ssLabel">Sede</div>
+                                            <div class="ssVal">{{ activeReservation.campusName }}</div>
+                                        </div>
+                                        <div class="ssSummaryRow">
+                                            <div class="ssLabel">Día</div>
+                                            <div class="ssVal">{{ activeReservation.occurrenceDateText }}</div>
+                                        </div>
+                                        <div class="ssSummaryRow">
+                                            <div class="ssLabel">Horario</div>
+                                            <div class="ssVal">{{ activeReservation.scheduleName }}</div>
+                                        </div>
+                                        <div class="ssSummaryRow">
+                                            <div class="ssLabel">Cantidad</div>
+                                            <div class="ssVal">{{ activeReservation.quantity }}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="ssQrWrap">
+                                        <div class="ssQrImgClip">
+                                            <img
+                                                class="ssQrImg"
+                                                :src="qrUrl(activeReservation.reservationCode)"
+                                                alt="QR Reserva" />
+                                        </div>
+                                    </div>
+
+                                    <div class="ssQrInfoText text-muted">
+                                        Presenta este código QR al ingresar al evento. También quedará guardado en Reservas z.10 en tu app, o puedes descargarlo aquí.
+                                    </div>
+
+                                    <div class="ssActions" style="flex-direction: column; align-items: center; display: flex; gap: 14px;">
+                                        <RockButton btnType="primary" @click="downloadImage" :disabled="busy" style="width: 100%;">
+                                            Descargar
+                                        </RockButton>
+
+                                        <RockButton btnType="default" @click="startReplaceFlow" :disabled="busy" style="width: 100%;">
+                                            Cambiar horario
+                                        </RockButton>
+
+                                        <a v-if="!busy" href="#" class="ssBackLink" @click.prevent="openCancelModal">Cancelar reserva</a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Flujo por pasos -->
+                            <div v-else class="card ssCard">
+                                <div class="card-body">
+                                    <!-- STEP 1: Campus -->
+                                    <div v-if="step === 1" class="ssScreen">
+                                        <div class="ssScreenTitle">Selecciona tu sede</div>
+                                        <div class="ssScreenSub text-muted">Elige la sede para ver horarios disponibles.</div>
+
+                                        <div class="ssCampusGrid">
+                                            <div
+                                                v-for="c in campusOptions"
+                                                :key="c.value"
+                                                role="button"
+                                                tabindex="0"
+                                                class="ssCampusCard"
+                                                :class="{ isSelected: String(c.value) === String(campusId), isDisabled: busy }"
+                                                @click="!busy && selectCampus(c)"
+                                                @keydown.enter="!busy && selectCampus(c)">
+                                                <div class="ssCampusImg">
+                                                    <img v-if="c.imageUrl" :src="c.imageUrl" alt="Campus" class="ssCampusRealImg" />
+                                                    <div v-else class="ssCampusInitials">{{ campusInitials(c.text) }}</div>
+                                                </div>
+                                                <div class="ssCampusName">{{ c.text }}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ssNav ssNavSingle">
+                                            <RockButton v-if="replacing" btnType="default" @click="cancelReplaceFlow" :disabled="busy">
+                                                Volver a mi reserva
+                                            </RockButton>
+                                        </div>
+                                    </div>
+
+                                    <!-- STEP 2: Cantidad -->
+                                    <div v-else-if="step === 2" class="ssScreen">
+
+                                        <div v-if="campusNameSelected" class="ssCampusHeading">Sede: {{ campusNameSelected }}</div>
+
+                                        <div class="ssQtyWrap">
+                                            <div class="ssQtyTitle">Cantidad de personas</div>
+                                            <div class="ssQtySub text-muted">Máximo 8 personas.</div>
+
+                                            <div class="ssQtyRow">
+                                                <button class="ssQtyBtn" type="button" @click="decQty" :disabled="holdBusy || quantity <= 1">-</button>
+                                                <div class="ssQtyVal">{{ quantity }}</div>
+                                                <button class="ssQtyBtn" type="button" @click="incQty" :disabled="holdBusy || quantity >= 8">+</button>
+                                            </div>
+                                        </div>
+
+                                        <div class="ssNav" :class="{ ssNavSingle: campusOptions.length === 1 }">
+                                            <a v-if="campusOptions.length > 1 && !busy" href="#" class="ssBackLink" @click.prevent="step = 1">Atr&aacute;s</a>
+
+                                            <RockButton
+                                                btnType="primary"
+                                                @click="goStep3"
+                                                :disabled="busy || !campusId">
+                                                Siguiente
+                                            </RockButton>
+                                        </div>
+                                    </div>
+
+                                    <!-- STEP 3: Horario -->
+                                    <div v-else-if="step === 3" class="ssScreen">
+                                        <div class="ssSummaryCard">
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Sede</div>
+                                                <div class="ssVal">{{ campusNameSelected }}</div>
+                                            </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Cantidad</div>
+                                                <div class="ssVal">{{ quantity }}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="ssScreenTitle" style="margin-top: 16px;">Selecciona horario</div>
+
+                                        <div v-if="weekBusy" class="text-muted ssSmall">Cargando horarios...</div>
+
+                                        <div v-if="weekError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ weekError }}</NotificationBox>
+                                        </div>
+
+                                        <div v-if="!weekBusy && !weekError && availableDays.length === 0" class="text-muted ssSmall">
+                                            No hay horarios con cupo disponible para este campus en la semana.
+                                        </div>
+
+                                        <div v-if="availableDays.length > 0" class="ssSlots">
+                                            <div v-for="d in availableDays" :key="d.occurrenceDate" class="ssDayBlock">
+                                                <div class="ssDayTitle">{{ d.occurrenceDateText }}</div>
+
+                                                <button
+                                                    v-for="s in d.slots"
+                                                    :key="s.slotId"
+                                                    type="button"
+                                                    class="ssSlotBtn"
+                                                    :class="{ isSelected: s.slotId === selectedSlotId }"
+                                                    :disabled="busy"
+                                                    @click="selectSlot(s)">
+                                                    <div class="ssSlotTop">
+                                                        <div class="ssSlotName">{{ s.scheduleName }}</div>
+                                                        <div class="ssSlotCap">Cupos disponibles: {{ s.available }}</div>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="ssNav">
+                                            <a v-if="!busy" href="#" class="ssBackLink" @click.prevent="step = 2">Atr&aacute;s</a>
+                                        </div>
+                                    </div>
+
+                                    <!-- STEP 4: Confirmar -->
+                                    <div v-else class="ssScreen">
+                                        <div class="ssScreenTitle">Confirmar reserva</div>
+                                        <div class="ssScreenSub text-muted">Revisa los detalles antes de confirmar.</div>
+
+                                        <div v-if="selectedSummary" class="ssSummaryCard">
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Sede</div>
+                                                <div class="ssVal">{{ selectedSummary.campusName }}</div>
+                                            </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Dia</div>
+                                                <div class="ssVal">{{ selectedSummary.occurrenceDateText }}</div>
+                                            </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Horario</div>
+                                                <div class="ssVal">{{ selectedSummary.scheduleName }}</div>
+                                            </div>
+                                            <div class="ssSummaryRow">
+                                                <div class="ssLabel">Cantidad</div>
+                                                <div class="ssVal">{{ quantity }}</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Barra de progreso del hold -->
+                                        <div v-if="holdToken && holdTimeRemaining > 0" class="ssHoldProgress">
+                                            <div class="ssHoldProgressLabel">
+                                                <span>Reservado</span>
+                                                <span class="ssHoldTime">{{ holdCountdownText }}</span>
+                                            </div>
+                                            <div class="ssHoldProgressBar">
+                                                <div class="ssHoldProgressFill" :style="{ width: holdProgressPercent + '%' }"></div>
+                                            </div>
+                                        </div>
+
+                                        <div v-else-if="!holdToken && !holdError" class="ssSmall text-muted">
+                                            Hold: {{ holdStatusText }}
+                                        </div>
+
+                                        <div v-if="holdError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ holdError }}</NotificationBox>
+                                        </div>
+
+                                        <div class="ssConfirmRow">
+                                            <RockButton btnType="primary" @click="confirm" :disabled="busy || holdBusy || !holdToken">
+                                                {{ busy ? "Procesando..." : "Confirmar reserva" }}
+                                            </RockButton>
+
+                                            <a href="#" class="ssBackLink" @click.prevent="step = 3" v-if="!busy">Atr&aacute;s</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Confirmar Cancelación -->
+                        <div v-if="showCancelModal" class="ssModalOverlay" @click.self="closeCancelModal">
+                            <div class="ssModalCard">
+                                <div class="ssModalTitle">Cancelar reserva</div>
+                                <div class="ssModalText">
+                                    ¿Seguro que deseas cancelar tu reserva? Esta acción libera tu cupo.
+                                </div>
+
+                                <div class="ssModalSummary" v-if="activeReservation">
+                                    <div class="ssModalRow">
+                                        <div class="ssModalLabel">Sede</div>
+                                        <div class="ssModalVal">{{ activeReservation.campusName }}</div>
+                                    </div>
+                                    <div class="ssModalRow">
+                                        <div class="ssModalLabel">Día</div>
+                                        <div class="ssModalVal">{{ activeReservation.occurrenceDateText }}</div>
+                                    </div>
+                                    <div class="ssModalRow">
+                                        <div class="ssModalLabel">Horario</div>
+                                        <div class="ssModalVal">{{ activeReservation.scheduleName }}</div>
+                                    </div>
+                                    <div class="ssModalRow">
+                                        <div class="ssModalLabel">Cantidad</div>
+                                        <div class="ssModalVal">{{ activeReservation.quantity }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="ssModalActions">
+                                    <RockButton btnType="default" @click="closeCancelModal" :disabled="busy">
+                                        No, mantener
+                                    </RockButton>
+
+                                    <RockButton btnType="danger" @click="confirmCancelReservation" :disabled="busy">
+                                        Sí, cancelar
+                                    </RockButton>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Tiempo Expirado -->
+                        <div v-if="showExpiredModal" class="ssModalOverlay" @click.self="closeExpiredModal">
+                            <div class="ssModalCard">
+                                <div class="ssModalTitle">⏱️ Tiempo expirado</div>
+                                <div class="ssModalText">
+                                    El tiempo de reserva ha expirado. Por favor, intenta seleccionar tu horario nuevamente.
+                                </div>
+
+                                <div class="ssModalActions" style="grid-template-columns: 1fr;">
+                                    <RockButton btnType="primary" @click="closeExpiredModal">
+                                        Entendido
+                                    </RockButton>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Toast -->
+                        <div v-if="toast.show" class="ssToast" :class="toast.kind">
+                            <div class="ssToastText">{{ toast.message }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type CampusOptionBag = { text: string; value: string; imageUrl?: string };
+
+type SlotBag = {
+    slotId: number;
+    campusId: number;
+    occurrenceDate: string;
+    scheduleId: number | null;
+    scheduleName: string;
+
+    capacity: number;
+    reservedCount: number;
+    holdCount: number;
+    available: number;
+    isAvailable: boolean;
+};
+
+type DaySlotsBag = {
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    slots: SlotBag[];
+};
+
+type ActiveReservationBag = {
+    reservationId: number;
+    reservationCode: string;
+    quantity: number;
+    status: number;
+
+    campusId: number;
+    campusName: string;
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    scheduleId: number | null;
+    scheduleName: string;
+};
+
+type InitBag = {
+    notLogged: boolean;
+    statusHtml: string;
+    campuses: CampusOptionBag[];
+    activeReservation: ActiveReservationBag | null;
+};
+
+type GetWeekSlotsResponse = { days: DaySlotsBag[] };
+
+type HoldUpsertResponse = {
+    resultCode: number;
+    holdToken: string;
+    availableAfter: number;
+    expiresDateTime: string;
+};
+
+type ConfirmResponse = {
+    resultCode: number;
+    reservationId: number;
+    reservationCode: string;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const busy = ref<boolean>(false);
+const holdBusy = ref<boolean>(false);
+const holdUpdating = ref<boolean>(false);
+
+const statusHtml = ref<string>(config.statusHtml || "");
+
+const campusOptions = ref<CampusOptionBag[]>(config.campuses || []);
+const activeReservation = ref<ActiveReservationBag | null>(config.activeReservation || null);
+const replacing = ref<boolean>(false);
+
+const step = ref<number>(1);
+
+const campusId = ref<number | null>(null);
+
+const days = ref<DaySlotsBag[]>([]);
+const weekBusy = ref<boolean>(false);
+const weekError = ref<string>("");
+
+const selectedSlotId = ref<number | null>(null);
+const selectedScheduleId = ref<number | null>(null);
+const selectedOccurrenceDate = ref<string>("");
+
+const quantity = ref<number>(1);
+
+const holdToken = ref<string>("");
+const holdExpiresAt = ref<string>("");
+const holdError = ref<string>("");
+const holdTimeRemaining = ref<number>(0); // segundos restantes
+
+let holdDebounceTimer: number | null = null;
+let holdCountdownTimer: number | null = null;
+let holdRequestSeq = 0;
+let holdInFlightSeq = 0;
+
+const showCancelModal = ref<boolean>(false);
+const showExpiredModal = ref<boolean>(false);
+
+type ToastKind = "success" | "danger" | "info";
+const toast = ref<{ show: boolean; kind: ToastKind; message: string }>({
+    show: false,
+    kind: "info",
+    message: ""
+});
+
+let toastTimer: number | null = null;
+
+function showToast(kind: ToastKind, message: string) {
+    toast.value = { show: true, kind, message };
+
+    if (toastTimer != null) {
+        window.clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+
+    toastTimer = window.setTimeout(() => {
+        toast.value.show = false;
+        toastTimer = null;
+    }, 2800);
+}
+
+function openCancelModal() {
+    if (!activeReservation.value) return;
+    showCancelModal.value = true;
+}
+
+function closeCancelModal() {
+    showCancelModal.value = false;
+}
+
+function closeExpiredModal() {
+    showExpiredModal.value = false;
+    resetSelection();
+
+    // Si solo hay un campus, seleccionarlo automáticamente y ir al paso 2
+    if (campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    } else {
+        step.value = 1;
+    }
+}
+
+function qrUrl(code: string): string {
+    const dim = 240;
+    return `/GetQRCode.ashx?data=${encodeURIComponent(code)}&size=${dim}`;
+}
+
+function downloadImage() {
+    if (!activeReservation.value) return;
+
+    const res = activeReservation.value;
+    const qrSize = 280;
+    const qrSrc = `/GetQRCode.ashx?data=${encodeURIComponent(res.reservationCode)}&size=${qrSize}`;
+
+    // Cargar imagen QR primero
+    const qrImg = new Image();
+    qrImg.crossOrigin = "anonymous";
+    
+    qrImg.onload = () => {
+        // Dimensiones del canvas
+        const canvasWidth = 420;
+        const canvasHeight = 580;
+        const padding = 30;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            showToast("danger", "No se pudo generar la imagen.");
+            return;
+        }
+
+        // Fondo blanco
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        // Header
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("VidaReal.tv", canvasWidth / 2, 45);
+
+        // Info grid
+        const infoY = 80;
+        const labelStyle = "#6B7280";
+        const valueStyle = "#111827";
+        const colWidth = (canvasWidth - padding * 2) / 2;
+
+        const drawInfo = (label: string, value: string, x: number, y: number) => {
+            ctx.fillStyle = labelStyle;
+            ctx.font = "600 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(label.toUpperCase(), x, y);
+            
+            ctx.fillStyle = valueStyle;
+            ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+            ctx.fillText(value, x, y + 18);
+        };
+
+        drawInfo("Campus", res.campusName, padding, infoY);
+        drawInfo("Día", res.occurrenceDateText, padding + colWidth, infoY);
+        drawInfo("Horario", res.scheduleName, padding, infoY + 50);
+        drawInfo("Cantidad", String(res.quantity), padding + colWidth, infoY + 50);
+
+        // QR centrado
+        const qrX = (canvasWidth - qrSize) / 2;
+        const qrY = 195;
+        
+        // Borde del QR
+        ctx.strokeStyle = "#E5E7EB";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8);
+        
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+        // Footer
+        ctx.fillStyle = "#9CA3AF";
+        ctx.font = "12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.fillText("Presenta este código QR al ingresar", canvasWidth / 2, qrY + qrSize + 35);
+
+        // Descargar
+        const link = document.createElement("a");
+        link.download = `reserva-${res.reservationCode}.jpg`;
+        link.href = canvas.toDataURL("image/jpeg", 0.95);
+        link.click();
+
+        showToast("success", "Imagen descargada");
+    };
+
+    qrImg.onerror = () => {
+        showToast("danger", "No se pudo cargar el código QR.");
+    };
+
+    qrImg.src = qrSrc;
+}
+
+const nextOccurrenceDateText = computed<string>(() => {
+    if (!days.value || days.value.length === 0) return "";
+    return days.value[0]?.occurrenceDateText || "";
+});
+
+const campusNameSelected = computed<string>(() => {
+    if (!campusId.value) return "";
+    const found = campusOptions.value.find(x => x.value === String(campusId.value));
+    return found?.text || "";
+});
+
+const availableDays = computed<DaySlotsBag[]>(() => {
+    return (days.value || [])
+        .map(d => ({
+            ...d,
+            slots: (d.slots || []).filter(s => s.isAvailable && s.available >= quantity.value)
+        }))
+        .filter(d => d.slots.length > 0);
+});
+
+function campusInitials(name: string): string {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    const first = parts[0]?.charAt(0) || "";
+    const second = parts.length > 1 ? parts[1]?.charAt(0) || "" : (parts[0]?.charAt(1) || "");
+    return (first + second).toUpperCase();
+}
+
+function selectCampus(c: CampusOptionBag) {
+    if (busy.value) return;
+    const n = Number(c.value);
+    campusId.value = Number.isFinite(n) ? n : null;
+    if (campusId.value) {
+        step.value = 2;
+    }
+}
+
+function resetHold() {
+    holdToken.value = "";
+    holdExpiresAt.value = "";
+    holdError.value = "";
+    holdUpdating.value = false;
+    holdTimeRemaining.value = 0;
+
+    if (holdCountdownTimer != null) {
+        window.clearInterval(holdCountdownTimer);
+        holdCountdownTimer = null;
+    }
+}
+
+function startHoldCountdown(expiresIso: string) {
+    // Limpiar timer anterior si existe
+    if (holdCountdownTimer != null) {
+        window.clearInterval(holdCountdownTimer);
+        holdCountdownTimer = null;
+    }
+
+    const expiresDate = new Date(expiresIso);
+
+    const updateRemaining = () => {
+        const now = new Date();
+        const diffMs = expiresDate.getTime() - now.getTime();
+        const diffSec = Math.floor(diffMs / 1000);
+
+        if (diffSec <= 0) {
+            holdTimeRemaining.value = 0;
+            if (holdCountdownTimer != null) {
+                window.clearInterval(holdCountdownTimer);
+                holdCountdownTimer = null;
+            }
+            // Mostrar modal de expiración
+            holdToken.value = "";
+            holdError.value = "";
+            showExpiredModal.value = true;
+        } else {
+            holdTimeRemaining.value = diffSec;
+        }
+    };
+
+    // Actualizar inmediatamente
+    updateRemaining();
+
+    // Actualizar cada segundo
+    holdCountdownTimer = window.setInterval(updateRemaining, 1000);
+}
+
+function resetSelection() {
+    days.value = [];
+    weekError.value = "";
+    selectedSlotId.value = null;
+    selectedScheduleId.value = null;
+    selectedOccurrenceDate.value = "";
+    quantity.value = 1;
+    resetHold();
+}
+
+function parseTimeFromScheduleName(name: string): number {
+    const m = (name || "").match(/(\d{1,2})\s*:\s*(\d{2})/);
+    if (!m) return 9999;
+
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+
+    if (!Number.isFinite(h) || !Number.isFinite(min)) return 9999;
+    return h * 60 + min;
+}
+
+function sortDaysAndSlots(input: DaySlotsBag[]): DaySlotsBag[] {
+    const daysCopy = (input || []).map(d => ({
+        ...d,
+        slots: [...(d.slots || [])].sort((a, b) => {
+            return parseTimeFromScheduleName(a.scheduleName) - parseTimeFromScheduleName(b.scheduleName);
+        })
+    }));
+
+    daysCopy.sort((a, b) => (a.occurrenceDate || "").localeCompare(b.occurrenceDate || ""));
+    return daysCopy;
+}
+
+async function loadWeekSlots(force: boolean) {
+    if (!campusId.value) return;
+
+    if (!force && (weekBusy.value || days.value.length > 0 || weekError.value)) return;
+
+    weekBusy.value = true;
+    weekError.value = "";
+
+    try {
+        const res = await invokeBlockAction<any>("GetWeekSlots", { bag: { campusId: campusId.value } });
+
+        if (!res.isSuccess) {
+            weekError.value = res.errorMessage || "No se pudieron cargar los horarios.";
+            days.value = [];
+            return;
+        }
+
+        const data = res.data as GetWeekSlotsResponse;
+        days.value = sortDaysAndSlots(data?.days || []);
+    } catch {
+        weekError.value = "Error cargando horarios.";
+        days.value = [];
+    } finally {
+        weekBusy.value = false;
+    }
+}
+
+watch(campusId, async () => {
+    resetSelection();
+    if (!campusId.value) return;
+    await loadWeekSlots(true);
+});
+
+function startReplaceFlow() {
+    replacing.value = true;
+    statusHtml.value = "";
+    step.value = 1;
+    resetSelection();
+    void loadWeekSlots(true);
+}
+
+function cancelReplaceFlow() {
+    replacing.value = false;
+    resetSelection();
+    step.value = 1;
+}
+
+async function goStep3() {
+    if (!campusId.value) return;
+    step.value = 3;
+
+    if (days.value.length === 0 && !weekBusy.value) {
+        await loadWeekSlots(true);
+    }
+}
+
+function selectSlot(s: SlotBag) {
+    if (!s.isAvailable) return;
+
+    selectedSlotId.value = s.slotId;
+    selectedScheduleId.value = s.scheduleId ?? null;
+    selectedOccurrenceDate.value = s.occurrenceDate;
+
+    resetHold();
+    scheduleHoldUpsert();
+    
+    // Avanzar al paso 4 (Confirmar)
+    step.value = 4;
+}
+
+function incQty() {
+    if (quantity.value >= 8) return;
+    quantity.value++;
+    scheduleHoldUpsert();
+}
+
+function decQty() {
+    if (quantity.value <= 1) return;
+    quantity.value--;
+    scheduleHoldUpsert();
+}
+
+function scheduleHoldUpsert() {
+    holdError.value = "";
+
+    if (!campusId.value || !selectedOccurrenceDate.value || !selectedScheduleId.value) return;
+
+    holdUpdating.value = true;
+
+    if (holdDebounceTimer != null) {
+        window.clearTimeout(holdDebounceTimer);
+        holdDebounceTimer = null;
+    }
+
+    holdDebounceTimer = window.setTimeout(() => {
+        holdDebounceTimer = null;
+        void doHoldUpsertLatest();
+    }, 250);
+}
+
+async function doHoldUpsertLatest() {
+    if (!campusId.value || !selectedOccurrenceDate.value || !selectedScheduleId.value) return;
+
+    const mySeq = ++holdRequestSeq;
+    holdInFlightSeq = mySeq;
+
+    holdBusy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("HoldUpsert", {
+            bag: {
+                campusId: campusId.value,
+                occurrenceDate: selectedOccurrenceDate.value,
+                scheduleId: selectedScheduleId.value,
+                quantity: quantity.value,
+                holdMinutes: 2
+            }
+        });
+
+        if (mySeq !== holdInFlightSeq) return;
+
+        if (!res.isSuccess) {
+            holdError.value = res.errorMessage || "No se pudo crear el hold.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+            return;
+        }
+
+        const data = res.data as HoldUpsertResponse;
+
+        if (data.resultCode !== 1) {
+            holdError.value = data.resultCode === 0
+                ? "Ya no hay cupo suficiente para esa cantidad."
+                : data.resultCode === -1
+                    ? "El horario ya no existe o no está activo."
+                    : "No se pudo apartar el cupo. Intenta de nuevo.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+            void refreshWeekSilent();
+            return;
+        }
+
+        holdToken.value = data.holdToken || "";
+        holdExpiresAt.value = data.expiresDateTime || "";
+
+        // Iniciar el countdown
+        if (data.expiresDateTime) {
+            startHoldCountdown(data.expiresDateTime);
+        }
+
+        void refreshWeekSilent();
+    } catch {
+        if (mySeq === holdInFlightSeq) {
+            holdError.value = "Error creando el hold.";
+            holdToken.value = "";
+            holdExpiresAt.value = "";
+        }
+    } finally {
+        if (mySeq === holdInFlightSeq) {
+            holdBusy.value = false;
+            holdUpdating.value = false;
+        }
+    }
+}
+
+async function refreshWeekSilent() {
+    if (!campusId.value) return;
+
+    try {
+        const res = await invokeBlockAction<any>("GetWeekSlots", { bag: { campusId: campusId.value } });
+
+        if (res.isSuccess && res.data?.days) {
+            days.value = sortDaysAndSlots(res.data.days as DaySlotsBag[]);
+
+            // Solo validar disponibilidad si NO tenemos un hold activo
+            // Si tenemos hold válido, significa que ya tomamos el cupo
+            if (selectedSlotId.value && !holdToken.value) {
+                const still = findSlotById(selectedSlotId.value);
+                if (!still || !still.isAvailable) {
+                    selectedSlotId.value = null;
+                    selectedScheduleId.value = null;
+                    selectedOccurrenceDate.value = "";
+                    resetHold();
+                    step.value = 2;
+                }
+            }
+        }
+    } catch {
+    }
+}
+
+function findSlotById(slotId: number): SlotBag | null {
+    for (const d of days.value) {
+        const s = d.slots.find(x => x.slotId === slotId);
+        if (s) return s;
+    }
+    return null;
+}
+
+const holdCountdownText = computed<string>(() => {
+    if (holdTimeRemaining.value <= 0) return "00:00";
+
+    const mins = Math.floor(holdTimeRemaining.value / 60);
+    const secs = holdTimeRemaining.value % 60;
+
+    const minsStr = String(mins).padStart(2, "0");
+    const secsStr = String(secs).padStart(2, "0");
+
+    return `${minsStr}:${secsStr}`;
+});
+
+// Porcentaje de tiempo restante (0-100%)
+const holdProgressPercent = computed<number>(() => {
+    const totalSeconds = 120; // 2 minutos = 120 segundos
+    if (holdTimeRemaining.value <= 0) return 0;
+    if (holdTimeRemaining.value >= totalSeconds) return 100;
+    return (holdTimeRemaining.value / totalSeconds) * 100;
+});
+
+const holdStatusText = computed<string>(() => {
+    if (!selectedSlotId.value) return "—";
+    if (holdError.value) return "Falló";
+    if (holdUpdating.value) return "Actualizando…";
+    if (!holdToken.value) return "—";
+    if (holdTimeRemaining.value > 0) return `Reservado (${holdCountdownText.value})`;
+    return "Activo";
+});
+
+const selectedSummary = computed<null | { campusName: string; occurrenceDateText: string; scheduleName: string }>(() => {
+    if (!selectedSlotId.value) return null;
+
+    const slot = findSlotById(selectedSlotId.value);
+    if (!slot) return null;
+
+    const day = days.value.find(d => d.occurrenceDate === slot.occurrenceDate);
+
+    return {
+        campusName: campusNameSelected.value || "Campus",
+        occurrenceDateText: day?.occurrenceDateText || slot.occurrenceDate,
+        scheduleName: slot.scheduleName
+    };
+});
+
+async function confirm() {
+    if (busy.value) return;
+
+    holdError.value = "";
+
+    if (!holdToken.value) {
+        holdError.value = "No hay hold vigente. Intenta de nuevo.";
+        return;
+    }
+
+    const previousReservationId = activeReservation.value?.reservationId ?? null;
+    busy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("ConfirmReservation", {
+            bag: {
+                holdToken: holdToken.value,
+                forceReplaceExisting: true,
+                esReemplazo: replacing.value
+            }
+        });
+
+        if (!res.isSuccess) {
+            await refreshActive();
+
+            if (activeReservation.value && activeReservation.value.reservationId !== previousReservationId) {
+                replacing.value = false;
+                resetSelection();
+                await refreshWeekSilent();
+                step.value = 1;
+                return;
+            }
+
+            holdError.value = res.errorMessage || "No se pudo confirmar.";
+            return;
+        }
+
+        const data = res.data as ConfirmResponse;
+
+        if (data.resultCode !== 1) {
+            await refreshActive();
+
+            if (activeReservation.value && activeReservation.value.reservationId !== previousReservationId) {
+                replacing.value = false;
+                resetSelection();
+                await refreshWeekSilent();
+                step.value = 1;
+                return;
+            }
+
+            holdError.value = data.resultCode === 0 || data.resultCode === -1
+                ? "No se pudo confirmar: el hold venció o ya no está disponible."
+                : data.resultCode === -2 || data.resultCode === -3
+                    ? "Ya existe otra reserva activa para esta persona."
+                    : "No se pudo confirmar. Intenta de nuevo.";
+            void refreshWeekSilent();
+            resetHold();
+            return;
+        }
+
+        if (data.resultCode !== 1) {
+            holdError.value = "No se pudo confirmar: ya no hay cupo o el hold venció.";
+            void refreshWeekSilent();
+            resetHold();
+            return;
+        }
+
+        await refreshActive();
+        await refreshWeekSilent();
+        replacing.value = false;
+        resetSelection();
+        step.value = 1;
+    } catch {
+        await refreshActive();
+
+        if (activeReservation.value && activeReservation.value.reservationId !== previousReservationId) {
+            replacing.value = false;
+            resetSelection();
+            await refreshWeekSilent();
+            step.value = 1;
+            return;
+        }
+
+        holdError.value = "Error confirmando reserva.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function refreshActive() {
+    try {
+        const res = await invokeBlockAction<any>("GetActiveReservation", {});
+        if (res.isSuccess) {
+            activeReservation.value = (res.data?.activeReservation || null) as ActiveReservationBag | null;
+        }
+    } catch {
+    }
+}
+
+async function confirmCancelReservation() {
+    if (!activeReservation.value) return;
+    if (busy.value) return;
+
+    const reservationId = activeReservation.value.reservationId;
+    const previousReservationId = activeReservation.value?.reservationId ?? null;
+    busy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("CancelReservation", {
+            bag: { reservationId }
+        });
+
+        if (!res.isSuccess) {
+            showToast("danger", res.errorMessage || "No se pudo cancelar la reserva.");
+            return;
+        }
+
+        const resultCode = Number(res.data?.resultCode ?? 0);
+
+        if (resultCode !== 1) {
+            await refreshActive();
+
+            // Si backend ya no reporta esa reserva como activa,
+            // tratamos la operacion como exitosa para evitar falso error en UI.
+            if (!activeReservation.value || activeReservation.value.reservationId !== reservationId) {
+                await refreshWeekSilent();
+                showCancelModal.value = false;
+                activeReservation.value = null;
+                replacing.value = false;
+                resetSelection();
+                showToast("success", "Reserva cancelada.");
+                return;
+            }
+
+            showToast("danger", resultCode === 0
+                ? "La reserva ya no estaba activa."
+                : resultCode === -2
+                    ? "La reserva ya no existe o ya no te pertenece."
+                    : "No se pudo cancelar. Intenta de nuevo.");
+            return;
+        }
+
+        await refreshActive();
+        await refreshWeekSilent();
+        showCancelModal.value = false;
+        activeReservation.value = null;
+        replacing.value = false;
+        resetSelection();
+
+        showToast("success", "Reserva cancelada.");
+    } catch {
+        showToast("danger", "Error cancelando reserva.");
+    } finally {
+        busy.value = false;
+
+        // Si solo hay un campus, seleccionarlo automáticamente y ir al paso 2
+        if (campusOptions.value.length === 1) {
+            const singleCampus = campusOptions.value[0];
+            const n = Number(singleCampus.value);
+            campusId.value = Number.isFinite(n) ? n : null;
+            if (campusId.value) {
+                step.value = 2;
+            }
+        } else {
+            step.value = 1;
+        }
+    }
+}
+
+// Auto-selección de campus si solo hay uno disponible
+onMounted(() => {
+    // Si no hay reserva activa y solo hay 1 campus, seleccionarlo automáticamente
+    if (!activeReservation.value && !replacing.value && campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    }
+});
+
+// También auto-seleccionar cuando se inicia el flujo de reemplazo
+watch(replacing, (newVal) => {
+    if (newVal && step.value === 1 && campusOptions.value.length === 1) {
+        const singleCampus = campusOptions.value[0];
+        selectCampus(singleCampus);
+    }
+});
+</script>
+
+<style>
+/* ===== Paleta y tipografía (estilo captura VidaReal.tv) ===== */
+/* Opcional (si CSP lo permite):
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&display=swap");
+*/
+
+:root{
+    --vr-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+
+    --vr-bg: #F4F6FB;
+    --vr-surface: #FFFFFF;
+    --vr-text: #111827;
+    --vr-muted: #6B7280;
+    --vr-border: rgba(17,24,39,.10);
+
+    --vr-shadow: 0 10px 30px rgba(17,24,39,.10);
+    --vr-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
+
+    --vr-radius-xl: 18px;
+    --vr-radius-lg: 14px;
+    --vr-radius-md: 12px;
+
+    --vr-accent: #2563EB;
+}
+
+/* ===== Página implícita (Blank Layout) ===== */
+.vrPage {
+    font-family: var(--vr-font);
+    background: var(--vr-bg);
+    min-height: 100vh;
+    padding-bottom: 18px;
+    color: var(--vr-text);
+    /* Prevenir zoom en móvil al hacer doble click */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Permitir selección de texto en campos de entrada y texto informativo */
+.vrPage input,
+.vrPage textarea,
+.vrPage .ssCode,
+.vrPage .ssModalText,
+.vrPage .ssScreenSub {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+}
+
+.vrTopBar {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    background: var(--vr-bg);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+}
+
+.vrBrand {
+    font-weight: 800;
+    letter-spacing: .2px;
+    color: var(--vr-text);
+    font-size: 18px;
+}
+
+.vrTopActions {
+    display: flex;
+    gap: 10px;
+}
+
+.vrIconBtn {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: rgba(17,24,39,.06);
+    border: 1px solid rgba(17,24,39,.06);
+}
+
+.vrContainer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 10px 10px 22px;
+}
+
+/* ===== Compat: text-muted estable aunque el theme cambie ===== */
+.text-muted { color: var(--vr-muted) !important; }
+
+/* ===== Wrapper interno ===== */
+.sswrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 6px 6px;
+    font-family: var(--vr-font);
+    color: var(--vr-text);
+}
+
+/* ===== Opcional: ocultar header del Panel si estorba ===== */
+.panel-block .panel-heading,
+.panel-block .panel-header {
+    display: none !important;
+}
+.panel-block {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* ===== Stepper ===== */
+.ssStepper {
+    position: sticky;
+    top: 54px; /* debajo de vrTopBar */
+    z-index: 10;
+    background: var(--vr-bg);
+    padding: 10px 8px 12px;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+    display: grid;
+    /* 4 steps = 4 autos + 3 frs lines */
+    grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.ssStep {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+@media (max-width: 576px) {
+    .ssStepText { display: none; }
+    .ssStepper { gap: 4px; }
+}
+
+.ssDot {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid rgba(17,24,39,.22);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 800;
+    background: var(--vr-surface);
+}
+
+.ssStepText {
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--vr-muted);
+}
+
+.ssLine {
+    height: 2px;
+    background: rgba(17,24,39,.12);
+    border-radius: 999px;
+}
+
+.ssStep.active .ssDot {
+    border-color: rgba(17,24,39,.45);
+    box-shadow: 0 6px 14px rgba(17,24,39,.10);
+}
+
+.ssStep.active .ssStepText {
+    color: var(--vr-text);
+}
+
+.ssStep.done .ssDot {
+    background: #272B32;
+    border-color: #272B32;
+    color: #FFFFFF;
+}
+
+.ssLine.done {
+    background: rgba(17,24,39,.28);
+}
+
+/* ===== Cards ===== */
+.ssCard {
+    margin-top: 12px;
+    background: var(--vr-surface);
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-xl);
+    box-shadow: var(--vr-shadow-soft);
+    overflow: hidden;
+}
+
+.ssCard .card-body {
+    padding: 14px 14px;
+}
+
+/* Screens */
+.ssScreenTitle {
+    font-size: 16px;
+    font-weight: 900;
+    margin-bottom: 4px;
+}
+
+.ssScreenSub {
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.ssFormGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.ssCampusGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    justify-content: center;
+}
+
+@media (max-width: 576px) {
+    .ssCampusGrid {
+        /* Tarjetas mas grandes en movil (casi full width si solo hay una) */
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .ssCampusImg {
+        height: 170px;
+        flex: 0 0 170px;
+    }
+}
+
+.ssCampusCard {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* Controlamos espacio con margin/padding */
+    align-items: stretch;
+    text-align: left;
+    padding: 0; 
+    border: 1px solid var(--vr-border);
+    background: var(--vr-surface);
+    border-radius: var(--vr-radius-lg);
+    box-shadow: var(--vr-shadow-soft);
+    cursor: pointer;
+    overflow: hidden; 
+    padding-bottom: 12px; 
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: auto !important; /* Force auto height to avoid button constraints */
+}
+
+.ssCampusCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(17,24,39,.12);
+}
+
+.ssCampusCard.isDisabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    pointer-events: none;
+}
+
+.ssCampusCard.isSelected {
+    border-color: rgba(37,99,235,.55);
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+
+.ssCampusImg {
+    width: 100%;
+    /* Altura fija para uniformidad, o aspect-ratio si el navegador lo soporta bien */
+    height: 140px; 
+    flex: 0 0 140px; /* Prevent flexing */
+    background: linear-gradient(135deg, rgba(37,99,235,.10), rgba(17,24,39,.04));
+    display: grid;
+    place-items: center;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+    overflow: hidden;
+}
+
+.ssCampusInitials {
+    font-weight: 900;
+    font-size: 24px;
+    color: var(--vr-text);
+    letter-spacing: 1px;
+}
+
+.ssCampusName {
+    padding: 10px 12px;
+    color: var(--vr-text);
+    margin-top: 0;
+    background: var(--vr-surface);
+    line-height: 1.2;
+}
+
+.ssCampusRealImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.ssNav {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.ssNavSingle {
+    grid-template-columns: 1fr;
+}
+
+.ssSummaryPill {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 10px;
+    border-radius: var(--vr-radius-lg);
+    background: rgba(17,24,39,.04);
+    border: 1px solid rgba(17,24,39,.06);
+    margin-bottom: 10px;
+}
+
+.ssPillLabel {
+    font-size: 11px;
+    font-weight: 900;
+    color: var(--vr-muted);
+}
+
+.ssPillValue {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--vr-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Step 3 header */
+.ssStep3Header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.ssStep3Row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ssStep3Label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vr-muted);
+}
+
+.ssStep3Value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--vr-text);
+}
+
+/* Slots */
+.ssSlots { margin-top: 6px; }
+.ssDayBlock { margin-bottom: 14px; }
+
+.ssDayTitle {
+    font-weight: 900;
+    font-size: 13px;
+    margin: 10px 0 8px;
+    color: var(--vr-muted);
+}
+
+.ssSlotBtn {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--vr-border);
+    background: var(--vr-surface);
+    border-radius: var(--vr-radius-lg);
+    padding: 12px 12px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(17,24,39,.06);
+}
+
+.ssSlotBtn.isSelected {
+    border-color: rgba(37,99,235,.35);
+    box-shadow: 0 12px 22px rgba(37,99,235,.10);
+}
+
+.ssSlotBtn.isDisabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ssSlotTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ssSlotName {
+    font-weight: 600;
+    color: var(--vr-text);
+    flex: 1;
+    min-width: 0;
+}
+
+.ssSlotCap {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--vr-muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Qty + Confirm */
+.ssQtyWrap {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(17,24,39,.06);
+}
+
+.ssCampusHeading {
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--vr-text);
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.ssQtyTitle {
+    font-weight: 900;
+    margin-bottom: 4px;
+    text-align: center;
+}
+
+.ssQtySub {
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.ssQtyRow {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    gap: 10px;
+    align-items: center;
+    max-width: 280px;
+    margin: 0 auto;
+}
+
+.ssQtyBtn {
+    height: 44px;
+    border-radius: var(--vr-radius-lg);
+    border: 1px solid var(--vr-border);
+    background: var(--vr-surface);
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.ssQtyVal {
+    height: 44px;
+    border-radius: var(--vr-radius-lg);
+    border: 1px solid var(--vr-border);
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: 16px;
+    text-align: center;
+}
+
+.ssConfirmRow {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.ssConfirmRow .btn-primary {
+    width: 100%;
+}
+
+.ssBackLink {
+    color: #272B32 !important;
+    text-decoration: underline !important;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.ssAlert { margin-top: 10px; }
+.ssSmall { font-size: 12px; margin-top: 8px; }
+
+/* Barra de progreso del hold */
+.ssHoldProgress {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.ssHoldProgressLabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--vr-text);
+}
+
+.ssHoldTime {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--vr-accent);
+}
+
+.ssHoldProgressBar {
+    width: 100%;
+    height: 8px;
+    background: rgba(17,24,39,.08);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+
+.ssHoldProgressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #10B981 0%, #3B82F6 50%, #2563EB 100%);
+    border-radius: 999px;
+    transition: width 0.5s linear;
+    box-shadow: 0 0 8px rgba(37,99,235,.35);
+}
+
+/* Summary card in step 3 */
+.ssSummaryCard {
+    border: 1px solid rgba(17,24,39,.08);
+    background: rgba(17,24,39,.03);
+    border-radius: var(--vr-radius-lg);
+    padding: 10px 10px;
+    margin-bottom: 10px;
+}
+
+.ssSummaryRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.ssLabel {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--vr-muted);
+}
+
+.ssVal {
+    font-size: 13px;
+    font-weight: 900;
+}
+
+/* Active reservation */
+.ssCardTitle {
+    font-weight: 900;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.ssInfoGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.ssQrWrap {
+    margin-top: 12px;
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    padding: 30px 20px;
+    background: #4A4A4A;
+    border-radius: var(--vr-radius-xl);
+    box-shadow: 0 4px 12px rgba(17,24,39,.12);
+}
+
+.ssQrInfoText {
+    font-size: 12px;
+    text-align: left;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+.ssQrImg {
+    width: 240px;
+    height: 240px;
+    border: none;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.ssQrWrap .ssQrImgClip {
+    width: 220px;
+    height: 220px;
+    overflow: hidden;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ssCode {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    word-break: break-all;
+    text-align: center;
+    padding: 0 8px;
+}
+
+.ssDownloadWrap {
+    margin-top: 16px;
+    display: grid;
+    place-items: center;
+}
+
+.ssActions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+@media (min-width: 576px) {
+    .ssConfirmRow .btn-primary { max-width: 400px; }
+    .ssActions { grid-template-columns: 1fr 1fr; }
+    .ssInfoGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 576px) {
+    .vrContainer { padding: 8px 2px 18px; }
+    .ssCard { margin-top: 8px; }
+    .ssCard .card-body { padding: 12px 10px; }
+    .sswrap { padding: 4px 0; }
+    .ssInfoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+    .ssInfoGrid--active {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        column-gap: 12px;
+        row-gap: 12px;
+    }
+
+    .ssInfoGrid--active > div {
+        min-width: 0;
+    }
+}
+
+/* Modal */
+.ssModalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17,24,39,.45);
+    display: grid;
+    place-items: center;
+    z-index: 9999;
+    padding: 14px;
+}
+
+.ssModalCard {
+    width: 100%;
+    max-width: 420px;
+    background: var(--vr-surface);
+    border-radius: var(--vr-radius-xl);
+    padding: 14px 14px;
+    box-shadow: 0 20px 50px rgba(17,24,39,.25);
+    border: 1px solid rgba(17,24,39,.10);
+}
+
+.ssModalTitle {
+    font-size: 16px;
+    font-weight: 900;
+    margin-bottom: 6px;
+}
+
+.ssModalText {
+    font-size: 13px;
+    color: rgba(17,24,39,.70);
+    line-height: 1.35;
+}
+
+.ssModalSummary {
+    margin-top: 10px;
+    border: 1px solid rgba(17,24,39,.08);
+    background: rgba(17,24,39,.03);
+    border-radius: var(--vr-radius-lg);
+    padding: 10px 10px;
+}
+
+.ssModalRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 0;
+}
+
+.ssModalLabel {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--vr-muted);
+}
+
+.ssModalVal {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--vr-text);
+    text-align: right;
+}
+
+.ssModalActions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* Toast */
+.ssToast {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    width: calc(100% - 24px);
+    max-width: 420px;
+    border-radius: var(--vr-radius-lg);
+    padding: 12px 12px;
+    box-shadow: 0 18px 40px rgba(17,24,39,.18);
+    border: 1px solid rgba(17,24,39,.10);
+    background: var(--vr-surface);
+}
+
+.ssToast.success { border-left: 6px solid rgba(16,185,129,.55); }
+.ssToast.danger  { border-left: 6px solid rgba(239,68,68,.55); }
+.ssToast.info    { border-left: 6px solid rgba(17,24,39,.35); }
+
+.ssToastText {
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--vr-text);
+}
+
+/* ===== Botones estilo VidaReal ===== */
+
+/* Botón principal (Siguiente, Confirmar) */
+.vrPage .btn-primary,
+.vrPage .rock-button.btn-primary {
+    background-color: #272B32 !important;
+    border-color: #272B32 !important;
+    color: #FFFFFF !important;
+    font-weight: 700;
+}
+
+/* Hover */
+.vrPage .btn-primary:hover,
+.vrPage .rock-button.btn-primary:hover {
+    background-color: #1a1d22 !important;
+    border-color: #1a1d22 !important;
+}
+
+/* Disabled */
+.vrPage .btn-primary:disabled,
+.vrPage .rock-button.btn-primary:disabled {
+    background-color: #272B32 !important;
+    border-color: #272B32 !important;
+    color: rgba(255,255,255,.45) !important;
+    opacity: 0.6;
+}
+
+/* Botón secundario (Atrás, Cancelar) */
+.vrPage .btn-default,
+.vrPage .rock-button.btn-default {
+    background-color: #F3F4F6 !important;
+    border-color: #E5E7EB !important;
+    color: #374151 !important;
+    font-weight: 600;
+}
+
+/* Danger (cancelar reserva rojo → gris suave opcional) */
+.vrPage .btn-danger,
+.vrPage .rock-button.btn-danger {
+    background-color: #F3F4F6 !important;
+    border-color: #E5E7EB !important;
+    color: #6B7280 !important;
+}
+
+</style>

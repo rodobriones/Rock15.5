@@ -28,6 +28,7 @@ using Rock.CheckIn;
 using Rock.Constants;
 using Rock.Data;
 using Rock.Model;
+using Rock.Security;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
@@ -768,10 +769,24 @@ tryGeoLocation();
 
                     var checkinTemplateTypeId = DefinedValueCache.GetId( Rock.SystemGuid.DefinedValue.GROUPTYPE_PURPOSE_CHECKIN_TEMPLATE.AsGuid() );
 
-                    ddlCheckinType.DataSource = groupTypeService
+                    var checkinTypes = groupTypeService
                         .Queryable().AsNoTracking()
                         .Where( t => t.GroupTypePurposeValueId.HasValue && t.GroupTypePurposeValueId == checkinTemplateTypeId )
                         .OrderBy( t => t.Name )
+                        .ToList();
+
+                    if ( CurrentPerson != null )
+                    {
+                        checkinTypes = checkinTypes
+                            .Where( t => t.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
+                            .ToList();
+                    }
+                    else
+                    {
+                        checkinTypes = new List<GroupType>();
+                    }
+
+                    ddlCheckinType.DataSource = checkinTypes
                         .Select( t => new
                         {
                             t.Name,

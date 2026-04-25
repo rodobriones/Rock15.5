@@ -37,7 +37,7 @@
                             <!-- During entry -->
                             <textarea runat="server" rows="3" cols="30" id="tbSmsMessage" visible="false" placeholder="Your SMS message here..." class="form-control js-sms-message mb-2"></textarea>
                             <asp:LinkButton runat="server" Visible="false" ID="btnSmsSend" CssClass="btn btn-xs btn-primary js-btn-send mb-3" OnClick="btnSend_Click">Send</asp:LinkButton>
-                            <asp:LinkButton runat="server" Visible="false" ID="btnSmsCancel" CssClass="btn btn-xs btn-link mb-3" OnClick="btnSmsCancel_Click">Cancel</asp:LinkButton>
+                            <asp:LinkButton runat="server" Visible="false" ID="btnSmsCancel" CssClass="btn btn-xs btn-link mb-3" OnClick="btnSmsCancel_Click">Cancelar</asp:LinkButton>
                         </div>
 
                         <asp:Repeater ID="rptrPhones" runat="server" OnItemDataBound="rptrPhones_ItemDataBound">

@@ -19,8 +19,12 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.Entity;
 using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+using Newtonsoft.Json;
 
 using Rock;
 using Rock.Attribute;
@@ -335,35 +339,82 @@ namespace RockWeb.Blocks.CheckIn.Manager
         }
 
         /// <summary>
+        /// Formatea un número de teléfono de Guatemala para usarlo con WhatsApp/Twilio.
+        /// </summary>
+        private static string FormatPhoneNumberForGuatemala( string phoneNumber )
+        {
+            if ( phoneNumber.StartsWith( "+502" ) )
+            {
+                return phoneNumber;
+            }
+
+            string cleaned = Regex.Replace( phoneNumber, @"\D", string.Empty );
+            if ( cleaned.Length == 8 )
+            {
+                return $"+502{cleaned}";
+            }
+
+            if ( cleaned.Length == 11 && cleaned.StartsWith( "502" ) )
+            {
+                return $"+{cleaned}";
+            }
+
+            throw new ArgumentException( "Número de teléfono no válido para Guatemala." );
+        }
+
+        /// <summary>
+        /// Envía un mensaje por WhatsApp usando la API de Twilio.
+        /// </summary>
+        private bool SendWhatsAppTemplateMessage( string toPhoneNumber, string mensajeCompleto )
+        {
+            var globalAttributes = GlobalAttributesCache.Get();
+            var accountSid = globalAttributes.GetValue( "TwilioAccountSid" );
+            var authToken = globalAttributes.GetValue( "TwilioAuthToken" );
+            var fromPhoneNumber = globalAttributes.GetValue( "TwilioWhatsAppFrom" );
+            var templateSid = globalAttributes.GetValue( "TwilioWhatsAppTemplateSid" );
+
+            try
+            {
+                using ( var client = new HttpClient() )
+                {
+                    var uri = new Uri( $"https://api.twilio.com/2010-04-01/Accounts/{accountSid}/Messages.json" );
+                    var requestBody = new Dictionary<string, string>
+                    {
+                        { "To", $"whatsapp:{toPhoneNumber}" },
+                        { "From", fromPhoneNumber },
+                        { "ContentSid", templateSid },
+                        {
+                            "ContentVariables",
+                            JsonConvert.SerializeObject( new Dictionary<string, string> { { "1", mensajeCompleto } } )
+                        }
+                    };
+
+                    var authHeader = Convert.ToBase64String( Encoding.ASCII.GetBytes( $"{accountSid}:{authToken}" ) );
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Basic", authHeader );
+
+                    var content = new FormUrlEncodedContent( requestBody );
+                    var response = client.PostAsync( uri, content ).Result;
+                    return response.IsSuccessStatusCode;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Handles the SaveClick event of the mdSms control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void mdSms_SaveClick( object sender, EventArgs e )
         {
-            var systemPhoneNumberGuid = GetAttributeValue( AttributeKey.SMSFrom ).AsGuidOrNull();
             var message = tbSmsMessage.Text.Trim();
-
             if ( message.IsNullOrWhiteSpace() )
             {
                 ResetSms();
-                DisplaySmsError( "Please enter a valid message to send." );
-                return;
-            }
-            else if ( !systemPhoneNumberGuid.HasValue )
-            {
-                ResetSms();
-                DisplaySmsError( "Error sending message. Please try again or contact an administrator if the error continues." );
-                LogException( new Exception( string.Format( "While trying to send an SMS from the Check-in Manager, the following error occurred: There is a misconfiguration with the {0} setting.", AttributeKey.SMSFrom ) ) );
-                return;
-            }
-
-            var smsFromNumber = SystemPhoneNumberCache.Get( systemPhoneNumberGuid.Value );
-            if ( smsFromNumber == null )
-            {
-                ResetSms();
-                DisplaySmsError( "Could not find a valid phone number to send from." );
-                LogException( new Exception( $"While trying to send an SMS from the Check-in Manager, the following error occurred: The configured System Phone Number ({systemPhoneNumberGuid}) does not exist." ) );
+                DisplaySmsError( "Mensaje vacío." );
                 return;
             }
 
@@ -373,21 +424,30 @@ namespace RockWeb.Blocks.CheckIn.Manager
             if ( phoneNumber == null )
             {
                 ResetSms();
-                DisplaySmsError( "Could not find a valid number for this person." );
+                DisplaySmsError( "No se encontró un número válido para esta persona." );
                 return;
             }
 
-            // This will queue up the message
-            Rock.Communication.Medium.Sms.CreateCommunicationMobile(
-                CurrentUser.Person,
-                person.PrimaryAliasId,
-                message,
-                smsFromNumber,
-                null,
-                GetAttachments(),
-                rockContext );
+            try
+            {
+                string formattedPhone = FormatPhoneNumberForGuatemala( phoneNumber.NumberFormatted );
+                bool enviado = SendWhatsAppTemplateMessage( formattedPhone, message );
 
-            DisplaySmsSuccess( "Message queued." );
+                if ( enviado )
+                {
+                    DisplaySmsSuccess( "Mensaje de WhatsApp enviado correctamente." );
+                }
+                else
+                {
+                    DisplaySmsError( $"No se pudo enviar el mensaje por WhatsApp a {person.FullName}." );
+                }
+            }
+            catch ( Exception ex )
+            {
+                LogException( ex );
+                DisplaySmsError( "Error inesperado al intentar enviar el mensaje por WhatsApp." );
+            }
+
             ResetSms();
         }
 

@@ -24,7 +24,15 @@
 
                 <%-- Edit Panel for merge that have EDIT auth to the block --%>
                 <asp:Panel runat="server" ID="pnlEdit">
-                    <Rock:PersonPicker ID="ppAdd" runat="server" Label="Add Another Person" OnSelectPerson="ppAdd_SelectPerson" />
+                    <div class="row">
+                        <div class="col-md-8">
+                            <Rock:PersonPicker ID="ppAdd" runat="server" Label="Add Another Person" OnSelectPerson="ppAdd_SelectPerson" />
+                        </div>
+                        <div class="col-md-4">
+                            <Rock:NumberBox ID="nbAddPersonId" runat="server" NumberType="Integer" MinimumValue="1" Label="Add by Person ID" />
+                            <asp:LinkButton ID="lbAddPersonById" runat="server" Text="Add by ID" CssClass="btn btn-default btn-sm" OnClick="lbAddPersonById_Click" />
+                        </div>
+                    </div>
 
                     <Rock:NotificationBox ID="nbError" runat="server" NotificationBoxType="Danger" Visible="false" />
                     <Rock:NotificationBox ID="nbWarning" runat="server" NotificationBoxType="Warning" Visible="false" />

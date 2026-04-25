@@ -7,7 +7,7 @@
 
      <div class="row-fluid checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
         </div>
     </div>
 

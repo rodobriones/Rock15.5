@@ -108,6 +108,19 @@
 
             });
         </script>
+        <script>
+            Sys.Application.add_load(function () {
+                var $alternateAreas = $('.js-alternate-areas input[type=checkbox]');
+
+                function uncheckAllIfAnyChecked() {
+                    if ($alternateAreas.is(':checked')) {
+                        $alternateAreas.prop('checked', false);
+                    }
+                }
+
+                setInterval(uncheckAllIfAnyChecked, 500);
+            });
+        </script>
 
 
         <asp:PlaceHolder ID="phGeoCodeScript" runat="server" />
@@ -141,8 +154,8 @@
                             <div class="col-md-6">
                                 <Rock:RockCheckBoxList ID="cblPrimaryGroupTypes" runat="server" Label="Check-in Area(s)" DataTextField="Name" DataValueField="Id"></Rock:RockCheckBoxList>
                             </div>
-                            <div class="col-md-6">
-                                <Rock:RockCheckBoxList ID="cblAlternateGroupTypes" runat="server" Label="Additional Area(s)" DataTextField="Name" DataValueField="Id"></Rock:RockCheckBoxList>
+                            <div class="col-md-6" style="display:none">
+                                <Rock:RockCheckBoxList ID="cblAlternateGroupTypes" runat="server" CssClass="js-alternate-areas" Label="Additional Area(s)" DataTextField="Name" DataValueField="Id"></Rock:RockCheckBoxList>
                             </div>
                         </div>
                         <asp:Panel ID="pnlHtml5CameraOptions" runat="server" CssClass="js-html5-camera-options">

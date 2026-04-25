@@ -102,6 +102,12 @@ namespace RockWeb.Blocks.CheckIn
                     if ( family == null )
                     {
                         GoBack();
+                        return;
+                    }
+
+                    foreach ( var person in family.CheckOutPeople )
+                    {
+                        person.Selected = false;
                     }
 
                     lTitle.Text = GetTitleText();

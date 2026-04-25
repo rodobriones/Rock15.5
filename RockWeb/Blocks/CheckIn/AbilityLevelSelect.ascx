@@ -27,7 +27,7 @@
                     <h1><asp:Literal ID="lNoOptionTitle" runat="server" /></h1>
                     <h4><asp:Literal ID="lNoOptionCaption" runat="server" /></h4>
                     <div class="actions">
-                        <asp:LinkButton CssClass="btn btn-primary btn-checkin" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Ok" />
+                        <asp:LinkButton CssClass="btn btn-primary btn-checkin" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Aceptar" />
                     </div>
                 </asp:Panel>
 
@@ -42,7 +42,7 @@
                                     Text='<%# Container.DataItem.ToString() %>'
                                     CommandArgument='<%# Eval("Guid").ToString().ToUpper() %>'
                                     CssClass="btn btn-primary btn-large btn-block btn-checkin-select"
-                                    DataLoadingText="Loading..." />
+                                    DataLoadingText="Cargando..." />
                             </ItemTemplate>
                         </asp:Repeater>
                     </div>
@@ -57,8 +57,8 @@
 
     <div class="checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Regresar" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
         </div>
     </div>
 

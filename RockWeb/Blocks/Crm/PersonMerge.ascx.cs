@@ -294,7 +294,7 @@ namespace RockWeb.Blocks.Crm
                         .Where( p => selectedPersonIds.Contains( p.Id ) )
                         .ToList();
 
-                    ppAdd.Visible = !people.All( a => a.IsBusiness() );
+                    SetAddPersonControlsVisibility( people );
 
                     // Create the data structure used to build the grid.
                     MergeData = new MergeData( people, headingKeys, CurrentPerson, IsUserAuthorized( PersonMerge.SecurityActionKey.ViewAllAttributes ) );
@@ -366,25 +366,57 @@ namespace RockWeb.Blocks.Crm
         protected void ppAdd_SelectPerson( object sender, EventArgs e )
         {
             int? personId = ppAdd.PersonId;
-            if ( personId.HasValue && ( MergeData == null || !MergeData.People.Any( p => p.Id == personId.Value ) ) )
+            if ( personId.HasValue )
             {
-                var selectedPersonIds = MergeData != null ? MergeData.People.Select( p => p.Id ).ToList() : new List<int>();
-                selectedPersonIds.Add( personId.Value );
-
-                PersonService.UpdateAccountProtectionProfileForPerson( personId.Value, new RockContext() );
-
-                // Get the people selected
-                var people = new PersonService( new RockContext() ).Queryable( "CreatedByPersonAlias.Person,Users" )
-                    .Where( p => selectedPersonIds.Contains( p.Id ) )
-                    .ToList();
-
-                // Rebuild mergdata, columns, and grid
-                MergeData = new MergeData( people, headingKeys, CurrentPerson, IsUserAuthorized( PersonMerge.SecurityActionKey.ViewAllAttributes ) );
-                BuildColumns();
-                BindGrid();
+                AddPersonToMerge( personId.Value );
             }
 
             ppAdd.SetValue( null );
+        }
+
+        /// <summary>
+        /// Handles the Click event of the lbAddPersonById control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void lbAddPersonById_Click( object sender, EventArgs e )
+        {
+            var personId = nbAddPersonId.IntegerValue;
+            nbAddPersonId.IntegerValue = null;
+
+            if ( !personId.HasValue || personId.Value <= 0 )
+            {
+                nbError.Heading = "Add Person Error";
+                nbError.Text = "<p>Please enter a valid Person ID.</p>";
+                nbError.Visible = true;
+                return;
+            }
+
+            if ( MergeData != null && MergeData.People.Any( p => p.Id == personId.Value ) )
+            {
+                nbError.Heading = "Add Person Error";
+                nbError.Text = $"<p>Person ID {personId.Value} is already included in this merge.</p>";
+                nbError.Visible = true;
+                return;
+            }
+
+            var personExists = new PersonService( new RockContext() )
+                .Queryable( new PersonService.PersonQueryOptions
+                {
+                    IncludeDeceased = true,
+                    IncludeNameless = true
+                } )
+                .Any( p => p.Id == personId.Value );
+
+            if ( !personExists )
+            {
+                nbError.Heading = "Add Person Error";
+                nbError.Text = $"<p>Person ID {personId.Value} was not found.</p>";
+                nbError.Visible = true;
+                return;
+            }
+
+            AddPersonToMerge( personId.Value );
         }
 
         /// <summary>
@@ -402,12 +434,20 @@ namespace RockWeb.Blocks.Crm
                     .Select( p => p.Id ).ToList();
 
                 // Get the people selected
-                var people = new PersonService( new RockContext() ).Queryable( "CreatedByPersonAlias.Person,Users" )
+                var people = new PersonService( new RockContext() )
+                    .Queryable( new PersonService.PersonQueryOptions
+                    {
+                        IncludeDeceased = true,
+                        IncludeNameless = true
+                    } )
+                    .Include( a => a.CreatedByPersonAlias.Person )
+                    .Include( a => a.Users )
                     .Where( p => selectedPersonIds.Contains( p.Id ) )
                     .ToList();
 
                 // Rebuild mergedata, columns, and grid
                 MergeData = new MergeData( people, headingKeys, CurrentPerson, IsUserAuthorized( PersonMerge.SecurityActionKey.ViewAllAttributes ) );
+                SetAddPersonControlsVisibility( people );
                 BuildColumns();
                 BindGrid();
             }
@@ -1216,6 +1256,51 @@ namespace RockWeb.Blocks.Crm
         #endregion Events
 
         #region Methods
+
+        /// <summary>
+        /// Adds a person to the merge request and rebuilds the merge grid.
+        /// </summary>
+        /// <param name="personId">The person identifier.</param>
+        private void AddPersonToMerge( int personId )
+        {
+            if ( MergeData != null && MergeData.People.Any( p => p.Id == personId ) )
+            {
+                return;
+            }
+
+            var selectedPersonIds = MergeData != null ? MergeData.People.Select( p => p.Id ).ToList() : new List<int>();
+            selectedPersonIds.Add( personId );
+
+            PersonService.UpdateAccountProtectionProfileForPerson( personId, new RockContext() );
+
+            var people = new PersonService( new RockContext() )
+                .Queryable( new PersonService.PersonQueryOptions
+                {
+                    IncludeDeceased = true,
+                    IncludeNameless = true
+                } )
+                .Include( a => a.CreatedByPersonAlias.Person )
+                .Include( a => a.Users )
+                .Where( p => selectedPersonIds.Contains( p.Id ) )
+                .ToList();
+
+            MergeData = new MergeData( people, headingKeys, CurrentPerson, IsUserAuthorized( PersonMerge.SecurityActionKey.ViewAllAttributes ) );
+            SetAddPersonControlsVisibility( people );
+            BuildColumns();
+            BindGrid();
+        }
+
+        /// <summary>
+        /// Sets the visibility of controls used to add additional people into the merge request.
+        /// </summary>
+        /// <param name="people">The selected people.</param>
+        private void SetAddPersonControlsVisibility( List<Person> people )
+        {
+            var canAddPerson = !people.All( a => a.IsBusiness() );
+            ppAdd.Visible = canAddPerson;
+            nbAddPersonId.Visible = canAddPerson;
+            lbAddPersonById.Visible = canAddPerson;
+        }
 
         /// <summary>
         /// Builds the values columns.

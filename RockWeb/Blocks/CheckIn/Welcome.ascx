@@ -496,8 +496,8 @@
                             <ItemTemplate>
                                 <div class="controls kioskmanager-location">
                                     <div id="divLocationToggle" runat="server" class="btn-group kioskmanager-location-toggle">
-                                        <asp:LinkButton runat="server" ID="lbOpen" CssClass="btn btn-default btn-lg btn-success" Text="Open" CommandName="Open" CommandArgument='<%# DataBinder.Eval(Container.DataItem, "LocationId") %>' />
-                                        <asp:LinkButton runat="server" ID="lbClose" CssClass="btn btn-default btn-lg" Text="Close" CommandName="Close" CommandArgument='<%# DataBinder.Eval(Container.DataItem, "LocationId") %>' />
+                                        <asp:LinkButton runat="server" ID="lbOpen" CssClass="btn btn-default btn-lg btn-success" Text="Abrir" CommandName="Open" CommandArgument='<%# DataBinder.Eval(Container.DataItem, "LocationId") %>' />
+                                        <asp:LinkButton runat="server" ID="lbClose" CssClass="btn btn-default btn-lg" Text="Cerrar" CommandName="Close" CommandArgument='<%# DataBinder.Eval(Container.DataItem, "LocationId") %>' />
 
                                     </div>
                                     <div class="kioskmanager-location-label">
@@ -520,8 +520,13 @@
             <div class="controls kioskmanager-actions checkin-actions">
                 <asp:LinkButton ID="btnReprintLabels" runat="server" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Reprint Labels" OnClick="btnReprintLabels_Click" />
                 <asp:LinkButton ID="btnOverride" runat="server" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Override" OnClick="btnOverride_Click" />
-                <asp:LinkButton ID="btnScheduleLocations" runat="server" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Schedule Locations" OnClick="btnScheduleLocations_Click" />
-                <asp:LinkButton ID="btnBack" runat="server" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Back" OnClick="btnBack_Click" />
+                <asp:LinkButton ID="btnScheduleLocations" runat="server" Visible="false" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Schedule Locations" OnClick="btnScheduleLocations_Click" />
+                <asp:LinkButton ID="btnBack" runat="server" CssClass="btn btn-default btn-large btn-block btn-checkin-select" Text="Regresar" OnClick="btnBack_Click" />
+                <asp:LinkButton ID="btnLogout" runat="server"
+                    CssClass="btn btn-danger btn-lg btn-block btn-checkin-select"
+                    Text="Cerrar Sesión"
+                    OnClick="btnLogout_Click"
+                    Style="position:fixed; bottom:20px; left:20px; width:200px; z-index:9999;" />
             </div>
 
         </asp:Panel>
@@ -534,13 +539,13 @@
                         <div class="checkin-search-body">
 
                             <asp:Panel ID="pnlSearchName" CssClass="clearfix center-block" runat="server">
-                                <Rock:RockTextBox ID="tbNameOrPhone" runat="server" Label="Phone or Name" AutoCompleteType="Disabled" spellcheck="false" autocorrect="off" CssClass="search-input namesearch input-lg" FormGroupCssClass="search-name-form-group" />
+                                <Rock:RockTextBox ID="tbNameOrPhone" runat="server" Label="Teléfono o Nombre" AutoCompleteType="Disabled" spellcheck="false" autocorrect="off" CssClass="search-input namesearch input-lg" FormGroupCssClass="search-name-form-group" />
                                 <Rock:ScreenKeyboard ID="skKeyboard" runat="server" ControlToTarget="tbNameOrPhone" KeyboardType="TenKey" KeyCssClass="checkin btn btn-default btn-lg btn-keypad digit" WrapperCssClass="center-block"></Rock:ScreenKeyboard>
                             </asp:Panel>
 
                             <div class="checkin-actions margin-t-md">
-                                <Rock:BootstrapButton CssClass="btn btn-primary btn-block" ID="lbManagerReprintSearch" runat="server" OnClick="lbManagerReprintSearch_Click" Text="Search" DataLoadingText="Searching..."></Rock:BootstrapButton>
-                                <asp:LinkButton CssClass="btn btn-default btn-block btn-cancel" ID="lbReprintCancelBack" runat="server" OnClick="lbManagerCancel_Click" Text="Cancel" />
+                                <Rock:BootstrapButton CssClass="btn btn-primary btn-block" ID="lbManagerReprintSearch" runat="server" OnClick="lbManagerReprintSearch_Click" Text="Buscar" DataLoadingText="Buscando..."></Rock:BootstrapButton>
+                                <asp:LinkButton CssClass="btn btn-default btn-block btn-cancel" ID="lbReprintCancelBack" runat="server" OnClick="lbManagerCancel_Click" Text="Cancelar" />
                             </div>
 
                         </div>
@@ -562,7 +567,7 @@
                                 <asp:Repeater ID="rReprintLabelPersonResults" runat="server" OnItemCommand="rReprintLabelPersonResults_ItemCommand">
                                     <ItemTemplate>
                                         <asp:HiddenField ID="hfAttendanceIds" runat="server" Value='<%#String.Join(",",((Rock.Utility.ReprintLabelPersonResult)Container.DataItem).AttendanceIds )%>' />
-                                        <Rock:BootstrapButton ID="lbSelectPersonForReprint" runat="server" Text='<%# Container.DataItem.ToString() %>' CommandName='<%# Eval("AttendanceIds") %>' CommandArgument='<%# Eval("Id") %>' CssClass="btn btn-primary btn-large btn-block btn-checkin-select text-left" DataLoadingText="Loading..." />
+                                        <Rock:BootstrapButton ID="lbSelectPersonForReprint" runat="server" Text='<%# Container.DataItem.ToString() %>' CommandName='<%# Eval("AttendanceIds") %>' CommandArgument='<%# Eval("Id") %>' CssClass="btn btn-primary btn-large btn-block btn-checkin-select text-left" DataLoadingText="Cargando..." />
                                     </ItemTemplate>
                                 </asp:Repeater>
                             </div>
@@ -574,7 +579,7 @@
 
             <div class="checkin-footer">
                 <div class="checkin-actions">
-                    <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbReprintSearchPersonCancel" runat="server" OnClick="lbManagerCancel_Click" Text="Cancel" />
+                    <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbReprintSearchPersonCancel" runat="server" OnClick="lbManagerCancel_Click" Text="Cancelar" />
                 </div>
             </div>
         </asp:Panel>
@@ -626,7 +631,7 @@
             <div class="checkin-footer">
                 <div class="checkin-actions">
                     <asp:LinkButton CssClass="btn btn-primary " ID="lbReprintSelectLabelTypes" runat="server" OnClientClick="return GetLabelTypeSelection();" OnClick="lbReprintSelectLabelTypes_Click" Text="Print" data-loading-text="Printing..." />
-                    <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbReprintSelectLabelCancel" runat="server" OnClick="lbManagerCancel_Click" Text="Cancel" />
+                    <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbReprintSelectLabelCancel" runat="server" OnClick="lbManagerCancel_Click" Text="Cancelar" />
                 </div>
             </div>
         </asp:Panel>
@@ -644,7 +649,7 @@
 
             <div class="checkin-footer">
                 <div class="checkin-actions">
-                    <asp:LinkButton CssClass="btn btn-primary" ID="lbMangerReprintDone" runat="server" OnClick="lbManagerReprintDone_Click" Text="Done" />
+                    <asp:LinkButton CssClass="btn btn-primary" ID="lbMangerReprintDone" runat="server" OnClick="lbManagerReprintDone_Click" Text="Hecho" />
                 </div>
             </div>
         </asp:Panel>
@@ -707,7 +712,7 @@
 
                 <div class="checkin-actions">
                     <asp:LinkButton ID="lbLogin" runat="server" OnClick="lbLogin_Click" CssClass="btn btn-primary">Log In</asp:LinkButton>
-                    <asp:LinkButton ID="lbCancel" runat="server" CausesValidation="false" OnClick="lbCancel_Click" CssClass="btn btn-default btn-cancel">Cancel</asp:LinkButton>
+                    <asp:LinkButton ID="lbCancel" runat="server" CausesValidation="false" OnClick="lbCancel_Click" CssClass="btn btn-default btn-cancel">Cancelar</asp:LinkButton>
                 </div>
             </div>
 

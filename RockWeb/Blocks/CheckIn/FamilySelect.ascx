@@ -27,7 +27,7 @@
 
         if ($('#<%=hfShowEditFamilyPrompt.ClientID%>').val() == "1") {
 
-                Rock.dialogs.confirm('<%=this.ConditionMessage + " Do you want to edit this family?" %>', function (result) {
+                Rock.dialogs.confirm('<%=this.ConditionMessage + " ¿Quieres editar esta familia?" %>', function (result) {
                     if (result) {
                         window.location = "javascript:__doPostBack('<%=upContent.ClientID %>', 'EditFamily')";
                     }
@@ -57,7 +57,7 @@
 
                 <div class="control-group checkin-body-container">
                     <label class="control-label"><asp:Literal ID="lCaption" runat="server" /></label>
-                    <asp:LinkButton CssClass="btn btn-link pull-right" ID="lbAddFamily" runat="server" OnClick="lbAddFamily_Click" Text="<i class='ti ti-plus'></i> Add Family"/>
+                    <asp:LinkButton CssClass="btn btn-link pull-right" ID="lbAddFamily" runat="server" OnClick="lbAddFamily_Click" Text="<i class='ti ti-plus'></i> Agregar familia"/>
                     <div class="controls">
                         <asp:Repeater ID="rSelection" runat="server" OnItemDataBound="rSelection_ItemDataBound">
                             <ItemTemplate>
@@ -78,8 +78,8 @@
 
      <div class="checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Regresar" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
         </div>
     </div>
 

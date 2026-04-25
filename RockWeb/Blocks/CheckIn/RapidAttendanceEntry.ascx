@@ -202,7 +202,7 @@
                                 </asp:Panel>
                                 <div class="actions margin-t-md">
                                     <Rock:BootstrapButton ID="bbtnSave" CssClass="btn btn-primary" runat="server" AccessKey="s" ToolTip="Alt+s" DataLoadingText="&lt;i class='ti ti-refresh ti-spin'&gt;&lt;/i&gt; Saving"
-                                        CompletedText="Success" CompletedMessage="<div class='margin-t-md alert alert-success'>Changes have been saved.</div>" Text="Save" OnClick="bbtnSave_Click" />
+                                        CompletedText="Success" CompletedMessage="<div class='margin-t-md alert alert-success'>Changes have been saved.</div>" Text="Guardar" OnClick="bbtnSave_Click" />
                                 </div>
                             </asp:Panel>
                             <asp:Panel ID="pnlEditFamily" runat="server" Visible="false" CssClass="padding-all-md">
@@ -239,8 +239,8 @@
                                 </fieldset>
                                 <%-- Edit Family Buttons --%>
                                 <div class="actions">
-                                    <asp:LinkButton ID="lbSaveFamily" runat="server" CssClass="btn btn-primary" Text="Save" CausesValidation="true" ValidationGroup="vgEditFamily" OnClick="lbSaveFamily_Click" />
-                                    <asp:LinkButton ID="lbCancel" runat="server" Text="Cancel" CssClass="btn btn-link" CausesValidation="false" OnClick="lbCancel_Click">Cancel</asp:LinkButton>
+                                    <asp:LinkButton ID="lbSaveFamily" runat="server" CssClass="btn btn-primary" Text="Guardar" CausesValidation="true" ValidationGroup="vgEditFamily" OnClick="lbSaveFamily_Click" />
+                                    <asp:LinkButton ID="lbCancel" runat="server" Text="Cancelar" CssClass="btn btn-link" CausesValidation="false" OnClick="lbCancel_Click">Cancelar</asp:LinkButton>
                                 </div>
                             </asp:Panel>
                             <asp:Panel ID="pnlEditMember" runat="server" Visible="false" CssClass="padding-all-md">
@@ -345,8 +345,8 @@
                                     </div>
                                 </asp:Panel>
                                 <div class="actions">
-                                    <asp:LinkButton ID="lbSaveMember" runat="server" CssClass="btn btn-primary" Text="Save" CausesValidation="true" ValidationGroup="vgEditMember" OnClick="lbSaveMember_Click" />
-                                    <asp:LinkButton ID="lbCancelMember" runat="server" Text="Cancel" CssClass="btn btn-link" CausesValidation="false" OnClick="lbCancel_Click">Cancel</asp:LinkButton>
+                                    <asp:LinkButton ID="lbSaveMember" runat="server" CssClass="btn btn-primary" Text="Guardar" CausesValidation="true" ValidationGroup="vgEditMember" OnClick="lbSaveMember_Click" />
+                                    <asp:LinkButton ID="lbCancelMember" runat="server" Text="Cancelar" CssClass="btn btn-link" CausesValidation="false" OnClick="lbCancel_Click">Cancelar</asp:LinkButton>
                                 </div>
                             </asp:Panel>
                         </div>

@@ -1101,6 +1101,14 @@
     }
 }
 
+@media (min-width: 1200px) {
+    .registration-entry-shell {
+        max-width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
 @media (max-width: 767px) {
     .registration-entry-shell {
         border-radius: 16px;

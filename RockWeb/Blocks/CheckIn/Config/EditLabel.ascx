@@ -16,7 +16,7 @@
                     <div class="col-md-6">
                         <Rock:RockControlWrapper ID="rcwLabelFile" runat="server" Label="Open Label File">
                             <Rock:ButtonDropDownList ID="ddlLabel" runat="server" />
-                            <asp:LinkButton ID="lbOpenLabel" runat="server" Text="Open" CssClass="btn btn-default margin-l-sm" OnClick="btnOpen_Click" />
+                            <asp:LinkButton ID="lbOpenLabel" runat="server" Text="Abrir" CssClass="btn btn-default margin-l-sm" OnClick="btnOpen_Click" />
                         </Rock:RockControlWrapper>
                     </div>
                     <div class="col-md-6">
@@ -31,8 +31,8 @@
                                 Help="By default Rock will force uploaded and saved ZPL templates to use UTF-8 encoding. This allows characters from any language to print on label for ZPL printers version .14 and up. Changes ^CI0 to ^CI28. Uncheck this box to save the label as-is." />
                         </div>
                         <div class="actions">
-                            <asp:LinkButton ID="btnSave" runat="server" Text="Save" Visible="false" CssClass="btn btn-primary" OnClick="btnSave_Click" />
-                            <asp:LinkButton ID="btnCancel" runat="server" Text="Cancel" Visible="false" CssClass="btn btn-link" OnClick="btnCancel_Click" />
+                            <asp:LinkButton ID="btnSave" runat="server" Text="Guardar" Visible="false" CssClass="btn btn-primary" OnClick="btnSave_Click" />
+                            <asp:LinkButton ID="btnCancel" runat="server" Text="Cancelar" Visible="false" CssClass="btn btn-link" OnClick="btnCancel_Click" />
                         </div>
                     </div>
                     <div class="col-md-6">

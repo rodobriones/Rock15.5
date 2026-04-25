@@ -43,5 +43,9 @@
     "typescript": "^5.2.2",
     "vue": "^3.3.10",
     "vue-eslint-parser": "^9.3.1"
+  },
+  "dependencies": {
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3"
   }
 }

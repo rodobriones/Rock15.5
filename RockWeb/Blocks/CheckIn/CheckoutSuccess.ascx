@@ -24,7 +24,7 @@
 
     <div class="checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-primary btn-done" ID="lbDone" runat="server" OnClick="lbDone_Click" Text="Done" />
+            <asp:LinkButton CssClass="btn btn-primary btn-done" ID="lbDone" runat="server" OnClick="lbDone_Click" Text="Hecho" />
          </div>
     </div>
 

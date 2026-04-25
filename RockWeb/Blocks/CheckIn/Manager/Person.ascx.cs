@@ -441,7 +441,7 @@ namespace RockWeb.Blocks.CheckIn.Manager
             if ( message.IsNullOrWhiteSpace() || !systemPhoneNumberGuid.HasValue )
             {
                 ResetSms();
-                DisplayResult( NotificationBoxType.Danger, "Error sending message. Please try again or contact an administrator if the error continues." );
+                DisplayResult( NotificationBoxType.Danger, "Error al enviar el mensaje. Inténtalo de nuevo o contacta al administrador si el problema continúa." );
                 if ( !systemPhoneNumberGuid.HasValue )
                 {
                     LogException( new Exception( string.Format( "While trying to send an SMS from the Check-in Manager, the following error occurred: There is a misconfiguration with the {0} setting.", AttributeKey.SMSFrom ) ) );
@@ -464,7 +464,7 @@ namespace RockWeb.Blocks.CheckIn.Manager
             if ( phoneNumber == null )
             {
                 ResetSms();
-                DisplayResult( NotificationBoxType.Danger, "Could not find a valid number for this person." );
+                DisplayResult( NotificationBoxType.Danger, "No se encontró un número válido para esta persona." );
                 return;
             }
 
@@ -478,7 +478,7 @@ namespace RockWeb.Blocks.CheckIn.Manager
                 null,
                 rockContext );
 
-            DisplayResult( NotificationBoxType.Success, "Message queued." );
+            DisplayResult( NotificationBoxType.Success, "Mensaje en cola." );
             ResetSms();
         }
 

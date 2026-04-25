@@ -27,7 +27,7 @@
 
                             <div class="control-group checkin-body-container">
                                 <label class="control-label"><asp:Literal ID="lCaption" runat="server" /></label>
-                                <asp:LinkButton CssClass="btn btn-link pull-right" ID="lbEditFamily" runat="server" OnClick="lbEditFamily_Click" Text="<i class='ti ti-pencil'></i> Edit Family" />
+                                <asp:LinkButton CssClass="btn btn-link pull-right" ID="lbEditFamily" runat="server" OnClick="lbEditFamily_Click" Text="<i class='ti ti-pencil'></i> Editar familia" />
                                 <div class="controls checkin-person-list">
                                     <asp:Repeater ID="rSelection" runat="server">
                                         <ItemTemplate>
@@ -66,9 +66,9 @@
 
                 <div class="checkin-footer">
                     <div class="checkin-actions">
-                        <asp:LinkButton CssClass="btn btn-primary " ID="lbSelect" runat="server" OnClientClick="return GetPersonSelection();" OnClick="lbSelect_Click" Text="Next" data-loading-text="Loading..." />
-                        <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+                        <asp:LinkButton CssClass="btn btn-primary " ID="lbSelect" runat="server" OnClientClick="return GetPersonSelection();" OnClick="lbSelect_Click" Text="Siguiente" data-loading-text="Cargando..." />
+                        <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Regresar" />
+                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
 
                     </div>
                 </div>
@@ -118,8 +118,8 @@
 
                 <div class="checkin-footer">
                     <div class="checkin-actions">
-                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbOptionCacncel" runat="server" OnClick="lbOptionCancel_Click" Text="Cancel" />
-                        <asp:LinkButton CssClass="btn btn-primary pull-right" ID="lbOptionSelect" runat="server" OnClientClick="return GetOptionSelection();" OnClick="lbOptionSelect_Click" Text="Ok" />
+                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbOptionCacncel" runat="server" OnClick="lbOptionCancel_Click" Text="Cancelar" />
+                        <asp:LinkButton CssClass="btn btn-primary pull-right" ID="lbOptionSelect" runat="server" OnClientClick="return GetOptionSelection();" OnClick="lbOptionSelect_Click" Text="Aceptar" />
 
 
                     </div>

@@ -77,8 +77,8 @@ namespace RockWeb.Blocks.CheckIn
                     // If RegistrationMode is enabled for this device, override any SearchType settings and search by Phone or Name
                     pnlSearchName.Visible = true;
                     pnlSearchPhone.Visible = false;
-                    txtName.Label = "Phone or Name";
-                    searchType = "Phone or Name";
+                    txtName.Label = "Teléfono o Nombre";
+                    searchType = "Teléfono o Nombre";
                 }
                 else
                 {
@@ -98,8 +98,8 @@ namespace RockWeb.Blocks.CheckIn
                     {
                         pnlSearchName.Visible = true;
                         pnlSearchPhone.Visible = false;
-                        txtName.Label = "Phone or Name";
-                        searchType = "Phone or Name";
+                        txtName.Label = "Teléfono o Nombre";
+                        searchType = "Teléfono o Nombre";
                     }
                 }
 

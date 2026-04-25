@@ -38,7 +38,7 @@
                     </div>
 
                     <div class="actions">
-                        <asp:LinkButton ID="btnPrimaryNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Next" CssClass="btn btn-primary pull-right" OnClick="btnPrimaryNext_Click" ValidationGroup="vgPrimary" />
+                        <asp:LinkButton ID="btnPrimaryNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Siguiente" CssClass="btn btn-primary pull-right" OnClick="btnPrimaryNext_Click" ValidationGroup="vgPrimary" />
                     </div>
                 </asp:Panel>
                 <asp:Panel runat="server" ID="pnlOtherWatcher" Visible="false" CssClass="js-navigation-panel">
@@ -82,7 +82,7 @@
                         </div>
                     </div>
                     <div class="actions">
-                        <asp:LinkButton ID="btnOtherNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Next" CssClass="btn btn-primary pull-right" OnClick="btnOtherNext_Click" />
+                        <asp:LinkButton ID="btnOtherNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Siguiente" CssClass="btn btn-primary pull-right" OnClick="btnOtherNext_Click" />
                     </div>
                 </asp:Panel>
                 <asp:Panel ID="pnlAccount" runat="server" Visible="false" CssClass="js-navigation-panel">
@@ -100,7 +100,7 @@
                         </div>
                     </div>
                     <div class="actions">
-                        <asp:LinkButton ID="btnAccountNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Next" CssClass="btn btn-primary pull-right" OnClick="btnAccountNext_Click" />
+                        <asp:LinkButton ID="btnAccountNext" runat="server" AccessKey="s" ToolTip="Alt+n" Text="Siguiente" CssClass="btn btn-primary pull-right" OnClick="btnAccountNext_Click" />
                     </div>
 
                 </asp:Panel>

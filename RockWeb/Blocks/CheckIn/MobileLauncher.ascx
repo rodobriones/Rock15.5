@@ -85,14 +85,14 @@
                             </ol>
 
                             <div class="controls">
-                                <Rock:BootstrapButton ID="bbtnPhoneLookup" runat="server" Text="Phone Lookup" OnClick="bbtnPhoneLookup_Click" CssClass="btn btn-primary btn-block" />
+                                <Rock:BootstrapButton ID="bbtnPhoneLookup" runat="server" Text="Ingresar Teléfono" OnClick="bbtnPhoneLookup_Click" CssClass="btn btn-primary btn-block" />
                                 <Rock:BootstrapButton ID="bbtnLogin" runat="server" Text="Log In" OnClick="bbtnLogin_Click" CssClass="btn btn-default btn-block" />
-                                <Rock:BootstrapButton ID="bbtnGetGeoLocation" runat="server" Text="Next" OnClick="bbtnGetGeoLocation_Click" DataLoadingText="Getting Location..." CssClass="btn btn-primary btn-block js-get-geolocation" />
-                                <Rock:BootstrapButton ID="bbtnTryAgain" runat="server" Text="Try Again" OnClick="bbtnTryAgain_Click" DataLoadingText="Check-in..." CssClass="btn btn-primary btn-block js-checkin-tryagain" />
-                                <Rock:BootstrapButton ID="bbtnCheckin" runat="server" Text="Check-in" OnClick="bbtnCheckin_Click" DataLoadingText="Check-in..." CssClass="btn btn-primary btn-block js-checkin" />
+                                <Rock:BootstrapButton ID="bbtnGetGeoLocation" runat="server" Text="Siguiente" OnClick="bbtnGetGeoLocation_Click" DataLoadingText="Obteniendo ubicación..." CssClass="btn btn-primary btn-block js-get-geolocation" />
+                                <Rock:BootstrapButton ID="bbtnTryAgain" runat="server" Text="Intentar de nuevo" OnClick="bbtnTryAgain_Click" DataLoadingText="Registrando..." CssClass="btn btn-primary btn-block js-checkin-tryagain" />
+                                <Rock:BootstrapButton ID="bbtnCheckin" runat="server" Text="Check-in" OnClick="bbtnCheckin_Click" DataLoadingText="Registrando..." CssClass="btn btn-primary btn-block js-checkin" />
                                 <asp:Repeater ID="rCampuses" runat="server" OnItemCommand="rCampuses_ItemCommand" OnItemDataBound="rCampuses_ItemDataBound">
                                     <ItemTemplate>
-                                        <Rock:BootstrapButton ID="lbCampusSelect" runat="server" Text='<%# Eval("CampusName") %>' CommandName='Device' CommandArgument='<%# Eval("DeviceId") %>' CssClass='btn btn-block' DataLoadingText="Loading..." />
+                                        <Rock:BootstrapButton ID="lbCampusSelect" runat="server" Text='<%# Eval("CampusName") %>' CommandName='Device' CommandArgument='<%# Eval("DeviceId") %>' CssClass='btn btn-block' DataLoadingText="Cargando..." />
                                     </ItemTemplate>
                                 </asp:Repeater>
                             </div>

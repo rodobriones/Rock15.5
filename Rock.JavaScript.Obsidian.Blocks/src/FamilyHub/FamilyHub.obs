@@ -1,0 +1,1696 @@
+﻿<template>
+    <Panel type="block" title="" :hasNoBodyPadding="true">
+        <template #default>
+            <div class="vrPage">
+                <div class="vrTopBar">
+                    <div class="vrBrand">VidaReal.tv</div>
+                </div>
+
+                <div class="vrContainer">
+                    <div class="fhwrap">
+                        <NotificationBox v-if="config.notLogged" alertType="warning">
+                            Debes iniciar sesión para ver y administrar tu familia.
+                        </NotificationBox>
+
+                        <div v-else>
+                            <div class="fhhead">
+                                <div class="fhtitle">Mi Familia</div>
+                                <div class="fhsub text-muted">Administra miembros, datos y parentesco de tu núcleo familiar.</div>
+                                <div class="fhDeleteNote text-muted">
+                                    Para eliminar un miembro escríbenos a <a :href="`mailto:soporteapp@vidareal.tv?subject=${encodeURIComponent('Soporte App')}&body=${encodeURIComponent('Hola, quisiera solicitar la eliminación del siguiente miembro de mi familia:\n\nNombre completo: \nMotivo: \n\nID de usuario: ' + config.currentPersonId + '\n\nGracias.')}`">soporteapp@vidareal.tv</a>
+                                </div>
+                            </div>
+
+                            <div v-if="statusHtml" class="fhstatus" v-html="statusHtml"></div>
+
+                            <div v-if="members.length === 0" class="fhEmpty card">
+                                <div class="fhEmptyTitle">No hay miembros para mostrar</div>
+                                <div class="fhEmptyText text-muted">
+                                    Agrega tu primer miembro para comenzar.
+                                </div>
+                            </div>
+
+                            <div v-else class="fhgrid">
+                                <article v-for="m in members" :key="m.personId" class="fhcard card">
+                                    <button class="fhEditIconBtn" @click="openEdit(m.personId)" :disabled="busy" aria-label="Editar miembro">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 20h9" />
+                                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                        </svg>
+                                    </button>
+
+                                    <div class="fhcardBody">
+                                        <div class="fhavatarWrap">
+                                            <div class="fhavatar">
+                                                <img v-if="m.photoUrl" :src="m.photoUrl" alt="Foto" />
+                                                <span v-else>{{ m.initials }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="fhmemberBody">
+                                            <div class="fhnameRow">
+                                                <div class="fhnameText">{{ m.fullName }}</div>
+                                                <span v-if="m.isMe" class="fhbadge">Yo</span>
+                                                <span v-if="m.maritalBadge" class="fhbadge fhbadgeMarital">{{ m.maritalBadge }}</span>
+                                            </div>
+                                            <div class="fhageText">{{ m.ageText }}</div>
+
+                                            <div class="fhchips">
+                                                <span class="fhchip">{{ m.familyRole }}</span>
+                                            </div>
+
+                                            <div class="fhmemberInfo">
+                                                <div class="fhinfoRow">
+                                                    <span class="fhinfoLabel">Email</span>
+                                                    <span class="fhinfoVal">{{ m.emailText }}</span>
+                                                </div>
+                                                <div class="fhinfoRow">
+                                                    <span class="fhinfoLabel">Móvil</span>
+                                                    <span class="fhinfoVal">{{ m.mobileText }}</span>
+                                                </div>
+                                                <div class="fhinfoRow">
+                                                    <span class="fhinfoLabel">Parentesco conmigo</span>
+                                                    <span class="fhinfoVal">{{ m.relationshipToMeText }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+
+                            <div class="fhAddWrap">
+                                <RockButton class="fhAddBtn" btnType="primary" @click="openNew" :disabled="busy">
+                                    Agregar miembro
+                                </RockButton>
+                            </div>
+
+
+                            <div v-if="modalOpen" class="fhmodalBack" @click="closeModal">
+                                <div class="fhmodal" @click.stop>
+                                    <div class="fhmodalTop">
+                                        <div class="fhmodalHeading">
+                                            <div class="fhmodalTitle">{{ editModel.personId ? `Editar: ${(editModel.firstName + ' ' + editModel.lastName).trim()}` : "Agregar miembro" }}</div>
+                                            <div class="fhmodalSubtitle">Actualiza datos personales, contacto y foto.</div>
+                                        </div>
+                                        <RockButton btnType="link" @click="closeModal" :disabled="busy">Cerrar</RockButton>
+                                    </div>
+
+                                    <div class="fhmodalBody" ref="modalBodyRef" @click="phoneMenuOpen = false">
+                                        <div v-if="editError" class="fhalert">
+                                            <NotificationBox alertType="danger">{{ editError }}</NotificationBox>
+                                        </div>
+
+                                        <div class="fhformGrid">
+                                            <div class="fhformLeft">
+                                                <section class="fhSection">
+                                                    <div class="fhSectionTitle">Datos personales</div>
+                                                    <div class="fhSectionHint text-muted">Estos campos identifican al miembro.</div>
+
+                                                    <div class="fhSectionBody">
+                                                        <TextBox v-model="editModel.firstName" label="Nombres" />
+                                                        <div v-if="fieldErrors.firstName" class="fhFieldError">{{ fieldErrors.firstName }}</div>
+                                                        <TextBox v-model="editModel.lastName" label="Apellidos" />
+                                                        <div v-if="fieldErrors.lastName" class="fhFieldError">{{ fieldErrors.lastName }}</div>
+
+                                                        <div class="fhform2">
+                                                            <fieldset class="fhDateFieldset">
+                                                                <legend class="fhLabel">Fecha de nacimiento</legend>
+                                                                <div class="fhDateRow">
+                                                                    <div class="fhDateField">
+                                                                        <input
+                                                                            :class="['fhDateInput', birthDayTouched && birthDayError ? 'fhDateInputError' : birthDayTouched && birthDay ? 'fhDateInputOk' : '']"
+                                                                            type="text"
+                                                                            inputmode="numeric"
+                                                                            autocomplete="bday-day"
+                                                                            maxlength="2"
+                                                                            placeholder="DD"
+                                                                            :disabled="busy"
+                                                                            :value="birthDay"
+                                                                            @input="onBirthDayInput"
+                                                                            @blur="onBirthDayBlur"
+                                                                            ref="birthDayRef" />
+                                                                        <label class="fhDateLabel">Día</label>
+                                                                    </div>
+                                                                    <div class="fhDateField">
+                                                                        <input
+                                                                            :class="['fhDateInput', birthMonthTouched && birthMonthError ? 'fhDateInputError' : birthMonthTouched && birthMonth ? 'fhDateInputOk' : '']"
+                                                                            type="text"
+                                                                            inputmode="numeric"
+                                                                            autocomplete="bday-month"
+                                                                            maxlength="2"
+                                                                            placeholder="MM"
+                                                                            :disabled="busy"
+                                                                            :value="birthMonth"
+                                                                            @input="onBirthMonthInput"
+                                                                            @blur="onBirthMonthBlur"
+                                                                            ref="birthMonthRef" />
+                                                                        <label class="fhDateLabel">Mes</label>
+                                                                    </div>
+                                                                    <div class="fhDateField fhDateFieldYear">
+                                                                        <input
+                                                                            :class="['fhDateInput', birthYearTouched && birthYearError ? 'fhDateInputError' : birthYearTouched && !birthYearError && birthYear.length === 4 ? 'fhDateInputOk' : '']"
+                                                                            type="text"
+                                                                            inputmode="numeric"
+                                                                            autocomplete="bday-year"
+                                                                            maxlength="4"
+                                                                            placeholder="AAAA"
+                                                                            :disabled="busy"
+                                                                            :value="birthYear"
+                                                                            @input="onBirthYearInput"
+                                                                            @blur="onBirthYearBlur"
+                                                                            ref="birthYearRef" />
+                                                                        <label class="fhDateLabel">Año</label>
+                                                                    </div>
+                                                                </div>
+                                                                <div v-if="birthDateValidText" class="fhDateValidText">{{ birthDateValidText }}</div>
+                                                                <div v-if="birthDateErrorText" class="fhDateErrorText">{{ birthDateErrorText }}</div>
+                                                            </fieldset>
+                                                            <div>
+                                                                <DropDownList v-model="genderValue" :items="genderOptions" label="Sexo" />
+                                                                <div v-if="fieldErrors.gender" class="fhFieldError">{{ fieldErrors.gender }}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </section>
+
+                                                <section class="fhSection">
+                                                    <div class="fhSectionTitle">Contacto</div>
+                                                    <div class="fhSectionHint text-muted">Email y teléfono móvil principal.</div>
+
+                                                    <div class="fhSectionBody">
+                                                        <TextBox v-model="editModel.email" label="Email" />
+                                                        <div v-if="fieldErrors.email" class="fhFieldError">{{ fieldErrors.email }}</div>
+
+                                                        <div class="fhField">
+                                                            <div class="fhLabel">Teléfono</div>
+
+                                                            <div class="fhPhoneInput" @click.stop>
+                                                                <button type="button" class="fhPhoneCodeBtn" :disabled="busy" @click="phoneMenuOpen = !phoneMenuOpen">
+                                                                    +{{ editModel.phoneCountry }}
+                                                                    <span class="fhCaret" aria-hidden="true"></span>
+                                                                </button>
+
+                                                                <input
+                                                                    class="fhPhoneNumberInput"
+                                                                    type="tel"
+                                                                    inputmode="numeric"
+                                                                    autocomplete="tel-national"
+                                                                    :disabled="busy"
+                                                                    v-model="editModel.phoneNumber"
+                                                                    placeholder="Teléfono móvil"
+                                                                    @input="onPhoneNumberInput" />
+
+                                                                <div v-if="phoneMenuOpen" class="fhPhoneMenu">
+                                                                    <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('502')">+502</button>
+                                                                    <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('503')">+503</button>
+                                                                    <button type="button" class="fhPhoneMenuItem" @mousedown.prevent="setPhoneCountry('1')">+1</button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="fhHelp text-muted">Código por defecto: +502</div>
+                                                            <div v-if="fieldErrors.phone" class="fhFieldError">{{ fieldErrors.phone }}</div>
+                                                        </div>
+                                                    </div>
+                                                </section>
+
+                                                <section class="fhSection">
+                                                    <div class="fhSectionTitle">Relación</div>
+                                                    <div class="fhSectionHint text-muted">Parentesco desde tu perfil hacia esta persona.</div>
+
+                                                    <div class="fhSectionBody">
+                                                        <DropDownList
+                                                            v-if="!isEditingMe"
+                                                            v-model="relationshipValue"
+                                                            :items="relationshipRoles"
+                                                            label="Parentesco conmigo" />
+                                                        <div v-if="fieldErrors.relationship" class="fhFieldError">{{ fieldErrors.relationship }}</div>
+
+                                                        <div v-if="!isEditingMe" class="fhHelp text-muted">
+                                                            Se guardará la relación desde tu perfil y también la relación inversa en el perfil de la otra persona.
+                                                        </div>
+
+                                                        <div v-else class="fhHelp text-muted">
+                                                            No puedes asignar un parentesco contigo mismo (Yo).
+                                                        </div>
+                                                    </div>
+                                                </section>
+                                            </div>
+
+                                            <div class="fhformRight">
+                                                <div class="fhphotoCard fhphotoCardSticky">
+                                                    <div class="fhphotoStage">
+                                                        <div class="fhavatar fhavatarLg fhavatarPhoto">
+                                                            <img v-if="photoPreviewUrl" :src="photoPreviewUrl" alt="Foto" />
+                                                            <span v-else>{{ photoPreviewInitials }}</span>
+
+                                                            <div v-if="photoUploadBusy" class="fhPhotoOverlay">
+                                                                <span class="fhSpinner" aria-hidden="true"></span>
+                                                                <span class="fhPhotoOverlayText">Subiendo foto...</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="fhPhotoMeta">
+                                                        <div class="fhPhotoTitle">Foto de perfil</div>
+                                                        <div class="fhPhotoHint text-muted">Selecciona y recorta la foto en formato cuadrado antes de guardar.</div>
+                                                        <RockButton btnType="default" @click="triggerPhotoPicker" :disabled="busy || photoUploadBusy">Seleccionar foto</RockButton>
+                                                        <div class="fhUploaderArea" ref="uploaderArea">
+                                                            <ImageEditor
+                                                                v-model="photoFile"
+                                                                label=""
+                                                                :binaryFileTypeGuid="config.personImageBinaryFileTypeGuid"
+                                                                :aspectRatio="1"
+                                                                :maxImageWidth="1200"
+                                                                :maxImageHeight="1200"
+                                                                :hideDeleteButton="false"
+                                                                buttonText="Seleccionar foto"
+                                                                @cropped="onPhotoCropped"
+                                                                @update:modelValue="onPhotoModelValueUpdated" />
+                                                        </div>
+                                                        <div v-if="photoUploadBusy" class="fhPhotoUploading text-muted">
+                                                            Cargando y comprimiendo foto...
+                                                        </div>
+                                                        <div v-if="photoFile?.text" class="fhPhotoFile text-muted">Archivo: {{ photoFile.text }}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="fhmodalActions">
+                                        <RockButton btnType="primary" @click="save" :disabled="busy || photoUploadBusy">{{ busy ? "Guardando..." : "Guardar" }}</RockButton>
+                                        <RockButton btnType="default" @click="closeModal" :disabled="busy || photoUploadBusy">Cancelar</RockButton>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import ImageEditor from "@Obsidian/Controls/imageEditor.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type ListItemBag = { text: string; value: string };
+
+type Member = {
+    personId: number;
+    fullName: string;
+    isMe: boolean;
+    familyRole: string;
+    ageText: string;
+    emailText: string;
+    mobileText: string;
+    relationshipToMeText: string;
+    photoUrl: string;
+    initials: string;
+    maritalBadge: string;
+};
+
+type InitBag = {
+    notLogged: boolean;
+    currentPersonId: number | null;
+    statusHtml: string;
+    members: Member[];
+    relationshipRoles: ListItemBag[];
+    genderOptions: ListItemBag[];
+    personImageBinaryFileTypeGuid: string;
+};
+
+type EditModel = {
+    personId: number | null;
+    firstName: string;
+    lastName: string;
+    birthDate: string;
+    gender: number | null;
+    email: string;
+    phoneCountry: string;
+    phoneNumber: string;
+    relationshipValue: string;
+    photoUrl: string;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const members = ref<Member[]>(config.members || []);
+const statusHtml = ref<string>(config.statusHtml || "");
+const relationshipRoles = ref<ListItemBag[]>(config.relationshipRoles || []);
+const genderOptions = ref<ListItemBag[]>(config.genderOptions || []);
+const phoneMenuOpen = ref<boolean>(false);
+const modalOpen = ref<boolean>(false);
+const busy = ref<boolean>(false);
+const editError = ref<string>("");
+const photoUploadBusy = ref<boolean>(false);
+const saveAttempted = ref<boolean>(false);
+const modalBodyRef = ref<HTMLElement | null>(null);
+
+const editModel = ref<EditModel>({
+    personId: null,
+    firstName: "",
+    lastName: "",
+    birthDate: "",
+    gender: null,
+    email: "",
+    phoneCountry: "502",
+    phoneNumber: "",
+    relationshipValue: "",
+    photoUrl: ""
+});
+
+const genderValue = computed<string>({
+    get() {
+        return editModel.value.gender == null ? "" : String(editModel.value.gender);
+    },
+    set(v: string) {
+        const n = Number(v);
+        editModel.value.gender = v ? (Number.isFinite(n) ? n : null) : null;
+    }
+});
+
+const relationshipValue = computed<string>({
+    get() {
+        return editModel.value.relationshipValue ?? "";
+    },
+    set(v: string) {
+        editModel.value.relationshipValue = v;
+    }
+});
+
+// ---- Birth date 3-input ----
+const birthDay = ref<string>("");
+const birthMonth = ref<string>("");
+const birthYear = ref<string>("");
+const birthDayTouched = ref<boolean>(false);
+const birthMonthTouched = ref<boolean>(false);
+const birthYearTouched = ref<boolean>(false);
+const birthDayRef = ref<HTMLInputElement | null>(null);
+const birthMonthRef = ref<HTMLInputElement | null>(null);
+const birthYearRef = ref<HTMLInputElement | null>(null);
+let birthDateFromInputs = false;
+
+const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const birthDayError = computed<boolean>(() => {
+    if (!birthDay.value) return false;
+    const n = Number(birthDay.value);
+    return isNaN(n) || n < 1 || n > 31;
+});
+
+const birthMonthError = computed<boolean>(() => {
+    if (!birthMonth.value) return false;
+    const n = Number(birthMonth.value);
+    return isNaN(n) || n < 1 || n > 12;
+});
+
+const birthYearError = computed<boolean>(() => {
+    if (!birthYear.value || birthYear.value.length < 4) return birthYear.value.length > 0;
+    const n = Number(birthYear.value);
+    const current = new Date().getFullYear();
+    return isNaN(n) || n < 1900 || n > current;
+});
+
+const birthDateValidText = computed<string>(() => {
+    const d = Number(birthDay.value);
+    const m = Number(birthMonth.value);
+    const y = Number(birthYear.value);
+    if (!birthDay.value || !birthMonth.value || !birthYear.value || birthYear.value.length < 4) return "";
+    if (birthDayError.value || birthMonthError.value || birthYearError.value) return "";
+    const monthName = MONTH_NAMES[m - 1] || "";
+    return `${d} de ${monthName} de ${y}`;
+});
+
+const birthDateErrorText = computed<string>(() => {
+    if (saveAttempted.value && !birthDay.value && !birthMonth.value && !birthYear.value) {
+        return "La fecha de nacimiento es requerida.";
+    }
+    if (birthDayTouched.value && birthDayError.value) return "Día inválido (1–31)";
+    if (birthMonthTouched.value && birthMonthError.value) return "Mes inválido (1–12)";
+    if (birthYearTouched.value && birthYearError.value) {
+        const current = new Date().getFullYear();
+        return `Año inválido (1900–${current})`;
+    }
+    return "";
+});
+
+watch(() => editModel.value.birthDate, (val) => {
+    if (birthDateFromInputs) return;
+    if (val && val.length >= 8) {
+        const parts = val.split("-");
+        birthYear.value = parts[0] || "";
+        birthMonth.value = parts[1] || "";
+        birthDay.value = parts[2] || "";
+    } else {
+        birthYear.value = "";
+        birthMonth.value = "";
+        birthDay.value = "";
+    }
+}, { immediate: true, flush: "sync" });
+
+function syncBirthDate() {
+    const d = birthDay.value;
+    const m = birthMonth.value;
+    const y = birthYear.value;
+    birthDateFromInputs = true;
+    if (d && m && y && y.length === 4 && !birthDayError.value && !birthMonthError.value && !birthYearError.value) {
+        editModel.value.birthDate = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    } else {
+        editModel.value.birthDate = "";
+    }
+    birthDateFromInputs = false;
+}
+
+function onBirthDayInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "").slice(0, 2);
+    el.value = digits;
+    birthDay.value = digits;
+    birthDayTouched.value = true;
+    syncBirthDate();
+    if (digits.length === 2 && !birthDayError.value) birthMonthRef.value?.focus();
+}
+
+function onBirthDayBlur() {
+    birthDayTouched.value = true;
+    if (birthDay.value.length === 1) {
+        birthDay.value = birthDay.value.padStart(2, "0");
+        syncBirthDate();
+    }
+}
+
+function onBirthMonthInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "").slice(0, 2);
+    el.value = digits;
+    birthMonth.value = digits;
+    birthMonthTouched.value = true;
+    syncBirthDate();
+    if (digits.length === 2 && !birthMonthError.value) birthYearRef.value?.focus();
+}
+
+function onBirthMonthBlur() {
+    birthMonthTouched.value = true;
+    if (birthMonth.value.length === 1) {
+        birthMonth.value = birthMonth.value.padStart(2, "0");
+        syncBirthDate();
+    }
+}
+
+function onBirthYearInput(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, "").slice(0, 4);
+    el.value = digits;
+    birthYear.value = digits;
+    syncBirthDate();
+}
+
+function onBirthYearBlur() {
+    birthYearTouched.value = true;
+    syncBirthDate();
+}
+
+const photoFile = ref<ListItemBag | null>(null);
+let photoUploadTimeoutHandle: number | null = null;
+
+const photoBinaryFileGuid = computed<string | null>(() => {
+    const raw = photoFile.value?.value;
+    if (!raw) return null;
+
+    const s = String(raw).trim();
+    return s.length > 0 ? s : null;
+});
+
+const photoBinaryFileId = computed<number | null>(() => {
+    const raw = photoFile.value?.value;
+    if (!raw) return null;
+
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+});
+
+const photoPreviewUrl = computed<string>(() => {
+    const guid = photoBinaryFileGuid.value;
+    if (guid) {
+        return `/GetImage.ashx?guid=${encodeURIComponent(guid)}&w=220&h=220&mode=crop`;
+    }
+
+    return editModel.value.photoUrl || "";
+});
+
+const photoPreviewInitials = computed<string>(() => {
+    const full = `${(editModel.value.firstName || "").trim()} ${(editModel.value.lastName || "").trim()}`.trim();
+    const parts = full.split(" ").filter(p => p.trim().length > 0);
+
+    if (parts.length === 0) return "--";
+
+    const a = parts[0]?.[0] || "";
+    const b = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "") : "";
+    const s = (a + b).trim();
+    return s ? s.toUpperCase() : "--";
+});
+
+const fieldErrors = computed<Record<string, string>>(() => {
+    if (!saveAttempted.value) return {};
+    const e: Record<string, string> = {};
+    if (!(editModel.value.firstName || "").trim()) e.firstName = "El nombre es requerido.";
+    if (!(editModel.value.lastName || "").trim()) e.lastName = "El apellido es requerido.";
+    if (editModel.value.gender == null) e.gender = "El sexo es requerido.";
+    if (!(editModel.value.email || "").trim()) e.email = "El email es requerido.";
+    if (!(editModel.value.phoneNumber || "").trim()) e.phone = "El teléfono es requerido.";
+    if (!isEditingMe.value && !(editModel.value.relationshipValue || "").trim()) e.relationship = "El parentesco es requerido.";
+    return e;
+});
+
+const isEditingMe = computed<boolean>(() => {
+    const currentPersonId = config.currentPersonId ?? null;
+    const personId = editModel.value.personId ?? null;
+
+    return currentPersonId != null && personId != null && currentPersonId === personId;
+});
+
+function onlyDigits(s: string): string {
+    return String(s || "").replace(/[^\d]/g, "");
+}
+
+function setPhoneCountry(cc: string): void {
+    editModel.value.phoneCountry = cc;
+    phoneMenuOpen.value = false;
+}
+
+function onPhoneNumberInput(e: Event): void {
+    const el = e.target as HTMLInputElement;
+    const digits = String(el.value || "").replace(/[^\d]/g, "");
+    if (digits !== el.value) {
+        el.value = digits;
+    }
+
+    editModel.value.phoneNumber = digits;
+}
+
+function closeModal(): void {
+    if (busy.value) return;
+
+    saveAttempted.value = false;
+    endPhotoUploadState();
+    modalOpen.value = false;
+    editError.value = "";
+    phoneMenuOpen.value = false;
+}
+
+function openNew(): void {
+    editError.value = "";
+    saveAttempted.value = false;
+    endPhotoUploadState();
+    photoFile.value = null;
+
+    editModel.value = {
+        personId: null,
+        firstName: "",
+        lastName: "",
+        birthDate: "",
+        gender: null,
+        email: "",
+        phoneCountry: "502",
+        phoneNumber: "",
+        relationshipValue: "",
+        photoUrl: ""
+    };
+
+    modalOpen.value = true;
+}
+
+async function openEdit(personId: number): Promise<void> {
+    editError.value = "";
+    saveAttempted.value = false;
+    endPhotoUploadState();
+    photoFile.value = null;
+    busy.value = true;
+
+    try {
+        const res = await invokeBlockAction<any>("GetEdit", { bag: { personId } });
+
+        if (!res.isSuccess || !res.data?.model) {
+            editError.value = res.errorMessage || "No se pudo cargar el miembro.";
+            modalOpen.value = true;
+            return;
+        }
+
+        const m = res.data.model;
+
+        const phoneCountry = String(m.phoneCountryCode || "").trim() || "502";
+        const phoneNumber = String(m.phoneNumber || "").trim();
+
+        editModel.value = {
+            personId: m.personId ?? null,
+            firstName: String(m.firstName || ""),
+            lastName: String(m.lastName || ""),
+            birthDate: String(m.birthDate || ""),
+            gender: m.gender == null ? null : Number(m.gender),
+            email: String(m.email || ""),
+            phoneCountry,
+            phoneNumber,
+            relationshipValue: String(m.relationshipValue ?? ""),
+            photoUrl: String(m.photoUrl || "")
+        };
+
+        modalOpen.value = true;
+    }
+    catch {
+        editError.value = "Error cargando el miembro.";
+        modalOpen.value = true;
+    }
+    finally {
+        busy.value = false;
+    }
+}
+
+async function save(): Promise<void> {
+    editError.value = "";
+    saveAttempted.value = true;
+    birthDayTouched.value = true;
+    birthMonthTouched.value = true;
+    birthYearTouched.value = true;
+
+    if (photoUploadBusy.value) {
+        editError.value = "Espera a que termine la carga de la foto.";
+        return;
+    }
+
+    if (Object.keys(fieldErrors.value).length > 0 || !!birthDateErrorText.value) {
+        await nextTick();
+        const firstErr = modalBodyRef.value?.querySelector<HTMLElement>(".fhDateErrorText, .fhFieldError");
+        firstErr?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+    }
+
+    const first = (editModel.value.firstName || "").trim();
+    const last = (editModel.value.lastName || "").trim();
+
+    busy.value = true;
+
+    try {
+        const cc = onlyDigits(editModel.value.phoneCountry || "502");
+        const num = onlyDigits(editModel.value.phoneNumber || "");
+
+        const bag = {
+            personId: editModel.value.personId,
+            firstName: first,
+            lastName: last,
+            birthDate: editModel.value.birthDate || "",
+            gender: editModel.value.gender,
+            email: editModel.value.email || "",
+            phoneCountryCode: cc,
+            phoneNumber: num,
+            relationshipValue: isEditingMe.value ? "" : (editModel.value.relationshipValue ?? ""),
+            photoBinaryFileGuid: photoBinaryFileGuid.value,
+            photoBinaryFileId: photoBinaryFileId.value
+        };
+
+        const res = await invokeBlockAction<any>("SaveMember", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            editError.value = res.errorMessage || "No se pudo guardar.";
+            return;
+        }
+
+        statusHtml.value = String(res.data.statusHtml || "");
+        window.setTimeout(() => { statusHtml.value = ""; }, 3500);
+        members.value = (res.data.members || []) as Member[];
+        modalOpen.value = false;
+    }
+    catch {
+        editError.value = "Error guardando cambios.";
+    }
+    finally {
+        busy.value = false;
+    }
+}
+
+const uploaderArea = ref<HTMLElement | null>(null);
+
+function triggerPhotoPicker(): void {
+    if (busy.value || photoUploadBusy.value) {
+        return;
+    }
+
+    const host = uploaderArea.value;
+    const input = host?.querySelector('input[type="file"]') as HTMLInputElement | null;
+    input?.click();
+}
+
+function beginPhotoUploadState(): void {
+    photoUploadBusy.value = true;
+
+    if (photoUploadTimeoutHandle != null) {
+        clearTimeout(photoUploadTimeoutHandle);
+    }
+
+    photoUploadTimeoutHandle = window.setTimeout(() => {
+        if (!photoUploadBusy.value) return;
+
+        photoUploadBusy.value = false;
+
+        if (!photoBinaryFileGuid.value) {
+            editError.value = "No se pudo subir la foto. Intenta de nuevo.";
+        }
+    }, 25000);
+}
+
+function endPhotoUploadState(): void {
+    photoUploadBusy.value = false;
+
+    if (photoUploadTimeoutHandle != null) {
+        clearTimeout(photoUploadTimeoutHandle);
+        photoUploadTimeoutHandle = null;
+    }
+}
+
+function onPhotoCropped(): void {
+    beginPhotoUploadState();
+}
+
+function onPhotoModelValueUpdated(): void {
+    endPhotoUploadState();
+}
+</script>
+
+<style>
+:root {
+    --vr-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+
+    --vr-bg: #F4F6FB;
+    --vr-surface: #FFFFFF;
+    --vr-text: #111827;
+    --vr-muted: #6B7280;
+    --vr-border: rgba(17,24,39,.10);
+
+    --vr-shadow: 0 10px 30px rgba(17,24,39,.10);
+    --vr-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
+
+    --vr-radius-xl: 18px;
+    --vr-radius-lg: 14px;
+    --vr-radius-md: 12px;
+
+    --vr-accent: #2563EB;
+}
+
+.vrPage {
+    font-family: var(--vr-font);
+    background: var(--vr-bg);
+    min-height: 100vh;
+    padding-bottom: 18px;
+    color: var(--vr-text);
+    color-scheme: light;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+
+    /* Force Rock CSS variables to light-mode values regardless of [theme] attribute */
+    --color-interface-strongest: #0a0a0a;
+    --color-interface-stronger:  #0D1117;
+    --color-interface-strong:    #3D444D;
+    --color-interface-medium:    #8B8BA7;
+    --color-interface-soft:      #D9D9E3;
+    --color-interface-softer:    #F8F8FC;
+    --color-interface-softest:   #fdfdfd;
+    --box-shadow:                rgba(145, 158, 171, 0.2) 0px 0px 2px 0px, rgba(145, 158, 171, 0.12) 0px 12px 24px -4px;
+    --popup-box-shadow:          0 1rem 3rem rgba(0,0,0,.175);
+}
+
+.vrPage input,
+.vrPage textarea {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+}
+
+.vrTopBar {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    background: var(--vr-bg);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+}
+
+.vrBrand {
+    font-weight: 800;
+    letter-spacing: .2px;
+    color: var(--vr-text);
+    font-size: 18px;
+}
+
+.vrTopActions {
+    display: flex;
+    gap: 10px;
+}
+
+.vrIconBtn {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: rgba(17,24,39,.06);
+    border: 1px solid rgba(17,24,39,.06);
+}
+
+.vrContainer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px 10px 22px;
+}
+
+.text-muted { color: var(--vr-muted) !important; }
+
+.panel-block .panel-heading,
+.panel-block .panel-header {
+    display: none !important;
+}
+
+.panel-block {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* ===== Botones estilo VidaReal ===== */
+.vrPage .btn-primary,
+.vrPage .rock-button.btn-primary {
+    background-color: #272B32 !important;
+    border-color: #272B32 !important;
+    color: #FFFFFF !important;
+    font-weight: 700;
+}
+
+.vrPage .btn-primary:hover,
+.vrPage .rock-button.btn-primary:hover {
+    background-color: #1a1d22 !important;
+    border-color: #1a1d22 !important;
+}
+
+.vrPage .btn-primary:disabled,
+.vrPage .rock-button.btn-primary:disabled {
+    background-color: #272B32 !important;
+    border-color: #272B32 !important;
+    color: rgba(255,255,255,.45) !important;
+    opacity: 0.6;
+}
+
+.vrPage .btn-default,
+.vrPage .rock-button.btn-default {
+    background-color: #F3F4F6 !important;
+    border-color: #E5E7EB !important;
+    color: #374151 !important;
+    font-weight: 600;
+}
+
+.vrPage .btn-link,
+.vrPage .rock-button.btn-link {
+    color: #374151 !important;
+}
+
+.fhwrap {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.fhhead {
+    margin-bottom: 14px;
+}
+
+.fhAddWrap {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+}
+
+.fhtitle {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.1;
+}
+
+.fhsub {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.fhAddBtn {
+    min-width: 200px;
+    max-width: 320px;
+    width: auto;
+}
+
+.fhDeleteNote {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.fhDeleteNote a {
+    color: #60A5FA;
+    text-decoration: none;
+}
+
+.fhDeleteNote a:hover {
+    text-decoration: underline;
+}
+
+.fhstatus {
+    margin-bottom: 10px;
+}
+
+.fhEmpty {
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-xl);
+    background: var(--vr-surface);
+    padding: 18px;
+    box-shadow: var(--vr-shadow-soft);
+}
+
+.fhEmptyTitle {
+    font-weight: 800;
+    font-size: 16px;
+}
+
+.fhEmptyText {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.fhgrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 340px));
+    gap: 12px;
+    justify-content: center;
+}
+
+.fhcard {
+    position: relative;
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-xl);
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-soft);
+}
+
+.fhcardBody {
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 12px;
+}
+
+.fhavatar {
+    width: 62px;
+    height: 62px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, rgba(37,99,235,.11), rgba(17,24,39,.05));
+    border: 1px solid rgba(17,24,39,.08);
+    font-weight: 900;
+}
+
+.fhavatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.fhmemberBody {
+    min-width: 0;
+}
+
+.fhnameRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+
+.fhageText {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--vr-muted);
+    font-weight: 700;
+}
+
+.fhbadge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(37,99,235,.14);
+    color: #1D4ED8;
+    font-weight: 700;
+}
+
+.fhbadgeMarital {
+    background: rgba(236,72,153,.12);
+    color: #BE185D;
+}
+
+.fhchips {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.fhchip {
+    border: 1px solid rgba(17,24,39,.10);
+    background: rgba(17,24,39,.03);
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--vr-muted);
+}
+
+.fhmemberInfo {
+    margin-top: 10px;
+    display: grid;
+    gap: 7px;
+}
+
+.fhinfoRow {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+
+.fhinfoLabel {
+    font-size: 12px;
+    color: var(--vr-muted);
+    font-weight: 700;
+}
+
+.fhinfoVal {
+    font-size: 12px;
+    color: var(--vr-text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fhEditIconBtn {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(17,24,39,.10);
+    background: rgba(255,255,255,.92);
+    color: #6B7280;
+    display: grid;
+    place-items: center;
+}
+
+.fhEditIconBtn:hover {
+    color: #111827;
+    background: #fff;
+}
+
+.fhEditIconBtn:disabled {
+    opacity: .6;
+}
+
+.fhmodalBack {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(17,24,39,.45);
+    display: grid;
+    place-items: center;
+    padding: 14px;
+}
+
+.fhmodal {
+    width: min(980px, 100%);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--vr-radius-xl);
+    border: 1px solid var(--vr-border);
+    background: var(--vr-surface);
+    box-shadow: 0 20px 50px rgba(17,24,39,.25);
+    overflow: hidden;
+}
+
+.fhmodalTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(17,24,39,.08);
+    position: sticky;
+    top: 0;
+    background: var(--vr-surface);
+    z-index: 2;
+    flex: 0 0 auto;
+}
+
+.fhmodalHeading {
+    min-width: 0;
+}
+
+.fhmodalTitle {
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.fhmodalSubtitle {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--vr-muted);
+}
+
+.fhmodalBody {
+    padding: 14px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.fhalert {
+    margin-bottom: 10px;
+}
+
+.fhformGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 14px;
+}
+
+.fhformLeft,
+.fhformRight {
+    min-width: 0;
+}
+
+.fhformLeft {
+    display: grid;
+    gap: 12px;
+}
+
+.fhSection {
+    border: 1px solid rgba(17,24,39,.10);
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff 0%, #FBFCFE 100%);
+    padding: 12px;
+    box-shadow: 0 4px 14px rgba(17,24,39,.04);
+}
+
+.fhSectionTitle {
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--vr-text);
+}
+
+.fhSectionHint {
+    margin-top: 2px;
+    font-size: 12px;
+}
+
+.fhSectionBody {
+    margin-top: 10px;
+    display: grid;
+    gap: 10px;
+}
+
+.fhformGrid .form-group,
+.fhformGrid .control-wrapper {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.fhformGrid .form-control,
+.fhformGrid input,
+.fhformGrid select,
+.fhformGrid textarea {
+    max-width: 100%;
+}
+
+.fhformGrid .form-control:focus,
+.fhformGrid input:focus,
+.fhformGrid select:focus,
+.fhformGrid textarea:focus {
+    border-color: #1D4ED8;
+    box-shadow: 0 0 0 3px rgba(29,78,216,.12);
+}
+
+.fhform2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.fhField {
+    margin-top: 10px;
+}
+
+.fhLabel {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.fhDateFieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.fhDateRow {
+    display: grid;
+    grid-template-columns: 72px 72px 1fr;
+    gap: 8px;
+    align-items: start;
+}
+
+.fhDateField {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fhDateFieldYear {
+    flex: 1;
+}
+
+.fhDateInput {
+    width: 100%;
+    height: 48px;
+    border: 1px solid rgba(17,24,39,.18);
+    border-radius: 8px;
+    background: #fff;
+    padding: 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--vr-text);
+    text-align: center;
+    letter-spacing: .05em;
+}
+
+.fhDateFieldYear .fhDateInput {
+    text-align: left;
+    letter-spacing: .08em;
+}
+
+.fhDateInput::placeholder {
+    color: rgba(17,24,39,.28);
+    font-weight: 400;
+    font-size: 14px;
+}
+
+.fhDateInput:focus {
+    outline: none;
+    border-color: #1D4ED8;
+    box-shadow: 0 0 0 3px rgba(29,78,216,.12);
+}
+
+.fhDateInput:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #F9FAFB;
+}
+
+.fhDateLabel {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--vr-muted);
+    text-align: center;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.fhDateFieldYear .fhDateLabel {
+    text-align: left;
+}
+
+.fhDateInputError {
+    border-color: #EF4444 !important;
+    box-shadow: 0 0 0 3px rgba(239,68,68,.12) !important;
+}
+
+.fhDateInputOk {
+    border-color: #10B981 !important;
+    box-shadow: 0 0 0 3px rgba(16,185,129,.10) !important;
+}
+
+.fhDateErrorText,
+.fhFieldError {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #EF4444;
+}
+
+.fhDateValidText {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #10B981;
+}
+
+.fhPhoneInput {
+    position: relative;
+    display: flex;
+    width: 100%;
+    border: 1px solid rgba(17,24,39,.18);
+    border-radius: 8px;
+    background: #fff;
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.fhPhoneInput:focus-within {
+    border-color: #1D4ED8;
+    box-shadow: 0 0 0 3px rgba(29,78,216,.12);
+}
+
+.fhPhoneCodeBtn {
+    border: none;
+    border-right: 1px solid rgba(17,24,39,.12);
+    background: #F3F4F6;
+    min-width: 82px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-weight: 700;
+}
+
+.fhCaret {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid rgba(0,0,0,.65);
+}
+
+.fhPhoneNumberInput {
+    border: none;
+    outline: none;
+    width: 100%;
+    height: 40px;
+    padding: 8px 12px;
+    background: transparent;
+}
+
+.fhPhoneMenu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 130px;
+    border: 1px solid rgba(17,24,39,.16);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(17,24,39,.12);
+    padding: 6px;
+    z-index: 30;
+}
+
+.fhPhoneMenuItem {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.fhPhoneMenuItem:hover {
+    background: rgba(17,24,39,.06);
+}
+
+.fhHelp {
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+.fhphotoCard {
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-lg);
+    background: linear-gradient(180deg, #fff 0%, #F8FAFD 100%);
+    padding: 14px;
+    box-shadow: 0 8px 20px rgba(17,24,39,.06);
+}
+
+.fhphotoCardSticky {
+    position: sticky;
+    top: 8px;
+}
+
+.fhphotoStage {
+    display: grid;
+    place-items: center;
+}
+
+.fhavatarLg {
+    width: 170px;
+    height: 170px;
+    font-size: 38px;
+}
+
+.fhavatarPhoto {
+    position: relative;
+}
+
+.fhPhotoPencil {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid rgba(17,24,39,.10);
+    background: rgba(255,255,255,.92);
+    box-shadow: 0 6px 16px rgba(17,24,39,.12);
+    display: grid;
+    place-items: center;
+    color: rgba(17,24,39,.72);
+}
+
+.fhPhotoPencil:hover {
+    color: rgba(17,24,39,.96);
+    background: #fff;
+}
+
+.fhPhotoOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(17,24,39,.38);
+    color: #fff;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 8px;
+    border-radius: inherit;
+    z-index: 2;
+}
+
+.fhPhotoOverlayText {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.fhPhotoUploading {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.fhSpinner {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 2px solid rgba(255,255,255,.5);
+    border-top-color: #fff;
+    animation: fhspin .8s linear infinite;
+}
+
+@keyframes fhspin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.fhPhotoMeta {
+    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+}
+
+.fhPhotoTitle {
+    font-weight: 800;
+}
+
+.fhPhotoHint,
+.fhPhotoFile {
+    font-size: 12px;
+}
+
+.fhUploaderArea {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
+}
+
+.fhmodalActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(17,24,39,.08);
+    background: var(--vr-surface);
+    flex: 0 0 auto;
+}
+
+@media (max-width: 1024px) {
+    .fhgrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .fhformGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .fhphotoCardSticky {
+        position: static;
+        top: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .fhhead {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .fhAddBtn {
+        min-width: unset;
+        max-width: unset;
+        width: 100%;
+    }
+
+    .fhAddBtn {
+        width: 100%;
+    }
+
+    .fhgrid {
+        grid-template-columns: 1fr;
+    }
+
+    .fhcardBody {
+        grid-template-columns: 56px minmax(0, 1fr);
+        align-items: center;
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .fhavatar {
+        width: 56px;
+        height: 56px;
+    }
+
+    .fhmemberBody {
+        min-height: 56px;
+    }
+
+    .fhnameRow {
+        padding-right: 44px;
+    }
+
+    .fhchips,
+    .fhmemberInfo {
+        display: none;
+    }
+
+    .fhEditIconBtn {
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+    }
+
+    .fhinfoRow {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .fhinfoVal {
+        white-space: normal;
+        overflow: visible;
+    }
+
+    .fhmodalBack {
+        padding: 0;
+    }
+
+    .fhmodal {
+        width: 100%;
+        max-height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+    }
+
+    .fhmodalTop {
+        padding: 10px 12px;
+    }
+
+    .fhmodalSubtitle {
+        display: none;
+    }
+
+    .fhmodalBody {
+        padding: 10px 12px;
+    }
+
+    .fhmodalActions {
+        grid-template-columns: 1fr;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    }
+
+    .fhphotoCard {
+        padding: 12px;
+    }
+
+    .fhSection {
+        padding: 10px;
+        border-radius: 12px;
+        box-shadow: none;
+    }
+
+    .fhavatarLg {
+        width: 132px;
+        height: 132px;
+        font-size: 30px;
+    }
+
+    .fhform2 {
+        grid-template-columns: 1fr;
+    }
+}
+</style>

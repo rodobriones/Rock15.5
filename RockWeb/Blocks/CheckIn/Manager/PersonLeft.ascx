@@ -95,7 +95,7 @@
             </asp:Repeater>
         </asp:Panel>
 
-        <Rock:ModalDialog ID="mdSms" runat="server" ValidationGroup="vgSMS" Title="New Text Message" OnSaveClick="mdSms_SaveClick" SaveButtonText="Send" Visible="false">
+        <Rock:ModalDialog ID="mdSms" runat="server" ValidationGroup="vgSMS" Title="Nuevo Mensaje de WhatsApp" OnSaveClick="mdSms_SaveClick" SaveButtonText="Enviar" Visible="false">
             <Content>
                 <Rock:NotificationBox ID="nbSmsError" runat="server" Visible="false" NotificationBoxType="Danger" />
 
@@ -103,7 +103,7 @@
 
                 <div class="row d-flex flex-wrap">
                     <div class="col">
-                        <Rock:RockTextBox ID="tbSmsMessage" runat="server" TextMode="MultiLine" Rows="5" Placeholder="Your SMS message here..." Label="Message" />
+                        <Rock:RockTextBox ID="tbSmsMessage" runat="server" TextMode="MultiLine" Rows="5" Placeholder="Mensaje de WhatsApp" Label="Mensaje" />
                     </div>
                     <div class="col flex-grow-0">
                         <Rock:ImageUploader ID="imgSmsImage" runat="server" BinaryFileTypeGuid="<%# new Guid( Rock.SystemGuid.BinaryFiletype.COMMUNICATION_ATTACHMENT ) %>" Help="Optional image to include in the message." Label="Image" />

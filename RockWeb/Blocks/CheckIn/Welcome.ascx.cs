@@ -119,7 +119,7 @@ namespace RockWeb.Blocks.CheckIn
         Key = AttributeKey.CheckinButtonText,
         Description = "The text to display on the check-in button. Defaults to 'Start' if left blank.",
         IsRequired = false,
-        DefaultValue = "",
+        DefaultValue = "Iniciar",
         Category = "Text",
         Order = 13 )]
 
@@ -1128,6 +1128,36 @@ if (window.RockCheckinNative && window.RockCheckinNative.PrintV2Labels) {{
             btnBack_Click( sender, e );
         }
 
+        protected void btnLogout_Click( object sender, EventArgs e )
+        {
+            Rock.Security.Authorization.SignOut();
+
+            // Clear server session state.
+            Session.Clear();
+            Session.Abandon();
+
+            // Expire all cookies seen in this request to avoid stale app/webview state.
+            foreach ( var key in Request.Cookies.AllKeys.Where( k => k.IsNotNullOrWhiteSpace() ) )
+            {
+                var expired = new System.Web.HttpCookie( key )
+                {
+                    Expires = RockDateTime.Now.AddDays( -1 ),
+                    Value = string.Empty
+                };
+
+                Response.Cookies.Add( expired );
+            }
+
+            // Prevent cached authenticated responses from being reused.
+            Response.Cache.SetCacheability( System.Web.HttpCacheability.NoCache );
+            Response.Cache.SetNoStore();
+            Response.Cache.SetExpires( RockDateTime.Now.AddMinutes( -1 ) );
+
+            // Always return to the Check-in route after logging in again, preserving theme.
+            Response.Redirect( "~/Login?returnurl=%2Fcheckin%3Ftheme%3Dvidaventuracheckin", false );
+            Context.ApplicationInstance.CompleteRequest();
+        }
+
         #endregion
 
         /// <summary>
@@ -1135,8 +1165,8 @@ if (window.RockCheckinNative && window.RockCheckinNative.PrintV2Labels) {{
         /// </summary>
         private void ShowManagementDetails()
         {
-            // Only show Schedule Locations if setting is not empty
-            btnScheduleLocations.Visible = GetAttributeValue( AttributeKey.ScheduledLocationsPage ).IsNotNullOrWhiteSpace();
+            // Hidden by customization request.
+            btnScheduleLocations.Visible = false;
 
             btnReprintLabels.Visible = GetAttributeValue( AttributeKey.AllowLabelReprinting ).AsBoolean();
             pnlManagerLogin.Visible = false;

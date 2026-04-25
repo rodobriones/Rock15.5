@@ -28,12 +28,12 @@
                         <asp:Panel ID="pnlNoOptions" runat="server" Visible="false">
                             <h4><asp:Literal ID="lNoOptions" runat="server" /></h4>
                             <div class="actions">
-                                <asp:LinkButton CssClass="btn btn-primary btn-checkin" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Ok" />
+                                <asp:LinkButton CssClass="btn btn-primary btn-checkin" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Aceptar" />
                             </div>
                         </asp:Panel>
                         <asp:Repeater ID="rSelection" runat="server" OnItemCommand="rSelection_ItemCommand">
                             <ItemTemplate>
-                                <Rock:BootstrapButton ID="lbSelect" runat="server" CommandArgument='<%# Eval("Location.Id") %>' CssClass="btn btn-primary btn-large btn-block btn-checkin-select" DataLoadingText="Loading..." ><%# Container.DataItem.ToString() %><%# FormatCount( (int)Eval("Location.Id") ) %></Rock:BootstrapButton>
+                                <Rock:BootstrapButton ID="lbSelect" runat="server" CommandArgument='<%# Eval("Location.Id") %>' CssClass="btn btn-primary btn-large btn-block btn-checkin-select" DataLoadingText="Cargando..." ><%# Container.DataItem.ToString() %><%# FormatCount( (int)Eval("Location.Id") ) %></Rock:BootstrapButton>
                             </ItemTemplate>
                         </asp:Repeater>
                     </div>
@@ -45,8 +45,8 @@
 
      <div class="row-fluid checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Regresar" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
         </div>
     </div>
 

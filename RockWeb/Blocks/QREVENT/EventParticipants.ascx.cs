@@ -11,20 +11,20 @@ namespace RockWeb.Blocks.QREVENT
 {
     public partial class EventParticipants : RockBlock
     {
-        protected override void OnInit(EventArgs e)
+        protected override void OnInit( EventArgs e )
         {
-            base.OnInit(e);
+            base.OnInit( e );
             gRegistrants.DataKeyNames = new[] { "RegistrantId" };
             gRegistrants.GridRebind += gRegistrants_GridRebind;
         }
 
-        protected override void OnLoad(EventArgs e)
+        protected override void OnLoad( EventArgs e )
         {
-            base.OnLoad(e);
-            if (!IsPostBack)
+            base.OnLoad( e );
+            if ( !IsPostBack )
             {
                 LoadEvents();
-                gRegistrants.Visible = false;
+                pnlContent.Visible = false;
             }
         }
 
@@ -47,69 +47,125 @@ namespace RockWeb.Blocks.QREVENT
             ddlEventos.Items.Insert( 0, new ListItem( "-- Selecciona un evento --", "" ) );
         }
 
-        protected void ddlEventos_SelectedIndexChanged(object sender, EventArgs e) => BindGrid();
+        protected void ddlEventos_SelectedIndexChanged( object sender, EventArgs e )
+        {
+            gRegistrants.PageIndex = 0;
+            tbSearch.Text = "";
+            ddlFiltroAsistencia.SelectedValue = "";
+            BindGrid();
+        }
 
-        protected void gRegistrants_GridRebind(object sender, GridRebindEventArgs e) => BindGrid();
+        protected void btnFiltrar_Click( object sender, EventArgs e )
+        {
+            gRegistrants.PageIndex = 0;
+            BindGrid();
+        }
+
+        protected void btnLimpiar_Click( object sender, EventArgs e )
+        {
+            tbSearch.Text = "";
+            ddlFiltroAsistencia.SelectedValue = "";
+            gRegistrants.PageIndex = 0;
+            BindGrid();
+        }
+
+        protected void gRegistrants_GridRebind( object sender, GridRebindEventArgs e ) => BindGrid();
 
         private void BindGrid()
         {
             if ( !int.TryParse( ddlEventos.SelectedValue, out int eventId ) )
             {
-                gRegistrants.Visible = false;
-                ltTotalAsistentes.Text = "0";
+                pnlContent.Visible = false;
                 return;
             }
 
+            pnlContent.Visible = true;
+
             using ( var rockContext = new RockContext() )
             {
-                // 1) Obtener registrants del evento
                 var registrantsList = new RegistrationRegistrantService( rockContext )
-                    .Queryable("PersonAlias.Person,Registration")
+                    .Queryable( "PersonAlias.Person,Registration" )
                     .Where( rr => rr.Registration.RegistrationInstanceId == eventId )
                     .ToList();
 
-                // 2) IDs de registrant
                 var registrantIds = registrantsList.Select( rr => rr.Id ).ToList();
-
-                // 3) Cargar valores de atributo desde AttributeValue
                 var avService = new AttributeValueService( rockContext );
 
                 var asistioDict = avService.Queryable()
-                    .Where( av =>
-                        av.AttributeId == 8400 &&
-                        av.EntityId.HasValue &&
-                        registrantIds.Contains( av.EntityId.Value ) )
+                    .Where( av => av.AttributeId == 8400 && av.EntityId.HasValue && registrantIds.Contains( av.EntityId.Value ) )
                     .Select( av => new { Id = av.EntityId.Value, av.Value } )
                     .ToDictionary( kv => kv.Id, kv => kv.Value );
 
                 var fechaDict = avService.Queryable()
-                    .Where( av =>
-                        av.AttributeId == 8401 &&
-                        av.EntityId.HasValue &&
-                        registrantIds.Contains( av.EntityId.Value ) )
+                    .Where( av => av.AttributeId == 8401 && av.EntityId.HasValue && registrantIds.Contains( av.EntityId.Value ) )
                     .Select( av => new { Id = av.EntityId.Value, av.Value } )
                     .ToDictionary( kv => kv.Id, kv => kv.Value );
 
-                // 4) Proyección al grid
-                var gridData = registrantsList.Select( rr => new
+                var fullData = registrantsList.Select( rr =>
                 {
-                    RegistrantId    = rr.Id,
-                    Nombre          = rr.PersonAlias?.Person?.FullName ?? "",
-                    Email           = rr.PersonAlias?.Person?.Email ?? "",
-                    FechaRegistro   = rr.CreatedDateTime,
-                    Estado          = "Registrado",
-                    AsistioQR       = asistioDict.TryGetValue( rr.Id, out var av ) ? av : "No",
-                    FechaAsistencia = fechaDict.TryGetValue( rr.Id, out var fv ) && DateTime.TryParse( fv, out var dt )
-                                      ? dt.ToString("yyyy-MM-dd HH:mm")
-                                      : ""
-                }).ToList();
+                    bool asistio = asistioDict.TryGetValue( rr.Id, out var av )
+                        && av.Equals( "Si", StringComparison.OrdinalIgnoreCase );
+                    string fechaAsistencia = fechaDict.TryGetValue( rr.Id, out var fv )
+                        && DateTime.TryParse( fv, out var dt )
+                        ? dt.ToString( "yyyy-MM-dd HH:mm" )
+                        : "";
+                    return new
+                    {
+                        RegistrantId    = rr.Id,
+                        PersonId        = rr.PersonAlias?.PersonId ?? 0,
+                        Nombre          = rr.PersonAlias?.Person?.FullName ?? "",
+                        Email           = rr.PersonAlias?.Person?.Email ?? "",
+                        FechaRegistro   = rr.CreatedDateTime,
+                        Estado          = "Registrado",
+                        Asistio         = asistio,
+                        AsistioQR       = asistio ? "Sí" : "No",
+                        FechaAsistencia = fechaAsistencia
+                    };
+                } ).ToList();
 
-                // 5) Bind y total
+                // Stats always reflect full event (not filtered)
+                int totalAsistidos = fullData.Count( x => x.Asistio );
+                int noAsistieron   = fullData.Count - totalAsistidos;
+                double pct         = fullData.Count > 0 ? ( double ) totalAsistidos / fullData.Count * 100 : 0;
+
+                ltTotalRegistrados.Text = fullData.Count.ToString( "N0" );
+                ltTotalAsistentes.Text  = totalAsistidos.ToString( "N0" );
+                ltNoAsistieron.Text     = noAsistieron.ToString( "N0" );
+                ltPorcentaje.Text       = $"{pct:F0}%";
+
+                // Apply filters
+                var search   = tbSearch.Text.Trim().ToLowerInvariant();
+                var filtered = fullData.AsEnumerable();
+
+                if ( !string.IsNullOrEmpty( search ) )
+                    filtered = filtered.Where( x =>
+                        x.Nombre.ToLowerInvariant().Contains( search ) ||
+                        x.Email.ToLowerInvariant().Contains( search ) );
+
+                if ( ddlFiltroAsistencia.SelectedValue == "si" )
+                    filtered = filtered.Where( x => x.Asistio );
+                else if ( ddlFiltroAsistencia.SelectedValue == "no" )
+                    filtered = filtered.Where( x => !x.Asistio );
+
+                var gridData = filtered.Select( x => new
+                {
+                    x.RegistrantId,
+                    x.PersonId,
+                    x.Nombre,
+                    x.Email,
+                    x.FechaRegistro,
+                    x.Estado,
+                    x.AsistioQR,
+                    x.FechaAsistencia
+                } ).ToList();
+
+                bool filtroActivo = !string.IsNullOrEmpty( search ) || !string.IsNullOrEmpty( ddlFiltroAsistencia.SelectedValue );
+                ltResultados.Text = filtroActivo
+                    ? $"<span class='label label-info'>{gridData.Count} de {fullData.Count} registros</span>"
+                    : $"<span class='label label-default'>{gridData.Count} registros</span>";
+
                 gRegistrants.DataSource = gridData;
                 gRegistrants.DataBind();
-                gRegistrants.Visible = true;
-
-                ltTotalAsistentes.Text = gridData.Count.ToString();
             }
         }
     }

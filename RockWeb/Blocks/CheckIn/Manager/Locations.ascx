@@ -45,7 +45,7 @@
                             <asp:Literal ID="lNavHeading" runat="server" />
                         </div>
                         <div class="pull-right">
-                            <Rock:Toggle ID="tglHeadingRoom" runat="server" OnText="Open" OffText="Close" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged" />
+                            <Rock:Toggle ID="tglHeadingRoom" runat="server" OnText="Abrir" OffText="Cerrar" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged" />
                         </div>
                         <asp:Panel ID="pnlThreshold" runat="server" CssClass="location-threshold pull-right d-flex mr-2 js-threshold">
                             <span class="small align-self-center mr-1">Threshold: </span>
@@ -66,7 +66,7 @@
                                 <div class="content"><%# Eval("Name") %></div>
                                 <div class="pull-right d-flex align-items-center">
                                     <asp:Label ID="lblCurrentCount" runat="server" CssClass="badge"/>
-                                    <Rock:Toggle ID="tglRoom" runat="server" OnText="Open" OffText="Close" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged"  />
+                                    <Rock:Toggle ID="tglRoom" runat="server" OnText="Abrir" OffText="Cerrar" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged"  />
                                     <i class='ti ti-fw ti-chevron-right'></i>
                                 </div>
                             </li>

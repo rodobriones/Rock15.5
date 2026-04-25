@@ -51,6 +51,8 @@ namespace RockWeb.Blocks.CheckIn
     [Rock.SystemGuid.BlockTypeGuid( "D2348D51-B13A-4069-97AD-369D9615A711" )]
     public partial class TimeSelect : CheckInBlock
     {
+        private const int AutoSelectNextScheduleWindowMinutes = 15;
+
         /* 2021-05/07 ETD
          * Use new here because the parent CheckInBlock also has inherited class AttributeKey.
          */
@@ -62,6 +64,8 @@ namespace RockWeb.Blocks.CheckIn
 
         protected override void OnLoad( EventArgs e )
         {
+            base.OnLoad( e );
+
             RockPage.AddScriptLink( "~/Scripts/CheckinClient/checkin-core.js" );
 
             if ( CurrentWorkflow == null || CurrentCheckInState == null )
@@ -82,6 +86,11 @@ namespace RockWeb.Blocks.CheckIn
                         if ( family != null )
                         {
                             var schedules = family.GetPeople( true ).SelectMany( p => p.PossibleSchedules ).ToList();
+                            if ( !schedules.Any() )
+                            {
+                                schedules = GetFallbackSchedulesFromSelectedLocations( family );
+                            }
+
                             if ( !schedules.Any() )
                             {
                                 CheckInPerson person = CurrentCheckInState.CheckIn.Families.Where( f => f.Selected ).SelectMany( f => f.People.Where( p => p.Selected ) ).FirstOrDefault();
@@ -133,10 +142,16 @@ namespace RockWeb.Blocks.CheckIn
                         lbSelect.Attributes.Add( "data-loading-text", "Printing..." );
 
                         personSchedules = location.Schedules.Where( s => !s.ExcludedByFilter ).ToList();
+                        if ( !personSchedules.Any() )
+                        {
+                            personSchedules = location.Schedules.Where( s => s.Schedule != null ).ToList();
+                        }
+
                         distinctSchedules = personSchedules;
                     }
 
                     lCaption.Text = GetAttributeValue( AttributeKey.Caption );
+                    ApplyAutoSelectUpcomingScheduleWindow( ref personSchedules, ref distinctSchedules );
 
                     if ( distinctSchedules.Count == 1 )
                     {
@@ -176,8 +191,81 @@ namespace RockWeb.Blocks.CheckIn
                     }
                 }
             }
+        }
 
-            base.OnLoad( e );
+        /// <summary>
+        /// If the next service starts soon, force-select that next service instead of showing
+        /// both current and upcoming schedule options (for example 10:50 should go to 11:00).
+        /// </summary>
+        private void ApplyAutoSelectUpcomingScheduleWindow( ref List<CheckInSchedule> personSchedules, ref List<CheckInSchedule> distinctSchedules )
+        {
+            if ( personSchedules == null || distinctSchedules == null )
+            {
+                return;
+            }
+
+            var now = RockDateTime.Now;
+
+            var orderedDistinctSchedules = distinctSchedules
+                .Where( s => s.StartTime.HasValue )
+                .OrderBy( s => s.StartTime.Value )
+                .ToList();
+
+            if ( orderedDistinctSchedules.Count < 2 )
+            {
+                return;
+            }
+
+            var targetSchedule = orderedDistinctSchedules
+                .FirstOrDefault( s => s.StartTime.Value >= now );
+
+            if ( targetSchedule != null )
+            {
+                var autoSelectStartWindow = targetSchedule.StartTime.Value.AddMinutes( -AutoSelectNextScheduleWindowMinutes );
+                if ( now < autoSelectStartWindow )
+                {
+                    return;
+                }
+            }
+            else
+            {
+                // No upcoming schedule left; keep only the latest available option.
+                targetSchedule = orderedDistinctSchedules.LastOrDefault();
+                if ( targetSchedule == null )
+                {
+                    return;
+                }
+            }
+
+            if ( targetSchedule.Schedule == null )
+            {
+                return;
+            }
+
+            int targetScheduleId = targetSchedule.Schedule.Id;
+            personSchedules = personSchedules
+                .Where( s => s.Schedule != null && s.Schedule.Id == targetScheduleId )
+                .ToList();
+
+            distinctSchedules = distinctSchedules
+                .Where( s => s.Schedule != null && s.Schedule.Id == targetScheduleId )
+                .ToList();
+        }
+
+        private List<CheckInSchedule> GetFallbackSchedulesFromSelectedLocations( CheckInFamily family )
+        {
+            if ( family == null )
+            {
+                return new List<CheckInSchedule>();
+            }
+
+            return family.GetPeople( true )
+                .SelectMany( p => p.GetGroupTypes( true ) )
+                .SelectMany( gt => gt.GetGroups( true ) )
+                .SelectMany( g => g.GetLocations( true ) )
+                .SelectMany( l => l.Schedules )
+                .Where( s => s != null && s.Schedule != null && s.StartTime.HasValue )
+                .ToList();
         }
 
         /// <summary>

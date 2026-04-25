@@ -37,10 +37,10 @@
                     message: '<%=this.ConditionMessage%>',
                     buttons: {
                         cancel: {
-                            label: 'Try Again'
+                            label: 'Intentar de nuevo'
                         },
                         confirm: {
-                            label: 'Add a New Family'
+                            label: 'Agregar Familia'
                         }
                     },
                     callback: function (result) {
@@ -99,8 +99,8 @@
                     </asp:Panel>
 
                     <div class="checkin-actions">
-                        <Rock:BootstrapButton CssClass="btn btn-primary btn-block" ID="lbSearch" runat="server" OnClick="lbSearch_Click" Text="Search" DataLoadingText="Searching..." ></Rock:BootstrapButton>
-                        <asp:LinkButton CssClass="btn btn-default btn-block btn-cancel" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Cancel" />
+                        <Rock:BootstrapButton CssClass="btn btn-primary btn-block" ID="lbSearch" runat="server" OnClick="lbSearch_Click" Text="Buscar" DataLoadingText="Buscando..." ></Rock:BootstrapButton>
+                        <asp:LinkButton CssClass="btn btn-default btn-block btn-cancel" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Cancelar" />
                     </div>
 
                 </div>

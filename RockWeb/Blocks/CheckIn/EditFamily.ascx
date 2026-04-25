@@ -84,13 +84,13 @@
                 if ($('#<%=hfShowCancelEditPrompt.ClientID%>').val() == "1") {
 
                 bootbox.confirm({
-                    message: 'Changes have been made to this family. Do you want to leave without saving?',
+                    message: 'Se han realizado cambios en esta familia. ¿Quieres irte sin guardar?',
                     buttons: {
                         cancel: {
-                            label: 'Stay on This Page'
+                            label: 'Seguir Editando'
                         },
                         confirm: {
-                            label: 'Leave This Page'
+                            label: 'Cancelar'
                         }
                     },
                     callback: function (result) {
@@ -105,7 +105,7 @@
         </script>
 
         <%-- Edit Family Modal --%>
-        <Rock:ModalDialog ID="mdEditFamily" runat="server" Title="Add Family" CancelLinkVisible="false">
+        <Rock:ModalDialog ID="mdEditFamily" runat="server" Title="Agregar Familia" CancelLinkVisible="false">
             <Content>
 
                 <%-- Have an inner UpdatePanel wrapper by a 'Conditional' Update Panel so that we don't loose the modal effect on postback from mdEditFamily --%>
@@ -116,8 +116,8 @@
                             <asp:ValidationSummary ID="vsEditFamily" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" ValidationGroup="vgEditFamily" />
                             <%-- Grid --%>
                             <div class="control-group edit-family-header">
-                                <label class="control-label">Family Members</label>
-                                <asp:LinkButton ID="btnAddPerson" runat="server" CssClass="btn btn-link btn-add-person pull-right" Text="<i class='ti ti-plus'></i> Add Person" CausesValidation="false" OnClick="btnAddPerson_Click" />
+                                <label class="control-label">Miembros de la familia</label>
+                                <asp:LinkButton ID="btnAddPerson" runat="server" CssClass="btn btn-link btn-add-person pull-right" Text="<i class='ti ti-plus'></i> Añadir Persona" CausesValidation="false" OnClick="btnAddPerson_Click" />
                             </div>
                             <Rock:Grid ID="gFamilyMembers" runat="server" CssClass="edit-family-grid" DisplayType="Light" ShowActionRow="false" ShowActionsInHeader="false" ShowHeader="false" ShowFooter="false" OnRowDataBound="gFamilyMembers_RowDataBound" RowItemText="Person">
                                 <Columns>
@@ -138,8 +138,8 @@
 
                             <%-- Edit Family Buttons --%>
                             <div class="actions">
-                                <Rock:BootstrapButton ID="btnSaveFamily" runat="server" CssClass="btn btn-primary" Text="Save" CausesValidation="true" ValidationGroup="vgEditFamily" OnClick="btnSaveFamily_Click" DataLoadingText="Saving..." />
-                                <asp:LinkButton ID="btnCancelFamily" runat="server" CssClass="btn btn-default btn-cancel" Text="Cancel" CausesValidation="false" OnClick="btnCancelFamily_Click" />
+                                <Rock:BootstrapButton ID="btnSaveFamily" runat="server" CssClass="btn btn-primary" Text="Guardar" CausesValidation="true" ValidationGroup="vgEditFamily" OnClick="btnSaveFamily_Click" DataLoadingText="Guardando..." />
+                                <asp:LinkButton ID="btnCancelFamily" runat="server" CssClass="btn btn-default btn-cancel" Text="Cancelar" CausesValidation="false" OnClick="btnCancelFamily_Click" />
                             </div>
                         </asp:Panel>
 
@@ -151,7 +151,7 @@
                             <asp:ValidationSummary ID="vsEditPerson" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" ValidationGroup="vgEditPerson" />
                             <div class="row">
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:Toggle ID="tglAdultChild" runat="server" OnText="Adult" OffText="Child" ActiveButtonCssClass="btn-primary" OnCheckedChanged="tglAdultChild_CheckedChanged" />
+                                    <Rock:Toggle ID="tglAdultChild" runat="server" OnText="Adulto" OffText="Niño" ActiveButtonCssClass="btn-primary" OnCheckedChanged="tglAdultChild_CheckedChanged" />
                                     <Rock:DefinedValuePicker ID="dvpRecordStatus" runat="server" Label="Record Status" ValidationGroup="vgEditPerson" />
 
                                     <%-- keep a hidden field for connectionstatus since we need to keep the state, but don't want it to be editable or viewable --%>
@@ -160,42 +160,42 @@
                                 <div class="col-md-6" style="min-height:auto;">
                                     <%-- Fields to be shown when editing a Child --%>
                                     <asp:Panel ID="pnlChildRelationshipToAdult" runat="server">
-                                        <Rock:RockDropDownList ID="ddlChildRelationShipToAdult" runat="server" Label="Relationship to Adult" />
+                                        <Rock:RockDropDownList ID="ddlChildRelationShipToAdult" runat="server" Label="Relación con el adulto" />
                                         <Rock:RockLiteral ID="lChildRelationShipToAdultReadOnly" runat="server" Label="Relationship" />
                                     </asp:Panel>
 
                                     <%-- Fields to be shown when editing an Adult --%>
-                                    <Rock:Toggle ID="tglAdultMaritalStatus" runat="server" OnText="Married" OffText="Single" ActiveButtonCssClass="btn-primary" />
+                                    <Rock:Toggle ID="tglAdultMaritalStatus" runat="server" OnText="Casado" OffText="Soltero" ActiveButtonCssClass="btn-primary" />
                                 </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:DataTextBox ID="tbFirstName" runat="server" SourceTypeName="Rock.Model.Person" PropertyName="NickName" Label="First Name" Required="true" ValidationGroup="vgEditPerson" NoSpecialCharacters="true" NoEmojisOrSpecialFonts="true" />
+                                    <Rock:DataTextBox ID="tbFirstName" runat="server" SourceTypeName="Rock.Model.Person" PropertyName="NickName" Label="Nombre" Required="true" ValidationGroup="vgEditPerson" NoSpecialCharacters="true" NoEmojisOrSpecialFonts="true" />
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:DataTextBox ID="tbLastName" runat="server" SourceTypeName="Rock.Model.Person" PropertyName="LastName" Label="Last Name" Required="true" ValidationGroup="vgEditPerson" NoSpecialCharacters="true" NoEmojisOrSpecialFonts="true" />
+                                    <Rock:DataTextBox ID="tbLastName" runat="server" SourceTypeName="Rock.Model.Person" PropertyName="LastName" Label="Apellido" Required="true" ValidationGroup="vgEditPerson" NoSpecialCharacters="true" NoEmojisOrSpecialFonts="true" />
                                 </div>
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6" style="min-height:auto;">
+                                <div class="col-md-6" style="min-height:auto; display:none;">
                                     <Rock:DefinedValuePicker ID="dvpSuffix" runat="server" Label="Suffix" ValidationGroup="vgEditPerson" />
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
                                     <Rock:ButtonGroup ID="bgGender" runat="server" FormGroupCssClass="toggle-container" SelectedItemClass="btn btn-primary active" UnselectedItemClass="btn btn-default" Label="&nbsp;" Required="true" ValidationGroup="vgEditPerson" RequiredErrorMessage="Gender is required.">
-                                        <asp:ListItem Text="Male" Value="1" />
-                                        <asp:ListItem Text="Female" Value="2" />
+                                        <asp:ListItem Text="Masculino" Value="1" />
+                                        <asp:ListItem Text="Femenino" Value="2" />
                                     </Rock:ButtonGroup>
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:DatePicker ID="dpBirthDate" runat="server" Label="Birthdate" AllowFutureDateSelection="False" RequireYear="True" ShowOnFocus="false" StartView="decade" ValidationGroup="vgEditPerson" />
+                                    <Rock:DatePicker ID="dpBirthDate" runat="server" Label="Fecha de nacimiento" AllowFutureDateSelection="False" RequireYear="True" ShowOnFocus="false" StartView="decade" ValidationGroup="vgEditPerson" />
                                 </div>
-                                <div class="col-md-6" style="min-height:auto;">
+                                <div class="col-md-6" style="min-height:auto; display:none;">
                                     <Rock:GradePicker ID="gpGradePicker" runat="server" Label="Grade" UseGradeOffsetAsValue="true" UseAbbreviation="true" ValidationGroup="vgEditPerson" />
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:PhoneNumberBox ID="pnMobilePhone" runat="server" Label="Mobile Phone" ValidationGroup="vgEditPerson" />
+                                    <Rock:PhoneNumberBox ID="pnMobilePhone" runat="server" Label="Teléfono" ValidationGroup="vgEditPerson" Required="true" />
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
                                     <Rock:ButtonGroup ID="bgSMS" runat="server" FormGroupCssClass="toggle-container" SelectedItemClass="btn btn-primary active" UnselectedItemClass="btn btn-default" Label="&nbsp;" ValidationGroup="vgEditPerson" RequiredErrorMessage="SMS Enabled is required.">
@@ -204,7 +204,7 @@
                                     </Rock:ButtonGroup>
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
-                                    <Rock:EmailBox ID="tbEmail" runat="server" Label="Email" ValidationGroup="vgEditPerson" />
+                                    <Rock:EmailBox ID="tbEmail" runat="server" Label="Email" ValidationGroup="vgEditPerson" Required="true" />
                                 </div>
                                 <div class="col-md-6" style="min-height:auto;">
                                     <Rock:RockTextBox ID="tbAlternateID" runat="server" Label="Alternate ID" CssClass="js-alternate-id" ValidationGroup="vgEditPerson" />
@@ -229,8 +229,8 @@
 
                             <%-- Person Actions --%>
                             <div class="actions">
-                            <asp:LinkButton ID="btnDonePerson" runat="server" CssClass="btn btn-primary" Text="Done" CausesValidation="true" ValidationGroup="vgEditPerson" OnClick="btnDonePerson_Click" />
-                                <asp:LinkButton ID="btnCancelPerson" runat="server" CssClass="btn btn-default btn-cancel" Text="Cancel" CausesValidation="false" OnClick="btnCancelPerson_Click" />
+                            <asp:LinkButton ID="btnDonePerson" runat="server" CssClass="btn btn-primary" Text="Hecho" CausesValidation="true" ValidationGroup="vgEditPerson" OnClick="btnDonePerson_Click" />
+                                <asp:LinkButton ID="btnCancelPerson" runat="server" CssClass="btn btn-default btn-cancel" Text="Cancelar" CausesValidation="false" OnClick="btnCancelPerson_Click" />
 
                             </div>
                         </asp:Panel>

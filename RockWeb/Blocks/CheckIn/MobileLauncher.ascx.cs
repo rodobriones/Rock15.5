@@ -474,13 +474,13 @@ namespace RockWeb.Blocks.CheckIn
 
             if ( selectedCheckinType == null || !selectedAreaGroupTypes.Any() )
             {
-                lMessage.Text = "Mobile check-in is not configured.";
+                lMessage.Text = "El check-in móvil no está configurado.";
                 return;
             }
 
             if ( !hasLoginPage && !hasPhoneIdentificationPage )
             {
-                lMessage.Text = "A Login Page or Phone Identification Page must be specified.";
+                lMessage.Text = "Debes especificar una página de inicio de sesión o una página de identificación por teléfono.";
                 return;
             }
 
@@ -500,7 +500,7 @@ namespace RockWeb.Blocks.CheckIn
 
             if ( GetAttributeValue( AttributeKey.DisableLocationServices ).AsBoolean() )
             {
-                lMessage.Text = "Please select a campus to let us know where you are:";
+                lMessage.Text = "Seleccione una sede para verificar horarios:";
                 BindCampuses( mobilePerson );
             }
             else
@@ -808,7 +808,7 @@ namespace RockWeb.Blocks.CheckIn
                         {
                             lCheckinQRCodeHtml.Text = string.Format( "<h6 class='text-center mt-4 mb-1'>Scan Code For Labels</h6><div class='qr-code-container'><img class='img-responsive qr-code' src='{0}' alt='Check-in QR Code' width='500' height='500'></div>", qrCodeImageUrl );
                             lCheckinQRCodeHtml.Visible = true;
-                            bbtnCheckin.Text = "Check-in Additional Individuals";
+                            bbtnCheckin.Text = "Check-in Personas Adicionales";
                         }
                         else
                         {

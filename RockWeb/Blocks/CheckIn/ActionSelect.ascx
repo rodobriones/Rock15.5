@@ -25,8 +25,8 @@
                 <div class="control-group checkin-body-container">
                     <label class="control-label"><asp:Literal ID="lCaption" runat="server"></asp:Literal></label>
                     <div class="controls">
-                        <Rock:BootstrapButton ID="lbCheckOut" runat="server" Text="Check Out" CssClass="btn btn-primary btn-large btn-block btn-checkin-select" OnClick="lbCheckOut_Click" DataLoadingText="Loading..." />
-                       <Rock:BootstrapButton ID="lbCheckIn" runat="server" Text="Check In" CssClass="btn btn-default btn-large btn-block btn-checkin-select" OnClick="lbCheckIn_Click" DataLoadingText="Loading..." Visible="false"/>
+                        <Rock:BootstrapButton ID="lbCheckOut" runat="server" Text="Registrar Salida" CssClass="btn btn-primary btn-large btn-block btn-checkin-select" OnClick="lbCheckOut_Click" DataLoadingText="Cargando..." />
+                       <Rock:BootstrapButton ID="lbCheckIn" runat="server" Text="Registrar Entrada" CssClass="btn btn-default btn-large btn-block btn-checkin-select" OnClick="lbCheckIn_Click" DataLoadingText="Cargando..." Visible="false"/>
                     </div>
                 </div>
 
@@ -37,8 +37,8 @@
 
     <div class="checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Regresar" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancelar" />
         </div>
     </div>
 

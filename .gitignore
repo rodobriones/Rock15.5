@@ -21,12 +21,17 @@ StyleCop.Cache
 #build artifacts
 **/[Bb]in/[Dd]ebug
 **/[Bb]in/[Rr]elease
+**/[Bb]in/*/[Dd]ebug
+**/[Bb]in/*/[Rr]elease
 **/[Oo]bj/[Dd]ebug
 **/[Oo]bj/[Rr]elease
+**/[Oo]bj/*/[Dd]ebug
+**/[Oo]bj/*/[Rr]elease
 **/[Oo]bj/*.nuget.*
 **/[Oo]bj/project.assets.json
 
 #specific folders
+RockWeb/Content/
 RockWeb/Cache/*
 RockWeb/Content/ASM_Thumbnails
 RockWeb/App_Data/PackageStaging

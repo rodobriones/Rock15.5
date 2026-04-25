@@ -44,7 +44,7 @@
                             OnReorderOverflowLocationClick="checkinGroup_ReorderOverflowLocationClick" />
 
                         <div class="panel-actions margin-t-md">
-                            <asp:LinkButton ID="btnSave" runat="server" data-shortcut-key="s" ToolTip="Alt+s" Text="Save" CssClass="btn btn-primary" OnClick="btnSave_Click" Visible="false" />
+                            <asp:LinkButton ID="btnSave" runat="server" data-shortcut-key="s" ToolTip="Alt+s" Text="Guardar" CssClass="btn btn-primary" OnClick="btnSave_Click" Visible="false" />
                             <asp:LinkButton ID="btnDelete" runat="server" Text="Delete" CssClass="btn btn-link" OnClick="btnDelete_Click" Visible="false" />
 
                         </div>
@@ -67,7 +67,7 @@
             </Content>
         </Rock:ModalDialog>
 
-        <Rock:ModalDialog ID="mdLocationPicker" runat="server" ScrollbarEnabled="false" SaveButtonText="Save" OnSaveClick="mdLocationPicker_SaveClick" Title="Select Check-in Location" ValidationGroup="Location">
+        <Rock:ModalDialog ID="mdLocationPicker" runat="server" ScrollbarEnabled="false" SaveButtonText="Guardar" OnSaveClick="mdLocationPicker_SaveClick" Title="Select Check-in Location" ValidationGroup="Location">
             <Content ID="mdLocationPickerContent">
                 <asp:HiddenField ID="hfLocationPickerOverflow" runat="server" />
                 <Rock:LocationItemPicker ID="locationPicker" runat="server" Label="Check-in Location" ValidationGroup="Location" Required="true" />

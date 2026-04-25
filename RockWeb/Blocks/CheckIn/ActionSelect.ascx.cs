@@ -99,6 +99,13 @@ namespace RockWeb.Blocks.CheckIn
                                 lCaption.Text = GetAttributeValue( AttributeKey.Caption );
 
                                 lbCheckIn.Visible = family.People.Count > 0;
+
+                                // Ocultar botón Check Out para el dispositivo configurado.
+                                var deviceId = CurrentCheckInState.Kiosk.Device?.Id ?? 0;
+                                if ( deviceId == 25 )
+                                {
+                                    lbCheckOut.Visible = false;
+                                }
                             }
                         }
                     }

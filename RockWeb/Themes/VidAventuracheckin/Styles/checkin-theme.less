@@ -1,0 +1,140 @@
+/*
+
+     Rock Park Check-in Theme
+     Crafted by: Spark Development Network
+
+ */
+
+//
+// Imports
+// --------------------------------------------------
+@import "../../../Styles/FontAwesome/font-awesome.less";
+@import "../../../Styles/Bootstrap/bootstrap.less";
+@import "../../../Styles/_checkin-core.less";
+@import "../../../Styles/_modal.less";
+@import "../../../Styles/_helpers.less";
+@import "../../../Styles/_checkin-mobile.less";
+
+@import "_variables.less";
+@import "_variable-overrides.less";
+
+@import "_balloons.less";
+
+:root {
+  --celebration-1: @celebration-color-1;
+  --celebration-2: @celebration-color-2;
+  --celebration-3: @celebration-color-3;
+  --celebration-4: @celebration-color-4;
+  --celebration-5: @celebration-color-5;
+  --celebration-6: @celebration-color-6;
+}
+
+// Fonts
+// -------------------------
+
+// regular (weight 'normal' aka 400)
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 400;
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Regular-webfont.eot");
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Regular-webfont.eot?#iefix") format("embedded-opentype"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Regular-webfont.woff2") format("woff2"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Regular-webfont.woff") format("woff");
+}
+
+// light (weight 300)
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 300;
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Light-webfont.eot");
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Light-webfont.eot?#iefix") format("embedded-opentype"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Light-webfont.woff2") format("woff2"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Light-webfont.woff") format("woff");
+}
+
+// semi-bold (weight 600)
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 600;
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Semibold-webfont.eot");
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Semibold-webfont.eot?#iefix") format("embedded-opentype"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Semibold-webfont.woff2") format("woff2"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Semibold-webfont.woff") format("woff");
+}
+
+// bold (weight 700)
+@font-face {
+  font-family: "OpenSans";
+  font-style: normal;
+  font-weight: 700;
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Bold-webfont.eot");
+  src: url("../../../Assets/Fonts/OpenSans/OpenSans-Bold-webfont.eot?#iefix") format("embedded-opentype"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Bold-webfont.woff2") format("woff2"),
+    url("../../../Assets/Fonts/OpenSans/OpenSans-Bold-webfont.woff") format("woff");
+}
+
+/*#endregion */
+
+
+//
+// Mix-ins
+// --------------------------------------------------
+.checkinBackground () {
+  background: @bg-color @background-image top right no-repeat fixed;
+}
+
+.checkinBackgroundRetina() {
+  background-image: @background-image-retina;
+  background-size: @background-image-retina-size;
+}
+
+
+//
+// Custom Overrides
+// --------------------------------------------------
+
+@media (min-width: 768px) {
+  .body-content {
+    width: 100% !important;
+    padding: 0 30px;
+  }
+}
+
+.administration {
+  .checkin-scroll-panel {
+    background: @btn-default-bg;
+    border-radius: @border-radius-base;
+
+    > .scroller {
+      padding-top: 15px;
+      padding-bottom: 15px;
+    }
+  }
+}
+
+.checkin-messages,
+.checkin-summary {
+  li {
+    padding: 15px;
+    background: @btn-default-bg;
+    border-radius: @border-radius-base;
+  }
+}
+
+.checkin-count h3,
+.checkin-count li {
+  color: #4c4c4b;
+}
+
+body {
+  display: none;
+  -ms-touch-action: none !important;
+  touch-action: none;   /* Disable any special actions on tap/touch */
+
+  -ms-content-zooming: none; /* Disables zooming */
+}
+
+@import "_css-overrides.less";

@@ -26,6 +26,7 @@ using System.Web.UI.WebControls;
 using Rock;
 using Rock.Attribute;
 using Rock.CheckIn;
+using Rock.Data;
 using Rock.Model;
 using Rock.Web.UI.Controls;
 
@@ -231,6 +232,7 @@ namespace RockWeb.Blocks.CheckIn
                 if ( !Page.IsPostBack )
                 {
                     ClearSelection();
+                    hfPeople.Value = string.Empty;
 
                     var family = CurrentCheckInState.CheckIn.CurrentFamily;
                     if ( family == null )
@@ -265,6 +267,9 @@ namespace RockWeb.Blocks.CheckIn
 
                     foreach ( var person in family.People )
                     {
+                        // No preseleccionar personas al volver a la pantalla de entrada.
+                        person.PreSelected = false;
+
                         // Check to see if person has option pre-selected and if not, select first item.
                         if ( _autoCheckin && !person.GroupTypes.Any( t => t.PreSelected ) )
                         {
@@ -437,9 +442,46 @@ namespace RockWeb.Blocks.CheckIn
                 var family = CurrentCheckInState.CheckIn.CurrentFamily;
                 if ( family != null )
                 {
+                    var rockContext = new RockContext();
+                    var attendanceService = new AttendanceService( rockContext );
+                    var personasYaRegistradas = new List<string>();
+
                     foreach ( var person in family.People )
                     {
                         person.Selected = person.PreSelected;
+
+                        if ( person.Selected )
+                        {
+                            // Verificar si ya hizo check-in hoy y aún no ha hecho check-out.
+                            var isCurrentlyCheckedIn = attendanceService
+                                .Queryable()
+                                .Any( a =>
+                                    a.PersonAlias.PersonId == person.Person.Id &&
+                                    a.DidAttend == true &&
+                                    a.EndDateTime == null &&
+                                    a.StartDateTime >= RockDateTime.Today );
+
+                            if ( isCurrentlyCheckedIn )
+                            {
+                                personasYaRegistradas.Add( person.Person.FullName );
+                            }
+                        }
+                    }
+
+                    if ( personasYaRegistradas.Any() )
+                    {
+                        string lista = string.Join( "<br/>", personasYaRegistradas );
+                        string mensaje = $"Las siguientes personas ya están registradas actualmente:<br/>{lista}";
+                        maWarning.Show( mensaje, Rock.Web.UI.Controls.ModalAlertType.Warning );
+                        return;
+                    }
+
+                    foreach ( var person in family.People )
+                    {
+                        if ( !person.Selected )
+                        {
+                            continue;
+                        }
 
                         if ( _autoCheckin && person.Selected )
                         {
@@ -459,9 +501,9 @@ namespace RockWeb.Blocks.CheckIn
                                             {
                                                 int scheduleId = schedule.Schedule.Id;
                                                 person.PossibleSchedules.Where( s => s.Schedule.Id == scheduleId ).ToList().ForEach( s => { s.Selected = true; } );
-                                                groupType.SelectedForSchedule.Add( scheduleId, true );
-                                                group.SelectedForSchedule.Add( scheduleId, true );
-                                                location.SelectedForSchedule.Add( scheduleId, true );
+                                                groupType.SelectedForSchedule[scheduleId] = 1;
+                                                group.SelectedForSchedule[scheduleId] = 1;
+                                                location.SelectedForSchedule[scheduleId] = 1;
                                             }
                                         }
                                     }
@@ -557,6 +599,7 @@ namespace RockWeb.Blocks.CheckIn
                 {
                     person.ClearFilteredExclusions();
                     person.Selected = false;
+                    person.PreSelected = false;
                     person.Processed = false;
                 }
             }

@@ -101,7 +101,7 @@
             </asp:Panel>
 
             <!-- Confirm Staying modal -->
-            <Rock:ModalDialog ID="mdConfirmStaying" runat="server" Title="Confirm" SaveButtonText="Check In" OnSaveClick="mdConfirmStaying_SaveClick">
+            <Rock:ModalDialog ID="mdConfirmStaying" runat="server" Title="Confirmar" SaveButtonText="Registrar Entrada" OnSaveClick="mdConfirmStaying_SaveClick">
                 <Content>
                     <asp:HiddenField ID="hfConfirmStayingAttendanceId" runat="server" />
                     <Rock:NotificationBox ID="nbConfirmStayingWarning" runat="server" NotificationBoxType="Warning" />
@@ -111,7 +111,7 @@
             </Rock:ModalDialog>
 
             <!-- Confirm Checkout All modal -->
-            <Rock:ModalDialog ID="mdConfirmCheckoutAll" runat="server" Title="Confirm" ValidationGroup="vgConfirmCheckoutAll" SaveButtonText="Check Out" OnSaveClick="mdConfirmCheckoutAll_SaveClick">
+            <Rock:ModalDialog ID="mdConfirmCheckoutAll" runat="server" Title="Confirmar" ValidationGroup="vgConfirmCheckoutAll" SaveButtonText="Registrar Salida" OnSaveClick="mdConfirmCheckoutAll_SaveClick">
                 <Content>
                     <asp:Literal ID="lConfirmCheckoutAll" runat="server" Text="Which schedules would you like to check out for:" />
                     <Rock:RockCheckBoxList ID="cblSchedulesCheckoutAll" runat="server" Label="Schedules" RepeatDirection="Horizontal" Required="true" ValidationGroup="vgConfirmCheckoutAll" />
@@ -119,7 +119,7 @@
             </Rock:ModalDialog>
 
             <!-- Confirm Checkout Attendee modal -->
-            <Rock:ModalDialog ID="mdConfirmCheckoutAttendee" runat="server" Title="Confirm" ValidationGroup="vgConfirmCheckoutAttendee" SaveButtonText="Check Out" OnSaveClick="mdConfirmCheckoutAttendee_SaveClick" >
+            <Rock:ModalDialog ID="mdConfirmCheckoutAttendee" runat="server" Title="Confirmar" ValidationGroup="vgConfirmCheckoutAttendee" SaveButtonText="Registrar Salida" OnSaveClick="mdConfirmCheckoutAttendee_SaveClick" >
                 <Content>
                     <asp:HiddenField ID="hfConfirmCheckoutAttendeeAttendanceIds" runat="server" />
                     <asp:Literal ID="lConfirmCheckoutAttendee" runat="server" Text="Which schedules would you like to check out for:" />

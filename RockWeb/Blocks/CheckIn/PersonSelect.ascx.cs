@@ -25,6 +25,7 @@ using System.Web.UI.WebControls;
 using Rock;
 using Rock.Attribute;
 using Rock.CheckIn;
+using Rock.Data;
 using Rock.Model;
 
 namespace RockWeb.Blocks.CheckIn
@@ -153,6 +154,33 @@ namespace RockWeb.Blocks.CheckIn
 
                 if ( person != null )
                 {
+                    using ( var rockContext = new RockContext() )
+                    {
+                        var attendanceService = new AttendanceService( rockContext );
+
+                        // Buscar el registro actual (presente) más reciente de hoy.
+                        var attendance = attendanceService
+                            .Queryable( "Occurrence.Group,Occurrence.Schedule" )
+                            .Where( a =>
+                                a.PersonAlias.PersonId == person.Person.Id &&
+                                a.DidAttend == true &&
+                                a.EndDateTime == null &&
+                                a.StartDateTime >= RockDateTime.Today )
+                            .OrderByDescending( a => a.StartDateTime )
+                            .FirstOrDefault();
+
+                        if ( attendance != null )
+                        {
+                            string horaEntrada = attendance.StartDateTime.ToShortTimeString();
+                            string grupo = attendance.Occurrence?.Group != null ? attendance.Occurrence.Group.Name : "desconocido";
+                            string horario = attendance.Occurrence?.Schedule != null ? attendance.Occurrence.Schedule.Name : "sin horario";
+                            string mensaje = $"{person.Person.FullName} ya está registrado actualmente desde las {horaEntrada} en el grupo \"{grupo}\" ({horario}).";
+
+                            maWarning.Show( mensaje, Rock.Web.UI.Controls.ModalAlertType.Warning );
+                            return;
+                        }
+                    }
+
                     person.Selected = true;
                     ProcessSelection();
                 }

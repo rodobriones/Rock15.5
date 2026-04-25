@@ -1,0 +1,2476 @@
+<template>
+    <Panel type="block" title="">
+        <template #default>
+            <div class="cyWrap">
+                <div class="cyScreen">
+                    <!-- Overlays: Estados de carga y exito -->
+                    <div v-if="busy || successMessage" class="cyStateOverlay">
+                        <!-- Estado de carga -->
+                        <div v-if="busy" class="cyStateModal cyLoadingModal">
+                            <div class="cySpinner"></div>
+                            <h4 class="cyStateTitle">Procesando donación</h4>
+                            <p class="cyStateText">Por favor, no cierre esta ventana.</p>
+                        </div>
+
+                        <!-- Estado de exito -->
+                        <div v-else-if="successMessage" class="cyStateModal cySuccessModal">
+                            <div class="cySuccessIcon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <h4 class="cyStateTitle">¡Gracias por su donación!</h4>
+                            <p class="cyStateText">{{ successMessage }}</p>
+                            <div class="cyStateActions">
+                                <button type="button" class="cyStateBtnPrimary" @click.prevent="resetFormSuccess">Hacer otra donación</button>
+                                <button v-if="!config.notLogged" type="button" class="cyStateBtnSecondary" @click.prevent="goToHistoryFromSuccess">Ver historial</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <header class="cyTopBar">
+                        <div class="cyTopBrand">
+                            <span class="cyTopLogo">DAR</span>
+                        </div>
+                        <div class="cyTopMeta" :class="config.mode === 'live' ? 'isLive' : 'isTest'">
+                            {{ config.mode === "live" ? "Live" : "Test" }}
+                        </div>
+                    </header>
+
+                    <section class="cyAmountHero">
+                        <div class="cyTopTabs" role="tablist" aria-label="Secciones de pago">
+                            <button
+                                type="button"
+                                class="cyTopTabBtn"
+                                :class="{ isActive: activeSubmenu === 'donation' }"
+                                @click="activeSubmenu = 'donation'">
+                                Donación
+                            </button>
+                            <button
+                                v-if="!config.notLogged"
+                                type="button"
+                                class="cyTopTabBtn"
+                                :class="{ isActive: activeSubmenu === 'history' }"
+                                @click="activeSubmenu = 'history'; loadHistory()">
+                                Historial
+                            </button>
+                        </div>
+
+                        <div v-show="activeSubmenu === 'donation'">
+                            <div class="cyAmountValue">
+                                <span class="cyAmountCurrency">{{ normalizeCurrency(form.currency) === "GTQ" ? "Q" : "$" }}</span>
+                                <input
+                                    v-model="heroAmountInputText"
+                                    class="cyAmountNumberInput"
+                                    :class="{ isInvalid: !!fieldErrors.amount }"
+                                    :style="{ width: heroAmountInputWidth }"
+                                    type="text"
+                                    inputmode="decimal"
+                                    placeholder="0.00"
+                                    aria-label="Monto de donación"
+                                    @input="onHeroAmountInput"
+                                    @blur="onHeroAmountBlur" />
+                            </div>
+                            <div class="cyHeroControls">
+                                <div class="cyCurrencySwitch" role="group" aria-label="Seleccionar moneda">
+                                    <button
+                                        type="button"
+                                        class="cyCurrencyBtn"
+                                        :class="{ isActive: form.currency === 'GTQ' }"
+                                        @click.prevent="switchCurrency('GTQ')">
+                                        GTQ
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="cyCurrencyBtn"
+                                        :class="{ isActive: form.currency === 'USD' }"
+                                        @click.prevent="switchCurrency('USD')">
+                                        USD
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="Number(form.amount || 0) <= 0 || fieldErrors.amount || fieldErrors.currency" class="cyAmountAlert">
+                                {{ fieldErrors.amount || fieldErrors.currency || "Ingrese el monto" }}
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="cyStage">
+                        <section class="cyMainCard">
+                            <!-- Seccion de tipo de regalo: oculta temporalmente -->
+                            <div class="cyPromptRow" v-show="false">
+                                <p class="cyPromptLabel">Tipo de regalo</p>
+                                <div class="cyGiftToggle" role="group" aria-label="Tipo de regalo">
+                                    <button type="button" class="cyGiftBtn isActive" @click.prevent>Dar una vez</button>
+                                    <button type="button" class="cyGiftBtn" @click.prevent>Configurar recurrente</button>
+                                </div>
+                            </div>
+
+
+
+                            <div v-show="activeSubmenu === 'donation'">
+                                <section class="cySection">
+                                    <div class="cySectionHead">
+                                        <h4 class="cySectionTitle">Datos de donación</h4>
+                                        <p class="cySectionText">Seleccione fondo y agregue una nota opcional.</p>
+                                    </div>
+
+                                    <div class="cyGrid">
+                                        <div class="cyField cyWide">
+                                            <span>Cuenta</span>
+                                            <div class="cyDropdown" :class="{ isInvalid: !!fieldErrors.accountId, isOpen: accountDropdownOpen }" v-click-outside="() => accountDropdownOpen = false">
+                                                <button type="button" class="cyDropdownTrigger" @click="accountDropdownOpen = !accountDropdownOpen">
+                                                    <span :class="{ cyDropdownPlaceholder: form.accountId === 0 }">
+                                                        {{ form.accountId === 0 ? 'Selecciona una cuenta...' : accounts.find(a => a.id === form.accountId)?.publicName }}
+                                                    </span>
+                                                    <svg class="cyDropdownChevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
+                                                    </svg>
+                                                </button>
+                                                <div v-if="accountDropdownOpen" class="cyDropdownMenu">
+                                                    <button
+                                                        v-for="a in accounts"
+                                                        :key="a.id"
+                                                        type="button"
+                                                        class="cyDropdownItem"
+                                                        :class="{ isSelected: form.accountId === a.id }"
+                                                        @click="form.accountId = a.id; fieldErrors.accountId = ''; accountDropdownOpen = false">
+                                                        <span>{{ a.publicName }}</span>
+                                                        <svg v-if="form.accountId === a.id" class="cyAccountCheck" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clip-rule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <small v-if="fieldErrors.accountId" class="cyFieldError">{{ fieldErrors.accountId }}</small>
+                                        </div>
+
+                                        <label class="cyField cyWide">
+                                            <span>Nota (opcional)</span>
+                                            <input
+                                                v-model="form.note"
+                                                class="form-control"
+                                                :class="{ isInvalid: !!fieldErrors.note }"
+                                                type="text"
+                                                maxlength="250"
+                                                placeholder="Ejemplo: Ofrenda especial"
+                                                @input="fieldErrors.note = ''" />
+                                            <small v-if="fieldErrors.note" class="cyFieldError">{{ fieldErrors.note }}</small>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="cySection">
+                                    <div class="cySectionHead">
+                                        <h4 class="cySectionTitle">Tarjeta</h4>
+                                        <p class="cySectionText">Complete la información de pago segura.</p>
+                                    </div>
+
+                                    <div class="cyCardInputs">
+                                        <label class="cyCardField">
+                                            <span>Número de tarjeta</span>
+                                            <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cardNumber }">
+                                                <input
+                                                    v-model="form.cardNumber"
+                                                    class="cyInput"
+                                                    type="text"
+                                                    maxlength="24"
+                                                    inputmode="numeric"
+                                                    autocomplete="cc-number"
+                                                    placeholder="4111 1111 1111 1111"
+                                                    @input="onCardNumberInput" />
+                                                <span class="cyCardBrandTag" :class="`brand-${cardBrand}`">{{ cardBrandLabel }}</span>
+                                            </div>
+                                            <small v-if="fieldErrors.cardNumber" class="cyFieldError">{{ fieldErrors.cardNumber }}</small>
+                                        </label>
+
+                                        <div class="cyCardRow">
+                                            <label class="cyCardField">
+                                                <span>Vencimiento</span>
+                                                <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.expDate }">
+                                                    <input
+                                                        v-model="form.expDate"
+                                                        class="cyInput"
+                                                        type="text"
+                                                        maxlength="5"
+                                                        inputmode="numeric"
+                                                        autocomplete="cc-exp"
+                                                        placeholder="MM/AA"
+                                                        @input="onExpDateInput" />
+                                                </div>
+                                                <small class="cyFieldHint">Formato: 05/30</small>
+                                                <small v-if="fieldErrors.expDate" class="cyFieldError">{{ fieldErrors.expDate }}</small>
+                                            </label>
+
+                                            <label class="cyCardField">
+                                                <span>CVV*</span>
+                                                <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cvv }">
+                                                    <input
+                                                        v-model="form.cvv"
+                                                        class="cyInput"
+                                                        type="password"
+                                                        maxlength="4"
+                                                        inputmode="numeric"
+                                                        autocomplete="cc-csc"
+                                                        :placeholder="`CVV (${expectedCvvLength})`"
+                                                        @input="onCvvInput" />
+                                                </div>
+                                                <small class="cyFieldHint">{{ expectedCvvLength }} dígitos de seguridad</small>
+                                                <small v-if="fieldErrors.cvv" class="cyFieldError">{{ fieldErrors.cvv }}</small>
+                                            </label>
+                                        </div>
+
+                                        <label class="cyCardField">
+                                            <span>Nombre del tarjetahabiente</span>
+                                            <div class="cyInputWrap" :class="{ isInvalid: !!fieldErrors.cardName }">
+                                                <input
+                                                    v-model="form.cardName"
+                                                    class="cyInput"
+                                                    type="text"
+                                                    maxlength="120"
+                                                    autocomplete="cc-name"
+                                                    placeholder="Nombre como aparece en la tarjeta"
+                                                    @input="fieldErrors.cardName = ''" />
+                                            </div>
+                                            <small v-if="fieldErrors.cardName" class="cyFieldError">{{ fieldErrors.cardName }}</small>
+                                        </label>
+
+                                    </div>
+                                </section>
+
+                                <!-- Seccion de recibo fiscal (NIT) -->
+                                <section class="cySection cyReceiptSection">
+                                    <div class="cyReceiptToggle">
+                                        <div class="cyReceiptText">
+                                            <h4 class="cyReceiptTitle">¿Desea su recibo de donación?</h4>
+                                            <p class="cyReceiptDesc">Active esta opción para ingresar su NIT.</p>
+                                        </div>
+                                        <label class="cySwitch">
+                                            <input type="checkbox" v-model="form.wantsReceipt">
+                                            <span class="cySlider"></span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div v-show="form.wantsReceipt" class="cyReceiptForm">
+                                        <div class="cyNitRow">
+                                            <label class="cyField cyNitInput">
+                                                <span>NIT</span>
+                                                <input
+                                                    v-model="form.nit"
+                                                    class="form-control"
+                                                    :class="{ isInvalid: !!fieldErrors.nit }"
+                                                    type="text"
+                                                    inputmode="text"
+                                                    placeholder="Ej: 12345678"
+                                                    @input="onNitInput" />
+                                            </label>
+                                            
+                                            <RockButton class="cyValidateBtn" btnType="default" :disabled="busyNit || !form.nit" @click="validateNit">
+                                                {{ busyNit ? "Validando..." : "Validar NIT" }}
+                                            </RockButton>
+                                        </div>
+                                        <small v-if="fieldErrors.nit" class="cyFieldError" style="display: block; margin-top: -8px; margin-bottom: 12px;">{{ fieldErrors.nit }}</small>
+                                        
+                                        <!-- Datos de solo lectura obtenidos del NIT -->
+                                        <div v-if="form.nitName || form.nitAddress" class="cyNitResult">
+                                            <label class="cyField">
+                                                <span>Nombre / Razón Social</span>
+                                                <input
+                                                    v-model="form.nitName"
+                                                    class="form-control"
+                                                    type="text"
+                                                    readonly
+                                                    disabled />
+                                            </label>
+                                            
+                                            <label class="cyField" v-if="form.nitAddress">
+                                                <span>Dirección</span>
+                                                <input
+                                                    v-model="form.nitAddress"
+                                                    class="form-control"
+                                                    type="text"
+                                                    readonly
+                                                    disabled />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <!-- Campo de correo electrónico -->
+                                <section class="cySection">
+                                    <div class="cyGrid">
+                                        <label class="cyField cyWide">
+                                            <span>Correo Electrónico *</span>
+                                            <input
+                                                v-model="form.donorEmail"
+                                                class="form-control"
+                                                :class="{ isInvalid: !!fieldErrors.donorEmail }"
+                                                type="email"
+                                                maxlength="200"
+                                                inputmode="email"
+                                                autocomplete="email"
+                                                :placeholder="config.notLogged ? 'tu@correo.com' : 'Correo de tu perfil'"
+                                                :readonly="!config.notLogged && !!config.currentPersonEmail"
+                                                :disabled="!config.notLogged && !!config.currentPersonEmail"
+                                                @input="fieldErrors.donorEmail = ''" />
+                                            <small class="cyFieldHint">Nota: A este correo se enviará tu confirmación y recibo de donación.</small>
+                                            <small v-if="fieldErrors.donorEmail" class="cyFieldError">{{ fieldErrors.donorEmail }}</small>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <div class="cyActions">
+                                    <RockButton btnType="primary" :disabled="busy || (form.wantsReceipt && !form.nitName)" @click="openConfirmModal">
+                                        Donar
+                                    </RockButton>
+                                    <p class="cyActionMeta">*Nota: No se guardará la información de su tarjeta.</p>
+                                </div>
+
+                                <NotificationBox v-if="errorMessage" alertType="danger" class="cyAlert">
+                                    {{ errorMessage }}
+                                </NotificationBox>
+
+                            </div>
+
+                            <section v-show="activeSubmenu === 'history'" class="cyHistoryCard cyHistoryPanel">
+                                <div class="cyHistoryHeader">
+                                    <h4 class="cyHistoryTitle">Mi historial de pagos</h4>
+                                    <RockButton btnType="default" :disabled="busyHistory" @click="loadHistory">
+                                        {{ busyHistory ? "Cargando..." : "Actualizar" }}
+                                    </RockButton>
+                                </div>
+
+                                <div v-if="history.length === 0" class="cyEmpty">No se encontraron pagos Cybersource.</div>
+
+                                <div v-else class="cyHistoryTableWrap">
+                                    <table class="table table-bordered cyHistoryTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Monto</th>
+                                                <th>Moneda</th>
+                                                <th>Cuenta</th>
+                                                <th>Estado</th>
+                                                <th>Ref</th>
+                                                <th>Audit</th>
+                                                <th>Tarjeta</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="item in history" :key="item.transactionId">
+                                                <td>{{ formatDate(item.transactionDateTime) }}</td>
+                                                <td>{{ formatMoney(item.amount, item.currency) }}</td>
+                                                <td>{{ normalizeCurrency(item.currency) }}</td>
+                                                <td>{{ item.accountName || "-" }}</td>
+                                                <td>
+                                                    <span class="cyStatusBadge" :class="statusClass(item.status)">{{ item.status || "-" }}</span>
+                                                    <small class="cyStatusCode">{{ item.responseCode || "-" }}</small>
+                                                </td>
+                                                <td>{{ item.referenceNumber || "-" }}</td>
+                                                <td>{{ item.auditNumber || "-" }}</td>
+                                                <td>{{ item.accountNumberMasked || "-" }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        <!-- Modal de confirmación de donación -->
+        <Teleport to="body">
+            <div v-if="showConfirmModal" class="cyConfirmOverlay" @click.self="showConfirmModal = false">
+                <div class="cyConfirmModal">
+                    <h3 class="cyConfirmTitle">Confirmar donación</h3>
+                    <p class="cyConfirmSubtitle">Revisa los detalles antes de proceder.</p>
+
+                    <div class="cyConfirmRows">
+                        <div class="cyConfirmRow">
+                            <span class="cyConfirmLabel">Cuenta</span>
+                            <span class="cyConfirmValue">{{ accounts.find(a => a.id === form.accountId)?.publicName }}</span>
+                        </div>
+                        <div class="cyConfirmRow cyConfirmRowHighlight">
+                            <span class="cyConfirmLabel">Monto</span>
+                            <span class="cyConfirmValue cyConfirmAmount">{{ amountPreview }}</span>
+                        </div>
+                        <div class="cyConfirmRow">
+                            <span class="cyConfirmLabel">Tarjeta</span>
+                            <span class="cyConfirmValue">{{ cardBrandLabel }} {{ cardPreviewNumber }}</span>
+                        </div>
+                        <div class="cyConfirmRow">
+                            <span class="cyConfirmLabel">Titular</span>
+                            <span class="cyConfirmValue">{{ form.cardName }}</span>
+                        </div>
+                        <div v-if="form.note" class="cyConfirmRow">
+                            <span class="cyConfirmLabel">Nota</span>
+                            <span class="cyConfirmValue">{{ form.note }}</span>
+                        </div>
+                    </div>
+
+                    <div class="cyConfirmActions">
+                        <button type="button" class="cyConfirmCancel" @click="showConfirmModal = false">Cancelar</button>
+                        <button type="button" class="cyConfirmSubmit" :disabled="busy" @click="confirmAndSubmit">
+                            {{ busy ? "Procesando..." : "Confirmar donación" }}
+                        </button>
+                    </div>
+
+                    <p class="cyConfirmNote">*No se guardará la información de su tarjeta.</p>
+                </div>
+            </div>
+        </Teleport>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref, type DirectiveBinding } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+// Marca de tarjeta detectada por BIN
+type CardBrand = "visa" | "mastercard" | "amex" | "discover" | "unknown";
+
+// Opción de cuenta financiera para el dropdown
+type AccountOptionBag = {
+    id: number;
+    publicName: string;
+};
+
+// Registro del historial de pagos Cybersource
+type PaymentHistoryBag = {
+    transactionId: number;
+    transactionDateTime: string;
+    amount: number;
+    accountName: string;
+    transactionCode: string;
+    responseCode: string;
+    status: string;
+    statusMessage: string;
+    referenceNumber: string;
+    auditNumber: string;
+    authorizationNumber: string;
+    currency: string;
+    mode: string;
+    accountNumberMasked: string;
+    summary: string;
+};
+
+// Datos iniciales del bloque enviados desde el servidor C#
+type InitBag = {
+    notLogged: boolean;
+    defaultCurrency: string;
+    mode: string;
+    accounts: AccountOptionBag[];
+    history: PaymentHistoryBag[];
+    currentPersonEmail: string;
+};
+
+// Resultado devuelto por la acción ProcessPayment del backend
+type ProcessPaymentResult = {
+    success: boolean;
+    message: string;
+    responseCode: string;
+    authorizationNumber: string;
+    referenceNumber: string;
+    auditNumber: string;
+    currency: string;
+    mode: string;
+    transactionId?: number;
+    history: PaymentHistoryBag[];
+};
+
+// Resultado del parseo de fecha de vencimiento MM/YY
+type ExpiryParse = {
+    month: number;
+    year: number;
+    valid: boolean;
+};
+
+// ========================
+// INICIALIZACIÓN DEL BLOQUE
+// ========================
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+// Listas de datos del servidor
+const accounts = ref<AccountOptionBag[]>(config.accounts || []);
+const history = ref<PaymentHistoryBag[]>(config.history || []);
+
+// Estados de UI
+const busy = ref(false);                                    // Procesando pago
+const busyHistory = ref(false);                             // Cargando historial
+const errorMessage = ref("");                               // Mensaje de error global
+const successMessage = ref("");                             // Mensaje de éxito (activa modal)
+const lastResult = ref<ProcessPaymentResult | null>(null);  // Último resultado de pago
+const activeSubmenu = ref<"donation" | "history">("donation"); // Pestaña activa
+const showConfirmModal = ref(false);                        // Modal de confirmación
+
+// Errores individuales por campo del formulario
+const fieldErrors = reactive({
+    accountId: "",
+    amount: "",
+    currency: "",
+    note: "",
+    cardName: "",
+    cardNumber: "",
+    expDate: "",
+    cvv: "",
+    nit: "",
+    donorEmail: ""
+});
+
+// Datos del formulario de donación
+const form = reactive({
+    accountId: accounts.value.length > 0 ? accounts.value[0].id : 0,
+    amount: 0,
+    note: "",
+    currency: (config.defaultCurrency || "GTQ").toUpperCase(),
+    cardName: "",
+    cardNumber: "",
+    expDate: "",
+    cvv: "",
+    wantsReceipt: false,   // Si el usuario quiere recibo fiscal
+    nit: "",               // NIT ingresado
+    nitName: "",           // Nombre/razón social obtenida de la SAT
+    nitAddress: "",        // Dirección obtenida de la SAT
+    donorEmail: (config.currentPersonEmail || "").trim()
+});
+
+// Clave de idempotencia para evitar cobros duplicados
+const idemKey = ref(generateIdemKey());
+
+// Estado del dropdown de cuentas
+const accountDropdownOpen = ref(false);
+
+// Directiva v-click-outside para cerrar el dropdown al hacer clic fuera
+const vClickOutside = {
+    mounted(el: HTMLElement, binding: DirectiveBinding) {
+        (el as any)._clickOutsideHandler = (event: MouseEvent) => {
+            if (!el.contains(event.target as Node)) {
+                binding.value();
+            }
+        };
+        document.addEventListener("click", (el as any)._clickOutsideHandler, true);
+    },
+    unmounted(el: HTMLElement) {
+        document.removeEventListener("click", (el as any)._clickOutsideHandler, true);
+    }
+};
+
+/** Genera una clave única combinando timestamp base36 + aleatorio */
+function generateIdemKey(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+}
+
+// ========================
+// PROPIEDADES COMPUTADAS
+// ========================
+
+// Texto visible en el input hero del monto
+const heroAmountInputText = ref(Number(form.amount || 0).toFixed(2));
+
+// Ancho dinámico del input hero (en ch) para que se ajuste al contenido
+const heroAmountInputWidth = computed(() => {
+    const text = String(heroAmountInputText.value || "");
+    // Reservar espacio para decimales (.xx) y evitar reflow al perder foco
+    const effective = text.includes(".") ? text : text + ".00";
+    const widthInCh = Math.min(Math.max(effective.length + 0.5, 4.5), 12);
+    return `${widthInCh}ch`;
+});
+
+// Solo dígitos del número de tarjeta (sin espacios)
+const cardNumberDigits = computed(() => (form.cardNumber || "").replace(/[^\d]/g, ""));
+
+// Marca detectada según los primeros dígitos (BIN)
+const cardBrand = computed<CardBrand>(() => detectCardBrand(cardNumberDigits.value));
+
+// Nombre legible de la marca de tarjeta
+const cardBrandLabel = computed<string>(() => {
+    if (cardBrand.value === "visa") return "Visa";
+    if (cardBrand.value === "mastercard") return "Mastercard";
+    if (cardBrand.value === "amex") return "American Express";
+    if (cardBrand.value === "discover") return "Discover";
+    return "Tarjeta";
+});
+
+// Longitud esperada del CVV según la marca (Amex=4, resto=3)
+const expectedCvvLength = computed<number>(() => (cardBrand.value === "amex" ? 4 : 3));
+
+// Vista previa del monto formateado con símbolo de moneda
+const amountPreview = computed<string>(() => {
+    return formatMoney(form.amount, form.currency);
+});
+
+// Vista previa del número de tarjeta con espacios
+const cardPreviewNumber = computed<string>(() => {
+    const preview = formatCardNumberDigits(cardNumberDigits.value, cardBrand.value);
+    return preview || "#### #### #### ####";
+});
+
+// Vista previa del nombre del titular en mayúsculas
+const cardPreviewName = computed<string>(() => {
+    const name = (form.cardName || "").trim();
+    return name ? name.toUpperCase() : "NOMBRE TITULAR";
+});
+
+// Vista previa de la fecha de vencimiento
+const cardPreviewExp = computed<string>(() => {
+    return form.expDate || "MM/AA";
+});
+
+// ========================
+// FUNCIONES DE TARJETA
+// ========================
+
+/** Detecta la marca de tarjeta según los primeros dígitos (BIN) */
+function detectCardBrand(pan: string): CardBrand {
+    if (!pan) return "unknown";
+
+    if (/^4/.test(pan)) return "visa";
+    if (/^(5[1-5]|2(?:2[2-9]|[3-6]\d|7[01]|720))/.test(pan)) return "mastercard";
+    if (/^3[47]/.test(pan)) return "amex";
+    if (/^(6011|65|64[4-9])/.test(pan)) return "discover";
+
+    return "unknown";
+}
+
+/** Valida el número de tarjeta usando el algoritmo de Luhn */
+function luhnCheck(pan: string): boolean {
+    if (!/^\d{12,19}$/.test(pan)) {
+        return false;
+    }
+
+    let sum = 0;
+    let shouldDouble = false;
+
+    for (let i = pan.length - 1; i >= 0; i--) {
+        let digit = Number(pan.charAt(i));
+
+        if (shouldDouble) {
+            digit *= 2;
+            if (digit > 9) {
+                digit -= 9;
+            }
+        }
+
+        sum += digit;
+        shouldDouble = !shouldDouble;
+    }
+
+    return sum % 10 === 0;
+}
+
+/** Formatea los dígitos de tarjeta con espacios según la marca (Amex: 4-6-5, resto: 4-4-4-...) */
+function formatCardNumberDigits(digits: string, brand: CardBrand): string {
+    const max = brand === "amex" ? 15 : 19;
+    const clean = digits.slice(0, max);
+
+    if (brand === "amex") {
+        const p1 = clean.slice(0, 4);
+        const p2 = clean.slice(4, 10);
+        const p3 = clean.slice(10, 15);
+        return [p1, p2, p3].filter(Boolean).join(" ");
+    }
+
+    return clean.match(/.{1,4}/g)?.join(" ") || clean;
+}
+
+/** Parsea la fecha de vencimiento MM/YY y devuelve mes, año y si es válida */
+function parseExpiry(value: string): ExpiryParse {
+    const digits = (value || "").replace(/[^\d]/g, "");
+
+    if (digits.length !== 4) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    const month = Number(digits.slice(0, 2));
+    const yy = Number(digits.slice(2, 4));
+
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+        return { month: 0, year: 0, valid: false };
+    }
+
+    const year = 2000 + yy;
+    return { month, year, valid: true };
+}
+
+/** Verifica si la tarjeta ya venció comparando con la fecha actual */
+function isExpired(month: number, year: number): boolean {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (year < currentYear) {
+        return true;
+    }
+
+    if (year === currentYear && month < currentMonth) {
+        return true;
+    }
+
+    return false;
+}
+
+// ========================
+// HANDLERS DE INPUTS
+// ========================
+
+/** Limpia datos sensibles de tarjeta del formulario (número, fecha, CVV) */
+function clearSensitive(): void {
+    form.cardNumber = "";
+    form.expDate = "";
+    form.cvv = "";
+}
+
+/** Formatea el número de tarjeta mientras el usuario escribe */
+function onCardNumberInput(): void {
+    fieldErrors.cardNumber = "";
+    const digits = (form.cardNumber || "").replace(/[^\d]/g, "");
+    const brand = detectCardBrand(digits);
+    form.cardNumber = formatCardNumberDigits(digits, brand);
+}
+
+/** Formatea la fecha de vencimiento con slash automático (MM/YY) */
+function onExpDateInput(): void {
+    fieldErrors.expDate = "";
+
+    const digits = (form.expDate || "").replace(/[^\d]/g, "").slice(0, 4);
+    if (digits.length <= 2) {
+        form.expDate = digits;
+        return;
+    }
+
+    form.expDate = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+/** Cambia la moneda y resetea el monto a 0 */
+function switchCurrency(currency: string): void {
+    if (form.currency === currency) return;
+    form.currency = currency;
+    form.amount = 0;
+    heroAmountInputText.value = "";
+    fieldErrors.currency = "";
+    fieldErrors.amount = "";
+}
+
+/** Limita el CVV a solo dígitos (máx 4) */
+function onCvvInput(): void {
+    fieldErrors.cvv = "";
+    form.cvv = (form.cvv || "").replace(/[^\d]/g, "").slice(0, 4);
+}
+
+/** Limpia caracteres especiales del NIT. Permite letras (ej: K) y números.
+ *  Si el usuario edita el NIT, se limpian los datos validados previamente. */
+function onNitInput(): void {
+    fieldErrors.nit = "";
+    form.nit = (form.nit || "").replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+
+    // Limpiar datos validados si el usuario modifica el NIT
+    form.nitName = "";
+    form.nitAddress = "";
+}
+
+/** Procesa el input del monto hero: normaliza decimales, limita a 7 dígitos enteros y 2 decimales */
+function onHeroAmountInput(): void {
+    fieldErrors.amount = "";
+
+    const raw = String(heroAmountInputText.value || "")
+        .replace(",", ".")
+        .replace(/[^\d.]/g, "");
+
+    const firstDot = raw.indexOf(".");
+    const normalized = firstDot >= 0
+        ? raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, "")
+        : raw;
+
+    const parts = normalized.split(".");
+    const whole = (parts[0] || "").slice(0, 7);
+    const fraction = parts.length > 1 ? (parts[1] || "").slice(0, 2) : "";
+
+    heroAmountInputText.value = parts.length > 1 ? `${whole}.${fraction}` : whole;
+
+    const parsed = Number(heroAmountInputText.value);
+    form.amount = Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Al perder el foco, formatea el monto con 2 decimales */
+function onHeroAmountBlur(): void {
+    const text = String(heroAmountInputText.value || "").trim();
+    if (!text) {
+        form.amount = 0;
+        return;
+    }
+
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) {
+        form.amount = 0;
+        heroAmountInputText.value = "";
+        return;
+    }
+
+    form.amount = parsed;
+    heroAmountInputText.value = parsed.toFixed(2);
+}
+
+// ========================
+// VALIDACIÓN DEL FORMULARIO
+// ========================
+
+/** Limpia todos los errores de campo */
+function clearAllFieldErrors(): void {
+    fieldErrors.accountId = "";
+    fieldErrors.amount = "";
+    fieldErrors.currency = "";
+    fieldErrors.note = "";
+    fieldErrors.cardName = "";
+    fieldErrors.cardNumber = "";
+    fieldErrors.expDate = "";
+    fieldErrors.cvv = "";
+    fieldErrors.nit = "";
+    fieldErrors.donorEmail = "";
+}
+
+/** Hace scroll suave al primer campo con error visible */
+function scrollToFirstError(): void {
+    setTimeout(() => {
+        const el = document.querySelector(".cyFieldError, .cyAmountAlert, .isInvalid");
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }, 50);
+}
+
+/** Valida todos los campos del formulario. Retorna true si todo es válido. */
+function validateForm(): boolean {
+    clearAllFieldErrors();
+
+    let isValid = true;
+
+    if (!Number.isFinite(form.accountId) || form.accountId <= 0) {
+        fieldErrors.accountId = "Seleccione una cuenta.";
+        isValid = false;
+    }
+
+    if (!Number.isFinite(form.amount) || Number(form.amount) <= 0) {
+        fieldErrors.amount = "Ingrese un monto válido mayor a cero.";
+        isValid = false;
+    }
+
+    if (form.wantsReceipt) {
+        if (!form.nit || form.nit.trim() === "") {
+            fieldErrors.nit = "Ingrese un número de NIT.";
+            isValid = false;
+        } else if (!form.nitName) {
+            fieldErrors.nit = "Valide el NIT antes de continuar.";
+            isValid = false;
+        }
+    }
+
+    const emailTrimmed = (form.donorEmail || "").trim();
+    if (!emailTrimmed) {
+        fieldErrors.donorEmail = "El correo electrónico es requerido.";
+        isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+        fieldErrors.donorEmail = "Ingrese un correo electrónico válido.";
+        isValid = false;
+    }
+
+    if (form.currency !== "GTQ" && form.currency !== "USD") {
+        fieldErrors.currency = "Solo se permite GTQ o USD.";
+        isValid = false;
+    }
+
+    if ((form.note || "").length > 250) {
+        fieldErrors.note = "Máximo 250 caracteres.";
+        isValid = false;
+    }
+
+    if ((form.cardName || "").trim().length < 3) {
+        fieldErrors.cardName = "Ingrese el nombre del titular.";
+        isValid = false;
+    }
+
+    if (!luhnCheck(cardNumberDigits.value)) {
+        fieldErrors.cardNumber = "Número de tarjeta inválido.";
+        isValid = false;
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        fieldErrors.expDate = "Usa el formato MM/AA.";
+        isValid = false;
+    } else if (isExpired(expiry.month, expiry.year)) {
+        fieldErrors.expDate = "La tarjeta está vencida.";
+        isValid = false;
+    }
+
+    const cvv = (form.cvv || "").replace(/[^\d]/g, "");
+    const validCvvLength = cardBrand.value === "amex" ? cvv.length === 4 : cvv.length === 3;
+    if (!validCvvLength) {
+        fieldErrors.cvv = `El CVV debe tener ${expectedCvvLength.value} dígitos.`;
+        isValid = false;
+    }
+
+    return isValid;
+}
+
+// ========================
+// ACCIONES PRINCIPALES
+// ========================
+
+/** Valida el formulario y abre el modal de confirmación */
+function openConfirmModal(): void {
+    errorMessage.value = "";
+    if (!validateForm()) {
+        errorMessage.value = "Corrija los campos resaltados para proceder.";
+        scrollToFirstError();
+        return;
+    }
+    showConfirmModal.value = true;
+}
+
+/** Confirma desde el modal y ejecuta el pago */
+async function confirmAndSubmit(): Promise<void> {
+    showConfirmModal.value = false;
+    await submitPayment();
+}
+
+/** Envía el pago al backend Cybersource. Usa clave de idempotencia para evitar cobros duplicados. */
+async function submitPayment(): Promise<void> {
+    if (busy.value) {
+        return;
+    }
+
+    errorMessage.value = "";
+    successMessage.value = "";
+
+    if (!validateForm()) {
+        errorMessage.value = "Corrija los campos resaltados para procesar.";
+        scrollToFirstError();
+        return;
+    }
+
+    const expiry = parseExpiry(form.expDate);
+    if (!expiry.valid) {
+        errorMessage.value = "Fecha de vencimiento inválida.";
+        return;
+    }
+
+    busy.value = true;
+
+    try {
+        const response = await invokeBlockAction<any>("ProcessPayment", {
+            bag: {
+                accountId: Number(form.accountId || 0),
+                amount: Number(form.amount || 0),
+                note: (form.note || "").trim(),
+                currency: (form.currency || "GTQ").toUpperCase(),
+                cardName: (form.cardName || "").trim(),
+                cardNumber: cardNumberDigits.value,
+                expMonth: expiry.month,
+                expYear: expiry.year,
+                cvv: (form.cvv || "").trim(),
+                wantsReceipt: form.wantsReceipt,
+                nit: form.wantsReceipt ? form.nit : "",
+                nitName: form.wantsReceipt ? form.nitName : "",
+                nitAddress: form.wantsReceipt ? form.nitAddress : "",
+                donorEmail: (form.donorEmail || "").trim(),
+                idemKey: idemKey.value
+            }
+        });
+
+        if (!response.isSuccess) {
+            errorMessage.value = response.errorMessage || "La solicitud de pago falló.";
+            return;
+        }
+
+        const data = response.data as ProcessPaymentResult;
+        lastResult.value = data;
+        history.value = data.history || [];
+
+        if (data.success) {
+            successMessage.value = data.message || "Pago aprobado.";
+            form.note = "";
+            idemKey.value = generateIdemKey(); // Nueva clave para el proximo pago
+        } else {
+            errorMessage.value = data.message || "Pago rechazado.";
+
+            // Solo regenerar la clave si fue un error de validacion/input (reintento seguro).
+            // Si fue timeout o estado desconocido, mantener la misma clave para que el
+            // backend evite un doble cobro si la solicitud original si fue procesada.
+            if (data.responseCode === "INVALID_INPUT" || data.responseCode === "DECLINED" || data.responseCode === "CONFIG") {
+                idemKey.value = generateIdemKey();
+            }
+        }
+    } catch {
+        errorMessage.value = "Error inesperado al procesar el pago.";
+        // En error de red del cliente, NO regeneramos la clave intencionalmente
+        // para que un reintento inmediato actue idempotentemente en el backend.
+    } finally {
+        clearSensitive();
+        busy.value = false;
+    }
+}
+
+/** Carga el historial de pagos del usuario desde el backend */
+async function loadHistory(): Promise<void> {
+    if (busyHistory.value) {
+        return;
+    }
+
+    busyHistory.value = true;
+
+    try {
+        const response = await invokeBlockAction<any>("GetPaymentHistory", {});
+        if (response.isSuccess) {
+            history.value = response.data?.history || [];
+        }
+    } finally {
+        busyHistory.value = false;
+    }
+}
+
+/** Reinicia el formulario después de un pago exitoso para hacer otra donación */
+function resetFormSuccess(): void {
+    successMessage.value = "";
+    lastResult.value = null;
+    form.amount = 0;
+    heroAmountInputText.value = "";
+    form.note = "";
+    clearAllFieldErrors();
+    activeSubmenu.value = "donation";
+    idemKey.value = generateIdemKey(); // Clave fresca para el nuevo pago
+}
+
+/** Navega al historial desde el modal de éxito */
+function goToHistoryFromSuccess(): void {
+    successMessage.value = "";
+    activeSubmenu.value = "history";
+    loadHistory();
+}
+
+// ========================
+// VALIDACIÓN DE NIT (SAT Guatemala)
+// ========================
+
+const busyNit = ref(false);
+
+/** Valida el NIT contra el servicio de la SAT y obtiene nombre/dirección */
+async function validateNit(): Promise<void> {
+    if (busyNit.value || !form.nit) {
+        return;
+    }
+    
+    busyNit.value = true;
+    fieldErrors.nit = "";
+    
+    try {
+        const response = await invokeBlockAction<any>("ValidateNitInfo", {
+            nit: form.nit
+        });
+        
+        if (response.isSuccess && response.data?.name) {
+            form.nitName = response.data.name;
+            form.nitAddress = response.data.address || "";
+        } else {
+            fieldErrors.nit = response.errorMessage || "NIT inválido o no encontrado.";
+            form.nitName = "";
+            form.nitAddress = "";
+        }
+    } catch {
+        fieldErrors.nit = "Error de conexión al validar NIT.";
+        form.nitName = "";
+        form.nitAddress = "";
+    } finally {
+        busyNit.value = false;
+    }
+}
+
+// ========================
+// FUNCIONES DE FORMATO
+// ========================
+
+/** Formatea fecha ISO a formato legible local */
+function formatDate(value: string): string {
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleString();
+}
+
+/** Normaliza el código de moneda a GTQ o USD */
+function normalizeCurrency(value?: string): string {
+    const upper = String(value || form.currency || "USD").toUpperCase();
+    return upper === "GTQ" ? "GTQ" : "USD";
+}
+
+/** Formatea un monto con símbolo de moneda (Q para GTQ, $ para USD) */
+function formatMoney(value: number, currencyCode?: string): string {
+    const amount = Number(value || 0);
+    const currency = normalizeCurrency(currencyCode);
+
+    const numStr = amount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
+    return currency === "GTQ" ? `Q${numStr}` : `$${numStr}`;
+}
+
+/** Retorna la clase CSS según el estado del pago (aprobado, rechazado, neutro) */
+function statusClass(status?: string): string {
+    const s = String(status || "").toUpperCase();
+
+    if (s === "APPROVED" || s === "SUCCESS" || s === "COMPLETED") {
+        return "isGood";
+    }
+
+    if (s === "DECLINED" || s === "FAILED" || s === "REJECTED") {
+        return "isBad";
+    }
+
+    return "isNeutral";
+}
+
+</script>
+
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+
+.panel-block .panel-heading,
+.panel-block .panel-header {
+    display: none !important;
+}
+
+.panel-block {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.panel-block > .panel-body {
+    padding: 0 !important;
+}
+
+.cyWrap {
+    --cy-black: #090909;
+    --cy-gray-100: #f3f3f3;
+    --cy-gray-200: #e5e5e5;
+    --cy-gray-300: #d5d5d5;
+    --cy-gray-500: #7d7d7d;
+    --cy-text: #1f2933;
+    --cy-danger: #c22016;
+    --cy-success: #0f8f53;
+    --cy-radius-xl: 22px;
+    --cy-radius-lg: 14px;
+    --cy-radius-pill: 999px;
+
+    background: linear-gradient(#000 0 380px, #ececec 380px 100%);
+    border-radius: 18px;
+    color: var(--cy-text);
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    overflow: hidden;
+    position: relative;
+}
+
+.cyScreen {
+    min-height: 100%;
+}
+
+.cyTopBar {
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+}
+
+.cyTopBrand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cyTopLogo {
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    background: #fff;
+    color: #121212;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Manrope, sans-serif;
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.cyTopName {
+    color: #fff;
+    font-family: Manrope, sans-serif;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.cyTopMeta {
+    border-radius: var(--cy-radius-pill);
+    border: 1px solid #ffffff38;
+    padding: 6px 10px;
+    color: #fff;
+    font-family: Manrope, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.cyTopMeta.isLive {
+    background: #163b28;
+    border-color: #2c8b5e;
+}
+
+.cyTopMeta.isTest {
+    background: #1a2b42;
+    border-color: #4d709b;
+}
+
+.cyTopTabs {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.cyTopTabBtn {
+    background: transparent;
+    border: none;
+    color: #8c8c8c;
+    font-family: Manrope, sans-serif;
+    font-size: 19px;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0 0 6px 0;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.cyTopTabBtn.isActive {
+    color: #ffffff;
+    border-bottom: 2px solid #ffffff;
+}
+
+.cyAmountHero {
+    color: #fff;
+    text-align: center;
+    padding: 18px 12px 60px;
+}
+
+.cyAmountLabel {
+    margin: 0;
+    color: #d9d9d9;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+}
+
+.cyAmountValue {
+    margin: 8px auto 0;
+    width: fit-content;
+    max-width: 90vw;
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 2px;
+    font-family: Manrope, sans-serif;
+}
+
+.cyAmountCurrency {
+    font-size: clamp(38px, 13vw, 120px);
+    line-height: 0.9;
+    font-weight: 500;
+    color: #efefef;
+    flex-shrink: 0;
+}
+
+.cyAmountNumberInput {
+    font-size: clamp(38px, 13vw, 120px);
+    line-height: 0.9;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    font-family: Manrope, sans-serif;
+    color: #8f8f8f;
+    min-width: 2ch;
+    max-width: 80vw;
+    flex-shrink: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    -webkit-appearance: none;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    text-align: left;
+}
+
+.cyAmountNumberInput::placeholder {
+    color: #676767;
+}
+
+.cyAmountNumberInput.isInvalid {
+    color: #f1a8a4;
+}
+
+/* Sobreescribe la regla anti-zoom de iOS en Blank.aspx (.rock-blank input:not(...)... = especificidad 0,8,1).
+   Agregar .cyAmountNumberInput sube la especificidad a 0,9,1 para que nuestro font-size gane. */
+@media (max-width: 991px) {
+    .rock-blank input.cyAmountNumberInput:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]) {
+        font-size: clamp(38px, 13vw, 120px) !important;
+    }
+}
+
+.cyHeroControls {
+    margin: 12px auto 0;
+    width: 100%;
+    max-width: 420px;
+    padding: 0 16px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+}
+
+.cyCurrencySwitch {
+    background: #111111;
+    border: 1px solid #3e3e3e;
+    border-radius: var(--cy-radius-pill);
+    padding: 3px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    width: 100%;
+}
+
+.cyCurrencyBtn {
+    min-height: 38px;
+    border: 0;
+    border-radius: var(--cy-radius-pill);
+    background: transparent;
+    color: #cfcfcf;
+    font-family: Manrope, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.cyCurrencyBtn.isActive {
+    background: #ffffff;
+    color: #0f0f0f;
+}
+
+.cyAmountAlert {
+    margin: 14px auto 0;
+    width: fit-content;
+    max-width: min(92vw, 380px);
+    border-radius: 10px;
+    background: #f6f6f6;
+    border: 1px solid #d8d8d8;
+    color: var(--cy-danger);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
+.cyStage {
+    width: min(960px, calc(100% - 18px));
+    margin: -36px auto 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+.cyMainCard {
+    background: var(--cy-gray-100);
+    border: 1px solid var(--cy-gray-300);
+    border-radius: var(--cy-radius-xl);
+    box-shadow: 0 14px 28px rgba(8, 8, 8, 0.12);
+}
+
+.cyMainCard {
+    padding: 14px;
+    animation: cyRise 0.35s ease-out both;
+}
+
+.cyPromptRow {
+    margin-bottom: 12px;
+}
+
+.cyPromptLabel {
+    margin: 0 0 7px;
+    font-size: 14px;
+    color: #2e2e2e;
+}
+
+.cySubmenu {
+    margin-bottom: 12px;
+    border: 1px solid #bdbdbd;
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.cySubmenuBtn {
+    border: 0;
+    border-bottom: 1px solid #bdbdbd;
+    background: #ededed;
+    color: #333;
+    min-height: 44px;
+    font-family: Manrope, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cySubmenuBtn:last-child {
+    border-bottom: 0;
+}
+
+.cySubmenuBtn.isActive {
+    background: #000;
+    color: #fff;
+}
+
+.cyGiftToggle {
+    border: 1px solid #bdbdbd;
+    border-radius: 8px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.cyGiftBtn {
+    border: 0;
+    border-bottom: 1px solid #bdbdbd;
+    background: #ececec;
+    color: #3a3a3a;
+    min-height: 50px;
+    font-family: Manrope, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cyGiftBtn:last-child {
+    border-bottom: 0;
+}
+
+.cyGiftBtn.isActive {
+    background: #000;
+    color: #fff;
+}
+
+.cySection {
+    margin-top: 12px;
+    background: #fff;
+    border: 1px solid #d7d7d7;
+    border-radius: var(--cy-radius-lg);
+    padding: 12px;
+}
+
+.cySectionHead {
+    margin-bottom: 10px;
+}
+
+.cySectionTitle {
+    margin: 0;
+    font-family: Manrope, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: #222;
+    text-transform: none;
+}
+
+.cySectionText {
+    margin: 4px 0 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.cyGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.cyWide {
+    grid-column: auto;
+}
+
+.cyField,
+.cyCardField {
+    display: grid;
+    gap: 6px;
+}
+
+.cyField > span,
+.cyCardField > span {
+    color: #4a4a4a;
+    font-family: Manrope, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyField .form-control,
+.cyInput {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #bfbfbf;
+    border-radius: 10px;
+    background: #fff;
+    color: #1e1e1e;
+    font-size: 14px;
+    padding: 10px 12px;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cyField .form-control:focus,
+.cyInput:focus {
+    outline: none;
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.cyField .form-control.isInvalid {
+    border-color: #dc6e66;
+}
+
+.cyCardInputs {
+    display: grid;
+    gap: 10px;
+}
+
+.cyCardRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+}
+
+.cyInputWrap {
+    border: 1px solid #bfbfbf;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.cyInputWrap:focus-within {
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.cyInputWrap.isInvalid {
+    border-color: #dc6e66;
+}
+
+.cyInputWrap .cyInput {
+    border: 0;
+    box-shadow: none;
+    min-height: 42px;
+    padding: 0;
+}
+
+.cyCardBrandTag {
+    flex: 0 0 auto;
+    border-radius: var(--cy-radius-pill);
+    border: 1px solid #bfc6cf;
+    background: #edf1f7;
+    color: #405061;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 7px;
+}
+
+.cyCardBrandTag.brand-visa {
+    background: #eaf1ff;
+    border-color: #bcd2ff;
+    color: #1e44a8;
+}
+
+.cyCardBrandTag.brand-mastercard {
+    background: #fff1e8;
+    border-color: #ffd7c2;
+    color: #9a3412;
+}
+
+.cyCardBrandTag.brand-amex {
+    background: #e8fbff;
+    border-color: #b7effa;
+    color: #0f6f88;
+}
+
+.cyCardBrandTag.brand-discover {
+    background: #fff4ec;
+    border-color: #fed7aa;
+    color: #c2410c;
+}
+
+.cyFieldHint {
+    color: #727272;
+    font-size: 12px;
+}
+
+.cyFieldError {
+    color: var(--cy-danger);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cyPreviewBar {
+    margin-top: 12px;
+    border-radius: 12px;
+    border: 1px solid #cecece;
+    background: #fff;
+    padding: 10px 12px;
+    display: grid;
+    gap: 3px;
+}
+
+.cyPreviewBar span {
+    color: #4e4e4e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.cyPreviewBar strong {
+    color: #1d1d1d;
+    font-size: 15px;
+    font-family: Manrope, sans-serif;
+    font-weight: 800;
+}
+
+.cyPreviewBar small {
+    color: #5f5f5f;
+    font-size: 12px;
+}
+
+.cyActions {
+    margin-top: 14px;
+    display: grid;
+    gap: 8px;
+}
+
+.cyActions .btn-primary,
+.cyActions .rock-button.btn-primary {
+    width: 100%;
+    min-height: 56px;
+    border-radius: var(--cy-radius-pill) !important;
+    border: 1px solid #000 !important;
+    background: #000 !important;
+    color: #fff !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 32px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.01em;
+    padding: 8px 20px !important;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.cyActions .btn-primary:hover,
+.cyActions .rock-button.btn-primary:hover {
+    background: #101010 !important;
+}
+
+.cyActionMeta {
+    margin: 0;
+    color: #5e5e5e;
+    font-size: 12px;
+}
+
+.cyAlert {
+    margin-top: 10px;
+}
+
+.cyResult {
+    margin-top: 10px;
+    border: 1px solid #d0d0d0;
+    border-radius: 12px;
+    background: #f8f8f8;
+    padding: 10px;
+    display: grid;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.cyHistoryCard {
+    border: 1px solid #d7d7d7;
+    border-radius: 12px;
+    background: #fff;
+    padding: 12px;
+}
+
+.cyHistoryTitle {
+    margin: 0;
+    font-family: Manrope, sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    color: #242424;
+    text-transform: none;
+}
+
+.cyHistoryPanel {
+    margin-top: 12px;
+}
+
+.cyHistoryHeader {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.cyHistoryCard .btn-default,
+.cyHistoryCard .rock-button.btn-default {
+    border-radius: var(--cy-radius-pill) !important;
+    border: 1px solid #b6b6b6 !important;
+    background: #fff !important;
+    color: #262626 !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding: 7px 14px !important;
+}
+
+.cyHistoryTableWrap {
+    overflow-x: auto;
+    border: 1px solid #dfdfdf;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.cyHistoryTable {
+    margin-bottom: 0;
+    min-width: 720px;
+    font-size: 12px;
+}
+
+.cyHistoryTable thead th {
+    background: #f2f2f2;
+    border-bottom: 1px solid #dfdfdf;
+    color: #3a3a3a;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.cyStatusBadge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--cy-radius-pill);
+    padding: 2px 8px;
+    border: 1px solid #d1d5db;
+    font-family: Manrope, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyStatusBadge.isGood {
+    background: #ecfdf3;
+    color: #067647;
+    border-color: #abe7c0;
+}
+
+.cyStatusBadge.isBad {
+    background: #fef3f2;
+    color: #b42318;
+    border-color: #fecdc9;
+}
+
+.cyStatusBadge.isNeutral {
+    background: #f3f4f6;
+    color: #344054;
+    border-color: #d4d8df;
+}
+
+.cyStatusCode {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+    font-size: 11px;
+}
+
+.cyEmpty {
+    color: #666;
+    font-size: 13px;
+}
+
+@keyframes cyRise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Estilos del flujo de recibo fiscal (NIT) */
+.cyReceiptSection {
+    background: #fafafa; /* Fondo ligeramente distinto para diferenciar la sección */
+}
+
+.cyReceiptToggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.cyReceiptText {
+    flex: 1;
+}
+
+.cyReceiptTitle {
+    margin: 0 0 2px;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #222;
+}
+
+.cyReceiptDesc {
+    margin: 0;
+    color: #666;
+    font-size: 13px;
+}
+
+.cySwitch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.cySwitch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.cySlider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #d1d5db;
+    transition: .3s;
+    border-radius: 26px;
+}
+
+.cySlider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.cySwitch input:checked + .cySlider {
+    background-color: #000;
+}
+
+.cySwitch input:checked + .cySlider:before {
+    transform: translateX(20px);
+}
+
+.cyReceiptForm {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #d7d7d7;
+    animation: cyFadeIn 0.3s ease;
+}
+
+.cyNitRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.cyNitRow > label {
+    margin-bottom: 0 !important;
+}
+
+.cyNitInput {
+    flex: 1;
+}
+
+.cyNitInput input {
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cyValidateBtn {
+    height: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 10px !important;
+    border: 1px solid #000 !important;
+    background: #000 !important;
+    color: #fff !important;
+    font-family: Manrope, sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    padding: 0 20px !important;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.cyValidateBtn:hover {
+    background: #1a1a1a !important;
+}
+
+.cyValidateBtn:disabled {
+    background: #9ca3af !important;
+    border-color: #9ca3af !important;
+    cursor: not-allowed;
+}
+
+.cyNitResult {
+    display: grid;
+    gap: 10px;
+}
+
+.cyNitResult input {
+    background: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+    border-color: #e5e7eb;
+}
+
+/* Overlays modales (carga y éxito) */
+.cyStateOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: cyFadeIn 0.3s ease;
+}
+
+.cyStateModal {
+    background: #fff;
+    border-radius: var(--cy-radius-xl);
+    padding: 34px 24px;
+    width: min(100%, 380px);
+    text-align: center;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cyStateTitle {
+    margin: 20px 0 8px;
+    font-size: 22px;
+    font-weight: 800;
+    font-family: Manrope, sans-serif;
+    color: #111;
+}
+
+.cyStateText {
+    margin: 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.cySpinner {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto;
+    border: 5px solid #eaeaea;
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: cySpin 0.9s linear infinite;
+}
+
+.cySuccessIcon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto;
+    background: #ecfdf3;
+    color: #067647;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cySuccessIcon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.cyStateActions {
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cyStateBtnPrimary,
+.cyStateBtnSecondary {
+    width: 100%;
+    min-height: 52px;
+    border-radius: var(--cy-radius-pill);
+    font-weight: 700;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+    border: 0;
+    transition: all 0.2s;
+}
+
+.cyStateBtnPrimary {
+    background: #000;
+    color: #fff;
+    border: 1px solid #000;
+}
+.cyStateBtnPrimary:hover {
+    background: #1a1a1a;
+}
+.cyStateBtnSecondary {
+    background: #fff;
+    color: #111;
+    border: 1px solid #dcdcdc;
+}
+.cyStateBtnSecondary:hover {
+    background: #f0f0f0;
+}
+
+@keyframes cyFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes cyScaleUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cySpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (min-width: 680px) {
+    .cyWrap {
+        background: linear-gradient(#000 0 480px, #ececec 480px 100%);
+    }
+
+    .cyTopBar {
+        padding: 16px 20px;
+    }
+
+    .cyAmountHero {
+        padding-bottom: 76px;
+    }
+
+    .cySubmenu {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .cySubmenuBtn {
+        border-bottom: 0;
+        border-right: 1px solid #bdbdbd;
+    }
+
+    .cySubmenuBtn:last-child {
+        border-right: 0;
+    }
+
+    .cyGiftToggle {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .cyGiftBtn {
+        border-bottom: 0;
+        border-right: 1px solid #bdbdbd;
+    }
+
+    .cyGiftBtn:last-child {
+        border-right: 0;
+    }
+
+    .cyGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cyWide {
+        grid-column: 1 / span 2;
+    }
+
+    .cyCardRow {
+        grid-template-columns: 1.2fr 1fr;
+    }
+}
+
+@media (min-width: 1080px) {
+    .cyMainCard {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 575px) {
+    main.container-fluid,
+    .zone-instance,
+    .block-instance,
+    .obsidian-block {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    .cyWrap {
+        border-radius: 0;
+    }
+
+    .cyStage {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+@media (max-width: 460px) {
+    .cyTopLogo {
+        width: 40px;
+        height: 40px;
+    }
+
+    .cyTopName {
+        font-size: 17px;
+    }
+
+    .cyActions .btn-primary,
+    .cyActions .rock-button.btn-primary {
+        font-size: 28px !important;
+    }
+}
+
+.cyDropdown {
+    position: relative;
+}
+
+.cyDropdownTrigger {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #bfbfbf;
+    border-radius: 10px;
+    background: #fff;
+    color: #1e1e1e;
+    font-size: 14px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cyDropdown.isOpen .cyDropdownTrigger {
+    border-color: #7b7b7b;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+}
+
+.cyDropdown.isInvalid .cyDropdownTrigger {
+    border-color: #dc6e66;
+}
+
+.cyDropdownPlaceholder {
+    color: #9ca3af;
+}
+
+.cyDropdownChevron {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: #6b7280;
+    transition: transform 0.2s ease;
+}
+
+.cyDropdown.isOpen .cyDropdownChevron {
+    transform: rotate(180deg);
+}
+
+.cyDropdownMenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    animation: cyFadeIn 0.15s ease;
+}
+
+.cyDropdownItem {
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-bottom: 1px solid #f3f4f6;
+    background: #fff;
+    color: #1e1e1e;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.cyDropdownItem:last-child {
+    border-bottom: 0;
+}
+
+.cyDropdownItem:hover {
+    background: #f9fafb;
+}
+
+.cyDropdownItem.isSelected {
+    background: #f0fdf4;
+    color: #067647;
+}
+
+.cyAccountCheck {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+/* Modal de confirmación */
+.cyConfirmOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    animation: cyFadeIn 0.2s ease;
+}
+
+@media (min-width: 576px) {
+    .cyConfirmOverlay {
+        align-items: center;
+        padding: 20px;
+    }
+}
+
+.cyConfirmModal {
+    background: #fff;
+    border-radius: 22px 22px 0 0;
+    padding: 28px 20px 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
+    animation: cySlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+}
+
+@media (min-width: 576px) {
+    .cyConfirmModal {
+        border-radius: 22px;
+        padding: 32px 28px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
+        animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+}
+
+@keyframes cySlideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.cyConfirmTitle {
+    font-family: Manrope, sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f0f0f;
+    margin: 0 0 4px;
+}
+
+.cyConfirmSubtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 20px;
+}
+
+.cyConfirmRows {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.cyConfirmRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.cyConfirmRow:last-child {
+    border-bottom: 0;
+}
+
+.cyConfirmRowHighlight {
+    background: #f9fafb;
+}
+
+.cyConfirmLabel {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.cyConfirmValue {
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
+    text-align: right;
+}
+
+.cyConfirmAmount {
+    font-family: Manrope, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f0f0f;
+}
+
+.cyConfirmActions {
+    display: grid;
+    gap: 10px;
+}
+
+.cyConfirmSubmit {
+    width: 100%;
+    min-height: 52px;
+    border: 0;
+    border-radius: 999px;
+    background: #0f0f0f;
+    color: #fff;
+    font-family: Manrope, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cyConfirmSubmit:hover {
+    background: #333;
+}
+
+.cyConfirmSubmit:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+.cyConfirmCancel {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    background: transparent;
+    color: #374151;
+    font-family: Manrope, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cyConfirmCancel:hover {
+    background: #f3f4f6;
+}
+
+.cyConfirmNote {
+    margin: 14px 0 0;
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+}
+</style>

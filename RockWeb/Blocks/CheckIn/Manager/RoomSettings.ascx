@@ -20,7 +20,7 @@
                 <div class="panel-heading clearfix">
                     <h1 class="panel-title pull-left">Room Details</h1>
                     <div class="pull-right">
-                        <Rock:Toggle ID="tglRoom" runat="server" OnText="Open" OffText="Close" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged" />
+                        <Rock:Toggle ID="tglRoom" runat="server" OnText="Abrir" OffText="Cerrar" ButtonSizeCssClass="btn-xs" OnCssClass="btn-success" OffCssClass="btn-danger" OnCheckedChanged="tglRoom_CheckedChanged" />
                     </div>
                 </div>
             </asp:Panel>
