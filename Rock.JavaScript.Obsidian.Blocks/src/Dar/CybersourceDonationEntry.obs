@@ -60,16 +60,15 @@
                             <div class="cyAmountValue">
                                 <span class="cyAmountCurrency">{{ normalizeCurrency(form.currency) === "GTQ" ? "Q" : "$" }}</span>
                                 <input
-                                    v-model="heroAmountInputText"
+                                    :value="heroAmountInputDisplay"
                                     class="cyAmountNumberInput"
                                     :class="{ isInvalid: !!fieldErrors.amount }"
                                     :style="{ width: heroAmountInputWidth }"
                                     type="text"
-                                    inputmode="decimal"
+                                    inputmode="numeric"
                                     placeholder="0.00"
                                     aria-label="Monto de donación"
-                                    @input="onHeroAmountInput"
-                                    @blur="onHeroAmountBlur" />
+                                    @input="onHeroAmountInput" />
                             </div>
                             <div class="cyHeroControls">
                                 <div class="cyCurrencySwitch" role="group" aria-label="Seleccionar moneda">
@@ -118,11 +117,11 @@
 
                                     <div class="cyGrid">
                                         <div class="cyField cyWide">
-                                            <span>Cuenta</span>
+                                            <span>Tipo</span>
                                             <div class="cyDropdown" :class="{ isInvalid: !!fieldErrors.accountId, isOpen: accountDropdownOpen }" v-click-outside="() => accountDropdownOpen = false">
                                                 <button type="button" class="cyDropdownTrigger" @click="accountDropdownOpen = !accountDropdownOpen">
                                                     <span :class="{ cyDropdownPlaceholder: form.accountId === 0 }">
-                                                        {{ form.accountId === 0 ? 'Selecciona una cuenta...' : accounts.find(a => a.id === form.accountId)?.publicName }}
+                                                        {{ form.accountId === 0 ? 'Selecciona un tipo...' : accounts.find(a => a.id === form.accountId)?.publicName }}
                                                     </span>
                                                     <svg class="cyDropdownChevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                                         <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
@@ -310,11 +309,11 @@
                                                 maxlength="200"
                                                 inputmode="email"
                                                 autocomplete="email"
-                                                :placeholder="config.notLogged ? 'tu@correo.com' : 'Correo de tu perfil'"
-                                                :readonly="!config.notLogged && !!config.currentPersonEmail"
-                                                :disabled="!config.notLogged && !!config.currentPersonEmail"
+                                                placeholder="tu@correo.com"
                                                 @input="fieldErrors.donorEmail = ''" />
-                                            <small class="cyFieldHint">Nota: A este correo se enviará tu confirmación y recibo de donación.</small>
+                                            <small class="cyFieldHint">
+                                                Nota: A este correo se enviará tu confirmación de donación<span v-if="form.wantsReceipt && form.nitName"> y recibo de donación</span>.
+                                            </small>
                                             <small v-if="fieldErrors.donorEmail" class="cyFieldError">{{ fieldErrors.donorEmail }}</small>
                                         </label>
                                     </div>
@@ -343,36 +342,19 @@
 
                                 <div v-if="history.length === 0" class="cyEmpty">No se encontraron pagos Cybersource.</div>
 
-                                <div v-else class="cyHistoryTableWrap">
-                                    <table class="table table-bordered cyHistoryTable">
-                                        <thead>
-                                            <tr>
-                                                <th>Fecha</th>
-                                                <th>Monto</th>
-                                                <th>Moneda</th>
-                                                <th>Cuenta</th>
-                                                <th>Estado</th>
-                                                <th>Ref</th>
-                                                <th>Audit</th>
-                                                <th>Tarjeta</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="item in history" :key="item.transactionId">
-                                                <td>{{ formatDate(item.transactionDateTime) }}</td>
-                                                <td>{{ formatMoney(item.amount, item.currency) }}</td>
-                                                <td>{{ normalizeCurrency(item.currency) }}</td>
-                                                <td>{{ item.accountName || "-" }}</td>
-                                                <td>
-                                                    <span class="cyStatusBadge" :class="statusClass(item.status)">{{ item.status || "-" }}</span>
-                                                    <small class="cyStatusCode">{{ item.responseCode || "-" }}</small>
-                                                </td>
-                                                <td>{{ item.referenceNumber || "-" }}</td>
-                                                <td>{{ item.auditNumber || "-" }}</td>
-                                                <td>{{ item.accountNumberMasked || "-" }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <div v-else class="cyHistoryList">
+                                    <div v-for="item in history" :key="item.transactionId" class="cyHistoryItem">
+                                        <!-- Fila superior: fecha + estado -->
+                                        <div class="cyHistoryItemTop">
+                                            <span class="cyHistoryDate">{{ formatDate(item.transactionDateTime) }}</span>
+                                            <span class="cyStatusBadge" :class="statusClass(item.status)">{{ item.status || "-" }}</span>
+                                        </div>
+                                        <!-- Fila media: monto + fondo -->
+                                        <div class="cyHistoryItemMid">
+                                            <span class="cyHistoryAmount">{{ formatMoney(item.amount, item.currency) }}</span>
+                                            <span class="cyHistoryFondo">{{ item.accountName || "-" }}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </section>
                         </section>
@@ -570,15 +552,18 @@ function generateIdemKey(): string {
 // PROPIEDADES COMPUTADAS
 // ========================
 
-// Texto visible en el input hero del monto
-const heroAmountInputText = ref(Number(form.amount || 0).toFixed(2));
+// Valor en centavos — fuente de verdad del monto (comportamiento banco/ATM)
+const centValue = ref(0);
 
-// Ancho dinámico del input hero (en ch) para que se ajuste al contenido
+// Texto visible derivado de centavos: 1234 → "12.34"
+const heroAmountInputDisplay = computed(() =>
+    centValue.value === 0 ? "" : (centValue.value / 100).toFixed(2)
+);
+
+// Ancho dinámico del input hero (en ch)
 const heroAmountInputWidth = computed(() => {
-    const text = String(heroAmountInputText.value || "");
-    // Reservar espacio para decimales (.xx) y evitar reflow al perder foco
-    const effective = text.includes(".") ? text : text + ".00";
-    const widthInCh = Math.min(Math.max(effective.length + 0.5, 4.5), 12);
+    const text = heroAmountInputDisplay.value || "0.00";
+    const widthInCh = Math.min(Math.max(text.length + 0.5, 4.5), 12);
     return `${widthInCh}ch`;
 });
 
@@ -752,7 +737,7 @@ function switchCurrency(currency: string): void {
     if (form.currency === currency) return;
     form.currency = currency;
     form.amount = 0;
-    heroAmountInputText.value = "";
+    centValue.value = 0;
     fieldErrors.currency = "";
     fieldErrors.amount = "";
 }
@@ -774,46 +759,23 @@ function onNitInput(): void {
     form.nitAddress = "";
 }
 
-/** Procesa el input del monto hero: normaliza decimales, limita a 7 dígitos enteros y 2 decimales */
-function onHeroAmountInput(): void {
+/** Comportamiento banco/ATM: los dígitos empujan desde la derecha en centavos.
+ *  Escribir "5" con "12.34" visible → "1.235" → cents=1235 → display "12.35". */
+function onHeroAmountInput(event: Event): void {
     fieldErrors.amount = "";
+    const input = event.target as HTMLInputElement;
 
-    const raw = String(heroAmountInputText.value || "")
-        .replace(",", ".")
-        .replace(/[^\d.]/g, "");
+    // Extraer solo dígitos de lo que el browser tiene ahora
+    const digits = input.value.replace(/\D/g, "");
+    const cents = Math.min(parseInt(digits || "0", 10), 99999999); // máx 999,999.99
 
-    const firstDot = raw.indexOf(".");
-    const normalized = firstDot >= 0
-        ? raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, "")
-        : raw;
+    centValue.value = cents;
+    form.amount = cents / 100;
 
-    const parts = normalized.split(".");
-    const whole = (parts[0] || "").slice(0, 7);
-    const fraction = parts.length > 1 ? (parts[1] || "").slice(0, 2) : "";
-
-    heroAmountInputText.value = parts.length > 1 ? `${whole}.${fraction}` : whole;
-
-    const parsed = Number(heroAmountInputText.value);
-    form.amount = Number.isFinite(parsed) ? parsed : 0;
-}
-
-/** Al perder el foco, formatea el monto con 2 decimales */
-function onHeroAmountBlur(): void {
-    const text = String(heroAmountInputText.value || "").trim();
-    if (!text) {
-        form.amount = 0;
-        return;
-    }
-
-    const parsed = Number(text);
-    if (!Number.isFinite(parsed)) {
-        form.amount = 0;
-        heroAmountInputText.value = "";
-        return;
-    }
-
-    form.amount = parsed;
-    heroAmountInputText.value = parsed.toFixed(2);
+    // Forzar valor formateado y cursor al final
+    const display = cents === 0 ? "" : (cents / 100).toFixed(2);
+    input.value = display;
+    input.setSelectionRange(display.length, display.length);
 }
 
 // ========================
@@ -1039,11 +1001,12 @@ function resetFormSuccess(): void {
     successMessage.value = "";
     lastResult.value = null;
     form.amount = 0;
-    heroAmountInputText.value = "";
+    centValue.value = 0;
     form.note = "";
     clearAllFieldErrors();
     activeSubmenu.value = "donation";
-    idemKey.value = generateIdemKey(); // Clave fresca para el nuevo pago
+    idemKey.value = generateIdemKey();
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /** Navega al historial desde el modal de éxito */
@@ -1094,7 +1057,7 @@ async function validateNit(): Promise<void> {
 // FUNCIONES DE FORMATO
 // ========================
 
-/** Formatea fecha ISO a formato legible local */
+/** Formatea fecha ISO a dd/mm/yyyy */
 function formatDate(value: string): string {
     if (!value) {
         return "-";
@@ -1105,7 +1068,12 @@ function formatDate(value: string): string {
         return value;
     }
 
-    return date.toLocaleString();
+    const d = String(date.getDate()).padStart(2, "0");
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const y = date.getFullYear();
+    const h = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${d}/${m}/${y} ${h}:${min}`;
 }
 
 /** Normaliza el código de moneda a GTQ o USD */
@@ -1769,29 +1737,74 @@ function statusClass(status?: string): string {
     padding: 7px 14px !important;
 }
 
-.cyHistoryTableWrap {
-    overflow-x: auto;
-    border: 1px solid #dfdfdf;
-    border-radius: 10px;
+.cyHistoryList {
+    display: grid;
+    gap: 8px;
+}
+
+.cyHistoryItem {
     background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 6px;
 }
 
-.cyHistoryTable {
-    margin-bottom: 0;
-    min-width: 720px;
+.cyHistoryItemTop {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.cyHistoryDate {
     font-size: 12px;
+    color: #6b7280;
 }
 
-.cyHistoryTable thead th {
-    background: #f2f2f2;
-    border-bottom: 1px solid #dfdfdf;
-    color: #3a3a3a;
+.cyHistoryItemMid {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.cyHistoryAmount {
     font-family: Manrope, sans-serif;
-    font-size: 10px;
+    font-size: 20px;
     font-weight: 800;
+    color: #0f0f0f;
+}
+
+.cyHistoryFondo {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    text-align: right;
+}
+
+.cyHistoryItemBot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 6px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.cyHistoryMeta {
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    white-space: nowrap;
+    color: #9ca3af;
+}
+
+.cyHistoryMetaVal {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    font-family: 'Courier New', monospace;
 }
 
 .cyStatusBadge {

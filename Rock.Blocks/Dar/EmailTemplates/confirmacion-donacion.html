@@ -1,0 +1,276 @@
+{% assign currency = Workflow | Attribute:'Currency' %}
+{% assign amount   = Workflow | Attribute:'Amount' %}
+{% assign symbol   = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
+{% assign nit      = Workflow | Attribute:'Nit' %}
+{% assign nitName  = Workflow | Attribute:'NitName' %}
+{% assign nitAddr  = Workflow | Attribute:'NitAddress' %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirmación de donación – DAR</title>
+</head>
+<body style="margin:0;padding:0;background:#ececec;font-family:'Segoe UI',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+
+  <!-- Wrapper -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ececec;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+
+          <!-- ══════════════════════════════════
+               HEADER NEGRO
+          ══════════════════════════════════ -->
+          <tr>
+            <td style="background:#000000;border-radius:22px 22px 0 0;padding:20px 24px 0;">
+
+              <!-- Top bar: logo + badge -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <!-- Logo DAR -->
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="background:#ffffff;border-radius:6px;width:44px;height:44px;text-align:center;vertical-align:middle;">
+                          <span style="font-family:Georgia,'Times New Roman',serif;font-size:11px;font-weight:900;color:#121212;letter-spacing:0.05em;line-height:44px;">DAR</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    <!-- Badge Live/Test -->
+                    {% assign mode = Workflow | Attribute:'Mode' %}
+                    {% if mode == 'live' %}
+                    <span style="display:inline-block;background:#163b28;border:1px solid #2c8b5e;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Live</span>
+                    {% else %}
+                    <span style="display:inline-block;background:#1a2b42;border:1px solid #4d709b;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Test</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Ícono de éxito + monto -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding:32px 0 28px;">
+
+                    <!-- Círculo verde con check -->
+                    <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;">
+                      <tr>
+                        <td width="72" height="72" align="center" valign="middle" style="width:72px;height:72px;background:#ecfdf3;border-radius:50%;font-size:34px;line-height:72px;color:#067647;font-weight:700;">
+                          &#10003;
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Título -->
+                    <p style="margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.01em;">¡Gracias por tu donación!</p>
+                    <p style="margin:0 0 20px;font-size:13px;color:#b0b0b0;letter-spacing:0.01em;">Tu generosidad hace la diferencia.</p>
+
+                    <!-- Monto destacado -->
+                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:54px;font-weight:700;color:#ffffff;line-height:1;letter-spacing:-0.01em;">
+                      <span style="font-size:28px;font-weight:500;color:#d9d9d9;vertical-align:top;line-height:1.6;">{{ symbol }}</span>{{ amount }}
+                    </p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#888888;text-transform:uppercase;letter-spacing:0.1em;">{{ currency }}</p>
+
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+
+          <!-- ══════════════════════════════════
+               CARD BLANCA
+          ══════════════════════════════════ -->
+          <tr>
+            <td style="background:#f3f3f3;border-left:1px solid #d5d5d5;border-right:1px solid #d5d5d5;padding:0 16px;">
+
+              <!-- Tarjeta principal -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #d7d7d7;border-radius:14px;margin:16px 0 0;overflow:hidden;">
+
+                <!-- Section head -->
+                <tr>
+                  <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
+                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:#222222;">Detalles de la transacción</p>
+                  </td>
+                </tr>
+
+                <!-- Fila: Donante -->
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Donante</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ Workflow | Attribute:'DonorName' }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fila: Correo -->
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Correo</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ Workflow | Attribute:'DonorEmail' }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fila: Monto -->
+                <tr>
+                  <td style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Monto</td>
+                        <td align="right" style="font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;color:#0f0f0f;">{{ symbol }}{{ amount }} <span style="font-size:12px;font-weight:500;color:#6b7280;">{{ currency }}</span></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fila: No. de referencia -->
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Referencia</td>
+                        <td align="right" style="font-size:13px;font-weight:500;color:#111827;font-family:'Courier New',monospace;">{{ Workflow | Attribute:'ReferenceNumber' }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fila: Autorización -->
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Autorización</td>
+                        <td align="right" style="font-size:13px;font-weight:500;color:#111827;font-family:'Courier New',monospace;">{{ Workflow | Attribute:'AuthorizationNumber' }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fila: ID transacción -->
+                <tr>
+                  <td style="padding:12px 16px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">ID transacción</td>
+                        <td align="right" style="font-size:13px;font-weight:500;color:#111827;font-family:'Courier New',monospace;">{{ Workflow | Attribute:'ExternalId' }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+              </table>
+
+
+              <!-- ── Sección NIT (solo si hay NIT) ── -->
+              {% if nit != '' and nit != null %}
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #d7d7d7;border-radius:14px;margin:12px 0 0;overflow:hidden;">
+
+                <tr>
+                  <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
+                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:#222222;">Datos de facturación</p>
+                  </td>
+                </tr>
+
+                <!-- NIT -->
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">NIT</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nit }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Nombre / Razón social -->
+                {% if nitName != '' and nitName != null %}
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Razón social</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nitName }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endif %}
+
+                <!-- Dirección -->
+                {% if nitAddr != '' and nitAddr != null %}
+                <tr>
+                  <td style="padding:12px 16px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Dirección</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nitAddr }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endif %}
+
+              </table>
+              {% endif %}
+
+
+              <!-- ── Nota ── -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 16px;">
+                <tr>
+                  <td style="background:#f0fdf4;border:1px solid #abe7c0;border-radius:10px;padding:12px 16px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="vertical-align:top;width:20px;padding-right:8px;font-size:14px;color:#067647;font-weight:700;line-height:1.5;">
+                          &#10003;
+                        </td>
+                        <td style="font-size:13px;color:#065f46;line-height:1.5;">
+                          Tu pago fue procesado exitosamente. Guarda este correo como comprobante de tu donación.
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+
+          <!-- ══════════════════════════════════
+               FOOTER NEGRO
+          ══════════════════════════════════ -->
+          <tr>
+            <td style="background:#000000;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:12px;color:#888888;">Este correo fue enviado a <span style="color:#cccccc;">{{ Workflow | Attribute:'DonorEmail' }}</span></p>
+              <p style="margin:0;font-size:11px;color:#555555;">Si tienes dudas, contáctanos. No respondas a este correo directamente.</p>
+              <p style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">DAR</p>
+            </td>
+          </tr>
+
+
+          <!-- Espacio inferior -->
+          <tr>
+            <td style="height:24px;"></td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

@@ -635,12 +635,10 @@ namespace Rock.Blocks.Dar
                 SavePersonEmail( rockContext, person, bag.donorEmail );
             }
 
-            EnqueueFinancialTransactionWorkflow( AttributeKey.DonationWorkflow, personAliasId, transaction.Id );
-            EnqueueFinancialTransactionWorkflow(
-                AttributeKey.ReceiptWorkflow,
-                personAliasId,
-                transaction.Id,
-                BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, transactionCurrency ) );
+            var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, transactionCurrency );
+
+            EnqueueFinancialTransactionWorkflow( AttributeKey.DonationWorkflow, personAliasId, transaction.Id, workflowAttributes );
+            EnqueueFinancialTransactionWorkflow( AttributeKey.ReceiptWorkflow, personAliasId, transaction.Id, workflowAttributes );
 
             return transaction.Id;
         }
