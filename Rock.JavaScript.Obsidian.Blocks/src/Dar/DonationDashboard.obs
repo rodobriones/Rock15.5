@@ -1,0 +1,504 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <Panel type="block" title="Donation Dashboard">
+        <!-- ======================================
+             FILTER PANEL
+             ====================================== -->
+        <div class="panel panel-default mb-3">
+            <div class="panel-heading" style="cursor:pointer;" @click="showFilters = !showFilters">
+                <h3 class="panel-title">
+                    <i :class="showFilters ? 'fa fa-chevron-up' : 'fa fa-chevron-down'" class="mr-1"></i>
+                    Filtros
+                    <span v-if="hasActiveFilters" class="label label-info ml-2">activos</span>
+                </h3>
+            </div>
+            <div v-show="showFilters" class="panel-body">
+                <div class="row">
+                    <div class="col-sm-3">
+                        <div class="form-group">
+                            <label class="control-label">Desde</label>
+                            <input type="date" class="form-control" v-model="filters.dateFrom" />
+                        </div>
+                    </div>
+                    <div class="col-sm-3">
+                        <div class="form-group">
+                            <label class="control-label">Hasta</label>
+                            <input type="date" class="form-control" v-model="filters.dateTo" />
+                        </div>
+                    </div>
+                    <div class="col-sm-3">
+                        <div class="form-group">
+                            <label class="control-label">NIT</label>
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="Buscar por NIT..."
+                                   v-model="filters.nitFilter"
+                                   @keyup.enter="search" />
+                        </div>
+                    </div>
+                    <div class="col-sm-3 flex align-items-end">
+                        <div class="form-group" style="margin-top:auto">
+                            <label class="control-label d-block">&nbsp;</label>
+                            <button class="btn btn-primary btn-block" @click="search" :disabled="isLoading">
+                                <i v-if="isLoading" class="fa fa-spinner fa-spin mr-1"></i>
+                                <i v-else class="fa fa-search mr-1"></i>
+                                Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4">
+                        <div class="form-group">
+                            <label class="control-label">Cuentas <span class="text-muted small">(ctrl+click para múltiples)</span></label>
+                            <select class="form-control" multiple style="height:90px" v-model="filters.accountGuids">
+                                <option v-for="a in config.filterOptions.accounts" :key="a.value" :value="a.value">
+                                    {{ a.text }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-sm-3">
+                        <div class="form-group">
+                            <label class="control-label">Moneda</label>
+                            <select class="form-control" multiple style="height:90px" v-model="filters.currencyValueIds">
+                                <option v-for="c in config.filterOptions.currencies" :key="c.value" :value="Number(c.value)">
+                                    {{ c.text }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-sm-2 flex align-items-end">
+                        <div class="form-group" style="margin-top:auto">
+                            <label class="control-label d-block">&nbsp;</label>
+                            <button class="btn btn-default btn-block btn-sm" @click="clearFilters" title="Limpiar filtros">
+                                <i class="fa fa-times"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================
+             GROUPBY + RESULTS COUNT
+             ====================================== -->
+        <div class="d-flex align-items-center flex-wrap mb-3" style="gap:8px">
+            <span class="text-sm text-muted font-weight-semibold mr-2">Agrupar por:</span>
+            <div class="btn-group btn-group-sm" role="group">
+                <button v-for="opt in groupByOptions"
+                        :key="opt.value"
+                        type="button"
+                        class="btn"
+                        :class="groupBy === opt.value ? 'btn-primary' : 'btn-default'"
+                        @click="groupBy = opt.value">
+                    {{ opt.label }}
+                </button>
+            </div>
+            <span v-if="transactions.length > 0" class="ml-auto text-muted text-sm">
+                {{ transactions.length }} resultado(s)
+            </span>
+        </div>
+
+        <!-- ======================================
+             LOADING
+             ====================================== -->
+        <div v-if="isLoading" class="text-center py-5">
+            <i class="fa fa-spinner fa-spin fa-2x text-muted"></i>
+            <p class="text-muted mt-2">Cargando transacciones...</p>
+        </div>
+
+        <!-- ======================================
+             EMPTY STATE
+             ====================================== -->
+        <div v-else-if="!hasSearched" class="text-center py-5 text-muted">
+            <i class="fa fa-search fa-2x mb-2 d-block"></i>
+            <p>Configure los filtros y presione <strong>Buscar</strong> para ver transacciones.</p>
+        </div>
+
+        <div v-else-if="transactions.length === 0" class="text-center py-5 text-muted">
+            <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
+            <p>No se encontraron transacciones con los filtros seleccionados.</p>
+        </div>
+
+        <!-- ======================================
+             RESULTS TABLE
+             ====================================== -->
+        <div v-else>
+            <div class="table-responsive">
+                <table class="table table-condensed table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th style="width:100px">Fecha</th>
+                            <th>Persona</th>
+                            <th>NIT</th>
+                            <th>Cuenta(s)</th>
+                            <th class="text-right" style="width:130px">Total</th>
+                            <th style="width:60px">Moneda</th>
+                            <th style="width:120px">Código</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template v-for="(group, groupKey) in groupedTransactions" :key="String(groupKey)">
+                            <!-- Group header row -->
+                            <tr v-if="groupBy !== 'none'" class="group-header">
+                                <td colspan="4">
+                                    <strong>{{ groupKey }}</strong>
+                                    <span class="text-muted small ml-2">{{ group.length }} transacción(es)</span>
+                                </td>
+                                <td colspan="3" class="text-right">
+                                    <span v-for="(subtotal, currency) in getGroupSubtotals(group)"
+                                          :key="currency"
+                                          class="label label-default ml-1">
+                                        {{ subtotal }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <!-- Transaction rows -->
+                            <tr v-for="txn in group"
+                                :key="txn.id"
+                                :class="expandedIds.has(txn.id) ? 'active' : ''"
+                                style="cursor:pointer"
+                                @click="toggleExpand(txn.id)">
+                                <td class="text-nowrap">{{ txn.transactionDateTime }}</td>
+                                <td>{{ txn.personName }}</td>
+                                <td class="text-muted small">{{ txn.nits }}</td>
+                                <td class="text-muted small">{{ txn.details.map(d => d.accountName).join(', ') }}</td>
+                                <td class="text-right font-weight-bold text-nowrap">{{ txn.formattedTotal }}</td>
+                                <td><span class="label label-default">{{ txn.currencyLabel }}</span></td>
+                                <td class="text-muted small text-nowrap">{{ txn.transactionCode }}</td>
+                            </tr>
+                            <!-- Expanded detail rows: v-for and v-if on separate elements to keep proper scope -->
+                            <template v-for="txn2 in group" :key="`detail-${txn2.id}`">
+                                <template v-if="expandedIds.has(txn2.id) && txn2.details.length > 1">
+                                    <tr v-for="det in txn2.details"
+                                        :key="`${txn2.id}-${det.accountName}`"
+                                        class="detail-row">
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td class="text-muted pl-4">
+                                            <i class="fa fa-angle-right mr-1"></i>{{ det.accountName }}
+                                        </td>
+                                        <td class="text-right text-muted">{{ det.formattedAmount }}</td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                </template>
+                            </template>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ======================================
+                 CURRENCY TOTALS FOOTER
+                 ====================================== -->
+            <div class="well well-sm mt-2 d-flex flex-wrap" style="gap:16px">
+                <div v-for="(total, currency) in currencyTotals" :key="currency" class="d-flex align-items-center">
+                    <span class="text-muted text-sm mr-1">Total {{ currency }}:</span>
+                    <strong class="text-lg">{{ total }}</strong>
+                </div>
+            </div>
+
+            <!-- Export button -->
+            <div v-if="config.allowExport" class="text-right mt-2">
+                <button class="btn btn-sm btn-default" @click="exportCsv">
+                    <i class="fa fa-download mr-1"></i> Exportar CSV
+                </button>
+            </div>
+        </div>
+    </Panel>
+</template>
+
+<style>
+.group-header td {
+    background-color: #f0f4f8 !important;
+    font-size: 13px;
+    border-top: 2px solid #c8d4e0 !important;
+}
+
+.detail-row td {
+    background-color: #fafafa;
+    font-size: 12px;
+}
+
+.text-nowrap {
+    white-space: nowrap;
+}
+
+.text-lg {
+    font-size: 15px;
+}
+</style>
+
+<script setup lang="ts">
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import { computed, ref } from "vue";
+
+    // ─── Types ────────────────────────────────────────────────────────────────
+
+    interface ListItem {
+        value: string;
+        text: string;
+    }
+
+    interface FilterOptions {
+        accounts: ListItem[];
+        currencies: ListItem[];
+        orgCurrencySymbol: string;
+    }
+
+    interface InitConfig {
+        allowExport: boolean;
+        filterOptions: FilterOptions;
+    }
+
+    interface DonationFilters {
+        dateFrom: string;
+        dateTo: string;
+        nitFilter: string;
+        accountGuids: string[];
+        currencyValueIds: number[];
+        personAliasGuid: string | null;
+    }
+
+    interface TransactionDetail {
+        accountName: string;
+        amount: number;
+        formattedAmount: string;
+    }
+
+    interface Transaction {
+        id: number;
+        transactionDateTime: string;
+        personName: string;
+        personAliasGuid: string | null;
+        nits: string;
+        formattedTotal: string;
+        totalAmount: number;
+        foreignCurrencyCodeValueId: number | null;
+        currencyLabel: string;
+        transactionCode: string;
+        summary: string;
+        details: TransactionDetail[];
+    }
+
+    // ─── Setup ────────────────────────────────────────────────────────────────
+
+    const config = useConfigurationValues<InitConfig>();
+    const invokeBlockAction = useInvokeBlockAction();
+
+    // ─── State ────────────────────────────────────────────────────────────────
+
+    const showFilters = ref(true);
+    const isLoading = ref(false);
+    const hasSearched = ref(false);
+    const transactions = ref<Transaction[]>([]);
+    const expandedIds = ref<Set<number>>(new Set());
+
+    const groupBy = ref<GroupByValue>("none");
+
+    const filters = ref<DonationFilters>({
+        dateFrom: "",
+        dateTo: "",
+        nitFilter: "",
+        accountGuids: [],
+        currencyValueIds: [],
+        personAliasGuid: null,
+    });
+
+    type GroupByValue = "none" | "person" | "nit" | "currency" | "account";
+
+    const groupByOptions: Array<{ value: GroupByValue; label: string }> = [
+        { value: "none", label: "Ninguno" },
+        { value: "person", label: "Persona" },
+        { value: "nit", label: "NIT" },
+        { value: "currency", label: "Moneda" },
+        { value: "account", label: "Cuenta" },
+    ];
+
+    // ─── Computed ─────────────────────────────────────────────────────────────
+
+    const hasActiveFilters = computed(() => {
+        return !!filters.value.dateFrom
+            || !!filters.value.dateTo
+            || !!filters.value.nitFilter
+            || filters.value.accountGuids.length > 0
+            || filters.value.currencyValueIds.length > 0;
+    });
+
+    /** Transactions grouped by the selected dimension. */
+    const groupedTransactions = computed((): Record<string, Transaction[]> => {
+        if (groupBy.value === "none") {
+            return { "": transactions.value };
+        }
+
+        const groups: Record<string, Transaction[]> = {};
+
+        for (const txn of transactions.value) {
+            let key: string;
+
+            switch (groupBy.value) {
+                case "person":
+                    key = txn.personName || "(Sin persona)";
+                    break;
+                case "nit":
+                    key = txn.nits || "(Sin NIT)";
+                    break;
+                case "currency":
+                    key = txn.currencyLabel || "(Sin moneda)";
+                    break;
+                case "account":
+                    key = txn.details.map(d => d.accountName).join(", ") || "(Sin cuenta)";
+                    break;
+                default:
+                    key = "";
+            }
+
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(txn);
+        }
+
+        return groups;
+    });
+
+    /** Formatted totals per currency (for the footer). */
+    const currencyTotals = computed((): Record<string, string> => {
+        const totalsMap: Record<string, number> = {};
+        const formattedTotals: Record<string, string> = {};
+
+        for (const txn of transactions.value) {
+            const lbl = txn.currencyLabel;
+            totalsMap[lbl] = (totalsMap[lbl] ?? 0) + txn.totalAmount;
+        }
+
+        for (const [lbl, amount] of Object.entries(totalsMap)) {
+            // Use the first transaction's formattedTotal as a reference for currency formatting.
+            // We sum raw amounts and display using the label; formatted total from backend per txn.
+            // For footer totals, sum the raw amounts and let backend format — here we sum and display.
+            // Since we don't have a frontend formatter, we show the sum with the currency label.
+            formattedTotals[lbl] = formatCurrencySimple(amount, lbl);
+        }
+
+        return formattedTotals;
+    });
+
+    // ─── Functions ────────────────────────────────────────────────────────────
+
+    /** Format a number with 2 decimal places and the currency label. */
+    function formatCurrencySimple(amount: number, currencyLabel: string): string {
+        const formatted = amount.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        // Prepend symbol-like characters for known currencies
+        if (currencyLabel === "$" || currencyLabel === "USD") return `$${formatted}`;
+        if (currencyLabel === "Q" || currencyLabel === "GTQ") return `Q${formatted}`;
+        return `${currencyLabel} ${formatted}`;
+    }
+
+    /** Compute per-currency subtotals for a group of transactions (for group header badges). */
+    function getGroupSubtotals(group: Transaction[]): Record<string, string> {
+        const totals: Record<string, number> = {};
+        for (const txn of group) {
+            totals[txn.currencyLabel] = (totals[txn.currencyLabel] ?? 0) + txn.totalAmount;
+        }
+        const result: Record<string, string> = {};
+        for (const [lbl, amount] of Object.entries(totals)) {
+            result[lbl] = formatCurrencySimple(amount, lbl);
+        }
+        return result;
+    }
+
+    /** Toggle expand/collapse of transaction detail rows. */
+    function toggleExpand(id: number): void {
+        if (expandedIds.value.has(id)) {
+            expandedIds.value.delete(id);
+        } else {
+            expandedIds.value.add(id);
+        }
+        // Trigger reactivity (Set mutations aren't tracked natively)
+        expandedIds.value = new Set(expandedIds.value);
+    }
+
+    /** Execute search with current filters. */
+    async function search(): Promise<void> {
+        isLoading.value = true;
+        expandedIds.value = new Set();
+
+        try {
+            const response = await invokeBlockAction<Transaction[]>("GetTransactions", {
+                filter: {
+                    DateFrom: filters.value.dateFrom || null,
+                    DateTo: filters.value.dateTo || null,
+                    AccountGuids: filters.value.accountGuids,
+                    CurrencyValueIds: filters.value.currencyValueIds,
+                    PersonAliasGuid: filters.value.personAliasGuid || null,
+                    NitFilter: filters.value.nitFilter || null,
+                }
+            });
+
+            if (response.isSuccess && response.data) {
+                transactions.value = response.data;
+            } else {
+                transactions.value = [];
+                console.error("Error loading transactions:", response.errorMessage);
+            }
+        } catch (err) {
+            transactions.value = [];
+            console.error("Exception loading transactions:", err);
+        } finally {
+            isLoading.value = false;
+            hasSearched.value = true;
+        }
+    }
+
+    /** Clear all filters and results. */
+    function clearFilters(): void {
+        filters.value = {
+            dateFrom: "",
+            dateTo: "",
+            nitFilter: "",
+            accountGuids: [],
+            currencyValueIds: [],
+            personAliasGuid: null,
+        };
+        transactions.value = [];
+        hasSearched.value = false;
+        expandedIds.value = new Set();
+    }
+
+    /** Export visible transactions to a CSV file. */
+    function exportCsv(): void {
+        const rows: string[][] = [
+            ["Fecha", "Persona", "NIT", "Cuenta(s)", "Total", "Moneda", "Código", "Resumen"]
+        ];
+
+        for (const group of Object.values(groupedTransactions.value)) {
+            for (const txn of group) {
+                rows.push([
+                    txn.transactionDateTime,
+                    txn.personName,
+                    txn.nits,
+                    txn.details.map(d => d.accountName).join(" | "),
+                    String(txn.totalAmount),
+                    txn.currencyLabel,
+                    txn.transactionCode,
+                    txn.summary,
+                ]);
+            }
+        }
+
+        const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `donaciones_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+</script>
