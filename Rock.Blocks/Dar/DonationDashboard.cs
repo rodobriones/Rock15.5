@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
 using System.Linq;
 using System.Text;
 
@@ -138,13 +139,20 @@ namespace Rock.Blocks.Dar
                 .ToList();
 
             var orgCurrencyInfo = new RockCurrencyCodeInfo();
+            var orgCurrencyDvId = orgCurrencyInfo.CurrencyCodeDefinedValueId;
+            var orgCurrencyCode = orgCurrencyInfo.CurrencyCode ?? orgCurrencyInfo.Symbol ?? "";
+
             var currencies = new List<ListItemBag>
             {
-                new ListItemBag { Value = "0", Text = $"Org. ({orgCurrencyInfo.Symbol})" }
+                new ListItemBag { Value = "0", Text = $"Org. ({orgCurrencyCode})" }
             };
 
             foreach ( var id in usedCurrencyIds )
             {
+                // Skip the org's own currency — it's already covered by the "Org." entry to avoid duplicates
+                if ( id == orgCurrencyDvId )
+                    continue;
+
                 var dv = DefinedValueCache.Get( id );
                 if ( dv != null )
                     currencies.Add( new ListItemBag { Value = id.ToString(), Text = dv.Value } );
@@ -158,17 +166,25 @@ namespace Rock.Blocks.Dar
             };
         }
 
-        private int? GetNitAttributeId()
+        /// <summary>
+        /// Extracts the NIT value from a transaction Summary string.
+        /// Summary format built by CybersourceDonationEntry: "Note | NIT: 12345678 | NIT Nombre: Juan | Ref: ABC | Auth: XYZ"
+        /// </summary>
+        private static string ExtractNitFromSummary( string summary )
         {
-            var nitAttributeKey = GetAttributeValue( AttributeKey.PersonNitAttributeKey );
-            if ( string.IsNullOrWhiteSpace( nitAttributeKey ) )
-                return null;
+            if ( string.IsNullOrEmpty( summary ) )
+                return "";
 
-            var personEntityTypeId = EntityTypeCache.GetId<Person>();
-            return AttributeCache.All()
-                .Where( a => a.EntityTypeId == personEntityTypeId && a.Key == nitAttributeKey )
-                .Select( a => ( int? ) a.Id )
-                .FirstOrDefault();
+            var marker = "NIT: ";
+            var idx = summary.IndexOf( marker, StringComparison.OrdinalIgnoreCase );
+            if ( idx < 0 )
+                return "";
+
+            var start = idx + marker.Length;
+            var sepIdx = summary.IndexOf( " | ", start, StringComparison.Ordinal );
+            return sepIdx >= 0
+                ? summary.Substring( start, sepIdx - start ).Trim()
+                : summary.Substring( start ).Trim();
         }
 
         #endregion
@@ -187,193 +203,222 @@ namespace Rock.Blocks.Dar
         [BlockAction( "GetTransactions" )]
         public BlockActionResult GetTransactions( DonationFilterBag filter )
         {
-            if ( filter == null )
-                filter = new DonationFilterBag();
+            using ( var rockContext = new RockContext() )
+            {
+                return ActionOk( GetTransactionRowsInternal( rockContext, filter ) );
+            }
+        }
+
+        [BlockAction( "ExportToExcel" )]
+        public BlockActionResult ExportToExcel( DonationFilterBag filter )
+        {
+            if ( !GetAttributeValue( AttributeKey.AllowExport ).AsBoolean() )
+                return ActionBadRequest( "Exportación no permitida en este bloque." );
 
             using ( var rockContext = new RockContext() )
             {
-                var maxResults = GetAttributeValue( AttributeKey.MaxResults ).AsIntegerOrNull() ?? 500;
-                var contributionTypeId = DefinedValueCache.GetId( Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION.AsGuid() ) ?? 0;
+                var rows = GetTransactionRowsInternal( rockContext, filter );
 
-                var qry = new FinancialTransactionService( rockContext )
-                    .Queryable()
-                    .Where( t => t.TransactionTypeValueId == contributionTypeId );
+                var dt = new DataTable( "Donaciones" );
+                dt.Columns.Add( "Fecha", typeof( string ) );
+                dt.Columns.Add( "Persona", typeof( string ) );
+                dt.Columns.Add( "NIT", typeof( string ) );
+                dt.Columns.Add( "Cuentas", typeof( string ) );
+                dt.Columns.Add( "Total", typeof( string ) );
+                dt.Columns.Add( "Monto", typeof( decimal ) );
+                dt.Columns.Add( "Moneda", typeof( string ) );
+                dt.Columns.Add( "Codigo", typeof( string ) );
+                dt.Columns.Add( "Resumen", typeof( string ) );
 
-                // Date range
-                if ( !string.IsNullOrWhiteSpace( filter.DateFrom ) )
+                foreach ( var r in rows )
                 {
-                    var dt = filter.DateFrom.AsDateTime();
-                    if ( dt.HasValue )
-                        qry = qry.Where( t => t.TransactionDateTime >= dt.Value );
-                }
-
-                if ( !string.IsNullOrWhiteSpace( filter.DateTo ) )
-                {
-                    var dt = filter.DateTo.AsDateTime();
-                    if ( dt.HasValue )
-                    {
-                        var dateToExclusive = dt.Value.AddDays( 1 );
-                        qry = qry.Where( t => t.TransactionDateTime < dateToExclusive );
-                    }
-                }
-
-                // Account filter
-                if ( filter.AccountGuids != null && filter.AccountGuids.Any() )
-                {
-                    var accountIds = new FinancialAccountService( rockContext )
-                        .Queryable()
-                        .Where( a => filter.AccountGuids.Contains( a.Guid ) )
-                        .Select( a => a.Id )
-                        .ToList();
-
-                    if ( accountIds.Any() )
-                        qry = qry.Where( t => t.TransactionDetails.Any( d => accountIds.Contains( d.AccountId ) ) );
-                }
-
-                // Currency filter: 0 = org default (null ForeignCurrencyCodeValueId)
-                if ( filter.CurrencyValueIds != null && filter.CurrencyValueIds.Any() )
-                {
-                    var specificIds = filter.CurrencyValueIds.Where( id => id > 0 ).ToList();
-                    var includeDefault = filter.CurrencyValueIds.Contains( 0 );
-
-                    if ( includeDefault && specificIds.Any() )
-                        qry = qry.Where( t => !t.ForeignCurrencyCodeValueId.HasValue || specificIds.Contains( t.ForeignCurrencyCodeValueId.Value ) );
-                    else if ( includeDefault )
-                        qry = qry.Where( t => !t.ForeignCurrencyCodeValueId.HasValue );
-                    else
-                        qry = qry.Where( t => t.ForeignCurrencyCodeValueId.HasValue && specificIds.Contains( t.ForeignCurrencyCodeValueId.Value ) );
-                }
-
-                // Person filter
-                if ( filter.PersonAliasGuid.HasValue )
-                {
-                    var paGuid = filter.PersonAliasGuid.Value;
-                    qry = qry.Where( t => t.AuthorizedPersonAlias.Guid == paGuid );
-                }
-
-                // NIT filter: resolve person IDs first, then filter transactions
-                var nitAttributeId = GetNitAttributeId();
-                if ( !string.IsNullOrWhiteSpace( filter.NitFilter ) && nitAttributeId.HasValue )
-                {
-                    var nitTerm = filter.NitFilter.Trim();
-                    var attrId = nitAttributeId.Value;
-
-                    var matchingPersonIds = new AttributeValueService( rockContext )
-                        .Queryable()
-                        .Where( av => av.AttributeId == attrId && av.Value.Contains( nitTerm ) )
-                        .Select( av => av.EntityId.Value );
-
-                    var nitAliasIds = new PersonAliasService( rockContext )
-                        .Queryable()
-                        .Where( pa => matchingPersonIds.Contains( pa.PersonId ) )
-                        .Select( pa => pa.Id );
-
-                    qry = qry.Where( t => t.AuthorizedPersonAliasId.HasValue && nitAliasIds.Contains( t.AuthorizedPersonAliasId.Value ) );
-                }
-
-                // Project to flat anonymous DTO (keeps SQL-side)
-                var rawRows = qry
-                    .Select( t => new
-                    {
-                        t.Id,
-                        t.TransactionDateTime,
-                        t.Summary,
-                        t.TransactionCode,
-                        t.ForeignCurrencyCodeValueId,
-                        PersonId = ( int? ) t.AuthorizedPersonAlias.PersonId,
-                        PersonNickName = t.AuthorizedPersonAlias.Person.NickName,
-                        PersonLastName = t.AuthorizedPersonAlias.Person.LastName,
-                        PersonAliasGuid = ( Guid? ) t.AuthorizedPersonAlias.Guid,
-                    } )
-                    .OrderByDescending( t => t.TransactionDateTime )
-                    .Take( maxResults )
-                    .ToList();
-
-                if ( !rawRows.Any() )
-                    return ActionOk( new List<TransactionRowBag>() );
-
-                // Load transaction details in a single query
-                var txnIds = rawRows.Select( r => r.Id ).ToList();
-                var rawDetails = new FinancialTransactionDetailService( rockContext )
-                    .Queryable()
-                    .Where( d => txnIds.Contains( d.TransactionId ) )
-                    .Select( d => new
-                    {
-                        d.TransactionId,
-                        AccountName = d.Account.Name,
-                        d.AccountId,
-                        d.Amount
-                    } )
-                    .ToList();
-
-                var detailsMap = rawDetails
-                    .GroupBy( d => d.TransactionId )
-                    .ToDictionary( g => g.Key, g => g.ToList() );
-
-                // Load NITs for all persons in result
-                var personIds = rawRows
-                    .Where( r => r.PersonId.HasValue )
-                    .Select( r => r.PersonId.Value )
-                    .Distinct()
-                    .ToList();
-
-                var nitMap = new Dictionary<int, string>();
-                if ( nitAttributeId.HasValue && personIds.Any() )
-                {
-                    var attrId = nitAttributeId.Value;
-                    nitMap = new AttributeValueService( rockContext )
-                        .Queryable()
-                        .Where( av => av.AttributeId == attrId && av.EntityId.HasValue && personIds.Contains( av.EntityId.Value ) )
-                        .ToDictionary( av => av.EntityId.Value, av => av.Value );
-                }
-
-                // Currency labels cache
-                var orgSymbol = new RockCurrencyCodeInfo().Symbol ?? "";
-                var currencyLabelCache = rawRows
-                    .Where( r => r.ForeignCurrencyCodeValueId.HasValue )
-                    .Select( r => r.ForeignCurrencyCodeValueId.Value )
-                    .Distinct()
-                    .ToDictionary(
-                        id => id,
-                        id => DefinedValueCache.Get( id )?.Value ?? id.ToString()
+                    dt.Rows.Add(
+                        r.transactionDateTime,
+                        r.personName,
+                        r.nits,
+                        string.Join( " | ", r.details.Select( d => d.accountName ) ),
+                        r.formattedTotal,
+                        r.totalAmount,
+                        r.currencyLabel,
+                        r.transactionCode,
+                        r.summary
                     );
+                }
 
-                // Build result bags
-                var result = rawRows.Select( r =>
+                var ds = new DataSet();
+                ds.Tables.Add( dt );
+
+                using ( var excel = ExcelHelper.CreateNewFile( ds, "Donaciones" ) )
                 {
-                    var details = detailsMap.TryGetValue( r.Id, out var dList ) ? dList : null;
-                    var totalAmount = details?.Sum( d => d.Amount ) ?? 0m;
-                    string nitValue = "";
-                    if ( r.PersonId.HasValue && nitMap.TryGetValue( r.PersonId.Value, out var n ) )
-                        nitValue = n;
-                    var currencyLabel = r.ForeignCurrencyCodeValueId.HasValue
-                        ? ( currencyLabelCache.TryGetValue( r.ForeignCurrencyCodeValueId.Value, out var lbl ) ? lbl : "" )
-                        : orgSymbol;
-
-                    return new TransactionRowBag
+                    var bytes = excel.ToByteArray();
+                    return ActionOk( new ExportResponseBag
                     {
-                        id = r.Id,
-                        transactionDateTime = r.TransactionDateTime?.ToShortDateString() ?? "",
-                        personName = ( $"{r.PersonNickName} {r.PersonLastName}" ).Trim(),
-                        personAliasGuid = r.PersonAliasGuid,
-                        nits = nitValue,
-                        formattedTotal = totalAmount.FormatAsCurrency( r.ForeignCurrencyCodeValueId ),
-                        totalAmount = totalAmount,
-                        foreignCurrencyCodeValueId = r.ForeignCurrencyCodeValueId,
-                        currencyLabel = currencyLabel,
-                        transactionCode = r.TransactionCode ?? "",
-                        summary = r.Summary ?? "",
-                        details = details?.Select( d => new TransactionDetailBag
-                        {
-                            accountName = d.AccountName ?? "",
-                            amount = d.Amount,
-                            formattedAmount = d.Amount.FormatAsCurrency( r.ForeignCurrencyCodeValueId )
-                        } ).ToList() ?? new List<TransactionDetailBag>()
-                    };
-                } ).ToList();
-
-                return ActionOk( result );
+                        fileName = $"donaciones_{RockDateTime.Now:yyyy-MM-dd_HHmm}.xlsx",
+                        base64 = Convert.ToBase64String( bytes )
+                    } );
+                }
             }
+        }
+
+        private List<TransactionRowBag> GetTransactionRowsInternal( RockContext rockContext, DonationFilterBag filter )
+        {
+            if ( filter == null )
+                filter = new DonationFilterBag();
+
+            var maxResults = GetAttributeValue( AttributeKey.MaxResults ).AsIntegerOrNull() ?? 500;
+            var contributionTypeId = DefinedValueCache.GetId( Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION.AsGuid() ) ?? 0;
+
+            var qry = new FinancialTransactionService( rockContext )
+                .Queryable()
+                .Where( t => t.TransactionTypeValueId == contributionTypeId );
+
+            // Date range
+            if ( !string.IsNullOrWhiteSpace( filter.DateFrom ) )
+            {
+                var dt = filter.DateFrom.AsDateTime();
+                if ( dt.HasValue )
+                    qry = qry.Where( t => t.TransactionDateTime >= dt.Value );
+            }
+
+            if ( !string.IsNullOrWhiteSpace( filter.DateTo ) )
+            {
+                var dt = filter.DateTo.AsDateTime();
+                if ( dt.HasValue )
+                {
+                    var dateToExclusive = dt.Value.AddDays( 1 );
+                    qry = qry.Where( t => t.TransactionDateTime < dateToExclusive );
+                }
+            }
+
+            // Account filter
+            if ( filter.AccountGuids != null && filter.AccountGuids.Any() )
+            {
+                var accountIds = new FinancialAccountService( rockContext )
+                    .Queryable()
+                    .Where( a => filter.AccountGuids.Contains( a.Guid ) )
+                    .Select( a => a.Id )
+                    .ToList();
+
+                if ( accountIds.Any() )
+                    qry = qry.Where( t => t.TransactionDetails.Any( d => accountIds.Contains( d.AccountId ) ) );
+            }
+
+            // Currency filter: 0 = org default (matches BOTH null ForeignCurrencyCodeValueId AND
+            // ForeignCurrencyCodeValueId == org default DefinedValueId)
+            if ( filter.CurrencyValueIds != null && filter.CurrencyValueIds.Any() )
+            {
+                var orgDvId = new RockCurrencyCodeInfo().CurrencyCodeDefinedValueId;
+                var specificIds = filter.CurrencyValueIds.Where( id => id > 0 && id != orgDvId ).ToList();
+                var includeDefault = filter.CurrencyValueIds.Contains( 0 );
+
+                if ( includeDefault && specificIds.Any() )
+                    qry = qry.Where( t => !t.ForeignCurrencyCodeValueId.HasValue
+                                          || t.ForeignCurrencyCodeValueId.Value == orgDvId
+                                          || specificIds.Contains( t.ForeignCurrencyCodeValueId.Value ) );
+                else if ( includeDefault )
+                    qry = qry.Where( t => !t.ForeignCurrencyCodeValueId.HasValue
+                                          || t.ForeignCurrencyCodeValueId.Value == orgDvId );
+                else
+                    qry = qry.Where( t => t.ForeignCurrencyCodeValueId.HasValue && specificIds.Contains( t.ForeignCurrencyCodeValueId.Value ) );
+            }
+
+            // Person filter
+            if ( filter.PersonAliasGuid.HasValue )
+            {
+                var paGuid = filter.PersonAliasGuid.Value;
+                qry = qry.Where( t => t.AuthorizedPersonAlias.Guid == paGuid );
+            }
+
+            // NIT filter: search in transaction Summary (stored as "NIT: 12345678")
+            if ( !string.IsNullOrWhiteSpace( filter.NitFilter ) )
+            {
+                var nitTerm = "NIT: " + filter.NitFilter.Trim();
+                qry = qry.Where( t => t.Summary != null && t.Summary.Contains( nitTerm ) );
+            }
+
+            var rawRows = qry
+                .Select( t => new
+                {
+                    t.Id,
+                    t.TransactionDateTime,
+                    t.Summary,
+                    t.TransactionCode,
+                    t.ForeignCurrencyCodeValueId,
+                    PersonId = ( int? ) t.AuthorizedPersonAlias.PersonId,
+                    PersonNickName = t.AuthorizedPersonAlias.Person.NickName,
+                    PersonLastName = t.AuthorizedPersonAlias.Person.LastName,
+                    PersonAliasGuid = ( Guid? ) t.AuthorizedPersonAlias.Guid,
+                } )
+                .OrderByDescending( t => t.TransactionDateTime )
+                .Take( maxResults )
+                .ToList();
+
+            if ( !rawRows.Any() )
+                return new List<TransactionRowBag>();
+
+            var txnIds = rawRows.Select( r => r.Id ).ToList();
+            var rawDetails = new FinancialTransactionDetailService( rockContext )
+                .Queryable()
+                .Where( d => txnIds.Contains( d.TransactionId ) )
+                .Select( d => new
+                {
+                    d.TransactionId,
+                    AccountName = d.Account.Name,
+                    d.AccountId,
+                    d.Amount
+                } )
+                .ToList();
+
+            var detailsMap = rawDetails
+                .GroupBy( d => d.TransactionId )
+                .ToDictionary( g => g.Key, g => g.ToList() );
+
+            var orgCurrencyInfo = new RockCurrencyCodeInfo();
+            var orgCurrencyDvId = orgCurrencyInfo.CurrencyCodeDefinedValueId;
+            var orgCurrencyCode = orgCurrencyInfo.CurrencyCode ?? orgCurrencyInfo.Symbol ?? "";
+
+            var currencyLabelCache = rawRows
+                .Where( r => r.ForeignCurrencyCodeValueId.HasValue )
+                .Select( r => r.ForeignCurrencyCodeValueId.Value )
+                .Distinct()
+                .ToDictionary(
+                    id => id,
+                    id => DefinedValueCache.Get( id )?.Value ?? id.ToString()
+                );
+
+            return rawRows.Select( r =>
+            {
+                var details = detailsMap.TryGetValue( r.Id, out var dList ) ? dList : null;
+                var totalAmount = details?.Sum( d => d.Amount ) ?? 0m;
+                var nitValue = ExtractNitFromSummary( r.Summary );
+
+                // Treat null OR org-default-currency-id as the same bucket (both are org currency)
+                var isOrgCurrency = !r.ForeignCurrencyCodeValueId.HasValue || r.ForeignCurrencyCodeValueId.Value == orgCurrencyDvId;
+                var currencyLabel = isOrgCurrency
+                    ? orgCurrencyCode
+                    : ( currencyLabelCache.TryGetValue( r.ForeignCurrencyCodeValueId.Value, out var lbl ) ? lbl : "" );
+
+                return new TransactionRowBag
+                {
+                    id = r.Id,
+                    transactionDateTime = r.TransactionDateTime?.ToShortDateString() ?? "",
+                    personName = ( $"{r.PersonNickName} {r.PersonLastName}" ).Trim(),
+                    personAliasGuid = r.PersonAliasGuid,
+                    nits = nitValue,
+                    formattedTotal = totalAmount.FormatAsCurrency( r.ForeignCurrencyCodeValueId ),
+                    totalAmount = totalAmount,
+                    foreignCurrencyCodeValueId = r.ForeignCurrencyCodeValueId,
+                    currencyLabel = currencyLabel,
+                    transactionCode = r.TransactionCode ?? "",
+                    summary = r.Summary ?? "",
+                    details = details?.Select( d => new TransactionDetailBag
+                    {
+                        accountName = d.AccountName ?? "",
+                        amount = d.Amount,
+                        formattedAmount = d.Amount.FormatAsCurrency( r.ForeignCurrencyCodeValueId )
+                    } ).ToList() ?? new List<TransactionDetailBag>()
+                };
+            } ).ToList();
         }
 
         #endregion
@@ -424,6 +469,12 @@ namespace Rock.Blocks.Dar
             public string accountName { get; set; }
             public decimal amount { get; set; }
             public string formattedAmount { get; set; }
+        }
+
+        public class ExportResponseBag
+        {
+            public string fileName { get; set; }
+            public string base64 { get; set; }
         }
 
         #endregion

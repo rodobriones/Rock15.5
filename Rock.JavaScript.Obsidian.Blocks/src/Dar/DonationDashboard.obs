@@ -39,7 +39,7 @@
                     <div class="col-sm-3 flex align-items-end">
                         <div class="form-group" style="margin-top:auto">
                             <label class="control-label d-block">&nbsp;</label>
-                            <button class="btn btn-primary btn-block" @click="search" :disabled="isLoading">
+                            <button type="button" class="btn btn-primary btn-block" @click="search" :disabled="isLoading">
                                 <i v-if="isLoading" class="fa fa-spinner fa-spin mr-1"></i>
                                 <i v-else class="fa fa-search mr-1"></i>
                                 Buscar
@@ -71,7 +71,7 @@
                     <div class="col-sm-2 flex align-items-end">
                         <div class="form-group" style="margin-top:auto">
                             <label class="control-label d-block">&nbsp;</label>
-                            <button class="btn btn-default btn-block btn-sm" @click="clearFilters" title="Limpiar filtros">
+                            <button type="button" class="btn btn-default btn-block btn-sm" @click="clearFilters" title="Limpiar filtros">
                                 <i class="fa fa-times"></i> Limpiar
                             </button>
                         </div>
@@ -203,8 +203,10 @@
 
             <!-- Export button -->
             <div v-if="config.allowExport" class="text-right mt-2">
-                <button class="btn btn-sm btn-default" @click="exportCsv">
-                    <i class="fa fa-download mr-1"></i> Exportar CSV
+                <button type="button" class="btn btn-sm btn-default" @click.prevent.stop="exportXlsx($event)" :disabled="isExporting">
+                    <i v-if="isExporting" class="fa fa-spinner fa-spin mr-1"></i>
+                    <i v-else class="fa fa-file-excel-o mr-1"></i>
+                    {{ isExporting ? "Generando..." : "Exportar Excel" }}
                 </button>
             </div>
         </div>
@@ -300,9 +302,16 @@
 
     const groupBy = ref<GroupByValue>("none");
 
+    function isoDate(d: Date): string {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    const _now = new Date();
+    const _firstOfMonth = new Date(_now.getFullYear(), _now.getMonth(), 1);
+
     const filters = ref<DonationFilters>({
-        dateFrom: "",
-        dateTo: "",
+        dateFrom: isoDate(_firstOfMonth),
+        dateTo: isoDate(_now),
         nitFilter: "",
         accountGuids: [],
         currencyValueIds: [],
@@ -456,11 +465,12 @@
         }
     }
 
-    /** Clear all filters and results. */
+    /** Clear all filters back to current-month defaults and clear results. */
     function clearFilters(): void {
+        const now = new Date();
         filters.value = {
-            dateFrom: "",
-            dateTo: "",
+            dateFrom: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+            dateTo: isoDate(now),
             nitFilter: "",
             accountGuids: [],
             currencyValueIds: [],
@@ -471,34 +481,90 @@
         expandedIds.value = new Set();
     }
 
-    /** Export visible transactions to a CSV file. */
-    function exportCsv(): void {
-        const rows: string[][] = [
-            ["Fecha", "Persona", "NIT", "Cuenta(s)", "Total", "Moneda", "Código", "Resumen"]
-        ];
-
-        for (const group of Object.values(groupedTransactions.value)) {
-            for (const txn of group) {
-                rows.push([
-                    txn.transactionDateTime,
-                    txn.personName,
-                    txn.nits,
-                    txn.details.map(d => d.accountName).join(" | "),
-                    String(txn.totalAmount),
-                    txn.currencyLabel,
-                    txn.transactionCode,
-                    txn.summary,
-                ]);
-            }
+    /**
+     * Trigger a download for a given Blob using a transient anchor.
+     * Uses a defensive pattern that avoids the SPA blank-page issue:
+     *   - native link.click() (trusted gesture from the original button click)
+     *   - capture-phase stopImmediatePropagation so Rock's router can't intercept
+     *   - deferred cleanup so the browser can finish processing the download
+     */
+    function downloadBlob(blob: Blob, filename: string): void {
+        const nav = navigator as unknown as { msSaveBlob?: (b: Blob, n: string) => boolean };
+        if (typeof nav.msSaveBlob === "function") {
+            nav.msSaveBlob(blob, filename);
+            return;
         }
 
-        const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `donaciones_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = filename;
+        link.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none";
+        link.addEventListener("click", (e) => e.stopImmediatePropagation(), true);
+
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(url);
+
+        setTimeout(() => {
+            try {
+                if (link.parentNode) link.parentNode.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (cleanupErr) {
+                console.warn("Download cleanup error:", cleanupErr);
+            }
+        }, 2000);
+    }
+
+    /** Decode a base64 string into a Uint8Array (chunked to avoid call-stack issues for large files). */
+    function base64ToBytes(base64: string): Uint8Array {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    const isExporting = ref(false);
+
+    /** Export visible transactions to an XLSX file (server-side generation via EPPlus). */
+    async function exportXlsx(ev?: Event): Promise<void> {
+        if (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+        }
+
+        if (isExporting.value) return;
+        isExporting.value = true;
+
+        try {
+            const response = await invokeBlockAction<{ fileName: string; base64: string }>("ExportToExcel", {
+                filter: {
+                    DateFrom: filters.value.dateFrom || null,
+                    DateTo: filters.value.dateTo || null,
+                    AccountGuids: filters.value.accountGuids,
+                    CurrencyValueIds: filters.value.currencyValueIds,
+                    PersonAliasGuid: filters.value.personAliasGuid || null,
+                    NitFilter: filters.value.nitFilter || null,
+                }
+            });
+
+            if (!response.isSuccess || !response.data) {
+                throw new Error(response.errorMessage ?? "Error generando archivo Excel");
+            }
+
+            const bytes = base64ToBytes(response.data.base64);
+            const blob = new Blob([bytes], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            });
+            downloadBlob(blob, response.data.fileName);
+        }
+        catch (err) {
+            console.error("Export Excel error:", err);
+            alert("Error al exportar a Excel: " + (err instanceof Error ? err.message : String(err)));
+        }
+        finally {
+            isExporting.value = false;
+        }
     }
 </script>

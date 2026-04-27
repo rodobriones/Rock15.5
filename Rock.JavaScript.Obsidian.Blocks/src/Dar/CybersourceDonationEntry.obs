@@ -347,7 +347,7 @@
                                         <!-- Fila superior: fecha + estado -->
                                         <div class="cyHistoryItemTop">
                                             <span class="cyHistoryDate">{{ formatDate(item.transactionDateTime) }}</span>
-                                            <span class="cyStatusBadge" :class="statusClass(item.status)">{{ item.status || "-" }}</span>
+                                            <span class="cyStatusBadge" :class="statusClass(item.status)">{{ statusLabel(item.status) }}</span>
                                         </div>
                                         <!-- Fila media: monto + fondo -->
                                         <div class="cyHistoryItemMid">
@@ -1043,8 +1043,15 @@ function resetFormSuccess(): void {
 /** Navega al historial desde el modal de éxito */
 function goToHistoryFromSuccess(): void {
     successMessage.value = "";
+    lastResult.value = null;
+    form.amount = 0;
+    centValue.value = 0;
+    form.note = "";
+    clearAllFieldErrors();
+    idemKey.value = generateIdemKey();
     activeSubmenu.value = "history";
     loadHistory();
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // ========================
@@ -1124,6 +1131,21 @@ function formatMoney(value: number, currencyCode?: string): string {
     });
 
     return currency === "GTQ" ? `Q${numStr}` : `$${numStr}`;
+}
+
+/** Traduce el estado del pago a español para mostrarlo al usuario */
+function statusLabel(status?: string): string {
+    const s = String(status || "").toUpperCase();
+
+    if (s === "APPROVED" || s === "SUCCESS" || s === "COMPLETED") {
+        return "Aprobada";
+    }
+
+    if (s === "DECLINED" || s === "FAILED" || s === "REJECTED") {
+        return "Rechazada";
+    }
+
+    return status || "-";
 }
 
 /** Retorna la clase CSS según el estado del pago (aprobado, rechazado, neutro) */
