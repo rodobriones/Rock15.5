@@ -182,13 +182,27 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 accountsHtml += string.Format(
                 @"<tr><td class='pr-4'>{0}</td><td class='text-right'>{1}</td></tr>",
                 item.AccountName,
-                item.TotalAmount.FormatAsCurrency() );
+                item.TotalAmount.FormatAsCurrency( item.ForeignCurrencyCodeValueId ) );
             }
 
             lAccount.Text = accountsHtml;
 
-            var lTotalAmount = e.Item.FindControl( "lTotalAmount" ) as Literal;
-            lTotalAmount.Text = contributionSummary.TotalAmount.FormatAsCurrency();
+            var lTotalAmounts = e.Item.FindControl( "lTotalAmounts" ) as Literal;
+            if ( lTotalAmounts != null )
+            {
+                var totalRowsHtml = new StringBuilder();
+                foreach ( var ct in contributionSummary.TotalsByCurrency.OrderBy( c => c.CurrencyCodeValueId ) )
+                {
+                    var label = ct.CurrencyCodeValueId.HasValue
+                        ? "Total " + ( DefinedValueCache.Get( ct.CurrencyCodeValueId.Value )?.Value ?? string.Empty )
+                        : "Total";
+                    totalRowsHtml.AppendFormat(
+                        "<tr><th>{0}</th><th class='text-right'>{1}</th></tr>",
+                        label,
+                        ct.Amount.FormatAsCurrency( ct.CurrencyCodeValueId ) );
+                }
+                lTotalAmounts.Text = totalRowsHtml.ToString();
+            }
         }
 
         #endregion Events
@@ -279,20 +293,32 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 return;
             }
 
-            var contributionByMonths = new Dictionary<DateTime, decimal>();
+            var monthlyChartItems = new List<MonthlyChartItem>();
             for ( var i = 35; i >= 0; i-- )
             {
                 var currentMonthlyDate = RockDateTime.Now.StartOfMonth().AddMonths( -i );
                 var month = currentMonthlyDate.Month;
                 var year = currentMonthlyDate.Year;
-                var total = threeYearsOfMonthlyAccountGiving.Where( h => h.Year == year && h.Month == month ).Sum( h => h.Amount );
-                contributionByMonths[currentMonthlyDate] = total;
+                var monthEntries = threeYearsOfMonthlyAccountGiving.Where( h => h.Year == year && h.Month == month ).ToList();
+                var total = monthEntries.Sum( h => h.Amount );
+
+                var currencyParts = monthEntries
+                    .GroupBy( h => h.ForeignCurrencyCodeValueId )
+                    .OrderBy( g => g.Key )
+                    .Select( g => g.Sum( h => h.Amount ).FormatAsCurrency( g.Key ) );
+
+                monthlyChartItems.Add( new MonthlyChartItem
+                {
+                    Date = currentMonthlyDate,
+                    TotalAmount = total,
+                    TooltipText = currentMonthlyDate.ToString( "MMM yyyy" ) + " " + string.Join( " + ", currencyParts )
+                } );
             }
 
-            MaxGiftAmount = contributionByMonths.Max( a => a.Value );
+            MaxGiftAmount = monthlyChartItems.Any() ? monthlyChartItems.Max( a => a.TotalAmount ) : 0;
 
             // Giving By Month Chart
-            rptGivingByMonth.DataSource = contributionByMonths.OrderBy( a => a.Key );
+            rptGivingByMonth.DataSource = monthlyChartItems;
             rptGivingByMonth.DataBind();
 
             // Community View
@@ -345,6 +371,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 .Select( a => new
                 {
                     TransactionDateTime = a.TransactionDateTime,
+                    ForeignCurrencyCodeValueId = a.ForeignCurrencyCodeValueId,
                     TotalAmountBeforeRefund = a.TransactionDetails
                         .Select( d => d.Amount )
                         .DefaultIfEmpty( 0.0M )
@@ -357,15 +384,23 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 } )
                 .ToList();
 
-            var last12MonthTotal = twelveMonthTransactions.Sum( t => t.TotalAmountBeforeRefund + t.TotalRefundAmount );
             var last12MonthCount = twelveMonthTransactions.Count;
 
-            // Last 12 Months KPI
+            // Last 12 Months KPI — per-currency display
+            var last12ByCurrency = twelveMonthTransactions
+                .GroupBy( t => t.ForeignCurrencyCodeValueId )
+                .Select( g => new { CurrencyId = g.Key, Total = g.Sum( t => t.TotalAmountBeforeRefund + t.TotalRefundAmount ) } )
+                .OrderBy( x => x.CurrencyId )
+                .ToList();
+
+            var last12MonthDisplay = string.Join( " + ", last12ByCurrency.Select( c =>
+                $"<span class=\"currency-span\">{FormatAsCurrency( c.Total, c.CurrencyId )}</span>" ) );
+
             string kpiLast12Months;
             var last12MonthCountText = $"{last12MonthCount} {"gift".PluralizeIf( last12MonthCount != 1 )}";
             kpiLast12Months = GetKpiShortCode(
                 "Last 12 Months",
-                $"<span class=\"currency-span\">{FormatAsCurrency( last12MonthTotal )}</span>",
+                last12MonthDisplay,
                 subValue: $"<div class=\"small\">{last12MonthCountText}</div>" );
 
             // Last 90 Days KPI
@@ -374,6 +409,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             var transactionPriorNinetyDayTotal = twelveMonthTransactions.Where( t => t.TransactionDateTime >= oneHundredEightyDaysAgo && t.TransactionDateTime < ninetyDaysAgo ).Sum( t => t.TotalAmountBeforeRefund + t.TotalRefundAmount );
             var baseGrowthContribution = transactionPriorNinetyDayTotal;
 
+            // Total all-currency sum kept for growth % calculation
             var last90DaysContribution = twelveMonthTransactions.Where( t => t.TransactionDateTime >= ninetyDaysAgo ).Sum( t => t.TotalAmountBeforeRefund + t.TotalRefundAmount );
 
             decimal growthPercent = 0;
@@ -440,9 +476,19 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
 </span>
 <div class=""small"">{last90DayCountText}</div>";
 
+            var last90ByCurrency = twelveMonthTransactions
+                .Where( t => t.TransactionDateTime >= ninetyDaysAgo )
+                .GroupBy( t => t.ForeignCurrencyCodeValueId )
+                .Select( g => new { CurrencyId = g.Key, Total = g.Sum( t => t.TotalAmountBeforeRefund + t.TotalRefundAmount ) } )
+                .OrderBy( x => x.CurrencyId )
+                .ToList();
+
+            var last90DaysDisplay = string.Join( " + ", last90ByCurrency.Select( c =>
+                $"<span class=\"currency-span\">{FormatAsCurrency( c.Total, c.CurrencyId )}</span>" ) );
+
             var kpiLast90Days = GetKpiShortCode(
                 "Last 90 Days",
-                $"<span class=\"currency-span\">{FormatAsCurrency( last90DaysContribution )}</span>",
+                last90DaysDisplay,
                 subValue: last90DaysSubValue );
 
             // Gives as family / individual KPI
@@ -514,7 +560,8 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
         /// <param name="e">The <see cref="RepeaterItemEventArgs"/> instance containing the event data.</param>
         protected void rptGivingByMonth_ItemDataBound( object sender, RepeaterItemEventArgs e )
         {
-            if ( !( e.Item.DataItem as KeyValuePair<DateTime, decimal>? ).HasValue )
+            var chartItem = e.Item.DataItem as MonthlyChartItem;
+            if ( chartItem == null )
             {
                 return;
             }
@@ -525,10 +572,8 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
                 return;
             }
 
-            var contributionByMonth = ( KeyValuePair<DateTime, decimal> ) e.Item.DataItem;
-
-            lGivingByMonthPercentHtml.Text = $@"<li title='{( contributionByMonth.Key.ToString( "MMM yyyy" ) )} {contributionByMonth.Value.FormatAsCurrency()}' />
-  <span style='{GetGivingByMonthPercentStyle( contributionByMonth.Value )}'></span>
+            lGivingByMonthPercentHtml.Text = $@"<li title='{chartItem.TooltipText}' />
+  <span style='{GetGivingByMonthPercentStyle( chartItem.TotalAmount )}'></span>
 </li>";
         }
 
@@ -558,10 +603,10 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
             var typicalGiftKpi = GetKpiShortCode(
                 "Typical Gift",
                 $"<span class=\"currency-span\">{FormatAsCurrency( giftAmountMedian )}</span>",
-                $"{giftAmountIqr}",
+                $"{giftAmountIqr.FormatAsCurrency()}",
                 "fa-fw fa-money-bill",
                 "left",
-                $"A typical gift amount has a median value of ${giftAmountMedian} with a variability of ${giftAmountIqr}." );
+                $"A typical gift amount has a median value of {giftAmountMedian.FormatAsCurrency()} with a variability of {giftAmountIqr.FormatAsCurrency()}." );
 
             stringBuilder.Append( typicalGiftKpi );
 
@@ -739,11 +784,12 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
                     .ToDictionary( k => k.Id, v => new FinancialAccountInfo { Name = v.Name, Order = v.Order } );
 
                 var summaryList = previousYearMonthlyGivingSummaries
-                    .GroupBy( a => new { a.Year, a.AccountId } )
+                    .GroupBy( a => new { a.Year, a.AccountId, a.ForeignCurrencyCodeValueId } )
                     .Select( t => new SummaryRecord
                     {
                         Year = t.Key.Year,
                         AccountId = t.Key.AccountId,
+                        ForeignCurrencyCodeValueId = t.Key.ForeignCurrencyCodeValueId,
                         TotalAmount = t.Sum( d => d.Amount )
                     } )
                     .OrderByDescending( a => a.Year )
@@ -774,13 +820,22 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
                         summaryRecords.Add( a );
                     }
 
-                    // Display the accounts in the order specified by the Accounts list.
                     contributionSummary.SummaryRecords = summaryRecords
-                        .OrderBy( s => s.Order )
+                        .OrderBy( s => s.ForeignCurrencyCodeValueId )
+                        .ThenBy( s => s.Order )
                         .ThenBy( s => s.AccountName )
                         .ToList();
 
-                    contributionSummary.TotalAmount = item.Sum( a => a.TotalAmount );
+                    contributionSummary.TotalsByCurrency = item
+                        .GroupBy( a => a.ForeignCurrencyCodeValueId )
+                        .Select( g => new CurrencyTotal
+                        {
+                            CurrencyCodeValueId = g.Key,
+                            Amount = g.Sum( a => a.TotalAmount )
+                        } )
+                        .OrderBy( c => c.CurrencyCodeValueId )
+                        .ToList();
+
                     contributionSummaries.Add( contributionSummary );
                 }
 
@@ -793,10 +848,10 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
             }
         }
 
-        private string FormatAsCurrency( decimal value )
+        private string FormatAsCurrency( decimal value, int? currencyCodeValueId = null )
         {
-            // wrap the first value returned with a span for styling
-            string val = value.FormatAsCurrencyWithDecimalPlaces( 0 );
+            string val = value.FormatAsCurrency( currencyCodeValueId, 0 );
+            if ( val.Length < 2 ) return val;
             return String.Format( "<span>{0}</span>{1}", val.Substring( 0, 1 ), val.Substring( 1 ) );
         }
 
@@ -816,6 +871,21 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
             public decimal TotalAmount { get; set; }
 
             public int Order { get; set; }
+
+            public int? ForeignCurrencyCodeValueId { get; set; }
+        }
+
+        protected class CurrencyTotal
+        {
+            public int? CurrencyCodeValueId { get; set; }
+            public decimal Amount { get; set; }
+        }
+
+        private class MonthlyChartItem
+        {
+            public DateTime Date { get; set; }
+            public decimal TotalAmount { get; set; }
+            public string TooltipText { get; set; }
         }
 
         /// <summary>
@@ -827,7 +897,7 @@ $@"<span title=""{growthPercentText}"" class=""small text-{growthPercentClass}""
 
             public List<SummaryRecord> SummaryRecords { get; set; }
 
-            public decimal TotalAmount { get; set; }
+            public List<CurrencyTotal> TotalsByCurrency { get; set; }
         }
 
         private class FinancialAccountInfo

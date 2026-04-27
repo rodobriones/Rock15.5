@@ -568,6 +568,7 @@ namespace Rock.Model
                     TransactionDateTime = t.TransactionDateTime.Value,
                     td.AccountId,
                     td.Amount,
+                    t.ForeignCurrencyCodeValueId,
 
                     // For each Refund (there could be more than one) get the refund amount for each if the refunds's Detail records for the Account.
                     // Then sum that up for the total refund amount for the account
@@ -579,13 +580,15 @@ namespace Rock.Model
                 {
                     a.TransactionDateTime.Year,
                     a.TransactionDateTime.Month,
-                    a.AccountId
+                    a.AccountId,
+                    a.ForeignCurrencyCodeValueId
                 } )
                 .Select( t => new MonthlyAccountGivingHistory
                 {
                     Year = t.Key.Year,
                     Month = t.Key.Month,
                     AccountId = t.Key.AccountId,
+                    ForeignCurrencyCodeValueId = t.Key.ForeignCurrencyCodeValueId,
                     Amount = t.Sum( d => d.Amount + d.AccountRefundAmount )
                 } )
                 .OrderByDescending( a => a.Year )

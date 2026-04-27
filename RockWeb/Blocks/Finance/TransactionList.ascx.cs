@@ -894,6 +894,12 @@ namespace RockWeb.Blocks.Finance
                 }
             }
 
+            var lTotalAmount = e.Row.FindControl( "lTotalAmount" ) as Literal;
+            if ( lTotalAmount != null )
+            {
+                lTotalAmount.Text = ( txn.TotalAmount ?? 0m ).FormatAsCurrency( txn.ForeignCurrencyCodeValueId );
+            }
+
             // Calculate the days since the last transaction. This is done as a C# calculate so that the
             // block doesn't sacrifice much in query performance to get this value. The previous date could be
             // previous or next in the row order depending on how the data is sorted
@@ -2138,42 +2144,67 @@ namespace RockWeb.Blocks.Finance
 
                     // Query for the totals instead of using the grid data,
                     // as the data bound to the grid can be paged.
-                    IQueryable<DetailInfo> transactionDetailQuery;
+                    List<AccountSummaryRow> accountSummaryList;
                     if ( hfTransactionViewMode.Value == "Transactions" )
                     {
-                        transactionDetailQuery = query.SelectMany( a => a.TransactionDetails );
+                        accountSummaryList = query
+                            .SelectMany( a => a.TransactionDetails, ( txn, d ) => new
+                            {
+                                d.AccountId,
+                                d.Amount,
+                                txn.ForeignCurrencyCodeValueId
+                            } )
+                            .GroupBy( x => new { x.AccountId, x.ForeignCurrencyCodeValueId } )
+                            .Select( g => new
+                            {
+                                AccountId = g.Key.AccountId,
+                                ForeignCurrencyCodeValueId = g.Key.ForeignCurrencyCodeValueId,
+                                TotalAmount = g.Sum( x => x.Amount )
+                            } )
+                            .ToList()
+                            .Select( a => new AccountSummaryRow
+                            {
+                                AccountId = a.AccountId,
+                                ForeignCurrencyCodeValueId = a.ForeignCurrencyCodeValueId,
+                                Order = FinancialAccountCache.Get( a.AccountId )?.Order ?? 0,
+                                Name = FinancialAccountCache.Get( a.AccountId )?.Name,
+                                TotalAmount = a.TotalAmount
+                            } )
+                            .ToList();
                     }
                     else
                     {
-                        transactionDetailQuery = query.Select( a => a.TransactionDetail );
+                        accountSummaryList = query
+                            .Select( a => new
+                            {
+                                AccountId = a.TransactionDetail.AccountId,
+                                Amount = a.TransactionDetail.Amount,
+                                a.ForeignCurrencyCodeValueId
+                            } )
+                            .GroupBy( x => new { x.AccountId, x.ForeignCurrencyCodeValueId } )
+                            .Select( g => new
+                            {
+                                AccountId = g.Key.AccountId,
+                                ForeignCurrencyCodeValueId = g.Key.ForeignCurrencyCodeValueId,
+                                TotalAmount = g.Sum( x => x.Amount )
+                            } )
+                            .ToList()
+                            .Select( a => new AccountSummaryRow
+                            {
+                                AccountId = a.AccountId,
+                                ForeignCurrencyCodeValueId = a.ForeignCurrencyCodeValueId,
+                                Order = FinancialAccountCache.Get( a.AccountId )?.Order ?? 0,
+                                Name = FinancialAccountCache.Get( a.AccountId )?.Name,
+                                TotalAmount = a.TotalAmount
+                            } )
+                            .ToList();
                     }
-
-                    var accountSummaries = transactionDetailQuery
-                        .Select( a => new
-                        {
-                            Id = a.AccountId,
-                            Amount = a.Amount
-                        } )
-                        .GroupBy( a => a.Id )
-                        .Select( a => new
-                        {
-                            AccountId = a.Key,
-                            TotalAmount = a.Sum( x => x.Amount )
-                        } )
-                        .ToList()
-                        .Select( a => new AccountSummaryRow
-                        {
-                            AccountId = a.AccountId,
-                            Order = FinancialAccountCache.Get( a.AccountId )?.Order ?? 0,
-                            Name = FinancialAccountCache.Get( a.AccountId )?.Name,
-                            TotalAmount = a.TotalAmount
-                        } );
 
                     // check for filtered accounts
                     var accountIds = ( gfTransactions.GetFilterPreference( "Account" ) ?? "" ).SplitDelimitedValues().AsIntegerList().Where( a => a > 0 ).ToList();
                     if ( accountIds.Any() && apAccount.Visible )
                     {
-                        accountSummaries = accountSummaries.Where( a => accountIds.Contains( a.AccountId ) ).OrderBy( a => a.Order );
+                        accountSummaryList = accountSummaryList.Where( a => accountIds.Contains( a.AccountId ) ).OrderBy( a => a.Order ).ToList();
                         lbFiltered.Text = "Filtered Account List";
                         lbFiltered.Visible = true;
                     }
@@ -2182,10 +2213,31 @@ namespace RockWeb.Blocks.Finance
                         lbFiltered.Visible = false;
                     }
 
-                    var accountSummaryList = accountSummaries.ToList();
-                    var grandTotalAmount = ( accountSummaryList.Count > 0 ) ? accountSummaryList.Sum( a => a.TotalAmount ) : 0;
-                    lGrandTotal.Text = grandTotalAmount.FormatAsCurrency();
-                    rptAccountSummary.DataSource = accountSummaryList.Select( a => new { a.Name, TotalAmount = a.TotalAmount.FormatAsCurrency() } ).ToList();
+                    // Per-currency grand totals
+                    var currencyTotals = accountSummaryList
+                        .GroupBy( a => a.ForeignCurrencyCodeValueId )
+                        .Select( g => new
+                        {
+                            CurrencyLabel = g.Key.HasValue
+                                ? ( DefinedValueCache.Get( g.Key.Value )?.Value ?? string.Empty )
+                                : string.Empty,
+                            TotalAmount = g.Sum( a => a.TotalAmount ).FormatAsCurrency( g.Key )
+                        } )
+                        .OrderBy( x => x.CurrencyLabel )
+                        .ToList();
+
+                    rptCurrencyTotals.DataSource = currencyTotals;
+                    rptCurrencyTotals.DataBind();
+
+                    rptAccountSummary.DataSource = accountSummaryList
+                        .OrderBy( a => a.ForeignCurrencyCodeValueId )
+                        .ThenBy( a => a.Order )
+                        .Select( a => new
+                        {
+                            a.Name,
+                            TotalAmount = a.TotalAmount.FormatAsCurrency( a.ForeignCurrencyCodeValueId )
+                        } )
+                        .ToList();
                     rptAccountSummary.DataBind();
 
                 }
@@ -2205,6 +2257,7 @@ namespace RockWeb.Blocks.Finance
             public string Name { get; internal set; }
             public int Order { get; internal set; }
             public decimal TotalAmount { get; set; }
+            public int? ForeignCurrencyCodeValueId { get; set; }
         }
 
         /// <summary>
@@ -2219,7 +2272,7 @@ namespace RockWeb.Blocks.Finance
                 List<string> summary = null;
                 if ( txn.TransactionDetail != null )
                 {
-                    var summaryLine = string.Format( "{0}: {1}", FinancialAccountCache.Get( txn.TransactionDetail.AccountId )?.Name, txn.TransactionDetail.Amount.FormatAsCurrency() );
+                    var summaryLine = string.Format( "{0}: {1}", FinancialAccountCache.Get( txn.TransactionDetail.AccountId )?.Name, txn.TransactionDetail.Amount.FormatAsCurrency( txn.ForeignCurrencyCodeValueId ) );
                     summary = new List<string>();
                     summary.Add( summaryLine );
                 }
@@ -2238,7 +2291,7 @@ namespace RockWeb.Blocks.Finance
                     .ThenBy( d => d.Order )
                     .Select( d => string.Format( "{0}: {1}",
                         !d.IsOther ? d.Name : "Other",
-                        d.Amount.FormatAsCurrency() ) )
+                        d.Amount.FormatAsCurrency( txn.ForeignCurrencyCodeValueId ) ) )
                     .ToList();
                 }
 

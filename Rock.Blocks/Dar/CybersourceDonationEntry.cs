@@ -358,9 +358,7 @@ namespace Rock.Blocks.Dar
                     
                     if ( string.IsNullOrWhiteSpace( name ) )
                     {
-                         // If we couldn't parse it well but got 200 OK, maybe the structure is different. Let's dump the raw if it's short, or generic text.
-                         name = "Consumidor Final"; // Or let it fail gracefully
-                         return ActionBadRequest( "No se encontró el formato esperado en la respuesta del NIT." );
+                        return ActionBadRequest( "No se encontró el formato esperado en la respuesta del NIT." );
                     }
 
                     return ActionOk( new { name = name, address = address } );
@@ -1239,6 +1237,7 @@ ORDER BY
                     : statusCode.ToString( CultureInfo.InvariantCulture );
             }
 
+            // responseMessage guarda el detalle técnico para logs/debugging interno.
             var responseMessage = responseStatus.IsNotNullOrWhiteSpace() ? responseStatus : "UNKNOWN";
             if ( reason.IsNotNullOrWhiteSpace() )
             {
@@ -1255,23 +1254,18 @@ ORDER BY
 
             var approved = isHttpSuccess && !isDeclinedStatus;
 
-            var snippet = string.Empty;
-            if ( responseText.IsNotNullOrWhiteSpace() )
+            string userErrorMessage;
+            if ( approved )
             {
-                var trimmed = responseText.Trim();
-                snippet = trimmed.Length > 180 ? trimmed.Substring( 0, 180 ) + "..." : trimmed;
+                userErrorMessage = string.Empty;
             }
-
-            var defaultErrorMessage = string.Format(
-                CultureInfo.InvariantCulture,
-                "Cybersource rechazó el pago (HTTP {0}). Firma usada: {1}/{2}. Verifica mode/host/merchantId/keyId/shared secret.",
-                statusCode,
-                profile.dateHeaderName,
-                profile.requestTargetHeaderName );
-
-            if ( snippet.IsNotNullOrWhiteSpace() )
+            else if ( reason.IsNotNullOrWhiteSpace() )
             {
-                defaultErrorMessage += " Respuesta: " + snippet;
+                userErrorMessage = MapCybersourceErrorToSpanish( reason, processorResponseCode );
+            }
+            else
+            {
+                userErrorMessage = MapCybersourceErrorToSpanish( null, processorResponseCode );
             }
 
             return new CybersourceChargeResult
@@ -1282,11 +1276,100 @@ ORDER BY
                 authorizationNumber = approvalCode,
                 referenceNumber = responseId,
                 auditNumber = !requestCode.IsNullOrWhiteSpace() ? requestCode : reconciliationId,
-                errorMessage = approved
-                    ? string.Empty
-                    : ( !reason.IsNullOrWhiteSpace() ? responseMessage : defaultErrorMessage ),
+                errorMessage = userErrorMessage,
                 rawResponse = responseText
             };
+        }
+
+        private static string MapCybersourceErrorToSpanish( string reason, string processorCode )
+        {
+            if ( reason.IsNotNullOrWhiteSpace() )
+            {
+                var r = reason.ToUpperInvariant().Trim();
+                switch ( r )
+                {
+                    case "INVALID_CVN":
+                    case "CV_FAILED":
+                        return "El código de seguridad (CVV) es incorrecto. Verifica e intenta de nuevo.";
+
+                    case "INVALID_ACCOUNT":
+                    case "INVALID_NUMBER":
+                    case "INVALID_CARD_NUMBER":
+                        return "El número de tarjeta no es válido. Verifica e intenta de nuevo.";
+
+                    case "INVALID_EXPIRY_DATE":
+                    case "EXPIRED_CARD":
+                        return "La tarjeta está vencida o la fecha de vencimiento no es válida.";
+
+                    case "INSUFFICIENT_FUND":
+                    case "INSUFFICIENT_FUNDS":
+                        return "Fondos insuficientes. Intenta con otra tarjeta.";
+
+                    case "CREDIT_LIMIT_REACHED":
+                    case "EXCEEDS_CREDIT_LIMIT":
+                        return "Se alcanzó el límite de crédito. Intenta con otra tarjeta.";
+
+                    case "STOLEN_LOST_CARD":
+                    case "PICK_UP_CARD":
+                        return "No fue posible procesar el pago. Contacta a tu banco.";
+
+                    case "DO_NOT_HONOR":
+                    case "GENERAL_DECLINE":
+                    case "PROCESSOR_DECLINED":
+                        return "Tu banco rechazó el pago. Contacta a tu banco para más información.";
+
+                    case "CALL_ISSUER":
+                        return "Tu banco requiere autorización. Contacta a tu banco para completar el pago.";
+
+                    case "RESTRICTED_CARD":
+                        return "La tarjeta tiene restricciones activas. Contacta a tu banco.";
+
+                    case "CARD_VELOCITY_EXCEEDED":
+                        return "Se alcanzó el límite de transacciones permitidas. Intenta más tarde.";
+
+                    case "FRAUD_SCORE_EXCEEDS_THRESHOLD":
+                        return "El pago fue rechazado por medidas de seguridad. Intenta con otra tarjeta.";
+
+                    case "AVS_FAILED":
+                        return "La dirección de facturación no coincide con los registros de tu banco.";
+
+                    case "SYSTEM_ERROR":
+                    case "SERVER_TIMEOUT":
+                    case "SERVICE_TIMEOUT":
+                    case "PROCESSOR_TIMEOUT":
+                        return "Error temporal del procesador de pagos. Espera unos minutos e intenta de nuevo.";
+
+                    case "INVALID_DATA":
+                    case "MISSING_FIELD":
+                    case "INVALID_REQUEST":
+                        return "Algunos datos del pago no son válidos. Revisa la información e intenta de nuevo.";
+
+                    case "CONSUMER_AUTHENTICATION_REQUIRED":
+                        return "Tu banco requiere autenticación adicional. Intenta con otra tarjeta o contacta a tu banco.";
+                }
+            }
+
+            // Fallback: mapear código numérico del procesador.
+            if ( processorCode.IsNotNullOrWhiteSpace() )
+            {
+                switch ( processorCode.Trim() )
+                {
+                    case "51":
+                        return "Fondos insuficientes. Intenta con otra tarjeta.";
+                    case "54":
+                        return "La tarjeta está vencida. Verifica la fecha de vencimiento.";
+                    case "05":
+                    case "57":
+                    case "62":
+                        return "Tu banco rechazó el pago. Contacta a tu banco para más información.";
+                    case "61":
+                        return "Se excedió el límite diario de la tarjeta. Intenta más tarde.";
+                    case "91":
+                        return "El banco no está disponible en este momento. Intenta de nuevo en unos minutos.";
+                }
+            }
+
+            return "El pago no pudo ser procesado. Intenta de nuevo o usa otra tarjeta.";
         }
 
         private Dictionary<string, object> BuildPaymentPayload( ProcessPaymentRequestBag bag, string requestCode )

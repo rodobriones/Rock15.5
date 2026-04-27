@@ -64,7 +64,7 @@
                                     SortExpression="_PERSONNAME_" />
                                 <Rock:RockBoundField DataField="TransactionDateTime" HeaderText="Date" SortExpression="TransactionDateTime" />
                                 <Rock:RockLiteralField ID="lDaysSinceLastTransaction" HeaderText="Days Since Last Transaction" HeaderStyle-HorizontalAlign="Center" ItemStyle-HorizontalAlign="Center" />
-                                <Rock:CurrencyField DataField="TotalAmount" HeaderText="Amount" SortExpression="TotalAmount" />
+                                <Rock:RockLiteralField ID="lTotalAmount" HeaderText="Amount" SortExpression="TotalAmount" HeaderStyle-HorizontalAlign="Right" ItemStyle-HorizontalAlign="Right" />
                                 <Rock:RockLiteralField ID="lForeignCurrencySymbol" HeaderText="Foreign Currency" />
                                 <Rock:RockLiteralField ID="lCurrencyType" HeaderText="Currency Type" />
                                 <Rock:RockBoundField DataField="TransactionCode" HeaderText="Transaction Code" SortExpression="TransactionCode" ColumnPriority="DesktopSmall" />
@@ -102,12 +102,14 @@
                                     </div>
                                 </ItemTemplate>
                             </asp:Repeater>
-                            <div class='row'>
-                                <div class='col-xs-8'><b>Total: </div>
-                                <div class='col-xs-4 text-right'>
-                                    <asp:Literal ID="lGrandTotal" runat="server" /></b>
-                                </div>
-                            </div>
+                            <asp:Repeater ID="rptCurrencyTotals" runat="server">
+                                <ItemTemplate>
+                                    <div class='row margin-t-sm'>
+                                        <div class='col-xs-8'><b>Total <%#Eval("CurrencyLabel")%>:</b></div>
+                                        <div class='col-xs-4 text-right'><b><%#Eval("TotalAmount")%></b></div>
+                                    </div>
+                                </ItemTemplate>
+                            </asp:Repeater>
                         </div>
                     </asp:Panel>
                 </div>

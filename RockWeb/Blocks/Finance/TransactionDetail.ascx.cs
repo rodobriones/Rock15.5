@@ -279,7 +279,7 @@ namespace RockWeb.Blocks.Finance
 
         private void GetForeignCurrencyFields( FinancialTransaction txn )
         {
-            if ( txn == null || txn.ForeignCurrencyCodeValueId == null || !GetAttributeValue( AttributeKey.EnableForeignCurrency ).AsBoolean() )
+            if ( txn == null || txn.ForeignCurrencyCodeValueId == null )
             {
                 return;
             }
@@ -287,10 +287,15 @@ namespace RockWeb.Blocks.Finance
             var currencyCodeDefinedValueCache = DefinedValueCache.Get( txn.ForeignCurrencyCodeValueId.Value );
             if ( currencyCodeDefinedValueCache != null )
             {
-                var currencySymbol = currencyCodeDefinedValueCache.GetAttributeValue( "Symbol" );
-                _foreignCurrencySymbol = currencySymbol;
-                _foreignCurrencyCode = currencyCodeDefinedValueCache.Value;
+                // Always load the currency ID so amounts format with the correct symbol,
+                // regardless of the EnableForeignCurrency block setting.
                 _foreignCurrencyCodeDefinedValueId = currencyCodeDefinedValueCache.Id;
+
+                if ( GetAttributeValue( AttributeKey.EnableForeignCurrency ).AsBoolean() )
+                {
+                    _foreignCurrencySymbol = currencyCodeDefinedValueCache.GetAttributeValue( "Symbol" );
+                    _foreignCurrencyCode = currencyCodeDefinedValueCache.Value;
+                }
             }
         }
 
@@ -851,7 +856,8 @@ namespace RockWeb.Blocks.Finance
                 amountMinusFeeCoverageAmount = financialTransactionDetail.Amount;
             }
 
-            lAccountsViewAmountMinusFeeCoverageAmount.Text = amountMinusFeeCoverageAmount.FormatAsCurrency();
+            var viewCurrencyId = _foreignCurrencyCodeDefinedValueId > 0 ? ( int? ) _foreignCurrencyCodeDefinedValueId : null;
+            lAccountsViewAmountMinusFeeCoverageAmount.Text = amountMinusFeeCoverageAmount.FormatAsCurrency( viewCurrencyId );
         }
 
         /// <summary>
@@ -892,7 +898,8 @@ namespace RockWeb.Blocks.Finance
                 amountMinusFeeCoverageAmount = financialTransactionDetail.Amount;
             }
 
-            lAccountsEditAmountMinusFeeCoverageAmount.Text = amountMinusFeeCoverageAmount.FormatAsCurrency();
+            var editCurrencyId = _foreignCurrencyCodeDefinedValueId > 0 ? ( int? ) _foreignCurrencyCodeDefinedValueId : null;
+            lAccountsEditAmountMinusFeeCoverageAmount.Text = amountMinusFeeCoverageAmount.FormatAsCurrency( editCurrencyId );
 
             // If account is associated with an entity (i.e. registration), or this is the total row do not allow it to be deleted
             if ( financialTransactionDetail.EntityTypeId.HasValue || financialTransactionDetail.AccountId == TotalRowAccountId )

@@ -704,11 +704,14 @@ function isExpired(month: number, year: number): boolean {
 // HANDLERS DE INPUTS
 // ========================
 
-/** Limpia datos sensibles de tarjeta del formulario (número, fecha, CVV) */
+/** Limpia datos sensibles de tarjeta del formulario y sus errores de campo */
 function clearSensitive(): void {
     form.cardNumber = "";
     form.expDate = "";
     form.cvv = "";
+    fieldErrors.cardNumber = "";
+    fieldErrors.expDate = "";
+    fieldErrors.cvv = "";
 }
 
 /** Formatea el número de tarjeta mientras el usuario escribe */
@@ -959,12 +962,40 @@ async function submitPayment(): Promise<void> {
             form.note = "";
             idemKey.value = generateIdemKey(); // Nueva clave para el proximo pago
         } else {
-            errorMessage.value = data.message || "Pago rechazado.";
+            errorMessage.value = data.message || "El pago no pudo ser procesado. Intenta de nuevo o usa otra tarjeta.";
 
-            // Solo regenerar la clave si fue un error de validacion/input (reintento seguro).
-            // Si fue timeout o estado desconocido, mantener la misma clave para que el
-            // backend evite un doble cobro si la solicitud original si fue procesada.
-            if (data.responseCode === "INVALID_INPUT" || data.responseCode === "DECLINED" || data.responseCode === "CONFIG") {
+            // Limpiar errores de campo anteriores antes de establecer los nuevos,
+            // para que no queden pegados si el usuario reintenta sin tocar los campos.
+            fieldErrors.cardNumber = "";
+            fieldErrors.expDate = "";
+            fieldErrors.cvv = "";
+
+            // Resaltar el campo específico que causó el rechazo para guiar al usuario.
+            const rc = data.responseCode || "";
+            if (rc === "INVALID_CVN" || rc === "CV_FAILED") {
+                fieldErrors.cvv = "Código de seguridad incorrecto.";
+            } else if (rc === "INVALID_EXPIRY_DATE" || rc === "EXPIRED_CARD") {
+                fieldErrors.expDate = "Fecha de vencimiento inválida o tarjeta vencida.";
+            } else if (rc === "INVALID_ACCOUNT" || rc === "INVALID_NUMBER" || rc === "INVALID_CARD_NUMBER") {
+                fieldErrors.cardNumber = "Número de tarjeta inválido.";
+            }
+
+            // Regenerar idemKey solo para errores de input/validación (reintento seguro).
+            // Para timeouts u estados desconocidos, mantener la clave para que el backend
+            // evite doble cobro si la solicitud original ya fue procesada.
+            const safeRetry = new Set([
+                "INVALID_INPUT", "DECLINED", "CONFIG",
+                "INVALID_CVN", "CV_FAILED",
+                "INVALID_ACCOUNT", "INVALID_NUMBER", "INVALID_CARD_NUMBER",
+                "INVALID_EXPIRY_DATE", "EXPIRED_CARD",
+                "INSUFFICIENT_FUND", "INSUFFICIENT_FUNDS",
+                "CREDIT_LIMIT_REACHED", "EXCEEDS_CREDIT_LIMIT",
+                "CARD_VELOCITY_EXCEEDED",
+                "INVALID_DATA", "MISSING_FIELD", "INVALID_REQUEST",
+                "AVS_FAILED", "FRAUD_SCORE_EXCEEDS_THRESHOLD",
+                "GENERAL_DECLINE", "PROCESSOR_DECLINED", "DO_NOT_HONOR"
+            ]);
+            if (safeRetry.has(rc)) {
                 idemKey.value = generateIdemKey();
             }
         }
@@ -973,8 +1004,8 @@ async function submitPayment(): Promise<void> {
         // En error de red del cliente, NO regeneramos la clave intencionalmente
         // para que un reintento inmediato actue idempotentemente en el backend.
     } finally {
-        clearSensitive();
         busy.value = false;
+        clearSensitive();
     }
 }
 

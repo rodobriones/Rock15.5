@@ -107,11 +107,7 @@
                                                 <asp:Literal ID="lAccount" runat="server" />
                                             </tbody>
                                             <tfoot>
-                                                <tr>
-                                                    <th>Total</th>
-                                                    <th class="text-right">
-                                                        <asp:Literal ID="lTotalAmount" runat="server" /></th>
-                                                </tr>
+                                                <asp:Literal ID="lTotalAmounts" runat="server" />
                                             </tfoot>
                                         </table>
                                     </div>

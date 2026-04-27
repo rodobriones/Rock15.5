@@ -54,5 +54,11 @@ namespace Rock.Model
         /// The amount.
         /// </value>
         public decimal Amount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the foreign currency code defined value identifier.
+        /// Null means the transaction was in the organization's default currency.
+        /// </summary>
+        public int? ForeignCurrencyCodeValueId { get; set; }
     }
 }
