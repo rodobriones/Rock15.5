@@ -2,6 +2,14 @@
     <Panel type="block" title="">
         <template #default>
             <div class="cyWrap">
+                <!-- Cybersource Device Fingerprint (invisible, antifraude) -->
+                <iframe
+                    v-if="deviceFingerprintUrl"
+                    :src="deviceFingerprintUrl"
+                    style="position:absolute;top:-5000px;left:-5000px;width:1px;height:1px;border:0;visibility:hidden"
+                    title="Device Fingerprint"
+                    aria-hidden="true"
+                    tabindex="-1"></iframe>
                 <div class="cyScreen">
                     <!-- Overlays: Estados de carga y exito -->
                     <div v-if="busy || successMessage" class="cyStateOverlay">
@@ -211,7 +219,7 @@
                                                         type="password"
                                                         maxlength="4"
                                                         inputmode="numeric"
-                                                        autocomplete="cc-csc"
+                                                        autocomplete="off"
                                                         :placeholder="`CVV (${expectedCvvLength})`"
                                                         @input="onCvvInput" />
                                                 </div>
@@ -449,6 +457,9 @@ type InitBag = {
     accounts: AccountOptionBag[];
     history: PaymentHistoryBag[];
     currentPersonEmail: string;
+    cybersourceOrgId: string;
+    cybersourceMerchantId: string;
+    recaptchaSiteKey: string;
 };
 
 // Resultado devuelto por la acción ProcessPayment del backend
@@ -477,6 +488,97 @@ type ExpiryParse = {
 // ========================
 const config = useConfigurationValues<InitBag>();
 const invokeBlockAction = useInvokeBlockAction();
+
+// ========================
+// CYBERSOURCE DEVICE FINGERPRINT
+// ========================
+// Genera un session ID estable por carga de página (hex 32 chars).
+// El iframe oculto carga el script de Cybersource Decision Manager Device
+// Fingerprint, que recolecta atributos del dispositivo y los asocia con este
+// session ID. El backend envía el mismo session ID a Cybersource al cobrar.
+function generateFingerprintSessionId(): string {
+    const arr = new Uint8Array(16);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        crypto.getRandomValues(arr);
+    }
+    else {
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] = Math.floor(Math.random() * 256);
+        }
+    }
+    return Array.from(arr).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+const deviceFingerprintSessionId = generateFingerprintSessionId();
+
+const deviceFingerprintUrl = computed(() => {
+    const orgId = (config.cybersourceOrgId || "").trim();
+    const merchantId = (config.cybersourceMerchantId || "").trim();
+    if (!orgId || !merchantId) {
+        return "";
+    }
+    // El parámetro session_id concatena merchantId + sessionId (requisito CYBS).
+    const combined = merchantId + deviceFingerprintSessionId;
+    return `https://h.online-metrix.net/fp/tags?org_id=${encodeURIComponent(orgId)}&session_id=${encodeURIComponent(combined)}`;
+});
+
+// ========================
+// reCAPTCHA ENTERPRISE
+// ========================
+// Carga la API JS de Google una sola vez si el bloque tiene siteKey configurado.
+// El backend valida el token contra Google Cloud antes de cobrar.
+declare global {
+    interface Window {
+        grecaptcha?: {
+            enterprise?: {
+                ready: (cb: () => void) => void;
+                execute: (siteKey: string, options: { action: string }) => Promise<string>;
+            };
+        };
+    }
+}
+
+const recaptchaSiteKey = (config.recaptchaSiteKey || "").trim();
+
+if (recaptchaSiteKey && typeof document !== "undefined") {
+    const scriptId = "recaptcha-enterprise-script";
+    if (!document.getElementById(scriptId)) {
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(recaptchaSiteKey)}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+}
+
+// Genera un token reCAPTCHA fresco para la acción "donation".
+// Devuelve "" si no hay siteKey configurada o si reCAPTCHA no cargó.
+async function getRecaptchaToken(): Promise<string> {
+    if (!recaptchaSiteKey) {
+        return "";
+    }
+    try {
+        const grecaptcha = window.grecaptcha;
+        if (!grecaptcha || !grecaptcha.enterprise) {
+            return "";
+        }
+        return await new Promise<string>((resolve) => {
+            grecaptcha.enterprise!.ready(async () => {
+                try {
+                    const token = await grecaptcha.enterprise!.execute(recaptchaSiteKey, { action: "donation" });
+                    resolve(token || "");
+                }
+                catch {
+                    resolve("");
+                }
+            });
+        });
+    }
+    catch {
+        return "";
+    }
+}
 
 // Listas de datos del servidor
 const accounts = ref<AccountOptionBag[]>(config.accounts || []);
@@ -928,6 +1030,9 @@ async function submitPayment(): Promise<void> {
     busy.value = true;
 
     try {
+        // Genera token reCAPTCHA Enterprise (vacío si la feature no está configurada).
+        const recaptchaToken = await getRecaptchaToken();
+
         const response = await invokeBlockAction<any>("ProcessPayment", {
             bag: {
                 accountId: Number(form.accountId || 0),
@@ -944,7 +1049,9 @@ async function submitPayment(): Promise<void> {
                 nitName: form.wantsReceipt ? form.nitName : "",
                 nitAddress: form.wantsReceipt ? form.nitAddress : "",
                 donorEmail: (form.donorEmail || "").trim(),
-                idemKey: idemKey.value
+                idemKey: idemKey.value,
+                deviceFingerprintSessionId: deviceFingerprintSessionId,
+                recaptchaToken: recaptchaToken
             }
         });
 

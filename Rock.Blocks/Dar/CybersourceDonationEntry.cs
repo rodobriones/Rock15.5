@@ -273,6 +273,44 @@ namespace Rock.Blocks.Dar
 
     #endregion
 
+    #region Block Attributes - Security
+
+    [TextField(
+        "reCAPTCHA Site Key",
+        Key = AttributeKey.RecaptchaSiteKey,
+        Description = "Google reCAPTCHA Enterprise public site key. Si los tres campos de reCAPTCHA están vacíos, la verificación se omite.",
+        IsRequired = false,
+        Category = AttributeCategory.Security,
+        Order = 0 )]
+
+    [EncryptedTextField(
+        "reCAPTCHA API Key",
+        Key = AttributeKey.RecaptchaApiKey,
+        Description = "API Key de Google Cloud restringida a reCAPTCHA Enterprise API. Se usa server-side para validar el token.",
+        IsRequired = false,
+        Category = AttributeCategory.Security,
+        Order = 1,
+        IsPassword = true )]
+
+    [TextField(
+        "reCAPTCHA Project Id",
+        Key = AttributeKey.RecaptchaProjectId,
+        Description = "ID del proyecto de Google Cloud donde se creó la clave de reCAPTCHA Enterprise.",
+        IsRequired = false,
+        Category = AttributeCategory.Security,
+        Order = 2 )]
+
+    [IntegerField(
+        "reCAPTCHA Min Score (0-100)",
+        Key = AttributeKey.RecaptchaMinScore,
+        Description = "Score mínimo (0-100) para aceptar la donación. reCAPTCHA devuelve 0.0–1.0; aquí se expresa como entero. Por defecto 50 (= 0.5).",
+        IsRequired = true,
+        DefaultIntegerValue = 50,
+        Category = AttributeCategory.Security,
+        Order = 3 )]
+
+    #endregion
+
     public class CybersourceDonationEntry : RockBlockType
     {
         private const string PaymentHistoryPrefix = "CYBS|";
@@ -282,6 +320,15 @@ namespace Rock.Blocks.Dar
         public override object GetObsidianBlockInitialization()
         {
             var currentPerson = RequestContext?.CurrentPerson;
+            var mode = GetMode();
+            var isLive = mode == "live";
+
+            // Org IDs públicos de Cybersource Decision Manager Device Fingerprint.
+            // Aparecen en la URL que carga el navegador, no son secretos.
+            var cybsOrgId = isLive ? "k8vif92e" : "1snn5n9w";
+            var cybsMerchantId = ( ( isLive
+                ? GetAttributeValue( AttributeKey.LiveMerchantId )
+                : GetAttributeValue( AttributeKey.TestMerchantId ) ) ?? string.Empty ).Trim();
 
             using ( var rockContext = new RockContext() )
             {
@@ -289,12 +336,15 @@ namespace Rock.Blocks.Dar
                 {
                     notLogged = currentPerson == null,
                     defaultCurrency = GetDefaultCurrency(),
-                    mode = GetMode(),
+                    mode = mode,
                     accounts = GetAllowedAccounts( rockContext ),
                     history = currentPerson != null
                         ? GetPaymentHistoryInternal( rockContext, currentPerson.Id )
                         : new List<PaymentHistoryBag>(),
-                    currentPersonEmail = currentPerson?.Email ?? string.Empty
+                    currentPersonEmail = currentPerson?.Email ?? string.Empty,
+                    cybersourceOrgId = cybsOrgId,
+                    cybersourceMerchantId = cybsMerchantId,
+                    recaptchaSiteKey = ( GetAttributeValue( AttributeKey.RecaptchaSiteKey ) ?? string.Empty ).Trim()
                 };
             }
         }
@@ -311,6 +361,12 @@ namespace Rock.Blocks.Dar
                 return ActionBadRequest( "NIT vacío." );
             }
 
+            // Limitar longitud del input para mitigar abuso/enumeración hacia la API externa.
+            if ( nit.Length > 32 )
+            {
+                return ActionBadRequest( "NIT inválido." );
+            }
+
             var apiUrl = GetAttributeValue( AttributeKey.NitApiUrl );
             var apiToken = GetDecryptedAttributeValue( AttributeKey.NitApiBearerToken );
 
@@ -319,9 +375,20 @@ namespace Rock.Blocks.Dar
                 return ActionBadRequest( "La API de validación de NIT no está configurada en el bloque." );
             }
 
+            // Validar que la URL configurada sea HTTPS absoluta para evitar SSRF accidental por mala configuración.
+            if ( !Uri.TryCreate( apiUrl, UriKind.Absolute, out var nitApiUri ) ||
+                 ( nitApiUri.Scheme != Uri.UriSchemeHttps && nitApiUri.Scheme != Uri.UriSchemeHttp ) )
+            {
+                return ActionBadRequest( "La API de validación de NIT no está configurada correctamente." );
+            }
+
             try
             {
                 var cleanNit = new string( nit.Where( char.IsLetterOrDigit ).ToArray() );
+                if ( cleanNit.IsNullOrWhiteSpace() || cleanNit.Length > 32 )
+                {
+                    return ActionBadRequest( "NIT inválido." );
+                }
                 string requestXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <RetornaDatosClienteRequest>
   <nit>{System.Security.SecurityElement.Escape( cleanNit )}</nit>
@@ -366,7 +433,8 @@ namespace Rock.Blocks.Dar
             }
             catch ( Exception ex )
             {
-                return ActionBadRequest( "Ocurrió un error al consultar el NIT: " + ex.Message );
+                ExceptionLogService.LogException( ex );
+                return ActionBadRequest( "Ocurrió un error al consultar el NIT." );
             }
         }
 
@@ -397,6 +465,13 @@ namespace Rock.Blocks.Dar
             if ( validationError.IsNotNullOrWhiteSpace() )
             {
                 return ActionBadRequest( validationError );
+            }
+
+            // reCAPTCHA Enterprise: si está configurado, validar token antes de cobrar.
+            var recaptchaError = VerifyRecaptchaToken( bag?.recaptchaToken );
+            if ( recaptchaError.IsNotNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( recaptchaError );
             }
 
             var transactionCurrency = NormalizeCurrency( bag.currency );
@@ -446,7 +521,7 @@ namespace Rock.Blocks.Dar
                 }
 
                 var gatewaySettings = BuildGatewaySettings();
-                var cybsResult = ChargeWithCybersource( bag, gatewaySettings );
+                var cybsResult = ChargeWithCybersource( bag, gatewaySettings, currentPerson );
 
                 var historyAfterCall = currentPerson != null
                     ? GetPaymentHistoryInternal( rockContext, currentPerson.Id )
@@ -477,10 +552,11 @@ namespace Rock.Blocks.Dar
                 }
                 catch ( Exception ex )
                 {
+                    ExceptionLogService.LogException( ex );
                     return ActionOk( new ProcessPaymentResponseBag
                     {
                         success = false,
-                        message = $"Cobro aprobado en Cybersource, pero falló el registro en Financial: {ex.Message}",
+                        message = "Cobro aprobado en Cybersource, pero falló el registro en Financial. Contacta a soporte con el número de referencia.",
                         responseCode = cybsResult.responseCode,
                         authorizationNumber = cybsResult.authorizationNumber,
                         referenceNumber = cybsResult.referenceNumber,
@@ -887,6 +963,118 @@ ORDER BY
 
         #region Internal - Cybersource
 
+        /// <summary>
+        /// Valida el token de reCAPTCHA Enterprise contra Google Cloud antes del cobro.
+        /// Si los atributos del bloque no están configurados, omite la verificación.
+        /// Devuelve null/empty si todo OK; mensaje de error (string) si la verificación falla.
+        /// </summary>
+        private string VerifyRecaptchaToken( string token )
+        {
+            var siteKey = ( GetAttributeValue( AttributeKey.RecaptchaSiteKey ) ?? string.Empty ).Trim();
+            var apiKey = ( GetDecryptedAttributeValue( AttributeKey.RecaptchaApiKey ) ?? string.Empty ).Trim();
+            var projectId = ( GetAttributeValue( AttributeKey.RecaptchaProjectId ) ?? string.Empty ).Trim();
+
+            // Feature off: si cualquiera de los 3 está vacío, no se verifica.
+            if ( siteKey.IsNullOrWhiteSpace() || apiKey.IsNullOrWhiteSpace() || projectId.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
+            // Si está configurado, el token es obligatorio.
+            if ( token.IsNullOrWhiteSpace() )
+            {
+                return "Verificación de seguridad fallida. Recargue la página e intente de nuevo.";
+            }
+
+            // Threshold (0-100 → 0.0-1.0). Default 50.
+            var minScoreInt = GetAttributeValue( AttributeKey.RecaptchaMinScore ).AsIntegerOrNull() ?? 50;
+            if ( minScoreInt < 0 ) minScoreInt = 0;
+            if ( minScoreInt > 100 ) minScoreInt = 100;
+            var minScore = minScoreInt / 100.0;
+
+            try
+            {
+                var url = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "https://recaptchaenterprise.googleapis.com/v1/projects/{0}/assessments?key={1}",
+                    Uri.EscapeDataString( projectId ),
+                    Uri.EscapeDataString( apiKey ) );
+
+                var requestBody = new Dictionary<string, object>
+                {
+                    {
+                        "event",
+                        new Dictionary<string, object>
+                        {
+                            { "token", token },
+                            { "siteKey", siteKey },
+                            { "expectedAction", "donation" }
+                        }
+                    }
+                };
+                var bodyJson = requestBody.ToJson();
+
+                using ( var http = new HttpClient() )
+                {
+                    http.Timeout = TimeSpan.FromSeconds( 10 );
+                    using ( var content = new StringContent( bodyJson, Encoding.UTF8, "application/json" ) )
+                    {
+                        var response = http.PostAsync( url, content ).Result;
+                        var responseText = response.Content.ReadAsStringAsync().Result;
+
+                        if ( !response.IsSuccessStatusCode )
+                        {
+                            ExceptionLogService.LogException( new Exception(
+                                $"reCAPTCHA Enterprise HTTP {(int)response.StatusCode}: {responseText}" ) );
+                            return "Verificación de seguridad fallida. Intente de nuevo.";
+                        }
+
+                        var parsed = responseText.FromJsonOrNull<RecaptchaAssessmentResponse>();
+                        if ( parsed?.tokenProperties == null )
+                        {
+                            ExceptionLogService.LogException( new Exception(
+                                $"reCAPTCHA respuesta sin tokenProperties. Body: {responseText}" ) );
+                            return "Verificación de seguridad fallida. Intente de nuevo.";
+                        }
+
+                        if ( !parsed.tokenProperties.valid )
+                        {
+                            var invalidReason = parsed.tokenProperties.invalidReason.IsNotNullOrWhiteSpace()
+                                ? parsed.tokenProperties.invalidReason
+                                : "unknown";
+                            ExceptionLogService.LogException( new Exception(
+                                $"reCAPTCHA token inválido: {invalidReason}. Body: {responseText}" ) );
+                            return "Verificación de seguridad fallida. Recargue la página e intente de nuevo.";
+                        }
+
+                        var action = parsed.tokenProperties.action ?? string.Empty;
+                        if ( !string.Equals( action, "donation", StringComparison.OrdinalIgnoreCase ) )
+                        {
+                            ExceptionLogService.LogException( new Exception(
+                                $"reCAPTCHA action inesperada: {action}" ) );
+                            return "Verificación de seguridad fallida. Intente de nuevo.";
+                        }
+
+                        // riskAnalysis.score (0.0–1.0). Comparar contra minScore.
+                        var score = parsed.riskAnalysis?.score ?? 0.0;
+                        if ( score < minScore )
+                        {
+                            ExceptionLogService.LogException( new Exception(
+                                $"reCAPTCHA score {score:0.00} debajo del mínimo {minScore:0.00}" ) );
+                            return "No fue posible validar la solicitud. Si el problema persiste, contacta a soporte.";
+                        }
+                    }
+                }
+
+                return null;
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+                return "Verificación de seguridad fallida. Intente de nuevo.";
+            }
+        }
+
         private string ValidatePaymentRequest( ProcessPaymentRequestBag bag )
         {
             if ( bag == null )
@@ -1006,7 +1194,7 @@ ORDER BY
             }
         }
 
-        private CybersourceChargeResult ChargeWithCybersource( ProcessPaymentRequestBag bag, CybersourceGatewaySettings settings )
+        private CybersourceChargeResult ChargeWithCybersource( ProcessPaymentRequestBag bag, CybersourceGatewaySettings settings, Person currentPerson = null )
         {
             var missing = new List<string>();
 
@@ -1045,7 +1233,7 @@ ORDER BY
             var date = DateTime.UtcNow.ToString( "r", CultureInfo.InvariantCulture );
 
             var requestCode = NormalizeReferenceCode( bag.auditNumber );
-            var requestPayload = BuildPaymentPayload( bag, requestCode );
+            var requestPayload = BuildPaymentPayload( bag, requestCode, currentPerson );
             var bodyJson = requestPayload.ToJson();
 
             var url = settings.baseUrl + path;
@@ -1094,11 +1282,12 @@ ORDER BY
                 }
                 catch ( Exception ex )
                 {
+                    ExceptionLogService.LogException( ex );
                     return new CybersourceChargeResult
                     {
                         ok = false,
                         responseCode = "CONFIG",
-                        errorMessage = "Shared secret inválido: " + ex.Message
+                        errorMessage = "Shared secret inválido."
                     };
                 }
 
@@ -1135,11 +1324,12 @@ ORDER BY
                 }
                 catch ( Exception ex )
                 {
+                    ExceptionLogService.LogException( ex );
                     return new CybersourceChargeResult
                     {
                         ok = false,
                         responseCode = "EXCEPTION",
-                        errorMessage = "Error consumiendo Cybersource: " + ex.Message
+                        errorMessage = "Error de comunicación con la pasarela de pago. Intenta de nuevo."
                     };
                 }
             }
@@ -1372,7 +1562,7 @@ ORDER BY
             return "El pago no pudo ser procesado. Intenta de nuevo o usa otra tarjeta.";
         }
 
-        private Dictionary<string, object> BuildPaymentPayload( ProcessPaymentRequestBag bag, string requestCode )
+        private Dictionary<string, object> BuildPaymentPayload( ProcessPaymentRequestBag bag, string requestCode, Person currentPerson = null )
         {
             var orderInformation = new Dictionary<string, object>
             {
@@ -1383,7 +1573,8 @@ ORDER BY
                         { "totalAmount", bag.amount.ToString( "0.00", CultureInfo.InvariantCulture ) },
                         { "currency", NormalizeCurrency( bag.currency ) }
                     }
-                }
+                },
+                { "billTo", BuildBillTo( bag, currentPerson ) }
             };
 
             var payload = new Dictionary<string, object>
@@ -1421,7 +1612,223 @@ ORDER BY
                 }
             };
 
+            var deviceInfo = BuildDeviceInformation( bag );
+            if ( deviceInfo != null && deviceInfo.Count > 0 )
+            {
+                payload["deviceInformation"] = deviceInfo;
+            }
+
             return payload;
+        }
+
+        /// <summary>
+        /// Construye el bloque billTo para Cybersource usando datos ya disponibles.
+        /// Logueado: nombre/email/teléfono/dirección de la cuenta (con fallback Guatemala).
+        /// Anónimo: nombre = split de bag.cardName, email = bag.donorEmail, dirección Guatemala.
+        /// Mejora la tasa de aprobación al permitir AVS y reduce riesgo de contracargo.
+        /// </summary>
+        private Dictionary<string, object> BuildBillTo( ProcessPaymentRequestBag bag, Person currentPerson )
+        {
+            string firstName = null;
+            string lastName = null;
+            string email = null;
+            string phoneNumber = null;
+            string address1 = null;
+            string locality = null;
+            string administrativeArea = null;
+            string postalCode = null;
+
+            if ( currentPerson != null )
+            {
+                firstName = currentPerson.FirstName.IsNotNullOrWhiteSpace()
+                    ? currentPerson.FirstName
+                    : currentPerson.NickName;
+                lastName = currentPerson.LastName;
+
+                email = currentPerson.Email.IsNotNullOrWhiteSpace()
+                    ? currentPerson.Email
+                    : ( bag.donorEmail ?? string.Empty );
+
+                // Primer teléfono no vacío de la cuenta, sólo dígitos.
+                try
+                {
+                    var rawPhone = currentPerson.PhoneNumbers?
+                        .FirstOrDefault( p => p.Number.IsNotNullOrWhiteSpace() )?
+                        .Number;
+                    if ( rawPhone.IsNotNullOrWhiteSpace() )
+                    {
+                        phoneNumber = new string( rawPhone.Where( char.IsDigit ).ToArray() );
+                    }
+                }
+                catch
+                {
+                    phoneNumber = null;
+                }
+
+                // Dirección de la cuenta (mailing → home). Si no hay, fallback Guatemala.
+                try
+                {
+                    var location = currentPerson.GetMailingLocation() ?? currentPerson.GetHomeLocation();
+                    if ( location != null )
+                    {
+                        address1 = location.Street1;
+                        locality = location.City;
+                        administrativeArea = location.State;
+                        postalCode = location.PostalCode;
+                    }
+                }
+                catch
+                {
+                    // No bloquear el cobro si la consulta de dirección falla.
+                }
+            }
+            else
+            {
+                var split = SplitCardholderName( bag.cardName );
+                firstName = split.first;
+                lastName = split.last;
+                email = bag.donorEmail ?? string.Empty;
+            }
+
+            // Saneamiento defensivo. Cybersource exige firstName, lastName, country no vacíos.
+            if ( firstName.IsNullOrWhiteSpace() )
+            {
+                firstName = "Donante";
+            }
+            if ( lastName.IsNullOrWhiteSpace() )
+            {
+                // Duplicar el nombre en lugar de "-" mejora el match parcial de AVS.
+                lastName = firstName;
+            }
+
+            // Normalización defensiva. Muchos perfiles en Rock tienen mal capturado:
+            //   State = "GT" (código de país) en lugar de "GU" (depto. de Guatemala) → CYBS marca COR-BA
+            //   City = "Guatemala" en lugar de "Guatemala City" → CYBS marca MM-IPBC porque el geo-IP
+            //   resuelve "Guatemala City" exacto.
+            if ( administrativeArea.IsNotNullOrWhiteSpace() )
+            {
+                var stateUpper = administrativeArea.Trim().ToUpperInvariant();
+                if ( stateUpper.Length != 2 || stateUpper == "GT" || stateUpper == "GUATEMALA" )
+                {
+                    administrativeArea = "GU";
+                }
+                else
+                {
+                    administrativeArea = stateUpper;
+                }
+            }
+            if ( locality.IsNotNullOrWhiteSpace() )
+            {
+                var cityTrim = locality.Trim();
+                if ( string.Equals( cityTrim, "Guatemala", StringComparison.OrdinalIgnoreCase ) ||
+                     string.Equals( cityTrim, "Ciudad de Guatemala", StringComparison.OrdinalIgnoreCase ) )
+                {
+                    locality = "Guatemala City";
+                }
+            }
+
+            // Fallbacks: dirección de la organización (verificable, mejora AVS y baja flags
+            // UNV-ADDR / MM-IPBC en Decision Manager). Locality "Guatemala City" coincide
+            // con la geo-IP que devuelve Cybersource para IPs guatemaltecas.
+            if ( address1.IsNullOrWhiteSpace() ) address1 = "19 Avenida 16-02, Zona 10";
+            if ( locality.IsNullOrWhiteSpace() ) locality = "Guatemala City";
+            if ( administrativeArea.IsNullOrWhiteSpace() ) administrativeArea = "GU";
+            if ( postalCode.IsNullOrWhiteSpace() ) postalCode = "01010";
+
+            var billTo = new Dictionary<string, object>
+            {
+                { "firstName", firstName.Trim() },
+                { "lastName", lastName.Trim() },
+                { "address1", address1.Trim() },
+                { "locality", locality.Trim() },
+                { "administrativeArea", administrativeArea.Trim() },
+                { "postalCode", postalCode.Trim() },
+                { "country", "GT" }
+            };
+
+            if ( email.IsNotNullOrWhiteSpace() )
+            {
+                billTo["email"] = email.Trim();
+            }
+            if ( phoneNumber.IsNotNullOrWhiteSpace() )
+            {
+                billTo["phoneNumber"] = phoneNumber;
+            }
+
+            return billTo;
+        }
+
+        /// <summary>
+        /// Divide el nombre del titular de la tarjeta en firstName/lastName.
+        /// Si viene una sola palabra, duplica el nombre para mejor match de AVS.
+        /// </summary>
+        private (string first, string last) SplitCardholderName( string cardName )
+        {
+            if ( cardName.IsNullOrWhiteSpace() )
+            {
+                return ( "Donante", "Anonimo" );
+            }
+
+            var trimmed = cardName.Trim();
+            var idx = trimmed.IndexOf( ' ' );
+            if ( idx < 0 )
+            {
+                return ( trimmed, trimmed );
+            }
+
+            var first = trimmed.Substring( 0, idx ).Trim();
+            var last = trimmed.Substring( idx + 1 ).Trim();
+            if ( last.IsNullOrWhiteSpace() )
+            {
+                last = first;
+            }
+            return ( first, last );
+        }
+
+        /// <summary>
+        /// Construye deviceInformation para fraud screening / Decision Manager.
+        /// IP y userAgent del request, más fingerprintSessionId si el cliente lo envía.
+        /// </summary>
+        private Dictionary<string, object> BuildDeviceInformation( ProcessPaymentRequestBag bag = null )
+        {
+            var info = new Dictionary<string, object>();
+
+            try
+            {
+                var ip = RequestContext?.ClientInformation?.IpAddress;
+                if ( ip.IsNotNullOrWhiteSpace() && ip != "localhost" && ip != "::1" )
+                {
+                    info["ipAddress"] = ip;
+                }
+
+                var ua = RequestContext?.ClientInformation?.UserAgent;
+                if ( ua.IsNotNullOrWhiteSpace() )
+                {
+                    // Cybersource limita userAgent a 255 chars.
+                    info["userAgent"] = ua.Length > 255 ? ua.Substring( 0, 255 ) : ua;
+                }
+            }
+            catch
+            {
+                // No bloquear el cobro si el contexto no está disponible.
+            }
+
+            // Session ID de Decision Manager Device Fingerprint (cliente).
+            // Cybersource exige alfanumérico, máx 32 chars.
+            if ( bag != null && bag.deviceFingerprintSessionId.IsNotNullOrWhiteSpace() )
+            {
+                var sid = new string( bag.deviceFingerprintSessionId.Where( char.IsLetterOrDigit ).ToArray() );
+                if ( sid.Length > 32 )
+                {
+                    sid = sid.Substring( 0, 32 );
+                }
+                if ( sid.IsNotNullOrWhiteSpace() )
+                {
+                    info["fingerprintSessionId"] = sid;
+                }
+            }
+
+            return info;
         }
 
         private string BuildDigest( string bodyJson )
@@ -1654,16 +2061,20 @@ ORDER BY
 
         private string BuildForeignKey( CybersourceChargeResult chargeResult, string mode, string currency, string idemKey = "" )
         {
+            // IDEM va primero para que sobreviva al truncado de 100 chars
+            // (es lo que usa el lookup de idempotencia). El resto de campos son
+            // informativos y se extraen por nombre, así que el orden no importa
+            // para ExtractForeignKeyValue ni para registros históricos.
             var foreignKey = string.Format(
                 CultureInfo.InvariantCulture,
-                "CYBS|MODE={0}|CUR={1}|RC={2}|REF={3}|AUDIT={4}|AUTH={5}|IDEM={6}",
+                "CYBS|IDEM={0}|MODE={1}|CUR={2}|RC={3}|REF={4}|AUDIT={5}|AUTH={6}",
+                idemKey ?? string.Empty,
                 mode ?? string.Empty,
                 currency ?? string.Empty,
                 chargeResult.responseCode ?? string.Empty,
                 chargeResult.referenceNumber ?? string.Empty,
                 chargeResult.auditNumber ?? string.Empty,
-                chargeResult.authorizationNumber ?? string.Empty,
-                idemKey ?? string.Empty );
+                chargeResult.authorizationNumber ?? string.Empty );
 
             if ( foreignKey.Length > 100 )
             {
@@ -1881,6 +2292,11 @@ ORDER BY
             public List<AccountOptionBag> accounts { get; set; }
             public List<PaymentHistoryBag> history { get; set; }
             public string currentPersonEmail { get; set; }
+            // Datos públicos requeridos por Cybersource Device Fingerprint en el cliente.
+            public string cybersourceOrgId { get; set; }
+            public string cybersourceMerchantId { get; set; }
+            // Site key pública de reCAPTCHA Enterprise. Vacía = verificación deshabilitada.
+            public string recaptchaSiteKey { get; set; }
         }
 
         public class AccountOptionBag
@@ -1910,6 +2326,10 @@ ORDER BY
             public string donorEmail { get; set; }
 
             public string idemKey { get; set; }
+            // Session ID generado en el cliente para Cybersource Device Fingerprint.
+            public string deviceFingerprintSessionId { get; set; }
+            // Token de reCAPTCHA Enterprise generado en el cliente.
+            public string recaptchaToken { get; set; }
         }
 
         public class ProcessPaymentResponseBag
@@ -1987,6 +2407,24 @@ ORDER BY
             public string responseText { get; set; }
         }
 
+        private class RecaptchaAssessmentResponse
+        {
+            public RecaptchaTokenProperties tokenProperties { get; set; }
+            public RecaptchaRiskAnalysis riskAnalysis { get; set; }
+        }
+
+        private class RecaptchaTokenProperties
+        {
+            public bool valid { get; set; }
+            public string invalidReason { get; set; }
+            public string action { get; set; }
+        }
+
+        private class RecaptchaRiskAnalysis
+        {
+            public double score { get; set; }
+        }
+
         private class PaymentHistoryRow
         {
             public int TransactionId { get; set; }
@@ -2039,6 +2477,11 @@ ORDER BY
             public const string NitApiBearerToken = "NitApiBearerToken";
 
             public const string PersonNitAttributeKey = "PersonNitAttributeKey";
+
+            public const string RecaptchaSiteKey = "RecaptchaSiteKey";
+            public const string RecaptchaApiKey = "RecaptchaApiKey";
+            public const string RecaptchaProjectId = "RecaptchaProjectId";
+            public const string RecaptchaMinScore = "RecaptchaMinScore";
         }
 
         #endregion
@@ -2049,6 +2492,7 @@ ORDER BY
         {
             public const string Finance = "Finance";
             public const string Gateway = "Gateway";
+            public const string Security = "Security";
         }
 
         #endregion
