@@ -822,6 +822,12 @@ function onCardNumberInput(): void {
     const digits = (form.cardNumber || "").replace(/[^\d]/g, "");
     const brand = detectCardBrand(digits);
     form.cardNumber = formatCardNumberDigits(digits, brand);
+
+    // American Express no está habilitada en el merchant actual.
+    // Mostrar error en tiempo real para evitar el intento fallido.
+    if (brand === "amex") {
+        fieldErrors.cardNumber = "El sistema no soporta American Express. Le sugerimos usar Visa o Mastercard.";
+    }
 }
 
 /** Formatea la fecha de vencimiento con slash automático (MM/YY) */
@@ -963,6 +969,10 @@ function validateForm(): boolean {
 
     if (!luhnCheck(cardNumberDigits.value)) {
         fieldErrors.cardNumber = "Número de tarjeta inválido.";
+        isValid = false;
+    }
+    else if (cardBrand.value === "amex") {
+        fieldErrors.cardNumber = "El sistema no soporta American Express. Le sugerimos usar Visa o Mastercard.";
         isValid = false;
     }
 

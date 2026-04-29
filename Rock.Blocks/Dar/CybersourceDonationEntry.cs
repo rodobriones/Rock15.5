@@ -712,7 +712,12 @@ namespace Rock.Blocks.Dar
             var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, transactionCurrency );
 
             EnqueueFinancialTransactionWorkflow( AttributeKey.DonationWorkflow, personAliasId, transaction.Id, workflowAttributes );
-            EnqueueFinancialTransactionWorkflow( AttributeKey.ReceiptWorkflow, personAliasId, transaction.Id, workflowAttributes );
+
+            // Solo lanzar el Recibo Workflow si el donante solicitó recibo, ingresó NIT y fue validado (nitName poblado por la API).
+            if ( bag.wantsReceipt && !bag.nit.IsNullOrWhiteSpace() && !bag.nitName.IsNullOrWhiteSpace() )
+            {
+                EnqueueFinancialTransactionWorkflow( AttributeKey.ReceiptWorkflow, personAliasId, transaction.Id, workflowAttributes );
+            }
 
             return transaction.Id;
         }
@@ -1112,6 +1117,14 @@ ORDER BY
             if ( cardNumber.Length < 12 || cardNumber.Length > 19 )
             {
                 return "Número de tarjeta inválido.";
+            }
+
+            // American Express no está habilitada en el merchant actual (vdcguatemala
+            // no soporta AmEx). Rechazo defensivo aquí por si el frontend es bypassed.
+            if ( cardNumber.Length >= 2 &&
+                 ( cardNumber.StartsWith( "34" ) || cardNumber.StartsWith( "37" ) ) )
+            {
+                return "El sistema no soporta American Express. Le sugerimos usar Visa o Mastercard.";
             }
 
             if ( bag.expMonth < 1 || bag.expMonth > 12 )
