@@ -1,6 +1,8 @@
 
 <template>
-    <div class="obs-header-root body-3">
+    <div class="obs-header-shell">
+        <transition name="obs-soft-fade">
+        <div v-if="isReady" class="obs-header-root body-3">
         <section class="menuvr2">
             <div class="menupruebaheader-3">
                 <div class="navegador-wrapper-2">
@@ -80,11 +82,25 @@
                 </div>
             </div>
         </section>
+        </div>
+        </transition>
     </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref, nextTick } from "vue";
+
+const isReady = ref(false);
+
+const scheduleReveal = (cb: () => void): void => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    if (typeof idle === "function") {
+        idle(cb, { timeout: 1500 });
+    }
+    else {
+        setTimeout(cb, 200);
+    }
+};
 
 const ensureGoogleFonts = (): void => {
     if (document.head.querySelector('link[data-header-obs="google-fonts"]')) {
@@ -170,20 +186,61 @@ const bindHeaderInteractions = (root: HTMLElement): void => {
     });
 };
 
+const initializeHeader = (): void => {
+    nextTick(() => {
+        const root = document.querySelector(".obs-header-root") as HTMLElement | null;
+        if (!root || root.dataset.obsHeaderInit === "1") {
+            return;
+        }
+
+        root.dataset.obsHeaderInit = "1";
+
+        ensureGoogleFonts();
+        bindHeaderInteractions(root);
+    });
+};
+
 onMounted(() => {
-    const root = document.querySelector(".obs-header-root") as HTMLElement | null;
-    if (!root || root.dataset.obsHeaderInit === "1") {
-        return;
+    const reveal = (): void => {
+        isReady.value = true;
+        initializeHeader();
+    };
+
+    if (document.readyState === "complete") {
+        scheduleReveal(reveal);
     }
-
-    root.dataset.obsHeaderInit = "1";
-
-    ensureGoogleFonts();
-    bindHeaderInteractions(root);
+    else {
+        window.addEventListener("load", () => scheduleReveal(reveal), { once: true });
+    }
 });
 </script>
 
 <style scoped>
+
+/* Soft reveal: reserva alto para evitar layout shift mientras el header se monta */
+.obs-header-shell {
+    min-height: 60px;
+}
+
+@media screen and (min-width: 1440px) {
+    .obs-header-shell { min-height: 80px; }
+}
+
+@media screen and (max-width: 479px) {
+    .obs-header-shell { min-height: 49px; }
+}
+
+.obs-soft-fade-enter-active {
+    transition: opacity 350ms ease;
+}
+
+.obs-soft-fade-enter-from {
+    opacity: 0;
+}
+
+.obs-soft-fade-enter-to {
+    opacity: 1;
+}
 
 /* normalize.css */
 /*! normalize.css v3.0.3 | MIT License | github.com/necolas/normalize.css */

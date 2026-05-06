@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:pagespeed.web.dev)",
+      "WebFetch(domain:www.googleapis.com)",
+      "Bash(curl -sS --max-time 90 \"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://personas.vidareal.tv/page/962&strategy=mobile&category=performance\" -o /tmp/psi-vr.json)",
+      "Read(//tmp/**)",
+      "Read(//c/tmp/**)"
+    ]
+  }
+}
