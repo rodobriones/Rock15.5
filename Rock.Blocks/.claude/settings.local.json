@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"c:/Repos/Rock18.1/Rock.JavaScript.Obsidian.Blocks/src/LayoutCustom/_webflowBase.ts\" \"/c/tmp/_webflowBase.js\")",
+      "Bash(node --check _webflowBase.js)",
+      "Bash(python -c \"import json, sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(node --check dist/LayoutCustom/_webflowBase.js)"
+    ]
+  }
+}
