@@ -338,9 +338,7 @@ namespace Rock.Blocks.Dar
                     defaultCurrency = GetDefaultCurrency(),
                     mode = mode,
                     accounts = GetAllowedAccounts( rockContext ),
-                    history = currentPerson != null
-                        ? GetPaymentHistoryInternal( rockContext, currentPerson.Id )
-                        : new List<PaymentHistoryBag>(),
+                    history = new List<PaymentHistoryBag>(),
                     currentPersonEmail = currentPerson?.Email ?? string.Empty,
                     cybersourceOrgId = cybsOrgId,
                     cybersourceMerchantId = cybsMerchantId,

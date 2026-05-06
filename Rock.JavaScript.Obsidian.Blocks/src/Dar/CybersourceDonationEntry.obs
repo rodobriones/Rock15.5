@@ -4,7 +4,7 @@
             <div class="cyWrap">
                 <!-- Cybersource Device Fingerprint (invisible, antifraude) -->
                 <iframe
-                    v-if="deviceFingerprintUrl"
+                    v-if="deviceFingerprintReady && deviceFingerprintUrl"
                     :src="deviceFingerprintUrl"
                     style="position:absolute;top:-5000px;left:-5000px;width:1px;height:1px;border:0;visibility:hidden"
                     title="Device Fingerprint"
@@ -374,7 +374,7 @@
                             <section v-show="activeSubmenu === 'history'" class="cyHistoryCard cyHistoryPanel">
                                 <div class="cyHistoryHeader">
                                     <h4 class="cyHistoryTitle">Mi historial de pagos</h4>
-                                    <RockButton btnType="default" :disabled="busyHistory" @click="loadHistory">
+                                    <RockButton btnType="default" :disabled="busyHistory" @click="loadHistory(true)">
                                         {{ busyHistory ? "Cargando..." : "Actualizar" }}
                                     </RockButton>
                                 </div>
@@ -478,7 +478,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, type DirectiveBinding } from "vue";
+import { computed, onMounted, reactive, ref, type DirectiveBinding } from "vue";
 import Panel from "@Obsidian/Controls/panel.obs";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import RockButton from "@Obsidian/Controls/rockButton.obs";
@@ -585,6 +585,16 @@ const deviceFingerprintUrl = computed(() => {
     return `https://h.online-metrix.net/fp/tags?org_id=${encodeURIComponent(orgId)}&session_id=${encodeURIComponent(combined)}`;
 });
 
+// Diferimos el montaje del iframe hasta después del primer paint para sacarlo
+// del critical rendering path. Cybersource solo necesita el fingerprint listo
+// antes de cobrar, no antes de pintar la UI.
+const deviceFingerprintReady = ref(false);
+onMounted(() => {
+    requestAnimationFrame(() => {
+        setTimeout(() => { deviceFingerprintReady.value = true; }, 0);
+    });
+});
+
 // ========================
 // reCAPTCHA ENTERPRISE
 // ========================
@@ -613,6 +623,32 @@ if (recaptchaSiteKey && typeof document !== "undefined") {
         script.defer = true;
         document.head.appendChild(script);
     }
+}
+
+// ========================
+// GOOGLE FONTS (Manrope + Plus Jakarta Sans)
+// ========================
+// Se inyectan como <link> en lugar de @import dentro del <style> porque @import
+// se descarga después del CSS padre y bloquea el render hasta completar. El
+// <link> con preconnect permite descarga paralela; display=swap pinta texto
+// con fuente fallback al instante y la cambia cuando llega la web font.
+if (typeof document !== "undefined" && !document.getElementById("cy-fonts")) {
+    const pre1 = document.createElement("link");
+    pre1.rel = "preconnect";
+    pre1.href = "https://fonts.googleapis.com";
+    document.head.appendChild(pre1);
+
+    const pre2 = document.createElement("link");
+    pre2.rel = "preconnect";
+    pre2.href = "https://fonts.gstatic.com";
+    pre2.crossOrigin = "anonymous";
+    document.head.appendChild(pre2);
+
+    const link = document.createElement("link");
+    link.id = "cy-fonts";
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap";
+    document.head.appendChild(link);
 }
 
 // Genera un token reCAPTCHA fresco para la acción "donation".
@@ -1191,15 +1227,18 @@ async function submitPayment(): Promise<void> {
 }
 
 /** Carga el historial de pagos del usuario desde el backend */
-async function loadHistory(): Promise<void> {
+async function loadHistory(force = false): Promise<void> {
     if (busyHistory.value) {
+        return;
+    }
+    if (!force && history.value.length > 0) {
         return;
     }
 
     busyHistory.value = true;
 
     try {
-        const response = await invokeBlockAction<any>("GetPaymentHistory", {});
+        const response = await invokeBlockAction<{ history: PaymentHistoryBag[] }>("GetPaymentHistory", {});
         if (response.isSuccess) {
             history.value = response.data?.history || [];
         }
@@ -1231,7 +1270,7 @@ function goToHistoryFromSuccess(): void {
     clearAllFieldErrors();
     idemKey.value = generateIdemKey();
     activeSubmenu.value = "history";
-    loadHistory();
+    loadHistory(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1347,8 +1386,6 @@ function statusClass(status?: string): string {
 </script>
 
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
-
 .panel-block .panel-heading,
 .panel-block .panel-header {
     display: none !important;
