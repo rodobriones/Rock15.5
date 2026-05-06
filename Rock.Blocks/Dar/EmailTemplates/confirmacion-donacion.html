@@ -40,11 +40,9 @@
                     </table>
                   </td>
                   <td align="right" style="vertical-align:middle;">
-                    <!-- Badge Live/Test -->
+                    <!-- Badge solo en modo Test -->
                     {% assign mode = Workflow | Attribute:'Mode' %}
-                    {% if mode == 'live' %}
-                    <span style="display:inline-block;background:#163b28;border:1px solid #2c8b5e;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Live</span>
-                    {% else %}
+                    {% if mode != 'live' %}
                     <span style="display:inline-block;background:#1a2b42;border:1px solid #4d709b;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Test</span>
                     {% endif %}
                   </td>

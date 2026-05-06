@@ -187,6 +187,19 @@ namespace Rock.Blocks.Dar
                 : summary.Substring( start ).Trim();
         }
 
+        /// <summary>
+        /// Returns the last 4 digits from a masked account number (e.g. "************1234" -> "1234").
+        /// Returns empty string if the input is null/empty or has fewer than 4 digits.
+        /// </summary>
+        private static string ExtractLast4( string masked )
+        {
+            if ( string.IsNullOrWhiteSpace( masked ) )
+                return "";
+
+            var digits = new string( masked.Where( char.IsDigit ).ToArray() );
+            return digits.Length >= 4 ? digits.Substring( digits.Length - 4 ) : digits;
+        }
+
         #endregion
 
         #region Block Actions
@@ -228,6 +241,7 @@ namespace Rock.Blocks.Dar
                 dt.Columns.Add( "Monto", typeof( decimal ) );
                 dt.Columns.Add( "Moneda", typeof( string ) );
                 dt.Columns.Add( "Codigo", typeof( string ) );
+                dt.Columns.Add( "Tarjeta", typeof( string ) );
                 dt.Columns.Add( "Resumen", typeof( string ) );
 
                 foreach ( var r in rows )
@@ -241,6 +255,7 @@ namespace Rock.Blocks.Dar
                         r.totalAmount,
                         r.currencyLabel,
                         r.transactionCode,
+                        string.IsNullOrEmpty( r.cardLast4 ) ? "" : "*" + r.cardLast4,
                         r.summary
                     );
                 }
@@ -344,6 +359,7 @@ namespace Rock.Blocks.Dar
                     t.Summary,
                     t.TransactionCode,
                     t.ForeignCurrencyCodeValueId,
+                    AccountNumberMasked = t.FinancialPaymentDetail != null ? t.FinancialPaymentDetail.AccountNumberMasked : null,
                     PersonId = ( int? ) t.AuthorizedPersonAlias.PersonId,
                     PersonNickName = t.AuthorizedPersonAlias.Person.NickName,
                     PersonLastName = t.AuthorizedPersonAlias.Person.LastName,
@@ -410,6 +426,7 @@ namespace Rock.Blocks.Dar
                     foreignCurrencyCodeValueId = r.ForeignCurrencyCodeValueId,
                     currencyLabel = currencyLabel,
                     transactionCode = r.TransactionCode ?? "",
+                    cardLast4 = ExtractLast4( r.AccountNumberMasked ),
                     summary = r.Summary ?? "",
                     details = details?.Select( d => new TransactionDetailBag
                     {
@@ -460,6 +477,7 @@ namespace Rock.Blocks.Dar
             public int? foreignCurrencyCodeValueId { get; set; }
             public string currencyLabel { get; set; }
             public string transactionCode { get; set; }
+            public string cardLast4 { get; set; }
             public string summary { get; set; }
             public List<TransactionDetailBag> details { get; set; }
         }

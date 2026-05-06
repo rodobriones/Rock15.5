@@ -166,7 +166,10 @@
                                 <td class="text-muted small">{{ txn.details.map(d => d.accountName).join(', ') }}</td>
                                 <td class="text-right font-weight-bold text-nowrap">{{ txn.formattedTotal }}</td>
                                 <td><span class="label label-default">{{ txn.currencyLabel }}</span></td>
-                                <td class="text-muted small text-nowrap">{{ txn.transactionCode }}</td>
+                                <td class="text-muted small text-nowrap">
+                                    {{ txn.transactionCode }}
+                                    <span v-if="txn.cardLast4" class="text-muted ml-1">*{{ txn.cardLast4 }}</span>
+                                </td>
                             </tr>
                             <!-- Expanded detail rows: v-for and v-if on separate elements to keep proper scope -->
                             <template v-for="txn2 in group" :key="`detail-${txn2.id}`">
@@ -283,6 +286,7 @@
         foreignCurrencyCodeValueId: number | null;
         currencyLabel: string;
         transactionCode: string;
+        cardLast4: string;
         summary: string;
         details: TransactionDetail[];
     }

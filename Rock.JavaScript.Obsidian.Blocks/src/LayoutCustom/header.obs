@@ -6,23 +6,23 @@
                 <div class="navegador-wrapper-2">
                     <div class="navegador-block-2">
                         <div id="w-node-_1e40c1e0-d28b-cb30-faa1-b4e963de0fdd-63de0fd9" class="div-block-nav-2">
-                            <a href="#" class="w-inline-block"><img loading="lazy" src="https://cdn.prod.website-files.com/67c61dde162b9dada748b105/67f599fe613794b8d1403e2f_logo%20vidareal.svg" alt="" class="logonav-2"></a>
+                            <a href="https://www.vidareal.tv/" class="w-inline-block"><img loading="lazy" src="https://cdn.prod.website-files.com/67c61dde162b9dada748b105/67f599fe613794b8d1403e2f_logo%20vidareal.svg" alt="" class="logonav-2"></a>
                         </div>
                     </div>
                     <div class="div-block-1230">
-                        <a href="#" class="link-block-135 w-inline-block">
+                        <a href="https://www.vidareal.tv/quien-es-jesus" class="link-block-135 w-inline-block">
                             <div class="optionmenu-3">&iquest;Qui&eacute;n es Jes&uacute;s?</div>
                         </a>
                         <div class="div-block-1232"></div>
-                        <a href="#" class="link-block-136 w-inline-block">
+                        <a href="https://www.vidareal.tv/puntos" class="link-block-136 w-inline-block">
                             <div class="optionmenu-3">Puntos</div>
                         </a>
                         <div class="div-block-1232"></div>
-                        <a href="#" class="link-block-137 w-inline-block">
+                        <a href="https://www.vidareal.tv/ministerios" class="link-block-137 w-inline-block">
                             <div class="optionmenu-3">Ministerios</div>
                         </a>
                         <div class="div-block-1232"></div>
-                        <a href="#" class="link-block-138 w-inline-block">
+                        <a href="https://www.vidareal.tv/eventos" class="link-block-138 w-inline-block">
                             <div class="optionmenu-3">Eventos</div>
                         </a>
                     </div>
@@ -48,29 +48,29 @@
                             <div class="div-block-1239">
                                 <div class="div-block-1236 div-block-1238">
                                     <div class="text-block-426">Enlaces principales</div>
-                                    <a href="#" class="link-31">Qui&eacute;nes somos</a>
-                                    <a href="#" class="link-31">Puntos</a>
-                                    <a href="#" class="link-31">Eventos</a>
-                                    <a href="#" class="link-31">Mensajes</a>
-                                    <a href="#" class="link-31 _2">Dar</a>
+                                    <a href="https://www.vidareal.tv/quienes-somos" class="link-31">Qui&eacute;nes somos</a>
+                                    <a href="https://www.vidareal.tv/puntos" class="link-31">Puntos</a>
+                                    <a href="https://www.vidareal.tv/eventos" class="link-31">Eventos</a>
+                                    <a href="https://www.vidareal.tv/series" class="link-31">Mensajes</a>
+                                    <a href="https://www.vidareal.tv/dar" class="link-31 _2">Dar</a>
                                 </div>
                                 <div class="div-block-1240">
                                     <div class="text-block-426">Enlaces secundarios</div>
                                     <div class="div-block-1237">
                                         <div class="div-block-1235 _2">
-                                            <a href="#" class="texto-menu-2">&iquest;Qui&eacute;n es Jes&uacute;s?</a>
-                                            <a href="#" class="texto-menu-2">Ministerios</a>
-                                            <a href="#" class="texto-menu-2">Quiero servir</a>
-                                            <a href="#" class="texto-menu-2">Bautismos</a>
-                                            <a href="https://eventos.vidareal.tv/eventos/registro-servicios-ilumina-z-10-24-y-25-enero/" class="texto-menu-2">Reservas CCI Z10</a>
-                                            <a href="#" class="texto-menu-2">Notas del mensaje</a>
+                                            <a href="https://www.vidareal.tv/quien-es-jesus" class="texto-menu-2">&iquest;Qui&eacute;n es Jes&uacute;s?</a>
+                                            <a href="https://www.vidareal.tv/ministerios" class="texto-menu-2">Ministerios</a>
+                                            <a href="https://www.vidareal.tv/quieroservir" class="texto-menu-2">Quiero servir</a>
+                                            <a href="https://www.vidareal.tv/bautismos" class="texto-menu-2">Bautismos</a>
+                                            <a href="https://eventos.vidareal.tv/eventos/registro-servicios-ilumina-z-10-02-y-03-mayo/" class="texto-menu-2">Reservas CCI Z10</a>
+                                            <a href="https://www.vidareal.tv/notas" class="texto-menu-2">Notas del mensaje</a>
                                         </div>
                                         <div class="div-block-1235 _2">
                                             <a href="https://sesabio.vidareal.tv/" class="texto-menu-2">S&eacute; sabio</a>
-                                            <a href="#" class="texto-menu-2">Anuncios</a>
-                                            <a href="#" class="texto-menu-2">Recursos</a>
-                                            <a href="#" class="texto-menu-2">Afilando mi espada</a>
-                                            <a href="#" class="texto-menu-2">Cont&aacute;ctenos</a>
+                                            <a href="https://www.vidareal.tv/anuncios" class="texto-menu-2">Anuncios</a>
+                                            <a href="https://www.vidareal.tv/recursos" class="texto-menu-2">Recursos</a>
+                                            <a href="https://www.vidareal.tv/atesorandosabiduria" class="texto-menu-2">Afilando mi espada</a>
+                                            <a href="https://www.vidareal.tv/contactenos" class="texto-menu-2">Cont&aacute;ctenos</a>
                                         </div>
                                     </div>
                                 </div>
@@ -79,15 +79,6 @@
                     </div>
                 </div>
             </div>
-            <form action="/search" class="search-5 w-form">
-                <div class="w-layout-blockcontainer container-145 w-container">
-                    <a data-w-id="1e40c1e0-d28b-cb30-faa1-b4e963de102d" href="#" class="vinculo cerrar w-inline-block">
-                        <div class="texto-pequeno-8 cerrar">Cerrar X</div>
-                    </a>
-                    <h1 class="heading-138">Realiza una b&uacute;squeda en el sitio</h1>
-                    <div class="div-block-1234"><input class="busquedaheader-2 w-input" maxlength="256" name="query" placeholder="B&uacute;squeda..." type="search" id="search" required><input type="submit" class="button-secondary-4 busqueda w-button" value="Buscar"></div>
-                </div>
-            </form>
         </section>
     </div>
 </template>

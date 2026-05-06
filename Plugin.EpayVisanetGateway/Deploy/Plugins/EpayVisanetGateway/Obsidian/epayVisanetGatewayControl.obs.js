@@ -16,8 +16,17 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
     }],
     execute: function () {
       var styleId = 'epay-gateway-control-style';
+      var fontsId = 'epay-gateway-control-fonts';
 
       function ensureStyleTag() {
+        if (!document.getElementById(fontsId)) {
+          var fontLink = document.createElement('link');
+          fontLink.id = fontsId;
+          fontLink.rel = 'stylesheet';
+          fontLink.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
+          document.head.appendChild(fontLink);
+        }
+
         if (document.getElementById(styleId)) {
           return;
         }
@@ -25,7 +34,60 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
         var style = document.createElement('style');
         style.id = styleId;
         style.type = 'text/css';
-        style.textContent = "\n.epayWrap { --epay-bg:#f3f3f3; --epay-border:#d6d6d6; --epay-text:#1f2933; --epay-muted:#6b7280; --epay-danger:#c22016; --epay-radius-lg:14px; --epay-radius-md:10px; --epay-radius-pill:999px; background:var(--epay-bg); border:1px solid var(--epay-border); border-radius:var(--epay-radius-lg); color:var(--epay-text); padding:12px; }\n.epayBadge { display:inline-flex; align-items:center; border:1px solid #bdbdbd; border-radius:var(--epay-radius-pill); padding:4px 9px; font-size:11px; font-weight:700; color:#3b3b3b; letter-spacing:.04em; text-transform:uppercase; background:#fff; }\n.epayTitle { margin:8px 0 0; font-size:20px; font-weight:800; }\n.epaySubtitle { margin:4px 0 10px; font-size:13px; color:var(--epay-muted); }\n.epayCardPreview { margin-bottom:12px; border-radius:12px; border:1px solid #cecece; background:#fff; padding:10px 12px; display:grid; gap:4px; }\n.epayCardPreview.brand-visa { border-color:#bcd2ff; background:#eaf1ff; }\n.epayCardPreview.brand-mastercard { border-color:#ffd7c2; background:#fff1e8; }\n.epayCardPreview.brand-amex { border-color:#b7effa; background:#e8fbff; }\n.epayCardPreview.brand-discover { border-color:#fed7aa; background:#fff4ec; }\n.epayPreviewBrand { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#505050; }\n.epayPreviewNumber { font-size:15px; font-weight:800; letter-spacing:.04em; }\n.epayPreviewMeta { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#555; }\n.epayFields { display:grid; gap:10px; }\n.epayRow { display:grid; grid-template-columns:1fr; gap:10px; }\n.epayField { display:grid; gap:6px; }\n.epayField > span { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#4a4a4a; }\n.epayInputWrap { border:1px solid #bfbfbf; border-radius:var(--epay-radius-md); background:#fff; display:flex; align-items:center; gap:8px; padding:0 10px; }\n.epayInputWrap:focus-within { border-color:#7b7b7b; box-shadow:0 0 0 3px rgba(51,51,51,.12); }\n.epayInputWrap.isInvalid { border-color:#dc6e66; }\n.epayInput { width:100%; min-height:42px; border:0; background:transparent; padding:0; font-size:14px; box-shadow:none; outline:none; }\n.epayBrandTag { flex:0 0 auto; border-radius:var(--epay-radius-pill); border:1px solid #bfc6cf; background:#edf1f7; color:#405061; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:4px 7px; }\n.epayBrandTag.brand-visa { background:#eaf1ff; border-color:#bcd2ff; color:#1e44a8; }\n.epayBrandTag.brand-mastercard { background:#fff1e8; border-color:#ffd7c2; color:#9a3412; }\n.epayBrandTag.brand-amex { background:#e8fbff; border-color:#b7effa; color:#0f6f88; }\n.epayBrandTag.brand-discover { background:#fff4ec; border-color:#fed7aa; color:#c2410c; }\n.epayHint { font-size:12px; color:#727272; }\n.epayError { font-size:12px; color:var(--epay-danger); font-weight:600; min-height:14px; }\n.epayInstallments { border-top:1px solid var(--epay-border); padding-top:10px; display:grid; gap:10px; }\n.epayCheckboxLabel { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; cursor:pointer; }\n.epayCheckboxLabel input[type='checkbox'] { width:18px; height:18px; accent-color:#1e44a8; cursor:pointer; }\n.epayInstallmentSelect { display:grid; gap:10px; }\n.epayInputWrap select.epayInput { appearance:auto; cursor:pointer; }\n.epaySurchargeInfo { display:flex; justify-content:space-between; align-items:center; background:#fff8e1; border:1px solid #ffe082; border-radius:var(--epay-radius-md); padding:8px 12px; }\n.epaySurchargeLabel { font-size:13px; color:#6d5c00; }\n.epaySurchargeAmount { font-size:14px; font-weight:800; color:#b8860b; }\n@media (min-width: 600px) { .epayRow { grid-template-columns:1fr 1fr; } }\n";
+        style.textContent = [
+          ".epayWrap { --epay-bg:#fff; --epay-border:#d7d7d7; --epay-text:#1f2933; --epay-muted:#6b7280; --epay-danger:#c22016; --epay-radius-xl:22px; --epay-radius-lg:14px; --epay-radius-md:10px; --epay-radius-pill:999px; background:var(--epay-bg); border:1px solid var(--epay-border); border-radius:var(--epay-radius-lg); color:var(--epay-text); font-family:'Plus Jakarta Sans','Segoe UI',sans-serif; padding:14px; position:relative; }",
+          ".epayHeader { margin-bottom:12px; }",
+          ".epayBadge { display:inline-flex; align-items:center; border:1px solid #bdbdbd; border-radius:var(--epay-radius-pill); padding:4px 9px; font-size:11px; font-weight:700; color:#3b3b3b; letter-spacing:.04em; text-transform:uppercase; background:#fff; }",
+          ".epayTitle { margin:8px 0 0; font-family:Manrope,sans-serif; font-size:18px; font-weight:800; color:#222; }",
+          ".epaySubtitle { margin:4px 0 0; font-size:13px; color:#666; }",
+          ".epayCardPreview { margin:12px 0; border-radius:12px; border:1px solid #cecece; background:#fff; padding:12px 14px; display:grid; gap:4px; transition:all .2s ease; }",
+          ".epayCardPreview.brand-visa { border-color:#bcd2ff; background:linear-gradient(135deg,#eaf1ff,#f4f8ff); }",
+          ".epayCardPreview.brand-mastercard { border-color:#ffd7c2; background:linear-gradient(135deg,#fff1e8,#fff8f3); }",
+          ".epayCardPreview.brand-amex { border-color:#b7effa; background:linear-gradient(135deg,#e8fbff,#f3fdff); }",
+          ".epayCardPreview.brand-discover { border-color:#fed7aa; background:linear-gradient(135deg,#fff4ec,#fff9f4); }",
+          ".epayPreviewBrand { font-family:Manrope,sans-serif; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#505050; }",
+          ".epayPreviewNumber { font-family:Manrope,sans-serif; font-size:18px; font-weight:800; letter-spacing:.04em; color:#1d1d1d; }",
+          ".epayPreviewMeta { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#555; }",
+          ".epayFields { display:grid; gap:10px; }",
+          ".epayRow { display:grid; grid-template-columns:1fr; gap:10px; }",
+          ".epayField { display:grid; gap:6px; }",
+          ".epayField > span { font-family:Manrope,sans-serif; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#4a4a4a; }",
+          ".epayFieldHead { display:flex; align-items:center; justify-content:space-between; gap:10px; }",
+          ".epayFieldHead > span { margin:0; }",
+          ".epayCardBrands { display:inline-flex; align-items:center; gap:5px; }",
+          ".epayBrandIcon { display:inline-flex; width:34px; height:22px; border-radius:4px; overflow:hidden; transition:opacity .18s ease, filter .18s ease, transform .18s ease; box-shadow:0 1px 2px rgba(15,23,42,.08); }",
+          ".epayBrandIcon svg { width:100%; height:100%; display:block; }",
+          ".epayBrandIcon.isDimmed { opacity:.32; filter:grayscale(1); }",
+          ".epayBrandIcon.isActive { transform:scale(1.08); box-shadow:0 2px 6px rgba(15,23,42,.18); }",
+          ".epayInputWrap { border:1px solid #bfbfbf; border-radius:var(--epay-radius-md); background:#fff; display:flex; align-items:center; gap:8px; padding:0 10px; transition:border-color .2s ease, box-shadow .2s ease; }",
+          ".epayInputWrap:focus-within { border-color:#7b7b7b; box-shadow:0 0 0 3px rgba(51,51,51,.12); }",
+          ".epayInputWrap.isInvalid { border-color:#dc6e66; }",
+          ".epayInput { width:100%; min-height:44px; border:0; background:transparent; padding:0; font-size:14px; color:#1e1e1e; box-shadow:none; outline:none; }",
+          ".epayBrandTag { flex:0 0 auto; border-radius:var(--epay-radius-pill); border:1px solid #bfc6cf; background:#edf1f7; color:#405061; font-family:Manrope,sans-serif; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:4px 7px; }",
+          ".epayBrandTag.brand-visa { background:#eaf1ff; border-color:#bcd2ff; color:#1e44a8; }",
+          ".epayBrandTag.brand-mastercard { background:#fff1e8; border-color:#ffd7c2; color:#9a3412; }",
+          ".epayBrandTag.brand-amex { background:#e8fbff; border-color:#b7effa; color:#0f6f88; }",
+          ".epayBrandTag.brand-discover { background:#fff4ec; border-color:#fed7aa; color:#c2410c; }",
+          ".epayHint { color:#727272; font-size:12px; }",
+          ".epayError { color:var(--epay-danger); font-size:12px; font-weight:600; min-height:14px; }",
+          ".epayInstallments { border-top:1px solid var(--epay-border); padding-top:12px; margin-top:4px; display:grid; gap:10px; }",
+          ".epayCheckboxLabel { display:flex; align-items:center; gap:8px; font-family:Manrope,sans-serif; font-size:14px; font-weight:700; cursor:pointer; color:#1e1e1e; }",
+          ".epayCheckboxLabel input[type='checkbox'] { width:18px; height:18px; accent-color:#000; cursor:pointer; }",
+          ".epayInstallmentSelect { display:grid; gap:10px; }",
+          ".epayInputWrap select.epayInput { appearance:auto; cursor:pointer; }",
+          ".epaySurchargeInfo { display:flex; justify-content:space-between; align-items:center; background:#fff8e1; border:1px solid #ffe082; border-radius:var(--epay-radius-md); padding:10px 12px; }",
+          ".epaySurchargeLabel { font-size:13px; color:#6d5c00; }",
+          ".epaySurchargeAmount { font-family:Manrope,sans-serif; font-size:14px; font-weight:800; color:#b8860b; }",
+          ".epayStateOverlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; animation:epayFadeIn .3s ease; }",
+          ".epayStateModal { background:#fff; border-radius:var(--epay-radius-xl); padding:34px 24px; width:min(100%,380px); text-align:center; box-shadow:0 24px 48px rgba(0,0,0,.25); animation:epayScaleUp .3s cubic-bezier(.175,.885,.32,1.275); }",
+          ".epayStateTitle { margin:20px 0 8px; font-family:Manrope,sans-serif; font-size:22px; font-weight:800; color:#111; }",
+          ".epayStateText { margin:0; color:#555; font-size:14px; line-height:1.5; }",
+          ".epaySpinner { width:60px; height:60px; margin:0 auto; border:5px solid #eaeaea; border-top-color:#000; border-radius:50%; animation:epaySpin .9s linear infinite; }",
+          "@keyframes epayFadeIn { from { opacity:0; } to { opacity:1; } }",
+          "@keyframes epayScaleUp { from { opacity:0; transform:translateY(16px) scale(.95); } to { opacity:1; transform:translateY(0) scale(1); } }",
+          "@keyframes epaySpin { to { transform:rotate(360deg); } }",
+          "@media (min-width: 600px) { .epayRow { grid-template-columns:1fr 1fr; } }"
+        ].join('\n');
 
         document.head.appendChild(style);
       }
@@ -125,9 +187,39 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
         return roundCurrency(value).toFixed(2);
       }
 
+      function visaSvg() {
+        return "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 780 500' fill='none' aria-hidden='true'>" +
+          "<g clip-path='url(#epay-visa-clip)'>" +
+            "<path d='M780 0H0V500H780V0Z' fill='#1434CB'/>" +
+            "<path d='M489.823 143.111C442.988 143.111 401.134 167.393 401.134 212.256C401.134 263.706 475.364 267.259 475.364 293.106C475.364 303.989 462.895 313.731 441.6 313.731C411.377 313.731 388.789 300.119 388.789 300.119L379.123 345.391C379.123 345.391 405.145 356.889 439.692 356.889C490.898 356.889 531.19 331.415 531.19 285.784C531.19 231.419 456.652 227.971 456.652 203.981C456.652 195.455 466.887 186.114 488.122 186.114C512.081 186.114 531.628 196.014 531.628 196.014L541.087 152.289C541.087 152.289 519.818 143.111 489.823 143.111ZM61.3294 146.411L60.1953 153.011C60.1953 153.011 79.8988 156.618 97.645 163.814C120.495 172.064 122.122 176.868 125.971 191.786L167.905 353.486H224.118L310.719 146.411H254.635L198.989 287.202L176.282 167.861C174.199 154.203 163.651 146.411 150.74 146.411H61.3294ZM333.271 146.411L289.275 353.486H342.756L386.598 146.411H333.271ZM631.554 146.411C618.658 146.411 611.825 153.318 606.811 165.386L528.458 353.486H584.542L595.393 322.136H663.72L670.318 353.486H719.805L676.633 146.411H631.554ZM638.848 202.356L655.473 280.061H610.935L638.848 202.356Z' fill='white'/>" +
+          "</g>" +
+          "<defs><clipPath id='epay-visa-clip'><rect width='780' height='500' fill='white'/></clipPath></defs>" +
+        "</svg>";
+      }
+
+      function mastercardSvg() {
+        return "<svg xmlns='http://www.w3.org/2000/svg' viewBox='80 0 620 410' fill='none' aria-hidden='true'>" +
+          "<path d='M780 0H0V500H780V0Z' fill='#253747'/>" +
+          "<path d='M465.738 69.1387H313.812V342.088H465.738V69.1387Z' fill='#FF5A00'/>" +
+          "<path d='M323.926 205.613C323.926 150.158 349.996 100.94 390 69.1387C360.559 45.9902 323.42 32 282.91 32C186.945 32 109.297 109.648 109.297 205.613C109.297 301.578 186.945 379.227 282.91 379.227C323.42 379.227 360.559 365.237 390 342.088C349.94 310.737 323.926 261.069 323.926 205.613Z' fill='#EB001B'/>" +
+          "<path d='M670.711 205.613C670.711 301.578 593.062 379.227 497.098 379.227C456.588 379.227 419.449 365.237 390.008 342.088C430.518 310.231 456.082 261.069 456.082 205.613C456.082 150.158 430.012 100.94 390.008 69.1387C419.393 45.9902 456.532 32 497.041 32C593.062 32 670.711 110.154 670.711 205.613Z' fill='#F79E1B'/>" +
+        "</svg>";
+      }
+
       function createMarkup(controlId, showNameField, installmentOpts) {
         var html = "<div class='epayWrap'>" +
-          "<div><span class='epayBadge'>Pago seguro</span><h4 class='epayTitle'>Tarjeta de credito</h4><p class='epaySubtitle'>Ingresa los datos de la tarjeta para completar el pago.</p></div>" +
+          "<div class='epayStateOverlay' data-el='loadingOverlay' style='display:none;'>" +
+            "<div class='epayStateModal'>" +
+              "<div class='epaySpinner'></div>" +
+              "<h4 class='epayStateTitle'>Procesando pago</h4>" +
+              "<p class='epayStateText'>Por favor, no cierre esta ventana.</p>" +
+            "</div>" +
+          "</div>" +
+          "<div class='epayHeader'>" +
+            "<span class='epayBadge'>Pago seguro</span>" +
+            "<h4 class='epayTitle'>Tarjeta de credito</h4>" +
+            "<p class='epaySubtitle'>Ingresa los datos de la tarjeta para completar el pago.</p>" +
+          "</div>" +
           "<div class='epayCardPreview brand-unknown' data-el='preview'>" +
             "<span class='epayPreviewBrand' data-el='previewBrand'>Tarjeta</span>" +
             "<strong class='epayPreviewNumber' data-el='previewNumber'>#### #### #### ####</strong>" +
@@ -135,7 +227,13 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
           "</div>" +
           "<div class='epayFields'>" +
             "<label class='epayField'>" +
-              "<span>Numero de tarjeta</span>" +
+              "<div class='epayFieldHead'>" +
+                "<span>Numero de tarjeta</span>" +
+                "<div class='epayCardBrands' role='img' aria-label='Tarjetas aceptadas'>" +
+                  "<span class='epayBrandIcon' data-brand-icon='visa' title='Visa'>" + visaSvg() + "</span>" +
+                  "<span class='epayBrandIcon' data-brand-icon='mastercard' title='Mastercard'>" + mastercardSvg() + "</span>" +
+                "</div>" +
+              "</div>" +
               "<div class='epayInputWrap' data-wrap='cardNumber'>" +
                 "<input id='" + controlId + "-number' class='epayInput' type='text' maxlength='24' inputmode='numeric' autocomplete='cc-number' placeholder='4111 1111 1111 1111' />" +
                 "<span class='epayBrandTag brand-unknown' data-el='brandTag'>Tarjeta</span>" +
@@ -236,6 +334,12 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             }
           };
 
+          var showLoading = function (show) {
+            if (dom && dom.loadingOverlay) {
+              dom.loadingOverlay.style.display = show ? 'flex' : 'none';
+            }
+          };
+
           var installmentOpts = (__props.settings.enableInstallments && __props.settings.installmentOptions) ? __props.settings.installmentOptions : [];
           var useInstallments = false;
           var selectedInstallmentCode = '';
@@ -252,13 +356,30 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             if (!dom) return;
             var brand = getBrand();
             var label = getBrandLabel(brand);
-            var badgeClasses = 'epayBrandTag brand-' + brand;
-            dom.brandTag.className = badgeClasses;
+            dom.brandTag.className = 'epayBrandTag brand-' + brand;
             dom.brandTag.textContent = label;
             dom.previewBrand.textContent = label;
             dom.preview.className = 'epayCardPreview brand-' + brand;
             dom.cvv.placeholder = 'CVV (' + expectedCvvLength() + ')';
             dom.cvvHint.textContent = expectedCvvLength() + ' digitos para ' + label;
+
+            if (dom.brandIcons && dom.brandIcons.length) {
+              for (var i = 0; i < dom.brandIcons.length; i++) {
+                var iconEl = dom.brandIcons[i];
+                var iconBrand = iconEl.getAttribute('data-brand-icon');
+                iconEl.classList.remove('isActive');
+                iconEl.classList.remove('isDimmed');
+                if (brand === 'unknown') {
+                  // estado neutral: ningun icono atenuado
+                }
+                else if (iconBrand === brand) {
+                  iconEl.classList.add('isActive');
+                }
+                else {
+                  iconEl.classList.add('isDimmed');
+                }
+              }
+            }
           };
 
           var updatePreview = function () {
@@ -371,6 +492,8 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
               return;
             }
 
+            showLoading(true);
+
             fetch(endpoint, {
               method: 'POST',
               headers: {
@@ -397,12 +520,15 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             }).then(function (result) {
               var token = (result && (result.token || result.Token)) ? (result.token || result.Token).toString() : '';
               if (!token) {
+                showLoading(false);
                 emit(GatewayEmitStrings.Error, 'Gateway did not return a payment token.');
                 return;
               }
 
+              showLoading(false);
               emit(GatewayEmitStrings.Success, token);
             }).catch(function (e) {
+              showLoading(false);
               emit(GatewayEmitStrings.Error, 'Error creating payment token. ' + (e && e.message ? e.message : 'Unknown error'));
             });
           };
@@ -431,6 +557,8 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
               previewName: root.querySelector('[data-el="previewName"]'),
               previewExp: root.querySelector('[data-el="previewExp"]'),
               cvvHint: root.querySelector('[data-el="cvvHint"]'),
+              loadingOverlay: root.querySelector('[data-el="loadingOverlay"]'),
+              brandIcons: root.querySelectorAll('[data-brand-icon]'),
               wraps: {
                 cardNumber: root.querySelector('[data-wrap="cardNumber"]'),
                 expDate: root.querySelector('[data-wrap="expDate"]'),
