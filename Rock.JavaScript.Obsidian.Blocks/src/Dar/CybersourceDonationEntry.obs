@@ -585,14 +585,60 @@ const deviceFingerprintUrl = computed(() => {
     return `https://h.online-metrix.net/fp/tags?org_id=${encodeURIComponent(orgId)}&session_id=${encodeURIComponent(combined)}`;
 });
 
-// Diferimos el montaje del iframe hasta después del primer paint para sacarlo
-// del critical rendering path. Cybersource solo necesita el fingerprint listo
-// antes de cobrar, no antes de pintar la UI.
+// Dispara `cb` una sola vez en la primera interacción del usuario
+// (pointerdown / focusin / scroll / touchstart / keydown) o, como respaldo,
+// `maxWaitAfterLoadMs` después del evento `load` de la ventana. Saca trabajo
+// costoso del critical rendering path sin arriesgar que el recurso no esté
+// listo cuando el usuario lo necesita en el submit.
+function triggerOnFirstInteractionOrIdle(cb: () => void, maxWaitAfterLoadMs: number): void {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+        return;
+    }
+
+    let fired = false;
+    const events: Array<keyof DocumentEventMap> = ["pointerdown", "focusin", "scroll", "touchstart", "keydown"];
+
+    const fire = (): void => {
+        if (fired) {
+            return;
+        }
+        fired = true;
+        for (const ev of events) {
+            document.removeEventListener(ev, fire as EventListener);
+        }
+        const w = window as Window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        };
+        if (typeof w.requestIdleCallback === "function") {
+            w.requestIdleCallback(cb, { timeout: 2000 });
+        }
+        else {
+            setTimeout(cb, 0);
+        }
+    };
+
+    for (const ev of events) {
+        document.addEventListener(ev, fire as EventListener, { once: true, passive: true });
+    }
+
+    const onLoad = (): void => {
+        setTimeout(fire, maxWaitAfterLoadMs);
+    };
+    if (document.readyState === "complete") {
+        onLoad();
+    }
+    else {
+        window.addEventListener("load", onLoad, { once: true });
+    }
+}
+
+// Diferimos el montaje del iframe a la primera interacción o, como respaldo,
+// 3s después del `load`. Cybersource necesita el fingerprint antes del submit,
+// pero el usuario llena el formulario varios segundos, suficiente para que
+// ThreatMetrix recolecte datos del dispositivo.
 const deviceFingerprintReady = ref(false);
 onMounted(() => {
-    requestAnimationFrame(() => {
-        setTimeout(() => { deviceFingerprintReady.value = true; }, 0);
-    });
+    triggerOnFirstInteractionOrIdle(() => { deviceFingerprintReady.value = true; }, 3000);
 });
 
 // ========================
@@ -613,16 +659,51 @@ declare global {
 
 const recaptchaSiteKey = (config.recaptchaSiteKey || "").trim();
 
-if (recaptchaSiteKey && typeof document !== "undefined") {
-    const scriptId = "recaptcha-enterprise-script";
-    if (!document.getElementById(scriptId)) {
+// Carga la API de reCAPTCHA bajo demanda. Cachea la promesa para que múltiples
+// llamadas (trigger + submit) no inserten el script más de una vez.
+let recaptchaLoadPromise: Promise<void> | null = null;
+function ensureRecaptchaLoaded(): Promise<void> {
+    if (recaptchaLoadPromise) {
+        return recaptchaLoadPromise;
+    }
+    if (!recaptchaSiteKey || typeof document === "undefined") {
+        recaptchaLoadPromise = Promise.resolve();
+        return recaptchaLoadPromise;
+    }
+
+    recaptchaLoadPromise = new Promise<void>((resolve) => {
+        const scriptId = "recaptcha-enterprise-script";
+        const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+        if (existing) {
+            if (window.grecaptcha) {
+                resolve();
+            }
+            else {
+                existing.addEventListener("load", () => resolve(), { once: true });
+                existing.addEventListener("error", () => resolve(), { once: true });
+            }
+            return;
+        }
+
         const script = document.createElement("script");
         script.id = scriptId;
         script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(recaptchaSiteKey)}`;
         script.async = true;
         script.defer = true;
+        script.addEventListener("load", () => resolve(), { once: true });
+        script.addEventListener("error", () => resolve(), { once: true });
         document.head.appendChild(script);
-    }
+    });
+
+    return recaptchaLoadPromise;
+}
+
+// Pre-carga reCAPTCHA en la primera interacción del usuario o, como respaldo,
+// 3s después del `load`. Si el usuario submite antes del trigger,
+// `getRecaptchaToken` llamará a `ensureRecaptchaLoaded` también, garantizando
+// que el script esté listo antes de generar el token.
+if (recaptchaSiteKey) {
+    triggerOnFirstInteractionOrIdle(() => { void ensureRecaptchaLoaded(); }, 3000);
 }
 
 // ========================
@@ -633,17 +714,9 @@ if (recaptchaSiteKey && typeof document !== "undefined") {
 // <link> con preconnect permite descarga paralela; display=swap pinta texto
 // con fuente fallback al instante y la cambia cuando llega la web font.
 if (typeof document !== "undefined" && !document.getElementById("cy-fonts")) {
-    const pre1 = document.createElement("link");
-    pre1.rel = "preconnect";
-    pre1.href = "https://fonts.googleapis.com";
-    document.head.appendChild(pre1);
-
-    const pre2 = document.createElement("link");
-    pre2.rel = "preconnect";
-    pre2.href = "https://fonts.gstatic.com";
-    pre2.crossOrigin = "anonymous";
-    document.head.appendChild(pre2);
-
+    // Sin preconnects: Lighthouse marca los preconnect a fonts.googleapis.com /
+    // fonts.gstatic.com como "preconnect not used" porque el theme ya tiene los
+    // suyos y el browser descubre el origen igual al parsear este <link>.
     const link = document.createElement("link");
     link.id = "cy-fonts";
     link.rel = "stylesheet";
@@ -658,6 +731,9 @@ async function getRecaptchaToken(): Promise<string> {
         return "";
     }
     try {
+        // Garantiza que el script esté cargado antes de pedir el token. Si el
+        // usuario submite antes del trigger diferido, aquí lo cargamos a tiempo.
+        await ensureRecaptchaLoaded();
         const grecaptcha = window.grecaptcha;
         if (!grecaptcha || !grecaptcha.enterprise) {
             return "";
@@ -1640,6 +1716,12 @@ function statusClass(status?: string): string {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+}
+
+@media (min-width: 576px) {
+    .cyStage {
+        margin-top: -28px;
+    }
 }
 
 .cyMainCard {

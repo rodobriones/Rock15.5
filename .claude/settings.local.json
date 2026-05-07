@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile \"/c/Users/Rodolfo Rodriguez/Desktop/rock-gender-fix/assign_gender.py\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
