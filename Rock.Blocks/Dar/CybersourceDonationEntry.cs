@@ -569,7 +569,7 @@ namespace Rock.Blocks.Dar
                 return ActionOk( new ProcessPaymentResponseBag
                 {
                     success = true,
-                    message = "Pago aprobado y registrado correctamente.",
+                    message = "En breve recibirá un comprobante en tu correo electrónico.",
                     responseCode = cybsResult.responseCode,
                     authorizationNumber = cybsResult.authorizationNumber,
                     referenceNumber = cybsResult.referenceNumber,

@@ -26,28 +26,17 @@
           <tr>
             <td style="background:#000000;border-radius:22px 22px 0 0;padding:20px 24px 0;">
 
-              <!-- Top bar: logo + badge -->
+              <!-- Top bar: badge -->
+              {% assign mode = Workflow | Attribute:'Mode' %}
+              {% if mode != 'live' %}
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="vertical-align:middle;">
-                    <!-- Logo DAR -->
-                    <table cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="background:#ffffff;border-radius:6px;width:44px;height:44px;text-align:center;vertical-align:middle;">
-                          <span style="font-family:Georgia,'Times New Roman',serif;font-size:11px;font-weight:900;color:#121212;letter-spacing:0.05em;line-height:44px;">DAR</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
                   <td align="right" style="vertical-align:middle;">
-                    <!-- Badge solo en modo Test -->
-                    {% assign mode = Workflow | Attribute:'Mode' %}
-                    {% if mode != 'live' %}
                     <span style="display:inline-block;background:#1a2b42;border:1px solid #4d709b;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Test</span>
-                    {% endif %}
                   </td>
                 </tr>
               </table>
+              {% endif %}
 
               <!-- Ícono de éxito + monto -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -200,7 +189,7 @@
                           &#10003;
                         </td>
                         <td style="font-size:13px;color:#065f46;line-height:1.5;">
-                          Tu pago fue procesado exitosamente. Guarda este correo como comprobante de tu donación.
+                          Tu donación fue recibida con éxito.{% if nit != '' and nit != null %} Tu recibo llegará en breve.{% endif %}
                         </td>
                       </tr>
                     </table>
@@ -218,8 +207,8 @@
           <tr>
             <td style="background:#000000;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
               <p style="margin:0 0 6px;font-size:12px;color:#888888;">Este correo fue enviado a <span style="color:#cccccc;">{{ Workflow | Attribute:'DonorEmail' }}</span></p>
-              <p style="margin:0;font-size:11px;color:#555555;">Si tienes dudas, contáctanos. No respondas a este correo directamente.</p>
-              <p style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">DAR</p>
+              <p style="margin:0;font-size:11px;color:#555555;">No respondas a este mensaje porque es automático.</p>
+              <p style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">Vidareal.tv</p>
             </td>
           </tr>
 

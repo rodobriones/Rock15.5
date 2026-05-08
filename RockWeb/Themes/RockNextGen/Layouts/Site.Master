@@ -72,6 +72,35 @@ through Christ, we find forgiveness, salvation, and the assurance of eternal lif
 
     <asp:ContentPlaceHolder ID="head" runat="server"></asp:ContentPlaceHolder>
 
+    <%-- Hace que los CSS de íconos no bloqueen el primer paint (PageSpeed mobile) --%>
+    <script>
+    (function () {
+        var TARGETS = [/tabler-icon\.css/i, /fontawesome-icon\.css/i, /fontawesome-solid\.css/i, /summernote\.min\.css/i];
+        function unblock(link) {
+            if (!link || link.dataset.unblocked === "1") return;
+            var href = link.href || "";
+            for (var i = 0; i < TARGETS.length; i++) {
+                if (TARGETS[i].test(href)) {
+                    link.dataset.unblocked = "1";
+                    link.media = "print";
+                    link.onload = function () { this.media = "all"; this.onload = null; };
+                    return;
+                }
+            }
+        }
+        var existing = document.head.querySelectorAll('link[rel="stylesheet"]');
+        for (var i = 0; i < existing.length; i++) unblock(existing[i]);
+        new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+                for (var j = 0; j < muts[i].addedNodes.length; j++) {
+                    var n = muts[i].addedNodes[j];
+                    if (n.tagName === "LINK" && n.rel === "stylesheet") unblock(n);
+                }
+            }
+        }).observe(document.documentElement, { childList: true, subtree: true });
+    })();
+    </script>
+
 </head>
 <body runat="server" id="body">
     <form id="form1" runat="server">

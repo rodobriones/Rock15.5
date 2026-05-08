@@ -37,9 +37,6 @@
                     </div>
 
                     <header class="cyTopBar">
-                        <div class="cyTopBrand">
-                            <span class="cyTopLogo">DAR</span>
-                        </div>
                         <div v-if="config.mode === 'test'" class="cyTopMeta isTest">
                             Test
                         </div>
@@ -216,7 +213,7 @@
                                                     maxlength="24"
                                                     inputmode="numeric"
                                                     autocomplete="cc-number"
-                                                    placeholder="4111 1111 1111 1111"
+                                                    placeholder="1234 1234 1234 1234"
                                                     @input="onCardNumberInput" />
                                                 <span class="cyCardBrandTag" :class="`brand-${cardBrand}`">{{ cardBrandLabel }}</span>
                                             </div>
@@ -409,7 +406,7 @@
 
                     <div class="cyConfirmRows">
                         <div class="cyConfirmRow">
-                            <span class="cyConfirmLabel">Cuenta</span>
+                            <span class="cyConfirmLabel">Tipo</span>
                             <span class="cyConfirmValue">{{ accounts.find(a => a.id === form.accountId)?.publicName }}</span>
                         </div>
                         <div class="cyConfirmRow cyConfirmRowHighlight">
@@ -438,38 +435,6 @@
                     </div>
 
                     <p class="cyConfirmNote">*No se guardará la información de su tarjeta.</p>
-                </div>
-            </div>
-        </Teleport>
-
-        <!-- Modal de bienvenida (se muestra al cargar la página) -->
-        <Teleport to="body">
-            <div v-if="showWelcomeModal" class="cyWelcomeOverlay" @click.self="showWelcomeModal = false">
-                <div class="cyWelcomeModal" role="dialog" aria-modal="true" aria-labelledby="cyWelcomeTitle">
-                    <button
-                        type="button"
-                        class="cyWelcomeClose"
-                        aria-label="Cerrar"
-                        @click="showWelcomeModal = false">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M4.28 4.28a.75.75 0 0 1 1.06 0L10 8.94l4.66-4.66a.75.75 0 1 1 1.06 1.06L11.06 10l4.66 4.66a.75.75 0 1 1-1.06 1.06L10 11.06l-4.66 4.66a.75.75 0 0 1-1.06-1.06L8.94 10 4.28 5.34a.75.75 0 0 1 0-1.06z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                    <p id="cyWelcomeTitle" class="cyWelcomeText">
-                        Gracias por donar en Iglesia Vida Real.<br />
-                        Si decides realizar tu donación con tarjeta de crédito, te sugerimos asegurarte de que tu cuenta esté al día para evitar cargos por intereses. De lo contrario, podrías incurrir en intereses sobre el monto donado.
-                    </p>
-                    <p class="cyWelcomeText">
-                        Si lo prefieres, también puedes hacer tu donación mediante transferencia bancaria.
-                    </p>
-                    <div class="cyWelcomeActions">
-                        <button
-                            type="button"
-                            class="cyWelcomeCta"
-                            @click="showWelcomeModal = false">
-                            Continuar
-                        </button>
-                    </div>
                 </div>
             </div>
         </Teleport>
@@ -767,7 +732,6 @@ const successMessage = ref("");                             // Mensaje de éxito
 const lastResult = ref<ProcessPaymentResult | null>(null);  // Último resultado de pago
 const activeSubmenu = ref<"donation" | "history">("donation"); // Pestaña activa
 const showConfirmModal = ref(false);                        // Modal de confirmación
-const showWelcomeModal = ref(true);                         // Modal de bienvenida (al cargar la página)
 
 // Errores individuales por campo del formulario
 const fieldErrors = reactive({
@@ -1179,7 +1143,7 @@ function validateForm(): boolean {
 function openConfirmModal(): void {
     errorMessage.value = "";
     if (!validateForm()) {
-        errorMessage.value = "Corrija los campos resaltados para proceder.";
+        errorMessage.value = "Verifica tus datos e intenta nuevamente.";
         scrollToFirstError();
         return;
     }
@@ -1251,7 +1215,7 @@ async function submitPayment(): Promise<void> {
         history.value = data.history || [];
 
         if (data.success) {
-            successMessage.value = data.message || "Pago aprobado.";
+            successMessage.value = data.message || "En breve recibirá un comprobante en tu correo electrónico.";
             form.note = "";
             idemKey.value = generateIdemKey(); // Nueva clave para el proximo pago
         } else {
@@ -1700,14 +1664,11 @@ function statusClass(status?: string): string {
     margin: 14px auto 0;
     width: fit-content;
     max-width: min(92vw, 380px);
-    border-radius: 10px;
-    background: #f6f6f6;
-    border: 1px solid #d8d8d8;
-    color: var(--cy-danger);
+    color: #ffffff;
     padding: 8px 12px;
     font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.22);
+    text-align: center;
 }
 
 .cyStage {
@@ -2527,98 +2488,6 @@ function statusClass(status?: string): string {
 
 @keyframes cySpin {
     to { transform: rotate(360deg); }
-}
-
-/* Modal de bienvenida (al cargar la página) */
-.cyWelcomeOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9998;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    animation: cyFadeIn 0.3s ease;
-}
-
-.cyWelcomeModal {
-    position: relative;
-    background: #fff;
-    border-radius: var(--cy-radius-xl);
-    padding: 40px 32px 32px;
-    width: min(100%, 560px);
-    text-align: center;
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
-    animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.cyWelcomeClose {
-    position: absolute;
-    top: -14px;
-    right: -14px;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #000;
-    color: #fff;
-    border: 2px solid #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-    transition: background 0.2s, transform 0.2s;
-}
-
-.cyWelcomeClose:hover {
-    background: #1a1a1a;
-    transform: scale(1.05);
-}
-
-.cyWelcomeClose svg {
-    width: 18px;
-    height: 18px;
-}
-
-.cyWelcomeText {
-    margin: 0 0 16px;
-    color: #1a2a3a;
-    font-size: 16px;
-    line-height: 1.55;
-    font-family: Manrope, sans-serif;
-}
-
-.cyWelcomeText:last-of-type {
-    margin-bottom: 0;
-}
-
-.cyWelcomeActions {
-    margin-top: 24px;
-    display: flex;
-    justify-content: center;
-}
-
-.cyWelcomeCta {
-    min-width: 180px;
-    min-height: 52px;
-    padding: 0 28px;
-    border-radius: var(--cy-radius-pill);
-    background: #000;
-    color: #fff;
-    border: 1px solid #000;
-    font-weight: 700;
-    font-family: Manrope, sans-serif;
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.2s;
-}
-
-.cyWelcomeCta:hover {
-    background: #1a1a1a;
-    transform: translateY(-1px);
 }
 
 @media (min-width: 680px) {
