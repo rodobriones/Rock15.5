@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(python -m py_compile \"/c/Users/Rodolfo Rodriguez/Desktop/rock-gender-fix/assign_gender.py\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(find /c/Repos/Rock18.1/Plugin.* -name \"*Migration*\" -type f)",
+      "Bash(find /c/Repos/Rock18.1/Plugin.* -name \"AssemblyInfo.cs\")",
+      "WebFetch(domain:developers.facebook.com)"
     ]
   }
 }

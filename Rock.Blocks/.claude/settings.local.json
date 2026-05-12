@@ -5,7 +5,15 @@
       "WebFetch(domain:www.googleapis.com)",
       "Bash(curl -sS --max-time 90 \"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://personas.vidareal.tv/page/962&strategy=mobile&category=performance\" -o /tmp/psi-vr.json)",
       "Read(//tmp/**)",
-      "Read(//c/tmp/**)"
+      "Read(//c/tmp/**)",
+      "Bash(\"/c/Program Files/dotnet/dotnet\" --version)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" Rock.Blocks/Rock.Blocks.csproj /t:Build /p:Configuration=Debug /verbosity:minimal /nologo)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\Repos\\\\Rock18.1\\\\Rock.Blocks\\\\Rock.Blocks.csproj\" -t:Build -p:Configuration=Debug -verbosity:minimal -nologo 2>&1)",
+      "PowerShell($env:NODE_OPTIONS = \"--max-old-space-size=4096\"; Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx tsc --noEmit -p tsconfig.json 2>&1 | Select-String -Pattern \"Dar.CybersourceDonation|error TS\" | Select-Object -First 60)",
+      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; $output = npx tsc --noEmit -p tsconfig.json 2>&1 | Out-String; if \\($output.Length -eq 0\\) { \"OK no output\" } else { $output.Substring\\(0, [Math]::Min\\(3000, $output.Length\\)\\) })",
+      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx tsc --noEmit -p tsconfig.json; \"ExitCode: $LASTEXITCODE\")",
+      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx eslint --ext .ts,.obs src/Dar/CybersourceDonationEntry.obs 2>&1 | Select-Object -First 50; \"ExitCode: $LASTEXITCODE\")",
+      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx eslint --ext .ts,.obs src/Dar/CybersourceDonationEntry.obs 2>&1 | Select-String -Pattern \"error\" | Select-Object -First 20; \"ExitCode: $LASTEXITCODE\")"
     ]
   }
 }

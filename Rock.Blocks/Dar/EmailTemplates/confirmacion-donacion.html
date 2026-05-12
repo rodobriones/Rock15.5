@@ -1,9 +1,12 @@
-{% assign currency = Workflow | Attribute:'Currency' %}
-{% assign amount   = Workflow | Attribute:'Amount' %}
-{% assign symbol   = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
-{% assign nit      = Workflow | Attribute:'Nit' %}
-{% assign nitName  = Workflow | Attribute:'NitName' %}
-{% assign nitAddr  = Workflow | Attribute:'NitAddress' %}
+{% assign currency   = Workflow | Attribute:'Currency'    | StripHtml | Truncate:8 | Escape %}
+{% assign amount     = Workflow | Attribute:'Amount'      | StripHtml | Truncate:20 | Escape %}
+{% assign symbol     = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
+{% assign nit        = Workflow | Attribute:'Nit'         | StripHtml | Truncate:32 | Escape %}
+{% assign nitName    = Workflow | Attribute:'NitName'     | StripHtml | Truncate:120 | Escape %}
+{% assign nitAddr    = Workflow | Attribute:'NitAddress'  | StripHtml | Truncate:200 | Escape %}
+{% assign mode       = Workflow | Attribute:'Mode'        | StripHtml | Truncate:10 | Escape %}
+{% assign donorName  = Workflow | Attribute:'DonorName'   | StripHtml | Truncate:80 | Escape %}
+{% assign donorEmail = Workflow | Attribute:'DonorEmail'  | StripHtml | Truncate:120 | Escape %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -27,7 +30,6 @@
             <td style="background:#000000;border-radius:22px 22px 0 0;padding:20px 24px 0;">
 
               <!-- Top bar: badge -->
-              {% assign mode = Workflow | Attribute:'Mode' %}
               {% if mode != 'live' %}
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
@@ -92,7 +94,7 @@
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Donante</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ Workflow | Attribute:'DonorName' }}</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donorName }}</td>
                       </tr>
                     </table>
                   </td>
@@ -104,7 +106,7 @@
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Correo</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ Workflow | Attribute:'DonorEmail' }}</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donorEmail }}</td>
                       </tr>
                     </table>
                   </td>
@@ -206,7 +208,7 @@
           ══════════════════════════════════ -->
           <tr>
             <td style="background:#000000;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
-              <p style="margin:0 0 6px;font-size:12px;color:#888888;">Este correo fue enviado a <span style="color:#cccccc;">{{ Workflow | Attribute:'DonorEmail' }}</span></p>
+              <p style="margin:0 0 6px;font-size:12px;color:#888888;">Este correo fue enviado a <span style="color:#cccccc;">{{ donorEmail }}</span></p>
               <p style="margin:0;font-size:11px;color:#555555;">No respondas a este mensaje porque es automático.</p>
               <p style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">Vidareal.tv</p>
             </td>

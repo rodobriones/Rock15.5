@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.SqlClient;
@@ -354,6 +355,13 @@ namespace Rock.Blocks.Dar
         [BlockAction( "ValidateNitInfo" )]
         public BlockActionResult ValidateNitInfo( string nit )
         {
+            // Rate limit por IP para mitigar enumeración masiva de NITs.
+            var ipForNit = TryGetClientIp();
+            if ( !TryConsumeRateLimit( $"NitIp:{ipForNit}", 10, TimeSpan.FromMinutes( 1 ) ) )
+            {
+                return ActionBadRequest( "Demasiadas validaciones. Espera un momento antes de reintentar." );
+            }
+
             if ( string.IsNullOrWhiteSpace( nit ) )
             {
                 return ActionBadRequest( "NIT vacío." );
@@ -373,9 +381,14 @@ namespace Rock.Blocks.Dar
                 return ActionBadRequest( "La API de validación de NIT no está configurada en el bloque." );
             }
 
-            // Validar que la URL configurada sea HTTPS absoluta para evitar SSRF accidental por mala configuración.
+            // Validar que la URL configurada sea HTTPS absoluta y apunte a un host whitelisted para evitar SSRF.
             if ( !Uri.TryCreate( apiUrl, UriKind.Absolute, out var nitApiUri ) ||
-                 ( nitApiUri.Scheme != Uri.UriSchemeHttps && nitApiUri.Scheme != Uri.UriSchemeHttp ) )
+                 nitApiUri.Scheme != Uri.UriSchemeHttps )
+            {
+                return ActionBadRequest( "La API de validación de NIT no está configurada correctamente." );
+            }
+
+            if ( IsLoopbackOrPrivateHost( nitApiUri.Host ) || !_allowedNitApiHosts.Contains( nitApiUri.Host ) )
             {
                 return ActionBadRequest( "La API de validación de NIT no está configurada correctamente." );
             }
@@ -409,16 +422,22 @@ namespace Rock.Blocks.Dar
                     string address = "CIUDAD";
 
                     // Extract values specifically from the received XML format.
+                    // Sanear texto: la API externa puede devolver tags/entidades; nunca confiar.
                     var matchName = Regex.Match( responseString, @"<nombre>(.*?)</nombre>", RegexOptions.IgnoreCase | RegexOptions.Singleline );
                     if ( matchName.Success )
                     {
-                        name = matchName.Groups[1].Value.Trim();
+                        var clean = StripUnsafeText( matchName.Groups[1].Value );
+                        name = clean.Length > 120 ? clean.Substring( 0, 120 ) : clean;
                     }
 
                     var matchAddr = Regex.Match( responseString, @"<direccion>(.*?)</direccion>", RegexOptions.IgnoreCase | RegexOptions.Singleline );
                     if ( matchAddr.Success )
                     {
-                        address = matchAddr.Groups[1].Value.Trim();
+                        var clean = StripUnsafeText( matchAddr.Groups[1].Value );
+                        if ( !clean.IsNullOrWhiteSpace() )
+                        {
+                            address = clean.Length > 200 ? clean.Substring( 0, 200 ) : clean;
+                        }
                     }
                     
                     if ( string.IsNullOrWhiteSpace( name ) )
@@ -458,6 +477,17 @@ namespace Rock.Blocks.Dar
         public BlockActionResult ProcessPayment( ProcessPaymentRequestBag bag )
         {
             var currentPerson = RequestContext?.CurrentPerson;
+            var clientIp = TryGetClientIp();
+
+            // Rate limit best-effort por IP y por persona autenticada para mitigar brute-force / DoS.
+            if ( !TryConsumeRateLimit( $"PaymentIp:{clientIp}", 5, TimeSpan.FromMinutes( 5 ) ) )
+            {
+                return ActionBadRequest( "Demasiados intentos en poco tiempo. Espera unos minutos antes de reintentar." );
+            }
+            if ( currentPerson != null && !TryConsumeRateLimit( $"PaymentPerson:{currentPerson.Id}", 10, TimeSpan.FromHours( 1 ) ) )
+            {
+                return ActionBadRequest( "Demasiados intentos. Espera antes de reintentar." );
+            }
 
             var validationError = ValidatePaymentRequest( bag );
             if ( validationError.IsNotNullOrWhiteSpace() )
@@ -474,6 +504,22 @@ namespace Rock.Blocks.Dar
 
             var transactionCurrency = NormalizeCurrency( bag.currency );
 
+            // Lock por (personAliasId|idemKey) para serializar requests paralelas con el mismo idempotency key (single-node).
+            object idemLocker = null;
+            string idemLockKey = null;
+            if ( currentPerson != null && !string.IsNullOrWhiteSpace( bag?.idemKey ) )
+            {
+                idemLockKey = $"{currentPerson.PrimaryAliasId}:{bag.idemKey}";
+                idemLocker = _idemLocks.GetOrAdd( idemLockKey, _ => new object() );
+            }
+
+            if ( idemLocker != null )
+            {
+                System.Threading.Monitor.Enter( idemLocker );
+            }
+
+            try
+            {
             using ( var rockContext = new RockContext() )
             {
                 // -- IDEMPOTENCY CHECK (solo para usuarios autenticados) --
@@ -582,6 +628,15 @@ namespace Rock.Blocks.Dar
                         : new List<PaymentHistoryBag>()
                 } );
             }
+            }
+            finally
+            {
+                if ( idemLocker != null )
+                {
+                    System.Threading.Monitor.Exit( idemLocker );
+                    _idemLocks.TryRemove( idemLockKey, out _ );
+                }
+            }
         }
 
         #endregion
@@ -659,7 +714,12 @@ namespace Rock.Blocks.Dar
                     chargeResult.authorizationNumber,
                     bag.wantsReceipt ? ( bag.nit ?? string.Empty ) : string.Empty,
                     bag.wantsReceipt ? ( bag.nitName ?? string.Empty ) : string.Empty,
-                    bag.donorEmail ?? string.Empty ),
+                    bag.donorEmail ?? string.Empty,
+                    chargeResult.auditNumber,
+                    chargeResult.responseCode,
+                    mode,
+                    bag.idemKey,
+                    TryGetClientIp() ),
                 Status = "Approved",
                 StatusMessage = chargeResult.responseMessage,
                 IsSettled = false,
@@ -1028,7 +1088,7 @@ ORDER BY
                         if ( !response.IsSuccessStatusCode )
                         {
                             ExceptionLogService.LogException( new Exception(
-                                $"reCAPTCHA Enterprise HTTP {(int)response.StatusCode}: {responseText}" ) );
+                                $"reCAPTCHA Enterprise HTTP {(int)response.StatusCode}." ) );
                             return "Verificación de seguridad fallida. Intente de nuevo.";
                         }
 
@@ -1036,7 +1096,7 @@ ORDER BY
                         if ( parsed?.tokenProperties == null )
                         {
                             ExceptionLogService.LogException( new Exception(
-                                $"reCAPTCHA respuesta sin tokenProperties. Body: {responseText}" ) );
+                                "reCAPTCHA respuesta sin tokenProperties." ) );
                             return "Verificación de seguridad fallida. Intente de nuevo.";
                         }
 
@@ -1046,15 +1106,15 @@ ORDER BY
                                 ? parsed.tokenProperties.invalidReason
                                 : "unknown";
                             ExceptionLogService.LogException( new Exception(
-                                $"reCAPTCHA token inválido: {invalidReason}. Body: {responseText}" ) );
+                                $"reCAPTCHA token inválido: {invalidReason}." ) );
                             return "Verificación de seguridad fallida. Recargue la página e intente de nuevo.";
                         }
 
-                        var action = parsed.tokenProperties.action ?? string.Empty;
-                        if ( !string.Equals( action, "donation", StringComparison.OrdinalIgnoreCase ) )
+                        var action = ( parsed.tokenProperties.action ?? string.Empty ).ToLowerInvariant();
+                        if ( !ConstantTimeEquals( action, "donation" ) )
                         {
                             ExceptionLogService.LogException( new Exception(
-                                $"reCAPTCHA action inesperada: {action}" ) );
+                                "reCAPTCHA action inesperada." ) );
                             return "Verificación de seguridad fallida. Intente de nuevo.";
                         }
 
@@ -1198,10 +1258,13 @@ ORDER BY
             {
                 return Encryption.DecryptString( rawValue ) ?? string.Empty;
             }
-            catch
+            catch ( Exception ex )
             {
-                // Fallback for legacy/plain values that were not stored encrypted.
-                return rawValue;
+                // Fallar seguro: nunca retornar el valor crudo. Si el atributo se guardó sin cifrar,
+                // el admin debe re-guardarlo desde la UI para que se cifre correctamente.
+                ExceptionLogService.LogException(
+                    new Exception( $"No se pudo descifrar el atributo '{key}'. Re-guarda el valor en la configuración del bloque para que quede cifrado.", ex ) );
+                return string.Empty;
             }
         }
 
@@ -1455,18 +1518,18 @@ ORDER BY
 
             var approved = isHttpSuccess && !isDeclinedStatus;
 
-            string userErrorMessage;
-            if ( approved )
+            // Mensaje genérico al cliente para evitar enumeración (CVV vs PAN vs declined).
+            // El detalle técnico mapeado por MapCybersourceErrorToSpanish se conserva en responseMessage para logs.
+            var userErrorMessage = approved ? string.Empty : GenericPaymentFailureMessage;
+            if ( !approved )
             {
-                userErrorMessage = string.Empty;
-            }
-            else if ( reason.IsNotNullOrWhiteSpace() )
-            {
-                userErrorMessage = MapCybersourceErrorToSpanish( reason, processorResponseCode );
-            }
-            else
-            {
-                userErrorMessage = MapCybersourceErrorToSpanish( null, processorResponseCode );
+                var technicalDetail = reason.IsNotNullOrWhiteSpace()
+                    ? MapCybersourceErrorToSpanish( reason, processorResponseCode )
+                    : MapCybersourceErrorToSpanish( null, processorResponseCode );
+                if ( !technicalDetail.IsNullOrWhiteSpace() )
+                {
+                    responseMessage = ( responseMessage ?? string.Empty ) + " | UI=" + technicalDetail;
+                }
             }
 
             return new CybersourceChargeResult
@@ -2107,7 +2170,9 @@ ORDER BY
         }
 
         private string BuildSummary( string note, string referenceNumber, string authorizationNumber,
-                                      string nit = "", string nitName = "", string email = "" )
+                                      string nit = "", string nitName = "", string email = "",
+                                      string auditNumber = "", string responseCode = "",
+                                      string mode = "", string idemKey = "", string clientIp = "" )
         {
             var parts = new List<string>();
 
@@ -2139,6 +2204,31 @@ ORDER BY
             if ( authorizationNumber.IsNotNullOrWhiteSpace() )
             {
                 parts.Add( "Auth: " + authorizationNumber.Trim() );
+            }
+
+            if ( auditNumber.IsNotNullOrWhiteSpace() )
+            {
+                parts.Add( "Audit: " + auditNumber.Trim() );
+            }
+
+            if ( responseCode.IsNotNullOrWhiteSpace() )
+            {
+                parts.Add( "RC: " + responseCode.Trim() );
+            }
+
+            if ( mode.IsNotNullOrWhiteSpace() )
+            {
+                parts.Add( "Mode: " + mode.Trim() );
+            }
+
+            if ( idemKey.IsNotNullOrWhiteSpace() )
+            {
+                parts.Add( "Idem: " + idemKey.Trim() );
+            }
+
+            if ( clientIp.IsNotNullOrWhiteSpace() )
+            {
+                parts.Add( "IP: " + clientIp.Trim() );
             }
 
             return parts.Any() ? parts.AsDelimited( " | " ) : "Cybersource donation";
@@ -2504,6 +2594,128 @@ ORDER BY
             public const string Finance = "Finance";
             public const string Gateway = "Gateway";
             public const string Security = "Security";
+        }
+
+        #endregion
+
+        #region Security Helpers
+
+        private const string GenericPaymentFailureMessage = "El pago no pudo procesarse. Verifica los datos de tu tarjeta o usa otro medio. Si el problema persiste contacta a tu banco.";
+
+        // Hosts permitidos para el endpoint NIT. En producción dejar solo los oficiales.
+        private static readonly HashSet<string> _allowedNitApiHosts = new HashSet<string>( StringComparer.OrdinalIgnoreCase )
+        {
+            "apiv2.ifacere-fel.com"
+        };
+
+        // Locks por (personAliasId|idemKey) para serializar requests paralelos del mismo idempotency key (single-node).
+        private static readonly ConcurrentDictionary<string, object> _idemLocks = new ConcurrentDictionary<string, object>();
+
+        // Rate limit tracker: key -> (windowStartUtc, count). Single-node best-effort.
+        private static readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimitBuckets = new ConcurrentDictionary<string, RateLimitEntry>();
+
+        private class RateLimitEntry
+        {
+            public DateTime WindowStartUtc;
+            public int Count;
+        }
+
+        /// <summary>
+        /// Sliding window rate limit best-effort, in-process. Returns true si la operación se permite.
+        /// </summary>
+        private static bool TryConsumeRateLimit( string bucketKey, int maxRequests, TimeSpan window )
+        {
+            if ( bucketKey.IsNullOrWhiteSpace() || maxRequests <= 0 ) return true;
+            var now = DateTime.UtcNow;
+            var allowed = true;
+            _rateLimitBuckets.AddOrUpdate( bucketKey,
+                _ => new RateLimitEntry { WindowStartUtc = now, Count = 1 },
+                ( _, existing ) =>
+                {
+                    if ( now - existing.WindowStartUtc > window )
+                    {
+                        existing.WindowStartUtc = now;
+                        existing.Count = 1;
+                    }
+                    else
+                    {
+                        existing.Count++;
+                        if ( existing.Count > maxRequests ) allowed = false;
+                    }
+                    return existing;
+                } );
+            return allowed;
+        }
+
+        /// <summary>
+        /// Remueve tags HTML, entidades decodificadas y caracteres de control. Usar para texto que viene
+        /// de APIs externas y va a renderizarse en email/UI.
+        /// </summary>
+        private static string StripUnsafeText( string value )
+        {
+            if ( value.IsNullOrWhiteSpace() ) return string.Empty;
+            var decoded = WebUtility.HtmlDecode( value );
+            var withoutTags = Regex.Replace( decoded, @"<[^>]+>", string.Empty );
+            return new string( withoutTags.Where( c => !char.IsControl( c ) || c == ' ' ).ToArray() ).Trim();
+        }
+
+        /// <summary>
+        /// Enmascara secuencias que parecen PANs (13-19 dígitos) en texto de logs, dejando solo los últimos 4.
+        /// </summary>
+        private static string MaskPotentialPan( string text )
+        {
+            if ( text.IsNullOrWhiteSpace() ) return text;
+            return Regex.Replace( text, @"\b\d{13,19}\b", m =>
+            {
+                var v = m.Value;
+                return "***" + v.Substring( v.Length - 4 );
+            } );
+        }
+
+        /// <summary>
+        /// Comparación de strings en tiempo constante para evitar timing attacks contra valores conocidos.
+        /// </summary>
+        private static bool ConstantTimeEquals( string a, string b )
+        {
+            if ( a == null || b == null ) return false;
+            if ( a.Length != b.Length ) return false;
+            var result = 0;
+            for ( var i = 0; i < a.Length; i++ ) result |= a[i] ^ b[i];
+            return result == 0;
+        }
+
+        /// <summary>
+        /// True si el host es loopback, link-local, privado RFC1918 o metadata cloud (169.254.x).
+        /// </summary>
+        private static bool IsLoopbackOrPrivateHost( string host )
+        {
+            if ( host.IsNullOrWhiteSpace() ) return true;
+            var lower = host.ToLowerInvariant();
+            if ( lower == "localhost" || lower == "metadata.google.internal" ) return true;
+            if ( !IPAddress.TryParse( host, out var ip ) ) return false;
+            if ( IPAddress.IsLoopback( ip ) ) return true;
+            var bytes = ip.GetAddressBytes();
+            if ( bytes.Length == 4 )
+            {
+                if ( bytes[0] == 10 ) return true;
+                if ( bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31 ) return true;
+                if ( bytes[0] == 192 && bytes[1] == 168 ) return true;
+                if ( bytes[0] == 169 && bytes[1] == 254 ) return true;
+                if ( bytes[0] == 0 ) return true;
+            }
+            return false;
+        }
+
+        private string TryGetClientIp()
+        {
+            try
+            {
+                return RequestContext?.ClientInformation?.IpAddress ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         #endregion

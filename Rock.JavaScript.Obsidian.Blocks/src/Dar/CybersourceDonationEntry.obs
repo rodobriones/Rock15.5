@@ -6,6 +6,8 @@
                 <iframe
                     v-if="deviceFingerprintReady && deviceFingerprintUrl"
                     :src="deviceFingerprintUrl"
+                    sandbox="allow-scripts"
+                    referrerpolicy="no-referrer"
                     style="position:absolute;top:-5000px;left:-5000px;width:1px;height:1px;border:0;visibility:hidden"
                     title="Device Fingerprint"
                     aria-hidden="true"
@@ -1151,9 +1153,18 @@ function openConfirmModal(): void {
 }
 
 /** Confirma desde el modal y ejecuta el pago */
+// Guard atómico no-reactivo: evita re-entradas aunque el atacante manipule `busy.value` desde DevTools.
+let submitInFlight = false;
+
 async function confirmAndSubmit(): Promise<void> {
+    if (submitInFlight || busy.value) return;
+    submitInFlight = true;
     showConfirmModal.value = false;
-    await submitPayment();
+    try {
+        await submitPayment();
+    } finally {
+        submitInFlight = false;
+    }
 }
 
 /** Envía el pago al backend Cybersource. Usa clave de idempotencia para evitar cobros duplicados. */
@@ -1179,27 +1190,35 @@ async function submitPayment(): Promise<void> {
 
     busy.value = true;
 
+    // Capturar datos sensibles en un bag local y limpiar reactivos ANTES del request.
+    // Así PAN/CVV no quedan visibles en Vue DevTools mientras el request está en vuelo.
+    const submitBag = {
+        accountId: Number(form.accountId || 0),
+        amount: Number(form.amount || 0),
+        note: (form.note || "").trim(),
+        currency: (form.currency || "GTQ").toUpperCase(),
+        cardName: (form.cardName || "").trim(),
+        cardNumber: cardNumberDigits.value,
+        expMonth: expiry.month,
+        expYear: expiry.year,
+        cvv: (form.cvv || "").trim(),
+        wantsReceipt: form.wantsReceipt,
+        nit: form.wantsReceipt ? form.nit : "",
+        nitName: form.wantsReceipt ? form.nitName : "",
+        nitAddress: form.wantsReceipt ? form.nitAddress : "",
+        donorEmail: (form.donorEmail || "").trim(),
+        idemKey: idemKey.value
+    };
+
+    clearSensitive();
+
     try {
         // Genera token reCAPTCHA Enterprise (vacío si la feature no está configurada).
         const recaptchaToken = await getRecaptchaToken();
 
         const response = await invokeBlockAction<any>("ProcessPayment", {
             bag: {
-                accountId: Number(form.accountId || 0),
-                amount: Number(form.amount || 0),
-                note: (form.note || "").trim(),
-                currency: (form.currency || "GTQ").toUpperCase(),
-                cardName: (form.cardName || "").trim(),
-                cardNumber: cardNumberDigits.value,
-                expMonth: expiry.month,
-                expYear: expiry.year,
-                cvv: (form.cvv || "").trim(),
-                wantsReceipt: form.wantsReceipt,
-                nit: form.wantsReceipt ? form.nit : "",
-                nitName: form.wantsReceipt ? form.nitName : "",
-                nitAddress: form.wantsReceipt ? form.nitAddress : "",
-                donorEmail: (form.donorEmail || "").trim(),
-                idemKey: idemKey.value,
+                ...submitBag,
                 deviceFingerprintSessionId: deviceFingerprintSessionId,
                 recaptchaToken: recaptchaToken
             }
@@ -1325,15 +1344,23 @@ async function validateNit(): Promise<void> {
     if (busyNit.value || !form.nit) {
         return;
     }
-    
+
+    // Capturar el NIT enviado para descartar respuestas obsoletas si el usuario lo cambió.
+    const sentNit = form.nit;
+
     busyNit.value = true;
     fieldErrors.nit = "";
-    
+
     try {
         const response = await invokeBlockAction<any>("ValidateNitInfo", {
-            nit: form.nit
+            nit: sentNit
         });
-        
+
+        // Si el usuario cambió el NIT mientras el request estaba en vuelo, descartar la respuesta.
+        if (form.nit !== sentNit) {
+            return;
+        }
+
         if (response.isSuccess && response.data?.name) {
             form.nitName = response.data.name;
             form.nitAddress = response.data.address || "";
@@ -1343,9 +1370,11 @@ async function validateNit(): Promise<void> {
             form.nitAddress = "";
         }
     } catch {
-        fieldErrors.nit = "Error de conexión al validar NIT.";
-        form.nitName = "";
-        form.nitAddress = "";
+        if (form.nit === sentNit) {
+            fieldErrors.nit = "Error de conexión al validar NIT.";
+            form.nitName = "";
+            form.nitAddress = "";
+        }
     } finally {
         busyNit.value = false;
     }
