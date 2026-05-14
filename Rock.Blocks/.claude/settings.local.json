@@ -13,7 +13,11 @@
       "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; $output = npx tsc --noEmit -p tsconfig.json 2>&1 | Out-String; if \\($output.Length -eq 0\\) { \"OK no output\" } else { $output.Substring\\(0, [Math]::Min\\(3000, $output.Length\\)\\) })",
       "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx tsc --noEmit -p tsconfig.json; \"ExitCode: $LASTEXITCODE\")",
       "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx eslint --ext .ts,.obs src/Dar/CybersourceDonationEntry.obs 2>&1 | Select-Object -First 50; \"ExitCode: $LASTEXITCODE\")",
-      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx eslint --ext .ts,.obs src/Dar/CybersourceDonationEntry.obs 2>&1 | Select-String -Pattern \"error\" | Select-Object -First 20; \"ExitCode: $LASTEXITCODE\")"
+      "PowerShell(Set-Location \"C:\\\\Repos\\\\Rock18.1\\\\Rock.JavaScript.Obsidian.Blocks\"; npx eslint --ext .ts,.obs src/Dar/CybersourceDonationEntry.obs 2>&1 | Select-String -Pattern \"error\" | Select-Object -First 20; \"ExitCode: $LASTEXITCODE\")",
+      "Bash(awk 'BEGIN{o=0;c=0} {for\\(i=1;i<=length\\($0\\);i++\\){ch=substr\\($0,i,1\\);if\\(ch==\"{\"\\)o++;else if\\(ch==\"}\"\\)c++}} END{print \"open=\"o,\" close=\"c,\" diff=\"\\(o-c\\)}' \"C:/Repos/Rock18.1/Rock.Blocks/Dar/CybersourceDonationEntry.cs\")",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"/c/Repos/Rock18.1/Rock.Blocks/Rock.Blocks.csproj\" -nologo -verbosity:minimal -p:Configuration=Debug)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"/c/Repos/Rock18.1/Rock.Blocks/Rock.Blocks.csproj\" -nologo -verbosity:quiet -p:Configuration=Debug)",
+      "Read(//c/c/Repos/Rock18.1/Rock.JavaScript.Obsidian.Blocks/**)"
     ]
   }
 }

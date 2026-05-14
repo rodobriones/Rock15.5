@@ -373,39 +373,62 @@ namespace Rock.Blocks.Dar
                 return ActionBadRequest( "NIT inválido." );
             }
 
+            var lookup = LookupNitFromExternalApi( nit );
+            if ( !lookup.ok )
+            {
+                return ActionBadRequest( lookup.errorMessage );
+            }
+
+            return ActionOk( new { name = lookup.name, address = lookup.address } );
+        }
+
+        /// <summary>
+        /// Consulta la API externa de validación de NIT y devuelve nombre/dirección saneados.
+        /// Centraliza el lookup para que se pueda invocar desde múltiples BlockActions garantizando
+        /// que el nombre fiscal y la dirección provienen siempre del proveedor (no del cliente).
+        /// </summary>
+        private (bool ok, string name, string address, string errorMessage) LookupNitFromExternalApi( string nit )
+        {
+            if ( string.IsNullOrWhiteSpace( nit ) )
+            {
+                return ( false, null, null, "NIT vacío." );
+            }
+
+            // Sanear el NIT: solo letras/dígitos, máximo 32 chars.
+            var cleanNit = new string( nit.Where( char.IsLetterOrDigit ).ToArray() );
+            if ( cleanNit.IsNullOrWhiteSpace() || cleanNit.Length > 32 )
+            {
+                return ( false, null, null, "NIT inválido." );
+            }
+
             var apiUrl = GetAttributeValue( AttributeKey.NitApiUrl );
             var apiToken = GetDecryptedAttributeValue( AttributeKey.NitApiBearerToken );
 
             if ( string.IsNullOrWhiteSpace( apiUrl ) || string.IsNullOrWhiteSpace( apiToken ) )
             {
-                return ActionBadRequest( "La API de validación de NIT no está configurada en el bloque." );
+                return ( false, null, null, "La API de validación de NIT no está configurada en el bloque." );
             }
 
             // Validar que la URL configurada sea HTTPS absoluta y apunte a un host whitelisted para evitar SSRF.
             if ( !Uri.TryCreate( apiUrl, UriKind.Absolute, out var nitApiUri ) ||
                  nitApiUri.Scheme != Uri.UriSchemeHttps )
             {
-                return ActionBadRequest( "La API de validación de NIT no está configurada correctamente." );
+                return ( false, null, null, "La API de validación de NIT no está configurada correctamente." );
             }
 
             if ( IsLoopbackOrPrivateHost( nitApiUri.Host ) || !_allowedNitApiHosts.Contains( nitApiUri.Host ) )
             {
-                return ActionBadRequest( "La API de validación de NIT no está configurada correctamente." );
+                return ( false, null, null, "La API de validación de NIT no está configurada correctamente." );
             }
 
             try
             {
-                var cleanNit = new string( nit.Where( char.IsLetterOrDigit ).ToArray() );
-                if ( cleanNit.IsNullOrWhiteSpace() || cleanNit.Length > 32 )
-                {
-                    return ActionBadRequest( "NIT inválido." );
-                }
                 string requestXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
 <RetornaDatosClienteRequest>
   <nit>{System.Security.SecurityElement.Escape( cleanNit )}</nit>
 </RetornaDatosClienteRequest>";
 
-                using ( var client = new HttpClient { Timeout = TimeSpan.FromSeconds( 15 ) } )
+                using ( var client = BuildSecureHttpClient( 15000 ) )
                 {
                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Bearer", apiToken );
                     var content = new StringContent( requestXml, Encoding.UTF8, "application/xml" );
@@ -415,7 +438,7 @@ namespace Rock.Blocks.Dar
 
                     if ( !response.IsSuccessStatusCode )
                     {
-                        return ActionBadRequest( $"Error de API externa (HTTP {(int)response.StatusCode})." );
+                        return ( false, null, null, $"Error de API externa (HTTP {(int)response.StatusCode})." );
                     }
 
                     string name = "";
@@ -439,19 +462,19 @@ namespace Rock.Blocks.Dar
                             address = clean.Length > 200 ? clean.Substring( 0, 200 ) : clean;
                         }
                     }
-                    
+
                     if ( string.IsNullOrWhiteSpace( name ) )
                     {
-                        return ActionBadRequest( "No se encontró el formato esperado en la respuesta del NIT." );
+                        return ( false, null, null, "No se encontró el formato esperado en la respuesta del NIT." );
                     }
 
-                    return ActionOk( new { name = name, address = address } );
+                    return ( true, name, address, null );
                 }
             }
             catch ( Exception ex )
             {
                 ExceptionLogService.LogException( ex );
-                return ActionBadRequest( "Ocurrió un error al consultar el NIT." );
+                return ( false, null, null, "Ocurrió un error al consultar el NIT." );
             }
         }
 
@@ -493,6 +516,20 @@ namespace Rock.Blocks.Dar
             if ( validationError.IsNotNullOrWhiteSpace() )
             {
                 return ActionBadRequest( validationError );
+            }
+
+            // Re-validar el NIT contra la API externa para impedir que el cliente envíe
+            // nombre/dirección fiscal arbitrarios y se emita un recibo falso.
+            if ( bag.wantsReceipt && !string.IsNullOrWhiteSpace( bag.nit ) )
+            {
+                var nitLookup = LookupNitFromExternalApi( bag.nit );
+                if ( !nitLookup.ok )
+                {
+                    return ActionBadRequest( "No se pudo validar el NIT. Vuelva a ingresarlo." );
+                }
+                // Overwrite client-supplied values with server-validated ones.
+                bag.nitName = nitLookup.name;
+                bag.nitAddress = nitLookup.address;
             }
 
             // reCAPTCHA Enterprise: si está configurado, validar token antes de cobrar.
@@ -1077,9 +1114,8 @@ ORDER BY
                 };
                 var bodyJson = requestBody.ToJson();
 
-                using ( var http = new HttpClient() )
+                using ( var http = BuildSecureHttpClient( 10000 ) )
                 {
-                    http.Timeout = TimeSpan.FromSeconds( 10 );
                     using ( var content = new StringContent( bodyJson, Encoding.UTF8, "application/json" ) )
                     {
                         var response = http.PostAsync( url, content ).Result;
@@ -1161,6 +1197,11 @@ ORDER BY
                 return "El correo electrónico no es válido.";
             }
 
+            if ( donorEmail.Length > 200 )
+            {
+                return "El correo electrónico es demasiado largo.";
+            }
+
             if ( bag.amount <= 0 )
             {
                 return "El monto debe ser mayor a 0.";
@@ -1169,6 +1210,16 @@ ORDER BY
             if ( bag.amount > 99999999m )
             {
                 return "El monto excede el máximo permitido.";
+            }
+
+            if ( ( bag.cardName ?? string.Empty ).Trim().Length < 3 )
+            {
+                return "Nombre del titular requerido.";
+            }
+
+            if ( ( bag.cardName ?? string.Empty ).Length > 120 )
+            {
+                return "Nombre del titular demasiado largo.";
             }
 
             var cardNumber = SanitizeCardNumber( bag.cardNumber );
@@ -1205,6 +1256,36 @@ ORDER BY
             if ( currency != "GTQ" && currency != "USD" )
             {
                 return "Moneda inválida. Valores permitidos: GTQ o USD.";
+            }
+
+            if ( bag.note != null && bag.note.Length > 250 )
+            {
+                return "La nota excede el máximo permitido.";
+            }
+
+            if ( bag.wantsReceipt && !string.IsNullOrWhiteSpace( bag.nit ) && bag.nit.Length > 32 )
+            {
+                return "NIT inválido.";
+            }
+
+            if ( !string.IsNullOrWhiteSpace( bag.nitName ) && bag.nitName.Length > 200 )
+            {
+                return "Nombre fiscal demasiado largo.";
+            }
+
+            if ( !string.IsNullOrWhiteSpace( bag.nitAddress ) && bag.nitAddress.Length > 250 )
+            {
+                return "Dirección fiscal demasiado larga.";
+            }
+
+            if ( !string.IsNullOrEmpty( bag.idemKey ) && !Regex.IsMatch( bag.idemKey, @"^[a-zA-Z0-9_-]{1,64}$" ) )
+            {
+                return "Solicitud inválida.";
+            }
+
+            if ( !string.IsNullOrEmpty( bag.deviceFingerprintSessionId ) && bag.deviceFingerprintSessionId.Length > 64 )
+            {
+                return "Solicitud inválida.";
             }
 
             return string.Empty;
@@ -1446,9 +1527,7 @@ ORDER BY
             string bodyJson,
             int timeoutMs )
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            using ( var httpClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds( timeoutMs > 0 ? timeoutMs : 30000 ) } )
+            using ( var httpClient = BuildSecureHttpClient( timeoutMs ) )
             using ( var request = new HttpRequestMessage( HttpMethod.Post, url ) )
             {
                 request.Headers.Host = requestHost;
@@ -1541,7 +1620,7 @@ ORDER BY
                 referenceNumber = responseId,
                 auditNumber = !requestCode.IsNullOrWhiteSpace() ? requestCode : reconciliationId,
                 errorMessage = userErrorMessage,
-                rawResponse = responseText
+                rawResponse = MaskPotentialPan( responseText )
             };
         }
 
@@ -2142,13 +2221,13 @@ ORDER BY
             var foreignKey = string.Format(
                 CultureInfo.InvariantCulture,
                 "CYBS|IDEM={0}|MODE={1}|CUR={2}|RC={3}|REF={4}|AUDIT={5}|AUTH={6}",
-                idemKey ?? string.Empty,
-                mode ?? string.Empty,
-                currency ?? string.Empty,
-                chargeResult.responseCode ?? string.Empty,
-                chargeResult.referenceNumber ?? string.Empty,
-                chargeResult.auditNumber ?? string.Empty,
-                chargeResult.authorizationNumber ?? string.Empty );
+                SanitizeForeignKeyValue( idemKey, 32 ),
+                SanitizeForeignKeyValue( mode, 8 ),
+                SanitizeForeignKeyValue( currency, 8 ),
+                SanitizeForeignKeyValue( chargeResult.responseCode, 16 ),
+                SanitizeForeignKeyValue( chargeResult.referenceNumber, 32 ),
+                SanitizeForeignKeyValue( chargeResult.auditNumber, 32 ),
+                SanitizeForeignKeyValue( chargeResult.authorizationNumber, 16 ) );
 
             if ( foreignKey.Length > 100 )
             {
@@ -2716,6 +2795,44 @@ ORDER BY
             {
                 return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// Construye un HttpClient con SslProtocols Tls12 (y Tls13 si el runtime lo soporta) sin
+        /// mutar el estado global de ServicePointManager (que afectaría a todo el proceso).
+        /// </summary>
+        private static HttpClient BuildSecureHttpClient( int timeoutMs )
+        {
+            var handler = new HttpClientHandler();
+            try
+            {
+                // Tls12 always; Tls13 if runtime supports it. Use reflection to avoid
+                // compile errors on .NET Framework versions where Tls13 enum is absent.
+                var tls12 = System.Security.Authentication.SslProtocols.Tls12;
+                var tls13Value = Enum.GetValues( typeof( System.Security.Authentication.SslProtocols ) )
+                    .Cast<System.Security.Authentication.SslProtocols>()
+                    .FirstOrDefault( v => v.ToString() == "Tls13" );
+                handler.SslProtocols = tls13Value != default ? ( tls12 | tls13Value ) : tls12;
+            }
+            catch
+            {
+                // If the handler doesn't allow setting SslProtocols (some runtimes), ignore.
+            }
+            var client = new HttpClient( handler, disposeHandler: true );
+            client.Timeout = TimeSpan.FromMilliseconds( timeoutMs > 0 ? timeoutMs : 30000 );
+            return client;
+        }
+
+        /// <summary>
+        /// Sanitiza un valor que se va a serializar dentro de la ForeignKey en formato pipe-delimited.
+        /// Elimina '|' y '=' (los separadores) y trunca al máximo permitido para que el parsing
+        /// posterior con ExtractForeignKeyValue nunca pueda confundir un valor con un nuevo campo.
+        /// </summary>
+        private static string SanitizeForeignKeyValue( string value, int maxLength )
+        {
+            if ( string.IsNullOrEmpty( value ) ) return string.Empty;
+            var clean = value.Replace( "|", "" ).Replace( "=", "" );
+            return clean.Length > maxLength ? clean.Substring( 0, maxLength ) : clean;
         }
 
         #endregion
