@@ -1,33 +1,29 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <RockForm @submit="onFormSubmit">
-        <div class="row">
-            <AccountInfo
-                         v-if="!config.isAccountInfoHidden"
-                         v-model="internalAccountInfo"
-                         v-model:isUsernameAvailable="internalIsUsernameAvailable"
-                         class="col-md-6"
-                         :config="config"
-                         :disabled="disabled"
-                         @checkUsernameAvailability="onCheckUsernameAvailability" />
-
-            <PersonInfo
-                        v-model="internalPersonInfo"
-                        class="col-md-6"
-                        :config="config"
-                        :disabled="disabled"
-                        :isMobile="isMobile" />
+        <div class="aePageHeader">
+            <h1 class="aePageTitle">Crea tu cuenta</h1>
+            <p class="aePageSubtitle">Únete a la comunidad VidaReal.tv</p>
         </div>
+
+        <AccountInfo
+                     v-if="!config.isAccountInfoHidden"
+                     v-model="internalAccountInfo"
+                     v-model:isUsernameAvailable="internalIsUsernameAvailable"
+                     :config="config"
+                     :disabled="disabled"
+                     @checkUsernameAvailability="onCheckUsernameAvailability" />
+
+        <PersonInfo
+                    v-model="internalPersonInfo"
+                    :config="config"
+                    :disabled="disabled"
+                    :isMobile="isMobile" />
 
         <slot name="captcha" />
 
-        <div class="row">
-            <div class="col-md-12">
-                <RockButton
-                            :btnType="BtnType.Primary"
-                            :disabled="disabled"
-                            type="submit">Next</RockButton>
-            </div>
+        <div class="aeActions">
+            <button class="aeSubmitBtn" :disabled="disabled" type="submit">Continuar</button>
         </div>
     </RockForm>
 </template>
@@ -37,9 +33,7 @@
     import { useBreakpoint } from "../types.partial";
     import AccountInfo from "./registrationStepAccountInfo.partial.obs";
     import PersonInfo from "./registrationStepPersonInfo.partial.obs";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
     import RockForm from "@Obsidian/Controls/rockForm.obs";
-    import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { RockDateTime } from "@Obsidian/Utility/rockDateTime";
     import { AccountEntryAccountInfoBag } from "@Obsidian/ViewModels/Blocks/Security/AccountEntry/accountEntryAccountInfoBag";
@@ -78,16 +72,10 @@
         (e: "update:modelValue", value: AccountEntryRegisterRequestBox): void,
     }>();
 
-    enum ValidationErrorMessages {
-        MinimumAge = "We are sorry, you must be at least {0} years old to create an account."
-    }
-
     //#region Values
 
     const isMobile = computed<boolean>(() => breakpoint.value === "xs");
-
     const shouldUsernameUpdateSetPersonInfoEmail = computed<boolean>(() => props.config.isEmailRequiredForUsername);
-
     const internalIsUsernameAvailable = useVModelPassthrough(props, "isUsernameAvailable", emit);
 
     //#endregion
@@ -135,18 +123,12 @@
 
     //#region Event Handlers
 
-    /**
-     * Event handler for the username being checked.
-     */
     function onCheckUsernameAvailability(username: string): void {
         if (!props.config.isUsernameAvailabilityCheckDisabled) {
             emit("checkUsernameAvailability", username);
         }
     }
 
-    /**
-     * Event handler for the registration form being submitted.
-     */
     async function onFormSubmit(): Promise<void> {
         if (isPersonInfoValid()) {
             emit("register");
@@ -157,9 +139,6 @@
 
     //#region Functions
 
-    /**
-     * Determines whether the person is old enough to register.
-     */
     function isOldEnough(): boolean {
         if (props.config.minimumAge <= 0) {
             return true;
@@ -168,23 +147,20 @@
         const birthday = internalPersonInfo.value?.birthday;
 
         if (!birthday) {
-            emit("error", "Birthday is required");
+            emit("error", "La fecha de nacimiento es requerida.");
             return false;
         }
 
-        const threshold = RockDateTime.now().addYears(- props.config.minimumAge);
+        const threshold = RockDateTime.now().addYears(-props.config.minimumAge);
         const birthdate = RockDateTime.fromParts(birthday.year, birthday.month, birthday.day);
         if (!birthdate || birthdate.isLaterThan(threshold)) {
-            emit("error", ValidationErrorMessages.MinimumAge.replace("{0}", props.config.minimumAge.toString()));
+            emit("error", `Lo sentimos, debes tener al menos ${props.config.minimumAge} años para crear una cuenta.`);
             return false;
         }
 
         return true;
     }
 
-    /**
-     * Determines whether the person info is valid.
-     */
     function isPersonInfoValid(): boolean {
         if (props.config.isBirthDateShown) {
             isOldEnough();

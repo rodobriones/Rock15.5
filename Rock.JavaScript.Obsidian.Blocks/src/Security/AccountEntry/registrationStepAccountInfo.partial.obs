@@ -1,7 +1,7 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <fieldset>
-        <legend>New Account</legend>
+        <legend>Nueva cuenta</legend>
         <TextBox
                  v-if="!isEmailRequiredForUsername"
                  v-model="internalUsername"
@@ -14,7 +14,7 @@
                   v-else
                   v-model="internalUsername"
                   :disabled="disabled"
-                  label="Email"
+                  label="Correo electrónico"
                   rules="required"></EmailBox>
 
         <NotificationBox v-if="usernameValidationCaption" :alertType="!isUsernameAvailable || isUsernameError ? 'warning' : 'success'">{{ usernameValidationCaption }}</NotificationBox>
@@ -22,13 +22,13 @@
         <TextBox
                  v-model="internalPassword"
                  :disabled="disabled"
-                 label="Password"
+                 label="Contraseña"
                  rules="required"
                  type="password"></TextBox>
         <TextBox
                  v-model="internalConfirmPassword"
                  :disabled="disabled"
-                 label="Confirm Password"
+                 label="Confirmar contraseña"
                  :rules="confirmPasswordRules"
                  type="password"></TextBox>
     </fieldset>
@@ -74,11 +74,11 @@
         "required",
         (value: unknown, _params: unknown[] | undefined): ValidationResult => {
             if (typeof value !== "string" || !value?.trim()) {
-                return `${usernameFieldLabel.value} is required.`;
+                return `${usernameFieldLabel.value} es requerido.`;
             }
 
             if (validateUsernameRegex.value && !validateUsernameRegex.value.test(value)) {
-                return `${usernameFieldLabel.value} is invalid. ${props.config.usernameRegexDescription}`;
+                return `${usernameFieldLabel.value} no es válido. ${props.config.usernameRegexDescription}`;
             }
 
             return true;
@@ -94,11 +94,8 @@
     //#region Computed Values
 
     const isUsernameError = computed(() => !!usernameValidationError.value);
-
     const isEmailRequiredForUsername = computed(() => props.config.isEmailRequiredForUsername);
-
-    const usernameFieldLabel = computed(() => props.config.usernameFieldLabel || "Username");
-
+    const usernameFieldLabel = computed(() => props.config.usernameFieldLabel || "Usuario");
     const validateUsernameRegex = computed((() => props.config.usernameRegex ? new RegExp(props.config.usernameRegex) : null));
 
     const internalUsername = computed<string>({
@@ -129,7 +126,7 @@
     });
 
     const confirmPasswordRules = computed<string>(() => {
-        return `required|equalsfield:must match Password,${internalPassword.value}`;
+        return `required|equalsfield:debe coincidir con Contraseña,${internalPassword.value}`;
     });
 
     const usernameValidationCaption = computed<string>(() => {
@@ -137,10 +134,10 @@
             return usernameValidationError.value;
         }
         else if (props.isUsernameAvailable) {
-            return `The ${usernameFieldLabel.value.toLowerCase()} you selected is available.`;
+            return `El ${usernameFieldLabel.value.toLowerCase()} que elegiste está disponible.`;
         }
         else if (props.isUsernameAvailable === false) {
-            return `The ${usernameFieldLabel.value.toLowerCase()} you selected is already in use.`;
+            return `El ${usernameFieldLabel.value.toLowerCase()} que elegiste ya está en uso.`;
         }
         else {
             return "";
@@ -151,16 +148,13 @@
 
     //#region Event Handlers
 
-    /**
-     * Event handler for the username being changed.
-     */
     function onUsernameChanged(): void {
         if (!internalUsername.value?.trim()) {
-            usernameValidationError.value = `${usernameFieldLabel.value} is required.`;
+            usernameValidationError.value = `${usernameFieldLabel.value} es requerido.`;
             emit("update:isUsernameAvailable", null);
         }
         else if (validateUsernameRegex.value && !validateUsernameRegex.value.test(internalUsername.value)) {
-            usernameValidationError.value = `${usernameFieldLabel.value} is invalid. ${props.config.usernameRegexDescription}`;
+            usernameValidationError.value = `${usernameFieldLabel.value} no es válido. ${props.config.usernameRegexDescription}`;
             emit("update:isUsernameAvailable", null);
         }
         else {

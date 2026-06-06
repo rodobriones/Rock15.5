@@ -258,7 +258,7 @@
                 viewBox.value = result.data;
             }
             else {
-                const fallbackViewBox = getDefaultViewBox(result.errorMessage || "An unexpected error occurred. Please try your request again.");
+                const fallbackViewBox = getDefaultViewBox(result.errorMessage || "Ocurrió un error inesperado. Por favor intenta de nuevo.");
                 viewBox.value = fallbackViewBox;
             }
         }

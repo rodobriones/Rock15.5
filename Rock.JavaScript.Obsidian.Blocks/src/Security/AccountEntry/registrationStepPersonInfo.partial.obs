@@ -2,38 +2,39 @@
 <template>
     <div>
         <fieldset>
-            <legend>Your Information</legend>
+            <legend>Tu información</legend>
             <FirstNameTextBox
                               v-model="internalFirstName"
                               :disabled="disabled"
-                              label="First Name"
+                              label="Nombre"
                               :rules="['required', 'nospecialcharacters', 'noemojisorspecialfonts']" />
             <TextBox
                      v-model="internalLastName"
                      :disabled="disabled"
-                     label="Last Name"
+                     label="Apellido"
                      :rules="['required', 'nospecialcharacters', 'noemojisorspecialfonts']" />
             <EmailBox
                       v-if="!isEmailHidden"
                       v-model="internalEmail"
                       :disabled="disabled"
-                      label="Email"
+                      label="Correo electrónico"
                       rules="required" />
             <GenderPicker
                           v-if="isGenderPickerShown"
                           v-model="internalGender"
+                          label="Género"
                           :rules="isGenderPickerRequired ? genderRules : ''"
                           :disabled="disabled" />
             <BirthdayPicker
                             v-if="isBirthDateShown"
                             v-model="internalBirthday"
                             :disabled="disabled"
-                            label="Birth Date"
+                            label="Fecha de nacimiento"
                             :rules="birthdayRules" />
         </fieldset>
 
         <fieldset v-if="internalArePhoneNumbersShown">
-            <legend v-if="internalPhoneNumbers.length > 1">Phone Numbers</legend>
+            <legend v-if="internalPhoneNumbers.length > 1">Teléfonos</legend>
             <template v-for="(value, key) in internalPhoneNumbers">
                 <PhoneNumberDetails v-if="!value.isHidden"
                                     v-model="internalPhoneNumbers[key]"
@@ -43,7 +44,7 @@
         </fieldset>
 
         <fieldset v-if="isAddressShown">
-            <legend>Address</legend>
+            <legend>Dirección</legend>
             <Address v-model="internalAddress"
                      :disabled="disabled"
                      :rules="addressRules"></Address>
@@ -218,8 +219,8 @@
     });
 
     const genderRules = computed<ValidationRule[]>(() => [
-        createRuleWithSuffix(required, "is required"),
-        createRuleWithReplacement(createNotEqualRule(Gender.Unknown), "is required"),
+        createRuleWithSuffix(required, "es requerido"),
+        createRuleWithReplacement(createNotEqualRule(Gender.Unknown), "es requerido"),
         "required"
     ]);
 
@@ -227,18 +228,10 @@
 
     // #region Event Handlers
 
-    /**
-     * Returns truthy if the argument is of type ListItemBag.
-     *
-     * @param object The object to test.
-     */
     function isListItemBag(object: unknown): object is ListItemBag {
         return !!object && typeof object === "object" && "value" in object;
     }
 
-    /**
-     * Updates the person's campus guid whenever the campus picker selection changes.
-     */
     function onCampusChanged(value: ListItemBag | ListItemBag[] | null): void {
         if (isListItemBag(value)) {
             emit("update:modelValue", { ...props.modelValue, campus: value.value });

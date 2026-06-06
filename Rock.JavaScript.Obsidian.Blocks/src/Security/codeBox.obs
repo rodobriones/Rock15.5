@@ -60,7 +60,7 @@
         allowedChars: {
             type: Object as PropType<RegExp>,
             required: false,
-            default: /^[a-zA-Z0-9]$/
+            default: /^[0-9]$/
         },
 
         disabled: {

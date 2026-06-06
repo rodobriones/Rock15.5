@@ -1,32 +1,22 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div :class="['phonegroup clearfix form-group', modelValue.isRequired ? 'required' : '']">
-        <div v-if="!isMobile" class="control-label col-sm-1 phonegroup-label">{{ modelValue.label }}&nbsp;</div>
-        <div :class="['controls', !isMobile ? 'col-sm-11' : 'col-sm-12', 'phonegroup-number']">
-            <div :class="['row', !isMobile ? 'margin-l-sm' : '']">
-                <div class="col-sm-7">
-                    <PhoneNumberBox v-model:modelValue="internalPhoneNumber"
-                                    v-model:countryCode="internalCountryCode"
-                                    :disabled="disabled"
-                                    :disableLabel="!isMobile"
-                                    :label="modelValue.label!"
-                                    :rules="phoneNumberRules"
-                                    :validationTitle="`${modelValue.label} phone`" />
-                </div>
-                <div class="col-sm-5 margin-t-sm">
-                    <div class="row">
-                        <div class="col-xs-6">
-                            <InlineCheckBox v-model="internalIsSmsEnabled"
-                                            :disabled="disabled"
-                                            label="SMS" />
-                        </div>
-                        <div class="col-xs-6">
-                            <InlineCheckBox v-model="internalIsUnlisted"
-                                            :disabled="disabled"
-                                            label="Unlisted" />
-                        </div>
-                    </div>
-                </div>
+    <div :class="['form-group', modelValue.isRequired ? 'required' : '']">
+        <label v-if="modelValue.label" class="control-label">{{ modelValue.label }}</label>
+        <div class="phonegroup-number">
+            <PhoneNumberBox v-model:modelValue="internalPhoneNumber"
+                            v-model:countryCode="internalCountryCode"
+                            :disabled="disabled"
+                            :disableLabel="true"
+                            :label="modelValue.label!"
+                            :rules="phoneNumberRules"
+                            :validationTitle="`Teléfono ${modelValue.label}`" />
+            <div style="display:flex; gap:16px; margin-top:8px;">
+                <InlineCheckBox v-model="internalIsSmsEnabled"
+                                :disabled="disabled"
+                                label="SMS" />
+                <InlineCheckBox v-model="internalIsUnlisted"
+                                :disabled="disabled"
+                                label="No publicar" />
             </div>
         </div>
     </div>

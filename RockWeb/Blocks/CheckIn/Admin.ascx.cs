@@ -212,18 +212,7 @@ namespace RockWeb.Blocks.CheckIn
                 ddlTheme.Items.Add( new ListItem( themeDir.Name, themeDir.Name.ToLower() ) );
             }
 
-            // If a theme has been specified in the URL, prefer it.
-            // If not, use the local device configuration cookie or the default theme for the site.
-            var activeTheme = PageParameter( PageParameterKey.Theme ).ToLower();
-            if ( string.IsNullOrWhiteSpace( activeTheme ) )
-            {
-                activeTheme = LocalDeviceConfig.CurrentTheme;
-            }
-            if ( string.IsNullOrWhiteSpace( activeTheme ) )
-            {
-                activeTheme = RockPage.Site.Theme.ToLower();
-            }
-
+            var activeTheme = "vidaventuracheckin";
             ddlTheme.SetValue( activeTheme );
             SetSelectedTheme( activeTheme );
 

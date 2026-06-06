@@ -7,7 +7,7 @@
         class="btn-block"
         :disabled="disabled"
         type="button"
-        @click="onSignInWithAccountClicked()">Sign in with Account</RockButton>
+        @click="onSignInWithAccountClicked()">Ingresar con usuario y contraseña</RockButton>
 
     <RockButton
         v-else-if="isPasswordlessLoginSupported && internalLoginMethod !== LoginMethod.Passwordless"
@@ -15,7 +15,7 @@
         class="btn-block"
         :disabled="disabled"
         type="button"
-        @click="onSignInWithEmailOrPhoneClicked()">Sign in with Email or Phone</RockButton>
+        @click="onSignInWithEmailOrPhoneClicked()">Ingresar con correo o teléfono</RockButton>
 </template>
 
 <script setup lang="ts">

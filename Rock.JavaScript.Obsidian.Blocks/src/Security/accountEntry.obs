@@ -1,66 +1,70 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
     <BreakpointObserver>
-        <NotificationBox v-if="errorMessage" alertType="validation" v-html="errorMessage" />
+        <div class="aeWrap">
+            <div v-if="errorMessage" class="aeAlert" v-html="errorMessage"></div>
 
-        <RegistrationStep v-if="step.isRegistration"
-                          v-model="registrationInfo"
-                          v-model:isUsernameAvailable="isUsernameAvailable"
-                          :config="config"
-                          :disabled="isRegistering || isNavigating"
-                          @checkUsernameAvailability="onCheckUsernameAvailability"
-                          @error="showError"
-                          @register="onRegister">
-            <template #captcha>
-                <Captcha v-if="!disableCaptchaSupport"
-                         ref="captchaElement" />
-            </template>
-        </RegistrationStep>
+            <div class="aeCard">
+            <RegistrationStep v-if="step.isRegistration"
+                              v-model="registrationInfo"
+                              v-model:isUsernameAvailable="isUsernameAvailable"
+                              :config="config"
+                              :disabled="isRegistering || isNavigating"
+                              @checkUsernameAvailability="onCheckUsernameAvailability"
+                              @error="showError"
+                              @register="onRegister">
+                <template #captcha>
+                    <Captcha v-if="!disableCaptchaSupport"
+                             ref="captchaElement" />
+                </template>
+            </RegistrationStep>
 
-        <DuplicatePersonSelectionStep v-else-if="step.isDuplicatePersonSelection"
-                                      v-model="selectedDuplicatePerson"
-                                      :disabled="isRegistering || isNavigating"
-                                      :options="duplicatePersonSelectionStepOptions"
-                                      @movePrevious="onDuplicatePersonSelectionStepMovePrevious()"
-                                      @personSelected="onDuplicatePersonSelected"
-                                      @noPersonSelected="onNoDuplicatePersonSelected">
-            <template #captcha>
-                <Captcha v-if="!disableCaptchaSupport"
-                         ref="captchaElement" />
-            </template>
-        </DuplicatePersonSelectionStep>
-
-        <PasswordlessConfirmationSentStep v-else-if="step.isPasswordlessConfirmationSent"
-                                          v-model="passwordlessConfirmationCode"
+            <DuplicatePersonSelectionStep v-else-if="step.isDuplicatePersonSelection"
+                                          v-model="selectedDuplicatePerson"
                                           :disabled="isRegistering || isNavigating"
-                                          :options="passwordlessConfirmationSentStepOptions"
-                                          @movePrevious="onPasswordlessConfirmationSentStepMovePrevious()"
-                                          @submit="onPasswordlessConfirmationSubmitted">
-            <template #captcha>
-                <Captcha v-if="!disableCaptchaSupport"
-                         ref="captchaElement" />
-            </template>
-        </PasswordlessConfirmationSentStep>
+                                          :options="duplicatePersonSelectionStepOptions"
+                                          @movePrevious="onDuplicatePersonSelectionStepMovePrevious()"
+                                          @personSelected="onDuplicatePersonSelected"
+                                          @noPersonSelected="onNoDuplicatePersonSelected">
+                <template #captcha>
+                    <Captcha v-if="!disableCaptchaSupport"
+                             ref="captchaElement" />
+                </template>
+            </DuplicatePersonSelectionStep>
 
-        <ExistingAccountStep v-else-if="step.isExistingAccount"
-                             :disabled="isSendingForgotUsername || isRegistering || isNavigating"
-                             :options="existingAccountStepOptions"
-                             @movePrevious="onMovePrevious()"
-                             @emailUsername="onEmailUsername"
-                             @sendToLogin="onSendToLogin">
-            <template #captcha>
-                <Captcha v-if="!disableCaptchaSupport"
-                         ref="captchaElement" />
-            </template>
-        </ExistingAccountStep>
+            <PasswordlessConfirmationSentStep v-else-if="step.isPasswordlessConfirmationSent"
+                                              v-model="passwordlessConfirmationCode"
+                                              :disabled="isRegistering || isNavigating"
+                                              :options="passwordlessConfirmationSentStepOptions"
+                                              @movePrevious="onPasswordlessConfirmationSentStepMovePrevious()"
+                                              @submit="onPasswordlessConfirmationSubmitted">
+                <template #captcha>
+                    <Captcha v-if="!disableCaptchaSupport"
+                             ref="captchaElement" />
+                </template>
+            </PasswordlessConfirmationSentStep>
 
-        <ConfirmationSentStep v-else-if="step.isConfirmationSent"
-                              :options="confirmationSentStepOptions" />
+            <ExistingAccountStep v-else-if="step.isExistingAccount"
+                                 :disabled="isSendingForgotUsername || isRegistering || isNavigating"
+                                 :options="existingAccountStepOptions"
+                                 @movePrevious="onMovePrevious()"
+                                 @emailUsername="onEmailUsername"
+                                 @sendToLogin="onSendToLogin">
+                <template #captcha>
+                    <Captcha v-if="!disableCaptchaSupport"
+                             ref="captchaElement" />
+                </template>
+            </ExistingAccountStep>
 
-        <CompletedStep v-else-if="step.isCompleted"
-                       :disabled="isRegistering || isNavigating"
-                       :options="completedStepOptions"
-                       @navigate="onNavigate($event)" />
+            <ConfirmationSentStep v-else-if="step.isConfirmationSent"
+                                  :options="confirmationSentStepOptions" />
+
+            <CompletedStep v-else-if="step.isCompleted"
+                           :disabled="isRegistering || isNavigating"
+                           :options="completedStepOptions"
+                           @navigate="onNavigate($event)" />
+            </div>
+        </div>
     </BreakpointObserver>
 </template>
 
@@ -74,7 +78,6 @@
     import PasswordlessConfirmationSentStep from "./AccountEntry/passwordlessConfirmationSentStep.partial.obs";
     import RegistrationStep from "./AccountEntry/registrationStep.partial.obs";
     import BreakpointObserver from "./breakpointObserver.partial.obs";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
     import { AccountEntryStep } from "@Obsidian/Enums/Blocks/Security/AccountEntry/accountEntryStep";
     import { onConfigurationValuesChanged, useConfigurationValues, useInvokeBlockAction, useReloadBlock } from "@Obsidian/Utility/block";
     import { useHttp } from "@Obsidian/Utility/http";
@@ -171,18 +174,13 @@
     }));
 
     const sentLoginCaption = computed<string>(() => {
-        return config.sentLoginCaption || "Your username has been emailed to you. If you've forgotten your password, the email includes a link to reset your password.";
+        return config.sentLoginCaption || "Tu nombre de usuario ha sido enviado a tu correo. Si olvidaste tu contraseña, el correo incluye un enlace para restablecerla.";
     });
 
     //#endregion
 
     //#region Event Handlers
 
-    /**
-     * Event handler for the username being checked.
-     *
-     * @param username The username to check.
-     */
     async function onCheckUsernameAvailability(username: string): Promise<void> {
         if (config.isUsernameAvailabilityCheckDisabled) {
             isUsernameAvailable.value = null;
@@ -193,27 +191,16 @@
         }
     }
 
-    /**
-     * Event handler for the duplicate person being selected.
-     */
     async function onDuplicatePersonSelected(): Promise<void> {
-        // Individual selected a person. Let them choose what to do on the next step.
         registrationInfo.value.selectedPersonId = selectedDuplicatePerson.value?.id;
-
         await register();
     }
 
-    /**
-     * Event handler for moving to the step prior to the "Duplicate Person Selection Step".
-     */
     function onDuplicatePersonSelectionStepMovePrevious(): void {
         selectedDuplicatePerson.value = null;
         onMovePrevious();
     }
 
-    /**
-     * Event handler for the "Email username" button being clicked.
-     */
     async function onEmailUsername(): Promise<void> {
         try {
             isSendingForgotUsername.value = true;
@@ -234,7 +221,7 @@
             const result = await invokeBlockAction<void>("ForgotUsername", { bag }, actionContext);
 
             if (!result?.isSuccess) {
-                showError(result?.errorMessage || "An unexpected error occurred.");
+                showError(result?.errorMessage || "Ocurrió un error inesperado.");
                 return;
             }
 
@@ -249,59 +236,34 @@
         }
     }
 
-    /**
-     * Event handler for moving to the previous step.
-     */
     function onMovePrevious(): void {
         movePrevious();
     }
 
-    /**
-     * Handles the event when a component triggers navigation.
-     *
-     * @param url The URL to navigate to.
-     * @returns an unresolving promise so the page/form remains unusable until the redirect is complete.
-     */
     async function onNavigate(url: string): Promise<void> {
         await navigate(url);
     }
 
-    /**
-     * Event handler for no duplicate person being selected.
-     */
     async function onNoDuplicatePersonSelected(): Promise<void> {
         registrationInfo.value.selectedPersonId = 0;
         await register();
     }
 
-    /**
-     * Event handler for moving to the step prior to the "Passwordless Confirmation Sent Step".
-     */
     function onPasswordlessConfirmationSentStepMovePrevious(): void {
         passwordlessConfirmationCode.value = "";
         registrationInfo.value.code = "";
         movePrevious();
     }
 
-    /**
-     * Event handler for the passwordless confirmation being submitted.
-     */
     async function onPasswordlessConfirmationSubmitted(): Promise<void> {
         registrationInfo.value.code = passwordlessConfirmationCode.value;
-
         await register();
     }
 
-    /**
-     * Event handler for registering the account.
-     */
     async function onRegister(): Promise<void> {
         await register();
     }
 
-    /**
-     * Event handler for the "Let me log in" button being clicked.
-     */
     async function onSendToLogin(): Promise<void> {
         await navigate(config.loginPageUrl || "/Login");
     }
@@ -310,17 +272,10 @@
 
     //#region Functions
 
-    /**
-     * Clears the error message.
-     */
     function clearError(): void {
         errorMessage.value = null;
     }
 
-    /**
-     * Moves to the previous step.
-     * Defaults to the registration step if no more steps.
-     */
     function movePrevious(): void {
         if (stepStack.value.length) {
             stepStack.value.splice(stepStack.value.length - 1);
@@ -330,12 +285,6 @@
         }
     }
 
-    /**
-     * Navigates to a URL.
-     *
-     * @param url The URL to navigate to.
-     * @returns an unresolving promise so the page/form remains disabled until the redirect is complete.
-     */
     async function navigate(url: string): Promise<void> {
         isNavigating.value = true;
         window.location.href = url;
@@ -363,7 +312,7 @@
                 displayStep(response.data);
             }
             else {
-                showError(response?.errorMessage || "An unexpected error occurred");
+                showError(response?.errorMessage || "Ocurrió un error inesperado.");
             }
         }
         finally {
@@ -371,11 +320,6 @@
         }
     }
 
-    /**
-     * Shows the "Completed" step.
-     *
-     * @param options The step options. Will not set new options if not supplied.
-     */
     function showCompletedStepNext(options?: AccountEntryCompletedStepBag | null): void {
         if (options) {
             completedStepOptions.value = options;
@@ -383,11 +327,6 @@
         stepStack.value.push(AccountEntryStep.Completed);
     }
 
-    /**
-     * Shows the "Confirmation Sent" step.
-     *
-     * @param options The step options. Will not set new options if not supplied.
-     */
     function showConfirmationSentStepNext(options?: AccountEntryConfirmationSentStepBag | null): void {
         if (options) {
             confirmationSentStepOptions.value = options;
@@ -395,11 +334,6 @@
         stepStack.value.push(AccountEntryStep.ConfirmationSent);
     }
 
-    /**
-     * Shows the "Duplicate Person Selection" step.
-     *
-     * @param options The step options. Will not set new options if not supplied.
-     */
     function showDuplicatePersonSelectionStepNext(options?: AccountEntryDuplicatePersonSelectionStepBag | null): void {
         if (options) {
             duplicatePersonSelectionStepOptions.value = options;
@@ -408,11 +342,6 @@
         stepStack.value.push(AccountEntryStep.DuplicatePersonSelection);
     }
 
-    /**
-     * Shows the "Passwordless Confirmation Sent" step.
-     *
-     * @param options The step options. Will not set new options if not supplied.
-     */
     function showPasswordlessConfirmationSentStepNext(options?: AccountEntryPasswordlessConfirmationSentStepBag | null): void {
         if (options) {
             passwordlessConfirmationSentStepOptions.value = options;
@@ -422,11 +351,6 @@
         stepStack.value.push(AccountEntryStep.PasswordlessConfirmationSent);
     }
 
-    /**
-     * Shows the "Existing Account" step.
-     *
-     * @param options The step options. Will not set new options if not supplied.
-     */
     function showExistingAccountStepNext(options?: AccountEntryExistingAccountStepBag | null): void {
         if (options) {
             existingAccountStepOptions.value = options;
@@ -434,60 +358,36 @@
         stepStack.value.push(AccountEntryStep.ExistingAccount);
     }
 
-    /**
-     * Sets and shows an error message.
-     *
-     * @param error The error message to show.
-     */
     function showError(error: string): void {
         errorMessage.value = error;
     }
 
-    /**
-     * Shows the "Registration" step.
-     */
     function showRegistrationStepNext(): void {
-        // Clear duplicate person data.
         selectedDuplicatePerson.value = null;
         duplicatePersonSelectionStepOptions.value = {};
-
         stepStack.value.push(AccountEntryStep.Registration);
     }
 
-    /**
-     * Shows a registration step.
-     */
     function displayStep(data: AccountEntryRegisterResponseBox): void {
         switch (data.step) {
-            case AccountEntryStep.Completed: {
+            case AccountEntryStep.Completed:
                 showCompletedStepNext(data.completedStepBag);
                 break;
-            }
-
-            case AccountEntryStep.ConfirmationSent: {
+            case AccountEntryStep.ConfirmationSent:
                 showConfirmationSentStepNext(data.confirmationSentStepBag);
                 break;
-            }
-
-            case AccountEntryStep.DuplicatePersonSelection: {
+            case AccountEntryStep.DuplicatePersonSelection:
                 showDuplicatePersonSelectionStepNext(data.duplicatePersonSelectionStepBag);
                 break;
-            }
-
-            case AccountEntryStep.PasswordlessConfirmationSent: {
+            case AccountEntryStep.PasswordlessConfirmationSent:
                 showPasswordlessConfirmationSentStepNext(data.passwordlessConfirmationSentStepBag);
                 break;
-            }
-
-            case AccountEntryStep.ExistingAccount: {
+            case AccountEntryStep.ExistingAccount:
                 showExistingAccountStepNext(data.existingAccountStepBag);
                 break;
-            }
-
-            case AccountEntryStep.Registration: {
+            case AccountEntryStep.Registration:
                 showRegistrationStepNext();
                 break;
-            }
         }
     }
 
@@ -496,3 +396,708 @@
     displayStep(config.accountEntryRegisterStepBox || { step: AccountEntryStep.Registration });
     onConfigurationValuesChanged(useReloadBlock());
 </script>
+
+<style>
+/* ── Wrapper ──────────────────────────────────────────────── */
+.aeWrap {
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    color: #1f2933;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 48px 24px 72px;
+    animation: aeRise 0.3s ease-out both;
+}
+
+/* ── Card contenedor del formulario ───────────────────────── */
+.aeCard {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 20px;
+    padding: 32px 32px 28px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Page header (title + subtitle) ──────────────────────── */
+.aeWrap .aePageHeader {
+    margin-bottom: 36px;
+    text-align: center;
+}
+
+.aeWrap .aePageTitle {
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: #1a1a1a;
+    margin: 0 0 8px;
+    line-height: 1.2;
+}
+
+.aeWrap .aePageSubtitle {
+    font-size: 15px;
+    color: #6b6b6b;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ── Error box ────────────────────────────────────────────── */
+.aeWrap .aeAlert {
+    background: #fef3f2;
+    border: 1px solid #fecdc9;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    color: #b42318;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+/* ── Fieldsets / Secciones ────────────────────────────────── */
+.aeWrap fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 8px;
+}
+
+.aeWrap fieldset:last-child {
+    margin-bottom: 0;
+}
+
+.aeWrap fieldset legend {
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 11px;
+    font-weight: 800;
+    color: #4a4a4a;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: none;
+    margin-bottom: 14px;
+    margin-top: 8px;
+    width: auto;
+    float: none;
+    padding: 0;
+}
+
+/* ── Labels ───────────────────────────────────────────────── */
+.aeWrap .form-group > label,
+.aeWrap .control-label {
+    color: #4a4a4a !important;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    margin-bottom: 7px !important;
+}
+
+/* ── Inputs ───────────────────────────────────────────────── */
+.aeWrap .form-control {
+    width: 100% !important;
+    min-height: 48px !important;
+    border: 1px solid #bfbfbf !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    color: #1e1e1e !important;
+    font-size: 15px !important;
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif !important;
+    padding: 10px 14px !important;
+    box-shadow: none !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+    -webkit-appearance: none !important;
+    outline: none !important;
+}
+
+.aeWrap .form-control:focus {
+    border-color: #7b7b7b !important;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12) !important;
+}
+
+.aeWrap .form-control:disabled {
+    background: #f3f3f3 !important;
+    color: #7d7d7d !important;
+    cursor: not-allowed !important;
+}
+
+/* Native <select> elements (GenderPicker) — custom arrow */
+.aeWrap select.form-control {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%231e1e1e' d='M6 8L0 0h12z'/></svg>") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 14px center !important;
+    background-size: 10px 7px !important;
+    padding-right: 36px !important;
+    cursor: pointer;
+}
+
+/* Inline checkbox layout fix (SMS / No publicar) */
+.aeWrap .checkbox {
+    display: inline-flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: unset !important;
+}
+
+.aeWrap .checkbox label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #555 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    cursor: pointer;
+}
+
+.aeWrap .checkbox label input[type="checkbox"] {
+    position: static !important;
+    margin: 0 !important;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.aeWrap .checkbox .label-text {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* ── Input group (teléfono con código de país) ────────────── */
+.aeWrap .input-group {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    width: 100%;
+}
+
+/* In a flex input-group, make the input grow instead of taking 100% width */
+.aeWrap .input-group > .form-control {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+/* Only apply right-only radius when the input is preceded by addon/btn */
+.aeWrap .input-group > .input-group-btn ~ .form-control,
+.aeWrap .input-group > .input-group-addon ~ .form-control {
+    border-radius: 0 12px 12px 0 !important;
+    border-left: none !important;
+}
+
+/* Simple phone icon addon (single country code) */
+.aeWrap .input-group-addon {
+    border: 1px solid #bfbfbf !important;
+    border-right: none !important;
+    border-radius: 12px 0 0 12px !important;
+    background: #f3f3f3 !important;
+    color: #1e1e1e !important;
+    font-size: 14px !important;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    white-space: nowrap;
+    box-shadow: none !important;
+    min-height: 48px;
+}
+
+/* Country code dropdown button wrapper — keep default Bootstrap table-cell behavior */
+.aeWrap .input-group-btn {
+    position: relative;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.aeWrap .input-group-btn > .btn {
+    border: 1px solid #bfbfbf !important;
+    border-right: none !important;
+    border-radius: 12px 0 0 12px !important;
+    background: #f3f3f3 !important;
+    color: #1e1e1e !important;
+    font-size: 14px !important;
+    padding: 0 12px !important;
+    white-space: nowrap;
+    box-shadow: none !important;
+    min-height: 48px;
+    line-height: 1 !important;
+}
+
+.aeWrap .input-group-btn > .btn:hover {
+    background: #e8e8e8 !important;
+}
+
+/* Dropdown menu from country code selector */
+.aeWrap .input-group-btn .dropdown-menu {
+    position: absolute !important;
+    z-index: 9999 !important;
+    top: 100% !important;
+    left: 0 !important;
+    min-width: 120px;
+    background: #fff;
+    border: 1px solid #bfbfbf;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 4px 0;
+    overflow: hidden;
+}
+
+.aeWrap .input-group-btn .dropdown-menu li a {
+    display: block;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: #1e1e1e;
+    text-decoration: none;
+}
+
+.aeWrap .input-group-btn .dropdown-menu li a:hover {
+    background: #f3f3f3;
+}
+
+/* ── Form groups ──────────────────────────────────────────── */
+.aeWrap .form-group {
+    margin-bottom: 14px;
+    position: relative;
+}
+
+.aeWrap .form-group:last-child {
+    margin-bottom: 0;
+}
+
+/* ── Campus picker (Ant Design Select) ───────────────────── */
+/* The ant-select gets class="form-control" — reset our border overrides
+   so the inner .ant-select-selector handles the visual styling */
+.aeWrap .ant-select.form-control {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    height: auto !important;
+    min-height: unset !important;
+    overflow: visible !important;
+}
+
+.aeWrap .ant-select-selector {
+    min-height: 48px !important;
+    border: 1px solid #bfbfbf !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 14px !important;
+    font-size: 15px !important;
+    color: #1e1e1e !important;
+    box-shadow: none !important;
+}
+
+.aeWrap .ant-select-selector:hover,
+.aeWrap .ant-select-focused .ant-select-selector {
+    border-color: #7b7b7b !important;
+    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12) !important;
+}
+
+/* Dropdown popup — rendered inside .control-wrapper, needs to overflow */
+.aeWrap .control-wrapper {
+    position: relative;
+    overflow: visible !important;
+}
+
+.aeWrap .ant-select-dropdown {
+    z-index: 9999 !important;
+    border: 1px solid #bfbfbf !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+    overflow: hidden !important;
+    padding: 4px 0 !important;
+}
+
+.aeWrap .ant-select-item {
+    padding: 8px 14px !important;
+    font-size: 14px !important;
+    color: #1e1e1e !important;
+    border-radius: 0 !important;
+}
+
+.aeWrap .ant-select-item-option-selected {
+    background: #f3f3f3 !important;
+    font-weight: 600 !important;
+}
+
+.aeWrap .ant-select-item-option-active {
+    background: #f7f7f7 !important;
+}
+
+/* Oculta el label inline del phonegroup cuando no es móvil */
+.aeWrap .phonegroup-label {
+    display: none !important;
+}
+
+.aeWrap .phonegroup-number {
+    padding-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1;
+}
+
+.aeWrap .phonegroup .row {
+    margin: 0;
+}
+
+/* ── Checkbox list / rockcheckboxlist ─────────────────────── */
+.aeWrap .rockcheckboxlist label,
+.aeWrap .margin-t-sm .row {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.aeWrap .rockcheckboxlist label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    color: #555 !important;
+    cursor: pointer;
+}
+
+/* ── Radio buttons (GenderPicker y similares) ─────────────── */
+.aeWrap .controls .radio,
+.aeWrap .rock-radio-button-list .radio {
+    display: inline-block;
+    margin: 0 6px 0 0;
+}
+
+.aeWrap .controls .radio label,
+.aeWrap .rock-radio-button-list .radio label {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 8px 20px !important;
+    min-height: 42px !important;
+    border: 1px solid #d5d5d5 !important;
+    border-radius: 999px !important;
+    cursor: pointer !important;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    transition: border-color 0.18s, background 0.18s, color 0.18s !important;
+    background: #fff !important;
+    color: #1e1e1e !important;
+}
+
+.aeWrap .controls .radio input[type="radio"],
+.aeWrap .rock-radio-button-list input[type="radio"] {
+    display: none !important;
+}
+
+.aeWrap .controls .radio label:has(input[type="radio"]:checked),
+.aeWrap .rock-radio-button-list .radio label:has(input[type="radio"]:checked) {
+    background: #1a1a1a !important;
+    color: #fff !important;
+    border-color: #1a1a1a !important;
+}
+
+/* ── Botón principal ──────────────────────────────────────── */
+.aeWrap .aeSubmitBtn {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 999px;
+    border: 1px solid #000;
+    background: #000;
+    color: #fff;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.18s ease;
+}
+
+.aeWrap .aeSubmitBtn:hover:not(:disabled) {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+}
+
+.aeWrap .aeSubmitBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Botón secundario (outline) ───────────────────────────── */
+.aeWrap .aeSecondaryBtn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 999px;
+    border: 1px solid #b6b6b6;
+    background: #fff;
+    color: #262626;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.aeWrap .aeSecondaryBtn:hover:not(:disabled) {
+    background: #f3f3f3;
+    border-color: #8a8a8a;
+}
+
+.aeWrap .aeSecondaryBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Botón link ───────────────────────────────────────────── */
+.aeWrap .aeLinkBtn {
+    background: none;
+    border: none;
+    color: #555;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.aeWrap .aeLinkBtn:hover:not(:disabled) {
+    color: #1a1a1a;
+}
+
+.aeWrap .aeLinkBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Grupos de acciones ───────────────────────────────────── */
+.aeWrap .aeActions {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.aeWrap .aeActionsRow {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    align-items: center;
+}
+
+/* ── Selección de persona duplicada ───────────────────────── */
+.aeWrap .aeDupHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.aeWrap .aeDupIcon {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f3f3f3;
+    border: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+}
+
+.aeWrap .aeDupIcon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.aeWrap .aeDupTitle {
+    margin: 0 0 2px;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #1a1a1a;
+}
+
+.aeWrap .aeDupSubtitle {
+    margin: 0;
+    font-size: 13px;
+    color: #6b6b6b;
+    line-height: 1.4;
+}
+
+.aeWrap .aeDupList {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.aeWrap .aeDupCard {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.aeWrap .aeDupCard:hover {
+    border-color: #ababab;
+    background: #fafafa;
+}
+
+.aeWrap .aeDupCard.isSelected {
+    border-color: #1a1a1a;
+    background: #f7f7f7;
+    box-shadow: 0 0 0 1px #1a1a1a;
+}
+
+.aeWrap .aeDupAvatar {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    color: #fff;
+    font-family: Manrope, "Plus Jakarta Sans", sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.02em;
+}
+
+.aeWrap .aeDupCard.isSelected .aeDupAvatar {
+    background: #000;
+}
+
+.aeWrap .aeDupName {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1.3;
+}
+
+.aeWrap .aeDupCheck {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1a1a1a;
+}
+
+.aeWrap .aeDupCheck svg {
+    width: 22px;
+    height: 22px;
+}
+
+.aeWrap .aeDupCheckEmpty {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #d0d0d0;
+}
+
+/* ── Cuenta existente ─────────────────────────────────────── */
+.aeWrap .aeExistingBox {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+}
+
+.aeWrap .aeExistingBox p {
+    margin: 0;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.5;
+}
+
+/* ── Completado ───────────────────────────────────────────── */
+.aeWrap .aeCompletedBox {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+}
+
+.aeWrap .aeCompletedBox p {
+    margin: 0;
+    font-size: 13px;
+    color: #166534;
+    line-height: 1.5;
+}
+
+/* ── iOS anti-zoom ────────────────────────────────────────── */
+@media (max-width: 991px) {
+    .aeWrap .form-control {
+        font-size: 16px !important;
+    }
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 575px) {
+    .aeWrap {
+        padding: 24px 12px 48px;
+    }
+
+    .aeCard {
+        padding: 24px 20px 20px;
+        border-radius: 16px;
+    }
+
+    .aeWrap .aePageTitle {
+        font-size: 22px;
+    }
+
+    .aeWrap .aePageHeader {
+        margin-bottom: 24px;
+    }
+
+    .aeWrap .aeSubmitBtn {
+        min-height: 48px;
+        font-size: 15px;
+    }
+
+    .aeWrap .aeSecondaryBtn {
+        min-height: 40px;
+        font-size: 13px;
+    }
+}
+
+/* ── Animación ────────────────────────────────────────────── */
+@keyframes aeRise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+</style>

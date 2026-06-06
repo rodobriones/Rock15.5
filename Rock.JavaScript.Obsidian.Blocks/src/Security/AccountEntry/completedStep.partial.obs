@@ -1,16 +1,23 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div v-if="options.isPlainCaption && options.caption">{{ options.caption }}</div>
-    <NotificationBox v-else-if="options.caption" alertType="success">{{ options.caption }}</NotificationBox>
+    <div>
+        <div v-if="options.isPlainCaption && options.caption" class="aeCompletedBox">
+            <p>{{ options.caption }}</p>
+        </div>
+        <div v-else-if="options.caption" class="aeCompletedBox">
+            <p>{{ options.caption }}</p>
+        </div>
 
-    <RockButton v-if="options.redirectUrl" :btnType="BtnType.Primary" :disabled="disabled" @click="onContinueClicked">Continue</RockButton>
+        <div v-if="options.redirectUrl" class="aeActions">
+            <button class="aeSubmitBtn" :disabled="disabled" type="button" @click="onContinueClicked">
+                Continuar
+            </button>
+        </div>
+    </div>
 </template>
 
 <script setup lang="ts">
     import { onMounted, PropType } from "vue";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
-    import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { AccountEntryCompletedStepBag } from "@Obsidian/ViewModels/Blocks/Security/AccountEntry/accountEntryCompletedStepBag";
 
     const props = defineProps({
@@ -28,10 +35,6 @@
     const emit = defineEmits<{
         (e: "navigate", value: string): void
     }>();
-
-    //#region Values
-
-    //#endregion
 
     //#region Event Handlers
 

@@ -1,43 +1,71 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <NotificationBox v-if="options.caption" alertType="warning">{{ options.caption }}</NotificationBox>
+    <div>
+        <div v-if="options.caption" class="aeAlert">{{ options.caption }}</div>
 
-    <SimpleGrid :items="options.duplicatePeople">
-        <template #header>
-            <tr>
-                <th>You?</th>
-                <th>Name</th>
-            </tr>
-        </template>
-        <template #row="{ item }: { item: AccountEntryDuplicatePersonItemBag }">
-            <tr>
-                <td><input v-model="internalModelValue" :disabled="disabled" name="DuplicatePerson" type="radio" :value="item" /></td>
-                <td>{{ item.fullName }}</td>
-            </tr>
-        </template>
-    </SimpleGrid>
+        <div class="aeDupHeader">
+            <div class="aeDupIcon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div>
+                <p class="aeDupTitle">¿Eres tú?</p>
+                <p class="aeDupSubtitle">Encontramos registros existentes que podrían ser tuyos.</p>
+            </div>
+        </div>
 
-    <div class="radio">
-        <label>
-            <input v-model="internalModelValue" :disabled="disabled" name="DuplicatePerson" type="radio" :value="null" />
-            <span class="label-text"><strong>None of these are me</strong></span>
-        </label>
-    </div>
+        <div class="aeDupList">
+            <button
+                v-for="person in options.duplicatePeople"
+                :key="person.id ?? 0"
+                type="button"
+                class="aeDupCard"
+                :class="{ isSelected: internalModelValue?.id === person.id }"
+                :disabled="disabled"
+                @click="internalModelValue = person">
+                <div class="aeDupAvatar">{{ personInitials(person.fullName ?? '') }}</div>
+                <span class="aeDupName">{{ person.fullName }}</span>
+                <div class="aeDupCheck">
+                    <svg v-if="internalModelValue?.id === person.id" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" />
+                    </svg>
+                    <div v-else class="aeDupCheckEmpty"></div>
+                </div>
+            </button>
 
-    <slot name="captcha" />
+            <button
+                type="button"
+                class="aeDupCard"
+                :class="{ isSelected: internalModelValue === null }"
+                :disabled="disabled"
+                @click="internalModelValue = null">
+                <div class="aeDupAvatar" style="background: #555;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;">
+                        <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-1.72 6.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 1 0 1.06 1.06L12 13.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L13.06 12l1.72-1.72a.75.75 0 1 0-1.06-1.06L12 10.94l-1.72-1.72Z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <span class="aeDupName">Ninguno soy yo</span>
+                <div class="aeDupCheck">
+                    <svg v-if="internalModelValue === null" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" />
+                    </svg>
+                    <div v-else class="aeDupCheckEmpty"></div>
+                </div>
+            </button>
+        </div>
 
-    <div class="actions">
-        <RockButton :btnType="BtnType.Link" :disabled="disabled" @click="onPreviousClicked">Previous</RockButton>
-        <RockButton :btnType="BtnType.Primary" :disabled="disabled" @click="onNextClicked">Next</RockButton>
+        <slot name="captcha" />
+
+        <div class="aeActions">
+            <button class="aeSubmitBtn" :disabled="disabled" type="button" @click="onNextClicked">Continuar</button>
+            <button class="aeLinkBtn" :disabled="disabled" type="button" @click="onPreviousClicked">Regresar</button>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-    import { PropType } from "vue";
-    import SimpleGrid from "./simpleGrid.partial.obs";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
-    import { BtnType } from "@Obsidian/Enums/Controls/btnType";
+    import { PropType, ref } from "vue";
     import { useVModelPassthrough } from "@Obsidian/Utility/component";
     import { AccountEntryDuplicatePersonItemBag } from "@Obsidian/ViewModels/Blocks/Security/AccountEntry/accountEntryDuplicatePersonItemBag";
     import { AccountEntryDuplicatePersonSelectionStepBag } from "@Obsidian/ViewModels/Blocks/Security/AccountEntry/accountEntryDuplicatePersonSelectionStepBag";
@@ -72,11 +100,16 @@
 
     //#endregion
 
+    //#region Functions
+
+    function personInitials(name: string): string {
+        return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
+    }
+
+    //#endregion
+
     //#region Event Handlers
 
-    /**
-     * Event handler for the next button being clicked.
-     */
     function onNextClicked(): void {
         if (internalModelValue.value) {
             emit("personSelected");
@@ -86,9 +119,6 @@
         }
     }
 
-    /**
-     * Event handler for the previous button being clicked.
-     */
     function onPreviousClicked(): void {
         emit("movePrevious");
     }

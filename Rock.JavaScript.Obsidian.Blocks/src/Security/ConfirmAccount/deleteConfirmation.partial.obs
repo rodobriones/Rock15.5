@@ -7,7 +7,7 @@
             <div class="actions">
                 <RockButton :btnType="BtnType.Primary"
                     :disabled="disabled"
-                    type="submit">Yes, Delete the Account</RockButton>
+                    type="submit">Sí, eliminar la cuenta</RockButton>
             </div>
         </RockForm>
     </div>

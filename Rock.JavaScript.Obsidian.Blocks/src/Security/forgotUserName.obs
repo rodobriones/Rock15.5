@@ -9,9 +9,9 @@
 
         <NotificationBox v-if="isWarningShown" alertType="validation">
             <template v-if="changePasswordNotSupportedWarningOptions">
-                <p>We were able to find the following accounts for this email, but none of them are able to be reset from this website.</p>
-                <p>Accounts:<br /> {{ changePasswordNotSupportedWarningOptions.accountTypes }}</p>
-                <p>To create a new account with a username and password please see our <a :href="changePasswordNotSupportedWarningOptions.newAccountUrl">New Account</a> page.</p>
+                <p>Encontramos cuentas asociadas a este correo, pero ninguna permite restablecer la contraseña desde este sitio.</p>
+                <p>Cuentas:<br /> {{ changePasswordNotSupportedWarningOptions.accountTypes }}</p>
+                <p>Para crear una nueva cuenta con usuario y contraseña, visita nuestra página de <a :href="changePasswordNotSupportedWarningOptions.newAccountUrl">Nueva Cuenta</a>.</p>
             </template>
 
             <div v-else v-html="warningMessage"></div>
@@ -21,7 +21,7 @@
             <EmailBox v-model="email"
                       :disabled="isProcessing"
                       :isRequiredIndicatorHidden="true"
-                      label="Enter your email address"
+                      label="Ingresa tu correo electrónico"
                       rules="required"></EmailBox>
 
             <Captcha v-if="!disableCaptchaSupport"
@@ -31,7 +31,7 @@
                 <RockButton :autoDisable="true"
                             :btnType="BtnType.Primary"
                             :disabled="isProcessing"
-                            type="submit">Email me reset instructions</RockButton>
+                            type="submit">Enviarme instrucciones de recuperación</RockButton>
             </div>
         </RockForm>
     </template>
@@ -140,12 +140,12 @@
      */
     function processResult(result: HttpResult<ForgotUserNameSendInstructionsResultBag>): void {
         if (result.isError) {
-            showError(result.errorMessage || "Invalid request.");
+            showError(result.errorMessage || "Solicitud inválida.");
             return;
         }
 
         if (!result.data) {
-            showError("Invalid request.");
+            showError("Solicitud inválida.");
             return;
         }
 
@@ -164,12 +164,12 @@
             }
 
             case SendInstructionsResultType.EmailInvalid: {
-                showWarning(config.captions?.invalidEmailCaption || "Sorry, we didn't recognize that email address. Want to try another?");
+                showWarning(config.captions?.invalidEmailCaption || "No reconocemos ese correo electrónico. ¿Deseas intentar con otro?");
                 break;
             }
 
             case SendInstructionsResultType.CaptchaInvalid: {
-                showWarning("There was an issue processing your request. Please try again. If the issue persists please contact us.");
+                showWarning("Hubo un problema al procesar tu solicitud. Por favor intenta de nuevo. Si el problema persiste, contáctanos.");
                 break;
             }
         }

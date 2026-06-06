@@ -10,7 +10,7 @@
             </div>
             <div v-else class="login-block">
                 <fieldset>
-                    <legend>Log In</legend>
+                    <legend>Iniciar sesión</legend>
 
                     <template v-if="config.configurationErrors?.length">
                         <NotificationBox v-for="configError in config.configurationErrors"
@@ -43,7 +43,7 @@
 
                         <Divider v-if="areSecondaryAndPrimaryAuthVisible"
                                  :class="isMobileForced ? 'col-sm-12' : 'col-sm-1'"
-                                 content="or"
+                                 content="o"
                                  :isVertical="!isMobile" />
 
                         <div :class="['login-entry', isMobileForced || (!isAnyExternalAuthProviderVisible && !areBothInternalAuthProvidersVisible) ? 'col-sm-12' : 'col-sm-6']">
@@ -240,7 +240,7 @@
 
             if (!response?.isSuccess || !responseBag) {
                 uiState.error({
-                    errorMessage: response?.errorMessage || "Something went wrong. Please try again."
+                    errorMessage: response?.errorMessage || "Algo salió mal. Por favor intenta de nuevo."
                 });
                 return;
             }
@@ -277,7 +277,7 @@
             }
 
             uiState.error({
-                errorMessage: responseBag.errorMessage || "Authentication failed. Please try again."
+                errorMessage: responseBag.errorMessage || "Error de autenticación. Por favor intenta de nuevo."
             });
         }
         finally {
@@ -347,7 +347,7 @@
 
             if (!response?.isSuccess || !response.data) {
                 uiState.error({
-                    errorMessage: response?.errorMessage || "Something went wrong. Please try again."
+                    errorMessage: response?.errorMessage || "Algo salió mal. Por favor intenta de nuevo."
                 });
                 return;
             }
@@ -369,7 +369,7 @@
             loginMethod.value = LoginMethod.Passwordless;
 
             uiState.error({
-                errorMessage: response?.data?.errorMessage || response?.errorMessage || "An unknown error occurred. Please submit email or phone number again."
+                errorMessage: response?.data?.errorMessage || response?.errorMessage || "Error desconocido. Por favor ingresa tu correo o teléfono nuevamente."
             });
             return;
         }
@@ -393,7 +393,7 @@
 
             if (!response || !response.isSuccess || !response.data) {
                 uiState.error({
-                    errorMessage: "Something went wrong. Please try again.",
+                    errorMessage: "Algo salió mal. Por favor intenta de nuevo.",
                 });
                 return;
             }
@@ -417,7 +417,7 @@
 
             if (response.data.isRegistrationRequired) {
                 if (!response.data.registrationUrl) {
-                    uiState.error({ errorMessage: "Redirecting to default registration page" });
+                    uiState.error({ errorMessage: "Redirigiendo a la página de registro." });
                 }
                 await navigate(response.data.registrationUrl || "/NewAccount");
                 return;
@@ -434,7 +434,7 @@
             }
 
             uiState.error({
-                errorMessage: response.data.errorMessage ?? "Authentication failed. Please try again."
+                errorMessage: response.data.errorMessage ?? "Error de autenticación. Por favor intenta de nuevo."
             });
         }
         finally {
@@ -515,12 +515,12 @@
      * @param error The optional error message.
      */
     function showCompleted(caption?: string | null | undefined): void {
-        completedCaption.value = caption || "An unknown error occurred";
+        completedCaption.value = caption || "Ocurrió un error desconocido.";
         isCompleted.value = true;
     }
 
     function getErrorOrDefault(error?: string | null | undefined): string {
-        return error || "An unknown error occurred";
+        return error || "Ocurrió un error desconocido.";
     }
 
     const uiState = {

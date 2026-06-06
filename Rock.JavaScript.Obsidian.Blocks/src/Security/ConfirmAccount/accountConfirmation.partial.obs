@@ -5,11 +5,11 @@
 
         <RockForm :hideErrors="true" @validationChanged="onFormValidationChanged">
             <fieldset>
-                <legend>Enter Code</legend>
+                <legend>Ingresar código</legend>
 
                 <TextBox v-model="internalCode"
                     :disabled="disabled"
-                    label="Code"
+                    label="Código"
                     rules="required"></TextBox>
             </fieldset>
 
@@ -17,15 +17,15 @@
                 <RockButton :btnType="BtnType.Primary"
                     :disabled="disabled"
                     type="submit"
-                    @click="onConfirmAccountClicked">Confirm Account</RockButton><!-- This "submit" button should be first so pressing [Enter] triggers this click event handler. -->
+                    @click="onConfirmAccountClicked">Confirmar cuenta</RockButton><!-- This "submit" button should be first so pressing [Enter] triggers this click event handler. -->
                 <RockButton :btnType="BtnType.Link"
                     :disabled="disabled"
                     type="submit"
-                    @click="onChangePasswordClicked">Change Password</RockButton><!-- The button type is "submit" to trigger form validation when it is clicked. -->
+                    @click="onChangePasswordClicked">Cambiar contraseña</RockButton><!-- The button type is "submit" to trigger form validation when it is clicked. -->
                 <RockButton :btnType="BtnType.Link"
                     :disabled="disabled"
                     type="submit"
-                    @click="onDeleteAccountClicked">Delete Account</RockButton><!-- The button type is "submit" to trigger form validation when it is clicked. -->
+                    @click="onDeleteAccountClicked">Eliminar cuenta</RockButton><!-- The button type is "submit" to trigger form validation when it is clicked. -->
             </div>
         </RockForm>
     </div>

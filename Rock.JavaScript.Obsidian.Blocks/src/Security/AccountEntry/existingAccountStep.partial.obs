@@ -1,32 +1,40 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <NotificationBox v-if="options.caption" alertType="warning">{{ options.caption }}</NotificationBox>
+    <div>
+        <div v-if="options.caption" class="aeExistingBox">
+            <p>{{ options.caption }}</p>
+        </div>
 
-    <slot name="captcha" />
+        <slot name="captcha" />
 
-    <div class="actions">
-        <RockButton
-                    :btnType="BtnType.Link"
-                    :disabled="disabled"
-                    @click="onPreviousClicked">Previous</RockButton>
-        <RockButton
-                    :btnType="BtnType.Primary"
-                    class="ml-1"
-                    :disabled="disabled"
-                    @click="onEmailUsernameClicked">Yes, send it</RockButton>
-        <RockButton
-                    :btnType="BtnType.Primary"
-                    class="ml-1"
-                    :disabled="disabled"
-                    @click="onSendToLoginClicked">No, just let me log in</RockButton>
+        <div class="aeActions">
+            <button
+                class="aeSubmitBtn"
+                :disabled="disabled"
+                type="button"
+                @click="onEmailUsernameClicked">
+                Sí, envíamelo
+            </button>
+            <button
+                class="aeSecondaryBtn"
+                :disabled="disabled"
+                type="button"
+                @click="onSendToLoginClicked">
+                No, quiero ingresar
+            </button>
+            <button
+                class="aeLinkBtn"
+                :disabled="disabled"
+                type="button"
+                @click="onPreviousClicked">
+                Regresar
+            </button>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
     import { PropType } from "vue";
-    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
-    import RockButton from "@Obsidian/Controls/rockButton.obs";
-    import { BtnType } from "@Obsidian/Enums/Controls/btnType";
     import { AccountEntryExistingAccountStepBag } from "@Obsidian/ViewModels/Blocks/Security/AccountEntry/accountEntryExistingAccountStepBag";
 
     defineProps({
@@ -47,32 +55,19 @@
         (e: "sendToLogin"): void
     }>();
 
-    //#region Values
-
-    //#endregion
-
     //#region Event Handlers
 
-    /**
-     * Event handler for the "Yes, send it" button being clicked.
-     */
     function onEmailUsernameClicked(): void {
         emit("emailUsername");
     }
 
-    /**
-     * Event handler for the previous button being clicked.
-     */
     function onPreviousClicked(): void {
         emit("movePrevious");
     }
 
-    /**
-     * Event handler for the "No, just let me log in" button being clicked.
-     */
     function onSendToLoginClicked(): void {
         emit("sendToLogin");
     }
 
-                    //#endregion
+    //#endregion
 </script>

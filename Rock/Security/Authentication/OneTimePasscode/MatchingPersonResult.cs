@@ -41,5 +41,10 @@ namespace Rock.Security.Authentication.OneTimePasscode
         /// The full name of the matching person.
         /// </summary>
         public string FullName { get; set; }
+
+        /// <summary>
+        /// The photo URL of the matching person.
+        /// </summary>
+        public string PhotoUrl { get; set; }
     }
 }

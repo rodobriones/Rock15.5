@@ -158,7 +158,7 @@ namespace Rock.Security.Authentication
             {
                 return new OneTimePasscodeAuthenticationResult
                 {
-                    ErrorMessage = "Code invalid or expired",
+                    ErrorMessage = "Código inválido o expirado",
                     State = options.State,
                     UniqueIdentifier = state.UniqueIdentifier
                 };
@@ -170,7 +170,7 @@ namespace Rock.Security.Authentication
                 {
                     return new OneTimePasscodeAuthenticationResult
                     {
-                        ErrorMessage = "Code is invalid",
+                        ErrorMessage = "El código es inválido",
                         State = options.State,
                         UniqueIdentifier = state.UniqueIdentifier
                     };
@@ -209,7 +209,7 @@ namespace Rock.Security.Authentication
                 return new SendOneTimePasscodeResult
                 {
                     IsSuccessful = false,
-                    ErrorMessage = "Please provide Email or Phone for passwordless login.",
+                    ErrorMessage = "Por favor proporciona un correo o teléfono para iniciar sesión.",
                     State = null
                 };
             }
@@ -223,7 +223,7 @@ namespace Rock.Security.Authentication
                 return new SendOneTimePasscodeResult
                 {
                     IsSuccessful = false,
-                    ErrorMessage = "The Passwordless Login Confirmation system communication needs to be active to use passwordless login.",
+                    ErrorMessage = "La comunicación de confirmación de inicio de sesión sin contraseña debe estar activa.",
                     State = null
                 };
             }
@@ -278,10 +278,10 @@ namespace Rock.Security.Authentication
                 }
                 else
                 {
-                    var errorMessage = "Unable to send confirmation code. Make sure to use a mobile phone that can receive text messages.";
+                    var errorMessage = "No fue posible enviar el código de confirmación. Asegúrate de usar un número de teléfono móvil que pueda recibir mensajes de texto.";
                     if ( errorMessages?.Count() == 1 && errorMessages.First().Contains( TransportComponent.UnsubscribedSmsRecipientMessage ) )
                     {
-                        errorMessage = $"We're unable to send a confirmation code to the number provided. {errorMessages.First()}";
+                        errorMessage = $"No fue posible enviar el código de confirmación al número proporcionado. {errorMessages.First()}";
                     }
 
                     return new SendOneTimePasscodeResult()
@@ -369,7 +369,7 @@ namespace Rock.Security.Authentication
             return new SendOneTimePasscodeResult
             {
                 IsSuccessful = false,
-                ErrorMessage = "Verification code failed to send",
+                ErrorMessage = "No fue posible enviar el código de verificación",
                 State = null
             };
         }
@@ -457,7 +457,7 @@ namespace Rock.Security.Authentication
                 {
                     return new OneTimePasscodeAuthenticationResult
                     {
-                        ErrorMessage = "The selected person is invalid"
+                        ErrorMessage = "La persona seleccionada no es válida"
                     };
                 }
             }
@@ -470,15 +470,20 @@ namespace Rock.Security.Authentication
                 // Multiple people match phone number or email provided.
                 // Individual must select the person they want to authenticate as.
                 var matchingPersonResults = matchingPeople
-                    .Select( p => new PasswordlessMatchingPersonState
+                    .Select( p => new
                     {
-                        PersonId = p.Id,
-                        FullName = p.FullName
+                        State = new PasswordlessMatchingPersonState
+                        {
+                            PersonId = p.Id,
+                            FullName = p.FullName
+                        },
+                        p.PhotoUrl
                     } )
-                    .Select( p => new MatchingPersonResult
+                    .Select( x => new MatchingPersonResult
                     {
-                        State = GetEncryptedMatchingPersonState( p ),
-                        FullName = p.FullName
+                        State = GetEncryptedMatchingPersonState( x.State ),
+                        FullName = x.State.FullName,
+                        PhotoUrl = x.PhotoUrl
                     } )
                     .ToList();
 
@@ -645,7 +650,6 @@ namespace Rock.Security.Authentication
         private static IQueryable<Person> GetMatchingPeopleQuery( RockContext rockContext, string phoneNumber, string email )
         {
             var personService = new PersonService( rockContext );
-            var phoneNumberService = new PhoneNumberService( rockContext );
             IQueryable<Person> peopleQuery = null;
 
             if ( email.IsNotNullOrWhiteSpace() )
@@ -660,9 +664,29 @@ namespace Rock.Security.Authentication
                     peopleQuery = personService.Queryable().AsNoTracking();
                 }
 
-                var personIdsByPhoneNumber = phoneNumberService.GetPersonIdsByNumber( phoneNumber );
+                // VR: Match phone with or without country code, so that a request from
+                // the frontend (which now always sends "+<code><digits>") still finds
+                // legacy Person.PhoneNumber rows that have Number stored without country code.
+                var digits = new string( ( phoneNumber ?? string.Empty ).Where( char.IsDigit ).ToArray() );
+                if ( digits.Length > 0 )
+                {
+                    var personIdsByPhoneNumber = new PhoneNumberService( rockContext ).Queryable().AsNoTracking()
+                        .Where( n =>
+                            // Stored with country code: "502" + "12345678" == "50212345678"
+                            ( n.CountryCode + n.Number ) == digits
+                            // Stored without country code: "12345678" == "12345678"
+                            || n.Number == digits
+                            // Fallback for partial / legacy formats
+                            || ( digits.Length >= 7 && n.Number.EndsWith( digits ) ) )
+                        .Select( n => n.PersonId )
+                        .Distinct();
 
-                peopleQuery = peopleQuery.Where( p => personIdsByPhoneNumber.Contains( p.Id ) );
+                    peopleQuery = peopleQuery.Where( p => personIdsByPhoneNumber.Contains( p.Id ) );
+                }
+                else
+                {
+                    peopleQuery = peopleQuery.Where( p => false );
+                }
             }
 
             return peopleQuery ?? Enumerable.Empty<Person>().AsQueryable();

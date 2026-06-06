@@ -158,10 +158,7 @@ namespace Rock.Model
         /// <returns></returns>
         private static string RandomString( int length )
         {
-            // Removed vowels to prevent bad words,
-            // the number nine to prevent other immature references,
-            // and other characters that can cause confusion.
-            const string AllowedChars = "BCDFGHJKLMNPRSTXZ245678";
+            const string AllowedChars = "0123456789";
             return new string( Enumerable.Repeat( AllowedChars, length )
                 .Select( s => s[Random.Next( s.Length )] ).ToArray() );
         }

@@ -6,7 +6,16 @@
       "Bash(grep -E \"\\\\.cs$\")",
       "Bash(find /c/Repos/Rock18.1/Plugin.* -name \"*Migration*\" -type f)",
       "Bash(find /c/Repos/Rock18.1/Plugin.* -name \"AssemblyInfo.cs\")",
-      "WebFetch(domain:developers.facebook.com)"
+      "WebFetch(domain:developers.facebook.com)",
+      "Bash(grep -E \"\\\\.\\(cs|ashx\\)$\")",
+      "PowerShell([guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\); [guid]::NewGuid\\(\\).ToString\\(\\).ToUpper\\(\\))",
+      "Bash(msbuild Rock.Blocks/Rock.Blocks.csproj /t:Build /p:Configuration=Debug /v:minimal /nologo)",
+      "PowerShell($msbuild = \\(Get-ChildItem 'C:\\\\Program Files\\\\Microsoft Visual Studio' -Recurse -Filter MSBuild.exe -ErrorAction SilentlyContinue | Select-Object -First 1\\).FullName; if \\(-not $msbuild\\) { $msbuild = \\(Get-ChildItem 'C:\\\\Program Files \\(x86\\)\\\\Microsoft Visual Studio' -Recurse -Filter MSBuild.exe -ErrorAction SilentlyContinue | Select-Object -First 1\\).FullName }; $msbuild)",
+      "PowerShell(& 'C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe' 'c:\\\\Repos\\\\Rock18.1\\\\Rock.Blocks\\\\Rock.Blocks.csproj' /t:Build /p:Configuration=Debug /v:minimal /nologo 2>&1)",
+      "PowerShell(& 'C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe' 'c:\\\\Repos\\\\Rock18.1\\\\Rock\\\\Rock.csproj' /t:Build /p:Configuration=Debug /v:minimal /nologo 2>&1)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

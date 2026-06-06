@@ -2059,7 +2059,8 @@ namespace Rock.Blocks.Security
                 var matchingPeople = passwordlessAuthenticationResult.MatchingPeopleResults?.Select( p => new ListItemBag
                 {
                     Value = p.State,
-                    Text = p.FullName
+                    Text = p.FullName,
+                    Category = p.PhotoUrl
                 } ).ToList();
                 return Response(
                     ResponseHelper.PasswordlessLogin.PersonSelectionRequired( matchingPeople ),
