@@ -43,6 +43,9 @@ export type RegistrationEntryArgsBag = {
     /** Gets or sets the gateway token. */
     gatewayToken?: string | null;
 
+    /** Gets or sets the NIT entered at the billing screen (validated against SAT) for the Odoo FEL invoice. (Vida Real) */
+    nit?: string | null;
+
     /** Gets or sets the payment plan. */
     paymentPlan?: RegistrationEntryCreatePaymentPlanRequestBag | null;
 
@@ -60,4 +63,7 @@ export type RegistrationEntryArgsBag = {
 
     /** Gets or sets the saved account unique identifier. */
     savedAccountGuid?: Guid | null;
+
+    /** Gets or sets whether the registrant wants a FEL invoice; false invoices as "CF". (Vida Real) */
+    wantsInvoice: boolean;
 };

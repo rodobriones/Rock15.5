@@ -1,7 +1,7 @@
 # Módulo DAR — Backend C# — Historial de cambios y documentación
 
 > **Rama:** `hotfix-18.1`
-> **Última actualización:** 2026-06-04
+> **Última actualización:** 2026-06-21
 >
 > Este documento cubre los dos bloques C# del módulo DAR, el flujo completo
 > de donación, la integración con Cybersource, las 4 features de anti-fraude,
@@ -9,6 +9,21 @@
 >
 > Para la documentación técnica detallada del bloque principal, ver
 > [`CybersourceDonationEntry.md`](CybersourceDonationEntry.md).
+
+> **Endurecimiento 2026-06-21 (security review #2–#7).** Tras una revisión de
+> OWASP/idempotencia/seguridad se corrigieron 6 hallazgos. El cambio mayor es
+> el **patrón de fila `Pending` durable**: la transacción se reserva en BD
+> ANTES de cobrar y se promueve a `Approved` después, lo que cierra el doble
+> cobro de donantes anónimos (#2) y el hueco "cobrado pero no guardado" (#3).
+> Resumen:
+> - **#2** Idempotencia ahora aplica también a donantes **anónimos** (clave por `idemKey`, no por persona).
+> - **#3** Reserva `Pending` antes del cobro + flag `ambiguous` (timeout/5xx) que **conserva** la fila para que un reintento no recobre.
+> - **#4** `sp_getapplock` (cross-node) dentro de una transacción de BD para serializar el check+insert, además del lock in-process.
+> - **#5** El **batch se separa por moneda** (`... (GTQ)` / `... (USD)`) para no mezclar totales de control sin conversión FX.
+> - **#6** `idemKey` ahora es **obligatorio** y se valida con cap de **32** chars (coincide con el truncado de `ForeignKey`).
+> - **#7** Se fuerza **HTTPS** en el Base URL de Cybersource (el PAN nunca sale en claro aunque el admin configure mal).
+> - **#8** **Purga oportunista** del rate limiter en memoria para que no crezca sin límite (fuga de memoria / DoS lento).
+> - **#1** (PAN crudo atraviesa el servidor → alcance PCI-DSS SAQ D / migrar a Microform) queda como **decisión de negocio**, no abordado en este cambio.
 
 ---
 
@@ -176,10 +191,12 @@ donación queda registrada en Rock:
     El nitName y nitAddress son sobreescritos con los valores de la API.
 18. [Backend]  VerifyRecaptchaToken() — POST a Google reCAPTCHA Enterprise
     Verifica: token válido, action=="donation", score >= minScore
-19. [Backend]  Idempotency check: busca IDEM={key} en última hora
-    Si existe y está aprobado → retorna resultado cacheado
-    Si existe y falló → retorna error sin reintentar
-20. [Backend]  GetAllowedAccountById() — verifica que la cuenta esté en el whitelist
+19. [Backend]  GetAllowedAccountById() — verifica que la cuenta esté en el whitelist
+20. [Backend]  ReserveIdempotencySlot() — sp_getapplock + busca IDEM={key} (última hora)
+    Autenticado: filtra por personAliasId; anónimo: por AuthorizedPersonAliasId NULL
+    Si existe Approved → retorna recuperado sin cobrar
+    Si existe Pending  → retorna "en proceso, no reintente" sin cobrar
+    Si no existe → inserta fila Pending (token durable) y commitea
 21. [Backend]  BuildGatewaySettings() — resuelve credenciales según modo live/test
 22. [Backend]  ChargeWithCybersource()
     a. BuildPaymentPayload() — arma el JSON con amount, currency, BillTo, card, DeviceInfo
@@ -189,14 +206,13 @@ donación queda registrada en Rock:
     e. POST a /pts/v2/payments con headers de firma
     f. Si HTTP 401 → reintenta con perfil de firma alternativo (hasta 3 perfiles)
     g. Parsea respuesta: status, processorResponseCode, approvalCode, reconciliationId
-23. [Backend]  Si cobro exitoso → SaveFinancialTransaction()
-    Crea FinancialPaymentDetail (tarjeta enmascarada, tipo)
-    Crea FinancialTransaction (Status="Approved", ForeignKey con claves CYBS)
-    Crea FinancialTransactionDetail (cuenta, monto)
-    Busca o crea FinancialBatch por prefijo+moneda+fecha
-    Actualiza ControlAmount del batch
-    Si persona logueada y sin email → guarda email
-    Si wantsReceipt y NIT → agrega NIT al atributo de Persona
+23. [Backend]  Según resultado del cobro:
+    - Aprobado → FinalizeApprovedTransaction(): promueve la fila Pending a Approved,
+      completa ForeignKey con claves CYBS, la asigna a un FinancialBatch separado
+      por moneda, actualiza ControlAmount, guarda email/NIT de la persona.
+    - Rechazo definitivo → DeletePendingTransaction() (permite reintento).
+    - Ambiguo (timeout/5xx) o finalización fallida → conserva la fila Pending
+      (un reintento con el mismo idemKey NO recobra).
 24. [Backend]  Encola DonationWorkflow (siempre, si configurado)
     Encola ReceiptWorkflow (solo si wantsReceipt + nitName validado)
 25. [Backend]  Devuelve ProcessPaymentResponseBag {success, message, códigos, history}
@@ -335,36 +351,66 @@ Estas cuatro features fueron implementadas en el commit `ab22c5b862
 - El objetivo es evitar los flags `COR-BA` y `MM-IPBC` de Decision Manager y
   mejorar la tasa de aprobación.
 
-### Feature 4: Idempotencia transaccional
+### Feature 4: Idempotencia transaccional (reforzada 2026-06-21)
 
 - El frontend genera una `idemKey` única por sesión de pago:
-  `Date.now().toString(36) + "-" + 8 bytes hex aleatorios`.
-- La clave se envía al backend en cada `ProcessPayment`.
-- El backend la almacena en el campo `ForeignKey` de `FinancialTransaction`
-  como `IDEM={key}`.
-- Antes de ejecutar cualquier cobro, busca si en la última hora existe una
-  transacción del mismo usuario con ese `IDEM`:
-  - Si existe y está aprobada: retorna ese resultado sin cobrar de nuevo.
-  - Si existe y está fallida: retorna error sin reintentar.
-- Además, hay un lock en memoria (`ConcurrentDictionary<string, object>`)
-  por `personAliasId:idemKey` para serializar requests paralelos en el mismo
-  nodo.
-- La clave se rota (se genera una nueva) tras un cobro exitoso o tras un
-  error que se considera "reintentable" (CVV incorrecto, fondos insuficientes,
-  etc.). Para errores de red o estados desconocidos, se conserva la misma
-  clave para que un reintento inmediato actúe idempotentemente.
+  `Date.now().toString(36) + "-" + 8 bytes hex aleatorios` (≈ 25 chars).
+- La clave es **obligatoria** y se valida con regex `^[a-zA-Z0-9_-]{1,32}$`.
+  El cap de 32 coincide con el truncado de `SanitizeForeignKeyValue`; antes
+  admitía 64 y un key largo rompía silenciosamente el lookup `IDEM=` (#6).
+- **Patrón de fila `Pending` durable (#2, #3).** El cobro es irreversible, así
+  que la transacción se reserva en BD **antes** de llamar a Cybersource:
+  1. `ReserveIdempotencySlot` abre una transacción de BD, adquiere
+     `sp_getapplock` (cross-node, #4) y busca una transacción previa del mismo
+     `idemKey` en la última hora.
+     - **Autenticado:** filtra por `AuthorizedPersonAliasId == personAliasId`.
+     - **Anónimo:** filtra por `AuthorizedPersonAliasId == null`. Esto da
+       idempotencia a donantes anónimos, que antes **no la tenían** (#2).
+     - Si existe `Approved` → retorna resultado recuperado sin cobrar.
+     - Si existe `Pending` → retorna "en proceso, no reintente" sin cobrar.
+     - Si no existe → inserta una fila `Status="Pending"` y commitea. Esta fila
+       es el token durable de idempotencia.
+  2. `ChargeWithCybersource` (fuera de la transacción de BD).
+  3. Según el resultado:
+     - **Aprobado** → `FinalizeApprovedTransaction` promueve `Pending` →
+       `Approved` (batch, atributos, workflows).
+     - **Rechazo definitivo** (4xx con decline) → `DeletePendingTransaction`
+       borra la reserva para permitir reintento.
+     - **Resultado ambiguo** (`ambiguous`: excepción/timeout/5xx) → se **conserva**
+       la fila `Pending`; un reintento con el mismo `idemKey` la encuentra y
+       **no recobra**. Cierra el hueco "cobrado pero no guardado" (#3).
+     - **Aprobado pero falla la finalización** → también se conserva `Pending`.
+- **Locks de concurrencia:**
+  - In-process: `ConcurrentDictionary<string,object>` por `cybs-idem:{idemKey}`
+    (rápido, single-node).
+  - Cross-node: `sp_getapplock @LockOwner='Transaction'` scoped al `idemKey`,
+    auto-liberado en commit/rollback (best-effort; si no está disponible, el
+    lock in-process sigue cubriendo single-node).
+- La clave se rota en el frontend tras un cobro exitoso o un error reintentable
+  (CVV incorrecto, fondos insuficientes, etc.). Para errores de red/estados
+  desconocidos se conserva, para que el reintento actúe idempotentemente.
+- **Residual conocido:** una fila `Pending` que quede huérfana (proceso muere
+  entre cobro y finalización) permanece en BD; es visible en el historial como
+  "Pendiente" y puede limpiarse manualmente. Es preferible a un doble cobro.
 
 ### Seguridad adicional (no en los 4 features principales)
 
 - **Rate limit por IP:** máximo 5 intentos de cobro por IP en 5 minutos, y
   10 validaciones de NIT por IP por minuto. Implementado en memoria con
-  `ConcurrentDictionary` (best-effort single-node).
+  `ConcurrentDictionary` (best-effort single-node). Desde 2026-06-21 (#8) hace
+  una **purga oportunista** (`MaybeSweepRateLimitBuckets`): cada ≤10 min un solo
+  hilo elimina entradas más viejas que 2h (> la ventana máxima de 1h), para que
+  el diccionario no crezca sin límite. Las entradas activas nunca se purgan
+  porque su `WindowStartUtc` se renueva en cada ventana.
 - **Re-validación server-side del NIT:** aunque el cliente ya consultó el NIT,
   el backend lo vuelve a consultar al procesar el pago para evitar que el
   cliente envíe un `nitName` o `nitAddress` falsos en el recibo fiscal.
 - **SSRF protection en NIT API:** la URL de la API de NIT debe ser HTTPS, no
   puede ser localhost ni IPs privadas RFC1918, y debe estar en una whitelist
   hardcodeada (`apiv2.ifacere-fel.com`).
+- **HTTPS forzado en Cybersource (#7):** `ChargeWithCybersource` rechaza con
+  error `CONFIG` cualquier Base URL que no sea `https://`, para que el PAN
+  jamás viaje en claro aunque un admin configure mal el atributo.
 - **Enmascaramiento de PANs en logs:** `MaskPotentialPan` reemplaza secuencias
   de 13-19 dígitos en cualquier texto de log con `***XXXX`.
 - **Comparación en tiempo constante:** la verificación del action de reCAPTCHA
@@ -407,6 +453,11 @@ El módulo soporta donaciones en **GTQ (Quetzal guatemalteco)** y **USD
 - `FinancialTransactionDetail.ForeignCurrencyAmount` recibe el monto en la
   moneda extranjera.
 - La moneda también se almacena en `ForeignKey` como `CUR={GTQ|USD}`.
+- **Batch separado por moneda (#5, 2026-06-21):** el nombre del batch incluye
+  la moneda — `"{BatchNamePrefix} (GTQ)"` / `"{BatchNamePrefix} (USD)"` — para
+  que el `ControlAmount` nunca sume GTQ y USD en un mismo total (antes lo hacía,
+  dejando el total sin sentido). La conversión FX real a moneda de la
+  organización requiere una fuente de tasa y queda fuera de alcance (como #1).
 
 ### En el Dashboard
 
@@ -489,7 +540,12 @@ de Guatemala.
 
 ## 11. Persistencia en Rock Finance
 
-`SaveFinancialTransaction` crea los siguientes registros en Rock:
+> **Nota 2026-06-21:** desde el endurecimiento de idempotencia, la persistencia
+> se hace en dos fases: `BuildPendingTransaction` (reserva la fila como
+> `Status="Pending"` antes del cobro) y `FinalizeApprovedTransaction` (la
+> promueve a `Approved` y la asigna al batch tras un cobro exitoso). El método
+> monolítico `SaveFinancialTransaction` fue eliminado. Los registros creados
+> son los mismos:
 
 ### `FinancialPaymentDetail`
 
@@ -527,12 +583,18 @@ de Guatemala.
 ### `FinancialBatch`
 
 Se busca o crea un batch activo por la combinación de:
-- Prefijo del nombre (`BatchNamePrefix`, por defecto `"Cybersource Online Giving"`)
+- Prefijo del nombre **con la moneda** (`"{BatchNamePrefix} (GTQ)"` /
+  `"{BatchNamePrefix} (USD)"`, por defecto base `"Cybersource Online Giving"`)
 - Tipo de moneda (`CREDIT_CARD`)
 - Tipo de tarjeta (Visa, Mastercard, etc.)
 - Fecha de la transacción
 
 Se incrementa `ControlAmount` del batch con el monto de la transacción.
+
+> Al separar por moneda, los batches con el nombre antiguo (sin sufijo) dejan
+> de recibir entradas nuevas; las donaciones nuevas van a los batches
+> `(GTQ)`/`(USD)`. Esto es intencional para que cada total de control sea
+> mono-moneda.
 
 ### Formato del `ForeignKey`
 
@@ -631,6 +693,7 @@ soportan CSS moderno (usa tablas HTML).
 | `9f55e261e3` | Cambios en sitio y estilos |
 | `7b119b9fc4` | Up to date DAR |
 | `4f80ff56b0` | BUGS y WA |
+| _(sin commit)_ | **Endurecimiento security review #2–#8**: fila `Pending` durable (idempotencia anónima + hueco "cobrado no guardado"), `sp_getapplock` cross-node, batch por moneda, `idemKey` obligatorio cap 32, HTTPS forzado en Cybersource, purga del rate limiter |
 
 ---
 

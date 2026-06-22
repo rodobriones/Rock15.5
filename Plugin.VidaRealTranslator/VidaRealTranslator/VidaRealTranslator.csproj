@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>com.vidareal.Translator</RootNamespace>
+    <AssemblyName>com.vidareal.Translator</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Referencias a Rock tomadas del build del repo (RockWeb\Bin), mismo patron
+       que Plugin.CybersourceInlineRestGateway pero apuntando al Bin del repo. -->
+  <ItemGroup>
+    <Reference Include="Rock">
+      <HintPath>..\..\RockWeb\Bin\Rock.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rock.Common">
+      <HintPath>..\..\RockWeb\Bin\Rock.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rock.Enums">
+      <HintPath>..\..\RockWeb\Bin\Rock.Enums.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rock.Rest">
+      <HintPath>..\..\RockWeb\Bin\Rock.Rest.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="EntityFramework">
+      <HintPath>..\..\RockWeb\Bin\EntityFramework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\RockWeb\Bin\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Web.Http">
+      <HintPath>..\..\RockWeb\Bin\System.Web.Http.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web" />
+  </ItemGroup>
+</Project>

@@ -9,6 +9,57 @@
 
             <hr />
 
+            <!-- Vida Real: facturación FEL. El NIT validado viaja al workflow de Odoo. -->
+            <section class="re-invoice">
+                <div class="re-invoice-toggle">
+                    <div class="re-invoice-text">
+                        <h4 class="re-invoice-title">{{ isSpanish ? "¿Desea factura?" : "Do you want an invoice?" }}</h4>
+                        <p class="re-invoice-desc">
+                            {{ isSpanish
+                                ? "Active esta opción para ingresar su NIT. De lo contrario se factura como CF."
+                                : "Turn this on to enter your Tax ID (NIT). Otherwise it is billed as CF." }}
+                        </p>
+                    </div>
+                    <label class="re-switch">
+                        <input type="checkbox" v-model="registrationEntryState.wantsInvoice" @change="onWantsInvoiceChange">
+                        <span class="re-slider"></span>
+                    </label>
+                </div>
+
+                <div v-show="registrationEntryState.wantsInvoice" class="re-invoice-form">
+                    <div class="re-nit-row">
+                        <label class="re-field re-nit-input">
+                            <span>NIT</span>
+                            <input
+                                v-model="registrationEntryState.nit"
+                                class="form-control"
+                                :class="{ 'is-invalid': !!nitError }"
+                                type="text"
+                                inputmode="text"
+                                :placeholder="isSpanish ? 'Ej: 12345678' : 'e.g. 12345678'"
+                                @input="onNitInput" />
+                        </label>
+                        <RockButton class="re-validate-btn" btnType="default" :disabled="busyNit || !registrationEntryState.nit" @click="validateNit">
+                            {{ busyNit ? (isSpanish ? "Validando..." : "Validating...") : (isSpanish ? "Validar NIT" : "Validate NIT") }}
+                        </RockButton>
+                    </div>
+                    <small v-if="nitError" class="re-field-error">{{ nitError }}</small>
+
+                    <div v-if="registrationEntryState.nitName || registrationEntryState.nitAddress" class="re-nit-result">
+                        <label class="re-field">
+                            <span>{{ isSpanish ? "Nombre / Razón Social" : "Name / Legal Name" }}</span>
+                            <input v-model="registrationEntryState.nitName" class="form-control" type="text" readonly disabled />
+                        </label>
+                        <label class="re-field" v-if="registrationEntryState.nitAddress">
+                            <span>{{ isSpanish ? "Dirección" : "Address" }}</span>
+                            <input v-model="registrationEntryState.nitAddress" class="form-control" type="text" readonly disabled />
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <hr />
+
             <div v-if="gatewayControlModel" class="payment-method-options">
                 <div v-if="hasSavedAccounts" v-for="savedAccount in savedAccountOptions" class="radio payment-method">
                     <label :for="getOptionUniqueId(savedAccount)">
@@ -61,7 +112,7 @@
                     {{ t("actionPrevious") }}
                 </RockButton>
 
-                <RockButton v-if="gatewayControlModel" btnType="primary" type="submit" :isLoading="loading" autoDisable>
+                <RockButton v-if="gatewayControlModel" btnType="primary" type="submit" :isLoading="loading" :disabled="registrationEntryState.wantsInvoice && !registrationEntryState.nitName" autoDisable>
                     {{ t("actionPay") }}
                 </RockButton>
             </div>
@@ -119,6 +170,12 @@
 
     /** The currently selected saved account. */
     const selectedSavedAccount = ref<string>("");
+
+    /** Vida Real: estado de la validación de NIT en curso. */
+    const busyNit = ref<boolean>(false);
+
+    /** Vida Real: mensaje de error de la validación de NIT. */
+    const nitError = ref<string>("");
 
     // #endregion
 
@@ -182,6 +239,9 @@
             ?? `$${registrationEntryState.amountToPayToday.toFixed(2)}`;
     });
 
+    /** Vida Real: ¿la UI está en español? Para los textos del bloque de facturación. */
+    const isSpanish = computed<boolean>(() => isSpanishUiLanguage());
+
     /** The URL to return to if the gateway control needs to perform a redirect. */
     const redirectReturnUrl = computed<string>(() => {
         if (window.location.href.includes("?")) {
@@ -207,6 +267,15 @@
         gatewayErrorMessage.value = "";
         gatewayValidationFields.value = [];
         submitErrorMessage.value = "";
+
+        // Vida Real: si el usuario pidió factura, exigir un NIT validado antes de cobrar.
+        if (registrationEntryState.wantsInvoice && !registrationEntryState.nitName) {
+            submitErrorMessage.value = isSpanish.value
+                ? "Valide el NIT antes de continuar o desactive la opción de factura."
+                : "Validate the NIT before continuing or turn off the invoice option.";
+            loading.value = false;
+            return;
+        }
 
         // If there is a cost, then the gateway will need to be used to pay
         if (registrationEntryState.amountToPayToday || registrationEntryState.paymentPlan?.amountPerPayment) {
@@ -293,11 +362,14 @@
                 // Handle English default error messages from Rock's internal gateway logic just in case
                 if (translatedText.includes("is required")) {
                     translatedText = "es requerido.";
-                } else if (translatedText.includes("invalid")) {
+                }
+ else if (translatedText.includes("invalid")) {
                     translatedText = "invalido.";
-                } else if (translatedText.includes("invalid format")) {
+                }
+ else if (translatedText.includes("invalid format")) {
                     translatedText = "formato invalido.";
-                } else if (translatedText.includes("3 digits")) {
+                }
+ else if (translatedText.includes("3 digits")) {
                     translatedText = "debe tener 3 digitos.";
                 }
             }
@@ -353,6 +425,66 @@
      */
     function getAccountDescription(option: SavedFinancialAccountListItemBag): string {
         return option.description ?? "";
+    }
+
+    /** Vida Real: normaliza el NIT mientras se escribe y limpia la validación previa. */
+    function onNitInput(): void {
+        nitError.value = "";
+        registrationEntryState.nit = (registrationEntryState.nit || "").replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+        // Si el usuario modifica el NIT, invalidar la razón social previamente validada.
+        registrationEntryState.nitName = "";
+        registrationEntryState.nitAddress = "";
+    }
+
+    /** Vida Real: al apagar el toggle de factura, limpiar los datos del NIT (se factura como CF). */
+    function onWantsInvoiceChange(): void {
+        if (!registrationEntryState.wantsInvoice) {
+            registrationEntryState.nit = "";
+            registrationEntryState.nitName = "";
+            registrationEntryState.nitAddress = "";
+            nitError.value = "";
+        }
+    }
+
+    /** Vida Real: valida el NIT contra SAT (ValidateNitInfo) y muestra la razón social. */
+    async function validateNit(): Promise<void> {
+        if (busyNit.value || !registrationEntryState.nit) {
+            return;
+        }
+
+        // Capturar el NIT enviado para descartar respuestas obsoletas si el usuario lo cambia.
+        const sentNit = registrationEntryState.nit;
+        busyNit.value = true;
+        nitError.value = "";
+
+        try {
+            const response = await invokeBlockAction<{ name: string; address: string }>("ValidateNitInfo", { nit: sentNit });
+
+            // Si el usuario cambió el NIT mientras el request estaba en vuelo, descartar la respuesta.
+            if (registrationEntryState.nit !== sentNit) {
+                return;
+            }
+
+            if (response.isSuccess && response.data?.name) {
+                registrationEntryState.nitName = response.data.name;
+                registrationEntryState.nitAddress = response.data.address || "";
+            }
+            else {
+                nitError.value = response.errorMessage || (isSpanish.value ? "NIT inválido o no encontrado." : "Invalid or not found NIT.");
+                registrationEntryState.nitName = "";
+                registrationEntryState.nitAddress = "";
+            }
+        }
+        catch {
+            if (registrationEntryState.nit === sentNit) {
+                nitError.value = isSpanish.value ? "Error de conexión al validar NIT." : "Connection error while validating NIT.";
+                registrationEntryState.nitName = "";
+                registrationEntryState.nitAddress = "";
+            }
+        }
+        finally {
+            busyNit.value = false;
+        }
     }
 
     /** Submit the registration to the server */
@@ -513,5 +645,135 @@
         border-radius: 12px;
         padding: 10px;
     }
+
+    .re-nit-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .re-validate-btn {
+        width: 100%;
+    }
+}
+
+/* Vida Real: bloque de facturación FEL */
+.re-invoice {
+    border: 1px solid #c4d4ea;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    padding: 14px;
+    margin-bottom: 4px;
+}
+
+.re-invoice-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.re-invoice-title {
+    margin: 0 0 2px;
+    font-size: 1rem;
+}
+
+.re-invoice-desc {
+    margin: 0;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.re-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.re-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.re-slider {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    background: #c5d4e7;
+    border-radius: 999px;
+    transition: background 0.2s ease;
+}
+
+.re-slider::before {
+    content: "";
+    position: absolute;
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    transition: transform 0.2s ease;
+}
+
+.re-switch input:checked + .re-slider {
+    background: #2563eb;
+}
+
+.re-switch input:checked + .re-slider::before {
+    transform: translateX(22px);
+}
+
+.re-invoice-form {
+    margin-top: 14px;
+}
+
+.re-nit-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.re-field {
+    display: block;
+    margin: 0;
+}
+
+.re-field > span {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e2a3d;
+    margin-bottom: 4px;
+}
+
+.re-nit-input {
+    flex: 1 1 auto;
+}
+
+.re-validate-btn {
+    white-space: nowrap;
+}
+
+.re-field-error {
+    display: block;
+    color: #b91c1c;
+    margin-top: 6px;
+}
+
+.re-nit-result {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.re-nit-result .form-control[disabled] {
+    background: #f3f6fb;
+    color: #374151;
 }
 </style>

@@ -261,7 +261,8 @@ Estos archivos `.md` en la raiz del repositorio documentan sesiones de trabajo a
 
 | Archivo | Modulo | Descripcion |
 |---|---|---|
-| `AI_HANDOFF_ROCK18_EVENT_CRM.md` | Eventos / CRM | i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration, reglas ES/EN, DatePicker, pitfalls Vue, template Lava recomendado |
+| `AI_HANDOFF_ROCK18_EVENT_CRM.md` | Eventos / CRM | i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration, reglas ES/EN, DatePicker, pitfalls Vue, template Lava recomendado, + Facturación FEL/NIT en pantalla de pago (2026-06-15) |
+| `Plugin.OdooEventSale/CONTEXT.md` + `README.md` | OdooEventSale | Integración Rock eventos → Odoo FEL: workflow action, NIT/SAT, Global Attributes, configuración staging, checklist |
 | `EPAY_FLOW_SUMMARY.md` | DAR / ePay | Flujo completo de cobro con cuotas ePay Visanet: SOAP, FeeCoverageAmount, calculo de balance, checklist de despliegue |
 | `FamilyHub_KnownRelationship_Fix_Context.md` | FamilyHub | Bug y fix de KnownRelationship bidireccional, rediseno visual del bloque |
 | `Migration_Context_ReservationScanner_FamilyHub.md` | QREVENT / FamilyHub | Migracion de ReservationScanner y FamilyHub de Rock 15.5.1 a Rock 18.1 |
@@ -381,4 +382,6 @@ Del mas simple al mas complejo, para onboarding de nuevos desarrolladores:
 - i18n ES/EN con diccionarios en `utils.partial.ts`.
 - Interaccion con DatePicker del framework base.
 - Flujo de registro con pago (integracion con pasarelas via `GatewayControl`).
-- **Archivos:** `src/Event/RegistrationEntry/`, `src/Crm/FamilyPreRegistration/`, `Rock.Blocks/Event/RegistrationEntry.cs`, `Rock/Model/Event/Registration/`
+- **Facturación FEL / NIT (2026-06-15):** la pantalla de pago captura y valida el NIT (toggle "¿Desea factura?" + botón "Validar NIT" vs SAT) y lo pasa a los workflows de inscripción para facturar en Odoo. Toca el backend del bloque core: `RegistrationEntry.cs` (BlockAction `ValidateNitInfo` + passthrough `Nit`/`WantsInvoice` en `ProcessPostSave`) y `RegistrationEntryArgsBag.cs`. Config en Global Attributes `OdooNitApiUrl`/`OdooNitApiBearerToken`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/`.
+- **Rediseño UI/UX 2026 (2026-06-18):** solo frontend/CSS, sin lógica. Design system del wizard en el `<style scoped>` de `registrationEntry.obs` (tokens `--re-*` que cascadean a hijos vía `:deep()`); barra de acción sticky; transiciones direccionales (`stepTransitionName`/`navBack`); jerarquía tipográfica. Acento azul intacto para cohesión con `payment`/`success`. Build con `npm run build-fast`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` § "Rediseño UI/UX del wizard".
+- **Archivos:** `src/Event/RegistrationEntry/` (incl. `payment.partial.obs`), `src/Crm/FamilyPreRegistration/`, `Rock.Blocks/Event/RegistrationEntry.cs`, `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs`, `Rock/Model/Event/Registration/`

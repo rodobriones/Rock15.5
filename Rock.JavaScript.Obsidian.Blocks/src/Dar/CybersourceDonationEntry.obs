@@ -1445,6 +1445,10 @@ function statusLabel(status?: string): string {
         return "Rechazada";
     }
 
+    if (s === "PENDING" || s === "PROCESSING") {
+        return "Pendiente";
+    }
+
     return status || "-";
 }
 

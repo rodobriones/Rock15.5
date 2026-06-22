@@ -56,6 +56,9 @@ Todos los commits por debajo de `ca2ca0ec94` son del upstream SparkDevNetwork y 
 | 2026-05-08 | `9f55e261e3` | **Cambios en sitio y estilos** — Ajustes visuales generales al sitio |
 | 2026-05-12 | `7b119b9fc4` | **Up to date DAR** — Actualizaciones al modulo de donaciones (Dar) |
 | 2026-05-13 | `4f80ff56b0` | **BUGS y WA** — Corrección de bugs y agregado del transporte WhatsApp (`Rock.WhatsApp`) |
+| (reciente) | `c205d270a3` | **Documentacion** — Actualización de documentación de contexto |
+| 2026-06-15 | *(sin commit)* | **Facturación FEL de eventos (Odoo) + NIT en pantalla de pago** — Módulo `Plugin.OdooEventSale` (workflow action a Odoo). NIT capturado/validado en el paso de pago de `RegistrationEntry`: BlockAction `ValidateNitInfo`, args bag `Nit`/`WantsInvoice`, passthrough al workflow. Frontend `payment.partial.obs`. Config vía Global Attributes. Ver `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/`. |
+| 2026-06-18 | *(sin commit)* | **Rediseño UI/UX del wizard RegistrationEntry** — Solo frontend/CSS, sin tocar lógica. Capa de diseño 2026 en el `<style scoped>` del shell `registrationEntry.obs` (cascadea a hijos vía `:deep()`): superficie sólida calmada (se retiró glassmorphism/blob), jerarquía tipográfica fuerte (h1 grande + barra de acento sobre el título), **barra de acción fija (sticky)**, **transiciones direccionales** entre pasos (usa `navBack`), botones de acento. Tarjetas de registrante con avatar en `summary.partial.obs`; header con ícono en `registrar.partial.obs`; fix doble-tarjeta en `intro.partial.obs`. Sin cambios de marca (acento azul para cohesión con `payment`/`success`). |
 
 ---
 
@@ -92,6 +95,7 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 ### Plugins independientes (proyectos C# separados)
 - `Plugin.CybersourceInlineRestGateway/` — Gateway de pago Cybersource como plugin Rock
 - `Plugin.EpayVisanetGateway/` — Gateway ePay Visanet (Guatemala) via SOAP
+- `Plugin.OdooEventSale/` — **NUEVO (sin commit)**. Workflow action `PostEventSaleToOdoo` que factura inscripciones pagadas en Odoo (orden + factura FEL certificada en SAT + pago) via `POST /api/event/sell`. Lee `Nit`/`WantsInvoice` de atributos del workflow (pre-poblados por `RegistrationEntry`). Incluye `CONTEXT.md` y `README.md`.
 
 ### Modulo WhatsApp
 - `Rock.WhatsApp/` — Proyecto C# completo: transport para WhatsApp Business Cloud API (Meta)
@@ -113,8 +117,10 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 - `.claude/CONTEXT_INDEX.md` — **Indice maestro de todos los archivos de contexto del repo (leer primero en sesion nueva)**
 - `.claude/PROJECT_CONTEXT.md` — Contexto tecnico principal del proyecto
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/vendor/CHANGES.md` — Documentacion de ZXing vendor bundle
+- `Plugin.OdooEventSale/CONTEXT.md` — Contexto completo de la integración Rock eventos → Odoo FEL (incluye §8: NIT en pantalla de pago, 2026-06-15)
+- `Plugin.OdooEventSale/README.md` — Configuración paso a paso (Global Attributes de NIT, Workflow Type, activities) + checklist staging
 - Archivos `.md` de contexto de sesiones Claude Code (raiz del repo):
-  - `AI_HANDOFF_ROCK18_EVENT_CRM.md` — i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration
+  - `AI_HANDOFF_ROCK18_EVENT_CRM.md` — i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration + Facturación FEL/NIT en pantalla de pago (2026-06-15)
   - `EPAY_FLOW_SUMMARY.md` — Flujo completo de cobro ePay con cuotas y FeeCoverageAmount
   - `FamilyHub_KnownRelationship_Fix_Context.md` — Bug y fix de KnownRelationship bidireccional
   - `Migration_Context_ReservationScanner_FamilyHub.md` — Migracion ReservationScanner + FamilyHub (Rock 15.5.1 -> 18.1)
@@ -139,7 +145,9 @@ Estos archivos EXISTEN en SparkDevNetwork/Rock pero tienen modificaciones de Vid
 ### Eventos y finanzas
 - `Rock/Model/Event/Registration/RegistrationService.cs`
 - `Rock/Model/Finance/FinancialTransaction/FinancialTransactionService.cs`
-- `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/` — Multiples parciales modificados para i18n
+- `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/` — Multiples parciales modificados para i18n (+ `payment.partial.obs` con sección NIT/FEL, 2026-06-15)
+- `Rock.Blocks/Event/RegistrationEntry.cs` — BlockAction `ValidateNitInfo` + passthrough NIT al workflow (2026-06-15)
+- `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` — props `Nit`/`WantsInvoice` (2026-06-15)
 
 ### CheckIn y asistencia
 - `RockWeb/Blocks/CheckIn/Admin.ascx` + `.cs` — Modificaciones al admin de CheckIn
@@ -222,9 +230,10 @@ Los bloques son wrappers minimos; toda la logica y UI vive en los `.obs` corresp
 
 ### Rock.Blocks/Event (modificado)
 
-- `Rock.Blocks/Event/RegistrationEntry.cs` — 5 lineas modificadas. Cambio menor para compatibilidad con el flujo i18n del frontend Obsidian de RegistrationEntry.
+- `Rock.Blocks/Event/RegistrationEntry.cs` — (a) ajuste menor i18n original; (b) **2026-06-15 — Facturación FEL / NIT**: nueva region "Vida Real - NIT / FEL Validation" con el BlockAction `ValidateNitInfo` + helper `LookupNitFromExternalApi` (valida NIT vs SAT leyendo Global Attributes `OdooNitApiUrl`/`OdooNitApiBearerToken`, anti-SSRF whitelist+https, rate-limit con cap de memoria, sanitización); y en `ProcessPostSave` el `LaunchWorkflow` pasa `{ Nit, WantsInvoice }` como atributos pre-poblados a los workflows de inscripción.
+- `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` — props `Nit` (string) y `WantsInvoice` (bool).
 
-**Riesgo de merge:** Bajo-medio. El upstream actualiza frecuentemente `RegistrationEntry.cs`. Verificar en cada sync.
+**Riesgo de merge:** Medio-alto. El upstream actualiza frecuentemente `RegistrationEntry.cs`; ahora hay una region propia grande (NIT/FEL) además del ajuste i18n. En cada sync verificar que la region y el passthrough en `ProcessPostSave` sobrevivan. Contexto: `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/CONTEXT.md`.
 
 ---
 
@@ -276,21 +285,23 @@ Todos los parciales de `RegistrationEntry` fueron modificados para internacional
 - `configurePaymentPlanModal.partial.obs` — textos de plan de pago traducidos
 - `costSummary.partial.obs` — resumen de costos en espanol
 - `discountCodeForm.partial.obs` — formulario de codigo de descuento traducido
-- `intro.partial.obs` — pantalla de introduccion traducida
-- `payment.partial.obs` — formulario de pago con textos en espanol y soporte multi-moneda
+- `intro.partial.obs` — pantalla de introduccion traducida. **+ 2026-06-18: fix doble-tarjeta** (div anidado renombrado `registrationentry-intro` → `registrationentry-intro-count` para que no herede el estilo de panel)
+- `payment.partial.obs` — formulario de pago con textos en espanol y soporte multi-moneda. **+ 2026-06-15: sección NIT/FEL** (toggle "¿Desea factura?", input NIT, botón "Validar NIT" vs SAT, razón social readonly, guard de pago)
 - `registrant.partial.obs` — formulario de registrante traducido
 - `registrantPersonField.partial.obs` — campos de persona traducidos
 - `registrants.partial.obs` — lista de registrantes traducida
-- `registrar.partial.obs` — datos del registrador traducidos
+- `registrar.partial.obs` — datos del registrador traducidos. **+ 2026-06-18: header con ícono + barra de acento (`<style scoped>` propio, usa tokens `--re-*` del shell)**
 - `registrationEnd.partial.obs` — pantalla de fin de registro traducida
 - `registrationStart.partial.obs` — pantalla de inicio de registro traducida
 - `sessionRenewal.partial.obs` — renovacion de sesion traducida
 - `success.partial.obs` — pantalla de exito traducida (con mensaje de confirmacion en espanol)
-- `summary.partial.obs` — resumen de registro traducido
+- `summary.partial.obs` — resumen de registro traducido. **+ 2026-06-18: tarjetas de registrante con avatar de iniciales (grid) en vez de `<ul><li>` plano; helper `initials()`; `<style scoped>` con tokens `--re-*`**
 - `utils.partial.ts` — utilidades con strings i18n y logica de formato de moneda multi-divisa
-- `registrationEntry.obs` — bloque principal con soporte i18n completo
+- `registrationEntry.obs` — bloque principal con soporte i18n completo. **+ 2026-06-15: state NIT (`wantsInvoice/nit/nitName/nitAddress`) y envío de `nit`/`wantsInvoice` en `getRegistrationEntryBlockArgs`**. **+ 2026-06-18: rediseño UI/UX 2026 en `<style scoped>`** — sistema de diseño del wizard (tokens `--re-*`: `--re-primary`, `--re-accent-grad`, `--re-pad`, `--re-ease`...) que cascadea a los hijos vía `:deep()`; barra de acción sticky; transición direccional (computed `stepTransitionName` ligado a `navBack`, `<Transition :name>`); tipografía y superficies modernizadas. **Es la capa estética central — editar aquí afecta todas las pantallas.**
+- `RegistrationEntry/types.partial.ts` — **+ 2026-06-15: campos NIT en `RegistrationEntryState`**
+- (ViewModel generado) `Rock.JavaScript.Obsidian/Framework/ViewModels/Blocks/Event/RegistrationEntry/registrationEntryArgsBag.d.ts` — **+ 2026-06-15: `nit`/`wantsInvoice`**
 
-**Riesgo de merge:** Alto. El upstream modifica activamente `RegistrationEntry`. En cada sync upstream revisar todos estos archivos.
+**Riesgo de merge:** Alto. El upstream modifica activamente `RegistrationEntry`. En cada sync upstream revisar todos estos archivos. La feature NIT/FEL (2026-06-15) está acoplada al backend `RegistrationEntry.cs` y al módulo `Plugin.OdooEventSale`. El rediseño UI/UX (2026-06-18) vive casi todo en el `<style scoped>` de `registrationEntry.obs` (+ `<style scoped>` en `summary`/`registrar`); como es CSS adicional el riesgo de conflicto con upstream es menor, pero si upstream renombra clases de panel (`.registrationentry-*`) o controles, los selectores `:deep()` dejarían de aplicar.
 
 ---
 

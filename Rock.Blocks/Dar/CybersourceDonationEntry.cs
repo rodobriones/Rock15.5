@@ -540,164 +540,276 @@ namespace Rock.Blocks.Dar
             }
 
             var transactionCurrency = NormalizeCurrency( bag.currency );
+            var idemKey = ( bag.idemKey ?? string.Empty ).Trim();   // obligatorio (validado): aplica a anónimos y autenticados.
 
-            // Lock por (personAliasId|idemKey) para serializar requests paralelas con el mismo idempotency key (single-node).
-            object idemLocker = null;
-            string idemLockKey = null;
-            if ( currentPerson != null && !string.IsNullOrWhiteSpace( bag?.idemKey ) )
-            {
-                idemLockKey = $"{currentPerson.PrimaryAliasId}:{bag.idemKey}";
-                idemLocker = _idemLocks.GetOrAdd( idemLockKey, _ => new object() );
-            }
-
-            if ( idemLocker != null )
-            {
-                System.Threading.Monitor.Enter( idemLocker );
-            }
-
+            // Lock in-process por idemKey: serializa duplicados concurrentes del mismo intento (single-node).
+            // La reserva durable (fila Pending) + sp_getapplock dentro de ReserveIdempotencySlot cubren multi-nodo.
+            var inProcLockKey = $"cybs-idem:{idemKey}";
+            var inProcLock = _idemLocks.GetOrAdd( inProcLockKey, _ => new object() );
+            System.Threading.Monitor.Enter( inProcLock );
             try
             {
-            using ( var rockContext = new RockContext() )
-            {
-                // -- IDEMPOTENCY CHECK (solo para usuarios autenticados) --
-                if ( currentPerson != null && !string.IsNullOrWhiteSpace( bag.idemKey ) )
+                using ( var rockContext = new RockContext() )
                 {
-                    var pastHour = RockDateTime.Now.AddHours( -1 );
-                    var idemSearchString = $"IDEM={bag.idemKey}";
-
-                    var duplicateTx = new FinancialTransactionService( rockContext )
-                        .Queryable()
-                        .Where( t =>
-                            t.AuthorizedPersonAliasId == currentPerson.PrimaryAliasId &&
-                            t.TransactionDateTime >= pastHour &&
-                            t.ForeignKey != null && t.ForeignKey.Contains( idemSearchString ) )
-                        .OrderByDescending( t => t.TransactionDateTime )
-                        .FirstOrDefault();
-
-                    if ( duplicateTx != null )
+                    var account = GetAllowedAccountById( rockContext, bag.accountId );
+                    if ( account == null )
                     {
-                        var isApproved = duplicateTx.Status == "Approved";
+                        return ActionBadRequest( "La cuenta no está permitida en este bloque." );
+                    }
 
+                    int? personAliasId = null;
+                    if ( currentPerson != null )
+                    {
+                        personAliasId = new PersonAliasService( rockContext ).GetPrimaryAliasId( currentPerson.Id );
+                        if ( !personAliasId.HasValue )
+                        {
+                            return ActionBadRequest( "No se encontró alias principal para la persona." );
+                        }
+                    }
+
+                    var mode = GetMode();
+
+                    // -- RESERVA DE IDEMPOTENCIA (check + insert Pending atómico, antes de cobrar) --
+                    // Si ya existe una transacción (Approved/Pending) para este idemKey no se vuelve a cobrar.
+                    // La fila Pending es el token durable: si el cobro queda en estado incierto, sobrevive al
+                    // reintento. Se hace ANTES del cobro para cerrar el hueco "cobrado pero no guardado".
+                    FinancialTransaction existingTx;
+                    FinancialTransaction pendingTx;
+                    try
+                    {
+                        ReserveIdempotencySlot( rockContext, idemKey, personAliasId, account, bag, transactionCurrency, mode, clientIp,
+                            out existingTx, out pendingTx );
+                    }
+                    catch ( Exception ex )
+                    {
+                        // Falla antes del cobro: no hubo cargo, es seguro pedir reintento.
+                        ExceptionLogService.LogException( ex );
+                        return ActionBadRequest( "No se pudo procesar la solicitud. Intenta de nuevo." );
+                    }
+
+                    if ( existingTx != null )
+                    {
+                        return ActionOk( BuildResponseForExisting( rockContext, existingTx, transactionCurrency, currentPerson ) );
+                    }
+
+                    // -- COBRO (fuera de la transacción de BD; la fila Pending ya está commiteada) --
+                    var gatewaySettings = BuildGatewaySettings();
+                    var cybsResult = ChargeWithCybersource( bag, gatewaySettings, currentPerson );
+
+                    if ( !cybsResult.ok )
+                    {
+                        if ( cybsResult.ambiguous )
+                        {
+                            // No sabemos si Cybersource cobró: dejamos la fila Pending para que un reintento
+                            // con el mismo idemKey NO vuelva a cobrar.
+                            return ActionOk( new ProcessPaymentResponseBag
+                            {
+                                success = false,
+                                message = "Tu pago se está procesando o requiere verificación. No vuelvas a intentar; si no recibes confirmación en unos minutos, contacta a soporte.",
+                                responseCode = cybsResult.responseCode,
+                                currency = transactionCurrency,
+                                mode = gatewaySettings.mode,
+                                transactionId = null,
+                                history = HistoryFor( rockContext, currentPerson )
+                            } );
+                        }
+
+                        // Rechazo definitivo (no hubo cobro): eliminamos la reserva para permitir reintento.
+                        DeletePendingTransaction( rockContext, pendingTx );
                         return ActionOk( new ProcessPaymentResponseBag
                         {
-                            success = isApproved,
-                            message = isApproved ? "Pago aprobado previamente (Recuperado)." : "Pago previamente intentado y fallido.",
-                            responseCode = ExtractForeignKeyValue( duplicateTx.ForeignKey, "RC" ),
-                            authorizationNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "AUTH" ),
-                            referenceNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "REF" ),
-                            auditNumber = ExtractForeignKeyValue( duplicateTx.ForeignKey, "AUDIT" ),
+                            success = false,
+                            message = cybsResult.errorMessage,
+                            responseCode = cybsResult.responseCode,
+                            authorizationNumber = cybsResult.authorizationNumber,
+                            referenceNumber = cybsResult.referenceNumber,
+                            auditNumber = cybsResult.auditNumber,
                             currency = transactionCurrency,
-                            mode = ExtractForeignKeyValue( duplicateTx.ForeignKey, "MODE" ),
-                            transactionId = duplicateTx.Id,
-                            history = GetPaymentHistoryInternal( rockContext, currentPerson.Id )
+                            mode = gatewaySettings.mode,
+                            transactionId = null,
+                            history = HistoryFor( rockContext, currentPerson )
                         } );
                     }
-                }
-                // -- END IDEMPOTENCY CHECK --
 
-                var account = GetAllowedAccountById( rockContext, bag.accountId );
-                if ( account == null )
-                {
-                    return ActionBadRequest( "La cuenta no está permitida en este bloque." );
-                }
+                    // -- FINALIZAR (Pending -> Approved: batch, atributos, workflows) --
+                    try
+                    {
+                        FinalizeApprovedTransaction( rockContext, pendingTx, currentPerson, account, bag, cybsResult, gatewaySettings.mode, transactionCurrency );
+                    }
+                    catch ( Exception ex )
+                    {
+                        ExceptionLogService.LogException( ex );
+                        // Cobro aprobado pero falló el registro: dejamos la fila Pending (un reintento no recobra).
+                        return ActionOk( new ProcessPaymentResponseBag
+                        {
+                            success = false,
+                            message = "Cobro aprobado en Cybersource, pero falló el registro en Financial. Contacta a soporte con el número de referencia.",
+                            responseCode = cybsResult.responseCode,
+                            authorizationNumber = cybsResult.authorizationNumber,
+                            referenceNumber = cybsResult.referenceNumber,
+                            auditNumber = cybsResult.auditNumber,
+                            currency = transactionCurrency,
+                            mode = gatewaySettings.mode,
+                            transactionId = null,
+                            history = HistoryFor( rockContext, currentPerson )
+                        } );
+                    }
 
-                var gatewaySettings = BuildGatewaySettings();
-                var cybsResult = ChargeWithCybersource( bag, gatewaySettings, currentPerson );
-
-                var historyAfterCall = currentPerson != null
-                    ? GetPaymentHistoryInternal( rockContext, currentPerson.Id )
-                    : new List<PaymentHistoryBag>();
-
-                if ( !cybsResult.ok )
-                {
                     return ActionOk( new ProcessPaymentResponseBag
                     {
-                        success = false,
-                        message = cybsResult.errorMessage,
+                        success = true,
+                        message = "En breve recibirá un comprobante en tu correo electrónico.",
                         responseCode = cybsResult.responseCode,
                         authorizationNumber = cybsResult.authorizationNumber,
                         referenceNumber = cybsResult.referenceNumber,
                         auditNumber = cybsResult.auditNumber,
                         currency = transactionCurrency,
                         mode = gatewaySettings.mode,
-                        transactionId = null,
-                        history = historyAfterCall
+                        transactionId = pendingTx.Id,
+                        history = HistoryFor( rockContext, currentPerson )
                     } );
                 }
-
-                int transactionId;
-
-                try
-                {
-                    transactionId = SaveFinancialTransaction( rockContext, currentPerson, account, bag, cybsResult, gatewaySettings.mode );
-                }
-                catch ( Exception ex )
-                {
-                    ExceptionLogService.LogException( ex );
-                    return ActionOk( new ProcessPaymentResponseBag
-                    {
-                        success = false,
-                        message = "Cobro aprobado en Cybersource, pero falló el registro en Financial. Contacta a soporte con el número de referencia.",
-                        responseCode = cybsResult.responseCode,
-                        authorizationNumber = cybsResult.authorizationNumber,
-                        referenceNumber = cybsResult.referenceNumber,
-                        auditNumber = cybsResult.auditNumber,
-                        currency = transactionCurrency,
-                        mode = gatewaySettings.mode,
-                        transactionId = null,
-                        history = historyAfterCall
-                    } );
-                }
-
-                return ActionOk( new ProcessPaymentResponseBag
-                {
-                    success = true,
-                    message = "En breve recibirá un comprobante en tu correo electrónico.",
-                    responseCode = cybsResult.responseCode,
-                    authorizationNumber = cybsResult.authorizationNumber,
-                    referenceNumber = cybsResult.referenceNumber,
-                    auditNumber = cybsResult.auditNumber,
-                    currency = transactionCurrency,
-                    mode = gatewaySettings.mode,
-                    transactionId = transactionId,
-                    history = currentPerson != null
-                        ? GetPaymentHistoryInternal( rockContext, currentPerson.Id )
-                        : new List<PaymentHistoryBag>()
-                } );
-            }
             }
             finally
             {
-                if ( idemLocker != null )
-                {
-                    System.Threading.Monitor.Exit( idemLocker );
-                    _idemLocks.TryRemove( idemLockKey, out _ );
-                }
+                System.Threading.Monitor.Exit( inProcLock );
+                _idemLocks.TryRemove( inProcLockKey, out _ );
             }
+        }
+
+        private List<PaymentHistoryBag> HistoryFor( RockContext rockContext, Person person )
+        {
+            return person != null
+                ? GetPaymentHistoryInternal( rockContext, person.Id )
+                : new List<PaymentHistoryBag>();
+        }
+
+        private ProcessPaymentResponseBag BuildResponseForExisting( RockContext rockContext, FinancialTransaction existingTx, string transactionCurrency, Person currentPerson )
+        {
+            var isApproved = existingTx.Status == "Approved";
+            var isPending = existingTx.Status == "Pending";
+
+            return new ProcessPaymentResponseBag
+            {
+                success = isApproved,
+                message = isApproved
+                    ? "Pago aprobado previamente (Recuperado)."
+                    : isPending
+                        ? "Tu pago se está procesando o requiere verificación. No vuelvas a intentar; si no recibes confirmación en unos minutos, contacta a soporte."
+                        : "Pago previamente intentado y fallido.",
+                responseCode = ExtractForeignKeyValue( existingTx.ForeignKey, "RC" ),
+                authorizationNumber = ExtractForeignKeyValue( existingTx.ForeignKey, "AUTH" ),
+                referenceNumber = ExtractForeignKeyValue( existingTx.ForeignKey, "REF" ),
+                auditNumber = ExtractForeignKeyValue( existingTx.ForeignKey, "AUDIT" ),
+                currency = transactionCurrency,
+                mode = ExtractForeignKeyValue( existingTx.ForeignKey, "MODE" ),
+                transactionId = isApproved ? existingTx.Id : ( int? ) null,
+                history = HistoryFor( rockContext, currentPerson )
+            };
         }
 
         #endregion
 
         #region Internal - Finance
 
-        private int SaveFinancialTransaction(
+        /// <summary>
+        /// Reserva atómica de idempotencia: dentro de una transacción de BD con sp_getapplock (cross-node),
+        /// busca una transacción previa para el idemKey; si no existe, inserta una fila Pending que actúa
+        /// como token durable contra doble cobro. Funciona para donantes anónimos y autenticados.
+        /// </summary>
+        private void ReserveIdempotencySlot(
             RockContext rockContext,
-            Person person,
+            string idemKey,
+            int? personAliasId,
             FinancialAccount account,
             ProcessPaymentRequestBag bag,
-            CybersourceChargeResult chargeResult,
-            string mode )
+            string currency,
+            string mode,
+            string clientIp,
+            out FinancialTransaction existing,
+            out FinancialTransaction pending )
         {
-            int? personAliasId = null;
-            if ( person != null )
+            existing = null;
+            pending = null;
+
+            var pastHour = RockDateTime.Now.AddHours( -1 );
+            var idemSearch = $"IDEM={idemKey}";
+
+            using ( var dbTxn = rockContext.Database.BeginTransaction() )
             {
-                personAliasId = new PersonAliasService( rockContext ).GetPrimaryAliasId( person.Id );
-                if ( !personAliasId.HasValue )
+                try
                 {
-                    throw new Exception( "No se encontró alias principal para la persona." );
+                    // Lock cross-node best-effort, scoped al idemKey y a la transacción (auto-libera en commit/rollback).
+                    TryAcquireSqlAppLock( rockContext, $"cybs-idem:{idemKey}" );
+
+                    var query = new FinancialTransactionService( rockContext )
+                        .Queryable()
+                        .Where( t => t.TransactionDateTime >= pastHour
+                            && t.ForeignKey != null
+                            && t.ForeignKey.Contains( idemSearch ) );
+
+                    if ( personAliasId.HasValue )
+                    {
+                        query = query.Where( t => t.AuthorizedPersonAliasId == personAliasId.Value );
+                    }
+                    else
+                    {
+                        query = query.Where( t => t.AuthorizedPersonAliasId == null );
+                    }
+
+                    existing = query.OrderByDescending( t => t.TransactionDateTime ).FirstOrDefault();
+
+                    if ( existing != null )
+                    {
+                        dbTxn.Commit();
+                        return;
+                    }
+
+                    pending = BuildPendingTransaction( rockContext, personAliasId, account, bag, currency, mode, clientIp, idemKey );
+                    new FinancialTransactionService( rockContext ).Add( pending );
+                    rockContext.SaveChanges();
+                    dbTxn.Commit();
+                }
+                catch
+                {
+                    dbTxn.Rollback();
+                    throw;
                 }
             }
+        }
 
+        /// <summary>
+        /// Adquiere un lock de aplicación de SQL Server (cross-node) scoped a la transacción actual.
+        /// Best-effort: si no está disponible, el lock in-process sigue cubriendo single-node.
+        /// </summary>
+        private static void TryAcquireSqlAppLock( RockContext rockContext, string resource )
+        {
+            try
+            {
+                rockContext.Database.ExecuteSqlCommand(
+                    "EXEC sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000;",
+                    new SqlParameter( "@Resource", resource ) );
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+            }
+        }
+
+        /// <summary>
+        /// Construye (sin guardar) la transacción Pending que sirve de token de idempotencia antes del cobro.
+        /// Los campos de respuesta del cobro (RC/REF/AUTH/AUDIT) se llenan en FinalizeApprovedTransaction.
+        /// </summary>
+        private FinancialTransaction BuildPendingTransaction(
+            RockContext rockContext,
+            int? personAliasId,
+            FinancialAccount account,
+            ProcessPaymentRequestBag bag,
+            string currency,
+            string mode,
+            string clientIp,
+            string idemKey )
+        {
             var financialGateway = GetConfiguredFinancialGateway( rockContext );
 
             var transactionTypeGuid = GetAttributeValue( AttributeKey.TransactionType ).AsGuidOrNull()
@@ -720,8 +832,7 @@ namespace Rock.Blocks.Dar
                 throw new Exception( "No se pudo resolver Financial Source Type." );
             }
 
-            var transactionCurrency = NormalizeCurrency( bag.currency );
-            var foreignCurrencyCodeValueId = ResolveForeignCurrencyCodeValueId( rockContext, transactionCurrency );
+            var foreignCurrencyCodeValueId = ResolveForeignCurrencyCodeValueId( rockContext, currency );
 
             var paymentDetail = new FinancialPaymentDetail
             {
@@ -733,6 +844,8 @@ namespace Rock.Blocks.Dar
                 ExpirationYear = NormalizeExpirationYear( bag.expYear )
             };
 
+            var emptyResult = new CybersourceChargeResult();
+
             var transaction = new FinancialTransaction
             {
                 Guid = Guid.NewGuid(),
@@ -742,26 +855,24 @@ namespace Rock.Blocks.Dar
                 TransactionTypeValueId = transactionType.Id,
                 SourceTypeValueId = sourceType.Id,
                 FinancialPaymentDetail = paymentDetail,
-                TransactionCode = !chargeResult.referenceNumber.IsNullOrWhiteSpace()
-                    ? chargeResult.referenceNumber.Truncate( 100 )
-                    : GenerateReferenceCode(),
+                TransactionCode = GenerateReferenceCode(),
                 Summary = BuildSummary(
                     bag.note,
-                    chargeResult.referenceNumber,
-                    chargeResult.authorizationNumber,
+                    string.Empty,
+                    string.Empty,
                     bag.wantsReceipt ? ( bag.nit ?? string.Empty ) : string.Empty,
                     bag.wantsReceipt ? ( bag.nitName ?? string.Empty ) : string.Empty,
                     bag.donorEmail ?? string.Empty,
-                    chargeResult.auditNumber,
-                    chargeResult.responseCode,
+                    string.Empty,
+                    string.Empty,
                     mode,
-                    bag.idemKey,
-                    TryGetClientIp() ),
-                Status = "Approved",
-                StatusMessage = chargeResult.responseMessage,
+                    idemKey,
+                    clientIp ),
+                Status = "Pending",
                 IsSettled = false,
                 ForeignCurrencyCodeValueId = foreignCurrencyCodeValueId,
-                ForeignKey = BuildForeignKey( chargeResult, mode, transactionCurrency, bag.idemKey )
+                // IDEM= debe estar presente desde la reserva para que el lookup de idempotencia funcione.
+                ForeignKey = BuildForeignKey( emptyResult, mode, currency, idemKey )
             };
 
             transaction.TransactionDetails.Add( new FinancialTransactionDetail
@@ -772,11 +883,61 @@ namespace Rock.Blocks.Dar
                 Summary = bag.note
             } );
 
+            return transaction;
+        }
+
+        /// <summary>
+        /// Promueve la fila Pending a Approved: completa los datos del cobro, la asigna a un batch
+        /// separado por moneda (para no mezclar GTQ y USD en el mismo total) y lanza los workflows.
+        /// </summary>
+        private void FinalizeApprovedTransaction(
+            RockContext rockContext,
+            FinancialTransaction transaction,
+            Person person,
+            FinancialAccount account,
+            ProcessPaymentRequestBag bag,
+            CybersourceChargeResult chargeResult,
+            string mode,
+            string currency )
+        {
+            var personAliasId = transaction.AuthorizedPersonAliasId;
+            var financialGateway = GetConfiguredFinancialGateway( rockContext );
+
+            transaction.Status = "Approved";
+            transaction.StatusMessage = chargeResult.responseMessage;
+            if ( !chargeResult.referenceNumber.IsNullOrWhiteSpace() )
+            {
+                transaction.TransactionCode = chargeResult.referenceNumber.Truncate( 100 );
+            }
+            transaction.Summary = BuildSummary(
+                bag.note,
+                chargeResult.referenceNumber,
+                chargeResult.authorizationNumber,
+                bag.wantsReceipt ? ( bag.nit ?? string.Empty ) : string.Empty,
+                bag.wantsReceipt ? ( bag.nitName ?? string.Empty ) : string.Empty,
+                bag.donorEmail ?? string.Empty,
+                chargeResult.auditNumber,
+                chargeResult.responseCode,
+                mode,
+                bag.idemKey,
+                TryGetClientIp() );
+            transaction.ForeignKey = BuildForeignKey( chargeResult, mode, currency, bag.idemKey );
+
+            var currencyType = transaction.FinancialPaymentDetail?.CurrencyTypeValueId.HasValue == true
+                ? DefinedValueCache.Get( transaction.FinancialPaymentDetail.CurrencyTypeValueId.Value )
+                : DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_CREDIT_CARD.AsGuid() );
+            var creditCardType = transaction.FinancialPaymentDetail?.CreditCardTypeValueId.HasValue == true
+                ? DefinedValueCache.Get( transaction.FinancialPaymentDetail.CreditCardTypeValueId.Value )
+                : null;
+
+            // Batch separado por moneda: evita que el total de control mezcle GTQ y USD sin conversión.
+            var batchPrefix = $"{GetAttributeValue( AttributeKey.BatchNamePrefix )} ({currency})";
+
             var batchService = new FinancialBatchService( rockContext );
             var batch = batchService.Get(
-                GetAttributeValue( AttributeKey.BatchNamePrefix ),
+                batchPrefix,
                 currencyType,
-                paymentDetail.CreditCardTypeValueId.HasValue ? DefinedValueCache.Get( paymentDetail.CreditCardTypeValueId.Value ) : null,
+                creditCardType,
                 transaction.TransactionDateTime.Value,
                 financialGateway?.GetBatchTimeOffset() ?? TimeSpan.Zero );
 
@@ -786,9 +947,6 @@ namespace Rock.Blocks.Dar
             }
 
             transaction.BatchId = batch.Id;
-
-            var financialTransactionService = new FinancialTransactionService( rockContext );
-            financialTransactionService.Add( transaction );
             rockContext.SaveChanges();
 
             batchService.IncrementControlAmount( batch.Id, transaction.TotalAmount, null );
@@ -804,7 +962,7 @@ namespace Rock.Blocks.Dar
                 SavePersonEmail( rockContext, person, bag.donorEmail );
             }
 
-            var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, transactionCurrency );
+            var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, currency );
 
             EnqueueFinancialTransactionWorkflow( AttributeKey.DonationWorkflow, personAliasId, transaction.Id, workflowAttributes );
 
@@ -813,8 +971,41 @@ namespace Rock.Blocks.Dar
             {
                 EnqueueFinancialTransactionWorkflow( AttributeKey.ReceiptWorkflow, personAliasId, transaction.Id, workflowAttributes );
             }
+        }
 
-            return transaction.Id;
+        /// <summary>
+        /// Elimina la fila Pending cuando el cobro fue rechazado de forma definitiva (no hubo cargo),
+        /// para que el donante pueda reintentar. No se llama en resultados ambiguos.
+        /// </summary>
+        private void DeletePendingTransaction( RockContext rockContext, FinancialTransaction transaction )
+        {
+            if ( transaction == null )
+            {
+                return;
+            }
+
+            try
+            {
+                var paymentDetail = transaction.FinancialPaymentDetail;
+                var detailService = new FinancialTransactionDetailService( rockContext );
+                foreach ( var detail in transaction.TransactionDetails.ToList() )
+                {
+                    detailService.Delete( detail );
+                }
+
+                new FinancialTransactionService( rockContext ).Delete( transaction );
+                rockContext.SaveChanges();
+
+                if ( paymentDetail != null )
+                {
+                    new FinancialPaymentDetailService( rockContext ).Delete( paymentDetail );
+                    rockContext.SaveChanges();
+                }
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+            }
         }
 
         private Dictionary<string, string> BuildReceiptWorkflowAttributes(
@@ -1278,7 +1469,10 @@ ORDER BY
                 return "Dirección fiscal demasiado larga.";
             }
 
-            if ( !string.IsNullOrEmpty( bag.idemKey ) && !Regex.IsMatch( bag.idemKey, @"^[a-zA-Z0-9_-]{1,64}$" ) )
+            // idemKey es obligatorio: es la defensa contra doble cobro (anónimos y autenticados).
+            // Cap a 32 para que coincida con el truncado de SanitizeForeignKeyValue en BuildForeignKey;
+            // si fuera más largo, el lookup Contains("IDEM=...") nunca encontraría la fila almacenada.
+            if ( string.IsNullOrEmpty( bag.idemKey ) || !Regex.IsMatch( bag.idemKey, @"^[a-zA-Z0-9_-]{1,32}$" ) )
             {
                 return "Solicitud inválida.";
             }
@@ -1402,6 +1596,18 @@ ORDER BY
                 };
             }
 
+            // Forzar HTTPS: el PAN viaja en el cuerpo, jamás debe salir por http en claro
+            // aunque un admin configure mal el Base URL.
+            if ( requestUri.Scheme != Uri.UriSchemeHttps )
+            {
+                return new CybersourceChargeResult
+                {
+                    ok = false,
+                    responseCode = "CONFIG",
+                    errorMessage = "La URL de Cybersource debe usar HTTPS."
+                };
+            }
+
             var requestHost = requestUri.IsDefaultPort ? requestUri.Host : requestUri.Authority;
             if ( requestHost.IsNullOrWhiteSpace() )
             {
@@ -1484,6 +1690,8 @@ ORDER BY
                     {
                         ok = false,
                         responseCode = "EXCEPTION",
+                        // Excepción/timeout: no sabemos si Cybersource cobró. El llamador conserva la fila Pending.
+                        ambiguous = true,
                         errorMessage = "Error de comunicación con la pasarela de pago. Intenta de nuevo."
                     };
                 }
@@ -1620,6 +1828,8 @@ ORDER BY
                 referenceNumber = responseId,
                 auditNumber = !requestCode.IsNullOrWhiteSpace() ? requestCode : reconciliationId,
                 errorMessage = userErrorMessage,
+                // 5xx/timeout/sin código: resultado incierto (puede haber cobrado). 4xx con decline = definitivo.
+                ambiguous = !approved && ( statusCode >= 500 || statusCode == 0 || statusCode == 408 ),
                 rawResponse = MaskPotentialPan( responseText )
             };
         }
@@ -2572,6 +2782,8 @@ ORDER BY
             public string referenceNumber { get; set; }
             public string auditNumber { get; set; }
             public string errorMessage { get; set; }
+            // true cuando no se pudo confirmar el resultado (excepción/timeout/5xx): el cobro pudo ocurrir.
+            public bool ambiguous { get; set; }
             public string rawResponse { get; set; }
         }
 
@@ -2693,6 +2905,12 @@ ORDER BY
         // Rate limit tracker: key -> (windowStartUtc, count). Single-node best-effort.
         private static readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimitBuckets = new ConcurrentDictionary<string, RateLimitEntry>();
 
+        // Purga oportunista para que el diccionario no crezca sin límite (una entrada por IP/persona).
+        // PurgeAfter (2h) > ventana más larga usada (1h), así que una entrada más vieja está muerta.
+        private static long _lastRateLimitSweepTicks = 0;
+        private static readonly TimeSpan RateLimitPurgeAfter = TimeSpan.FromHours( 2 );
+        private static readonly TimeSpan RateLimitSweepInterval = TimeSpan.FromMinutes( 10 );
+
         private class RateLimitEntry
         {
             public DateTime WindowStartUtc;
@@ -2723,7 +2941,39 @@ ORDER BY
                     }
                     return existing;
                 } );
+            MaybeSweepRateLimitBuckets( now );
             return allowed;
+        }
+
+        /// <summary>
+        /// Elimina entradas abandonadas del rate limiter. Corre como mucho una vez por intervalo
+        /// (CAS para que solo un hilo barra) y solo borra entradas más viejas que la ventana máxima,
+        /// así una entrada activa nunca se purga (su WindowStartUtc se renueva en cada ventana).
+        /// </summary>
+        private static void MaybeSweepRateLimitBuckets( DateTime now )
+        {
+            var lastTicks = System.Threading.Interlocked.Read( ref _lastRateLimitSweepTicks );
+            if ( now - new DateTime( lastTicks, DateTimeKind.Utc ) < RateLimitSweepInterval )
+            {
+                return;
+            }
+
+            // Un solo hilo gana el barrido por intervalo; el resto sigue de largo.
+            if ( System.Threading.Interlocked.CompareExchange( ref _lastRateLimitSweepTicks, now.Ticks, lastTicks ) != lastTicks )
+            {
+                return;
+            }
+
+            foreach ( var kvp in _rateLimitBuckets )
+            {
+                // ponytail: lectura de WindowStartUtc sin lock; en el peor caso se purga/omite una
+                // entrada de forma inexacta y se recrea en el siguiente request. Inofensivo para un
+                // rate limiter best-effort.
+                if ( now - kvp.Value.WindowStartUtc > RateLimitPurgeAfter )
+                {
+                    _rateLimitBuckets.TryRemove( kvp.Key, out _ );
+                }
+            }
         }
 
         /// <summary>

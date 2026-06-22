@@ -119,5 +119,17 @@ namespace Rock.ViewModels.Blocks.Event.RegistrationEntry
         /// The payment plan.
         /// </value>
         public RegistrationEntryCreatePaymentPlanRequestBag PaymentPlan { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the registrant wants a (FEL) invoice. When false the
+        /// sale is invoiced as "CF" (consumidor final) by the Odoo workflow. (Vida Real)
+        /// </summary>
+        public bool WantsInvoice { get; set; }
+
+        /// <summary>
+        /// Gets or sets the NIT entered at the billing screen, validated against the
+        /// SAT certifier. Consumed by the Odoo event-sale workflow to build the FEL invoice. (Vida Real)
+        /// </summary>
+        public string Nit { get; set; }
     }
 }

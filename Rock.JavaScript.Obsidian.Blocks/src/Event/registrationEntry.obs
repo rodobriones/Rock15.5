@@ -43,7 +43,7 @@
                     </div>
                 </template>
             </ProgressTracker>
-            <Transition name="re-step" mode="out-in">
+            <Transition :name="stepTransitionName" mode="out-in">
                 <div :key="currentStep">
                     <RegistrationEntryIntro v-if="currentStep === steps.intro" @next="onIntroNext" />
                     <RegistrationEntryRegistrationStart v-else-if="currentStep === steps.registrationStartForm" @next="onRegistrationStartNext" @previous="onRegistrationStartPrevious" />
@@ -175,6 +175,10 @@
         registrationSessionGuid: config.session?.registrationSessionGuid || newGuid(),
         ownFamilyGuid: config.currentPersonFamilyGuid || newGuid(),
         paymentPlan: null,
+        wantsInvoice: false,
+        nit: "",
+        nitName: "",
+        nitAddress: "",
     });
     const registrationCostSummary = ref<RegistrationCostSummaryInfo>({
         paidAmount: 0,
@@ -190,6 +194,11 @@
 
     const currentStep = computed<string>(() => {
         return registrationEntryState.value.currentStep;
+    });
+
+    /** Directional name for the step transition: forward slides in from the right, back from the left. */
+    const stepTransitionName = computed<string>(() => {
+        return registrationEntryState.value.navBack ? "re-step-back" : "re-step-fwd";
     });
 
     /** The person currently authenticated */
@@ -470,6 +479,9 @@
             amountToPayNow: registrationEntryState.value.amountToPayToday,
             registrationGuid: config.session?.registrationGuid || null,
             paymentPlan,
+            // Vida Real: datos de facturación FEL capturados en la pantalla de pago.
+            wantsInvoice: registrationEntryState.value.wantsInvoice,
+            nit: registrationEntryState.value.wantsInvoice ? registrationEntryState.value.nit : "",
         };
     }
 
@@ -696,58 +708,33 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 
 .registration-entry-shell {
-    --re-bg-top: #f8fbff;
-    --re-bg-light: #f4f6fb;
-    --re-bg-base: #eef3f9;
-    --re-surface: rgba(255, 255, 255, 0.88);
-    --re-border: rgba(17, 24, 39, 0.1);
-    --re-heading: #111827;
-    --re-text: #374151;
+    --re-surface: #ffffff;
+    --re-canvas: #e7ecf9;
+    --re-border: rgba(16, 24, 40, 0.08);
+    --re-heading: #0b1220;
+    --re-text: #475467;
+    --re-muted: #667085;
     --re-primary: #2563eb;
+    --re-primary-2: #6366f1;
     --re-primary-hover: #1d4ed8;
-    --re-radius-xl: 18px;
+    --re-accent-grad: linear-gradient(135deg, #2563eb 0%, #6366f1 100%);
+    --re-radius-xl: 24px;
     --re-radius-lg: 14px;
+    --re-pad: clamp(24px, 3.2vw, 38px);
+    --re-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
     background:
-        radial-gradient(840px 220px at -8% -10%, rgba(37, 99, 235, 0.09) 0%, rgba(37, 99, 235, 0) 72%),
-        radial-gradient(760px 200px at 110% -12%, rgba(148, 163, 184, 0.12) 0%, rgba(148, 163, 184, 0) 76%),
-        linear-gradient(180deg, var(--re-bg-top) 0 180px, var(--re-bg-light) 180px 64%, var(--re-bg-base) 100%);
+        radial-gradient(820px 360px at 50% -100px, rgba(99, 102, 241, 0.22), transparent 62%),
+        radial-gradient(720px 320px at 12% 4%, rgba(37, 99, 235, 0.12), transparent 60%),
+        linear-gradient(180deg, #eef2fc 0%, var(--re-canvas) 100%);
     border-radius: var(--re-radius-xl);
     border: 1px solid var(--re-border);
-    box-shadow: 0 10px 30px rgba(17, 24, 39, 0.1);
-    padding: 20px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 30px 60px -32px rgba(30, 41, 99, 0.35);
+    padding: var(--re-pad);
     color: var(--re-text);
     font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
     position: relative;
     isolation: isolate;
-    overflow: hidden;
-}
-
-.registration-entry-shell::before {
-    content: "";
-    position: absolute;
-    inset: -22% -8%;
-    background:
-        radial-gradient(420px 180px at 16% 32%, rgba(37, 99, 235, 0.1), transparent 72%),
-        radial-gradient(360px 160px at 82% 24%, rgba(17, 24, 39, 0.06), transparent 74%);
-    filter: blur(1px);
-    animation: registration-entry-orbit 18s ease-in-out infinite alternate;
-    z-index: 0;
-}
-
-.registration-entry-shell::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 44%);
-    opacity: 0.45;
-    pointer-events: none;
-    z-index: 0;
-}
-
-.registration-entry-shell > * {
-    position: relative;
-    z-index: 1;
 }
 
 .registration-entry-shell :deep(h1),
@@ -760,10 +747,41 @@
 }
 
 .registration-entry-shell :deep(h1) {
-    margin: 2px 0 16px;
-    font-size: clamp(1.75rem, 2.7vw, 2.35rem);
-    letter-spacing: -0.02em;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+    position: relative;
+    margin: 4px 0 24px;
+    font-size: clamp(2.2rem, 4vw, 3.15rem);
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+    font-weight: 800;
+}
+
+.registration-entry-shell :deep(h1)::before {
+    content: "";
+    display: block;
+    width: 56px;
+    height: 6px;
+    margin-bottom: 18px;
+    border-radius: 999px;
+    background: var(--re-accent-grad);
+}
+
+.registration-entry-shell :deep(h4) {
+    letter-spacing: -0.015em;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--re-heading);
+    margin-bottom: 16px;
+}
+
+/* Intro is a centered hero: keep the accent bar centered above its title. */
+.registration-entry-shell :deep(.registrationentry-intro) > h1,
+.registration-entry-shell :deep(.registrationentry-intro-count) {
+    text-align: center;
+}
+
+.registration-entry-shell :deep(.registrationentry-intro) h1::before {
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .registration-entry-shell :deep(.progress-tracker) {
@@ -880,62 +898,49 @@
 .registration-entry-shell :deep(.registrationentry-summary),
 .registration-entry-shell :deep(.registrationentry-payment),
 .registration-entry-shell :deep(.registrationentry-success) {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.9) 100%);
+    position: relative;
+    background: var(--re-surface);
     border: 1px solid var(--re-border);
     border-radius: var(--re-radius-xl);
-    box-shadow:
-        0 6px 18px rgba(17, 24, 39, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.72);
-    padding: 22px;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 28px 56px -30px rgba(30, 41, 99, 0.3);
+    padding: var(--re-pad);
 }
 
-.re-step-enter-active,
-.re-step-leave-active {
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+/* Directional step transitions: forward slides in from the right, back from the left. */
+.re-step-fwd-enter-active,
+.re-step-fwd-leave-active,
+.re-step-back-enter-active,
+.re-step-back-leave-active {
+    transition: opacity 0.34s var(--re-ease), transform 0.34s var(--re-ease);
+    will-change: opacity, transform;
 }
 
-.re-step-enter-from {
+.re-step-fwd-enter-from {
     opacity: 0;
-    transform: translateY(16px) scale(0.98);
+    transform: translateX(36px);
 }
 
-.re-step-leave-to {
+.re-step-fwd-leave-to {
     opacity: 0;
-    transform: translateY(-16px) scale(0.98);
+    transform: translateX(-36px);
 }
 
-@media (hover: hover) {
-    .registration-entry-shell :deep(.registrationentry-intro),
-    .registration-entry-shell :deep(.registrationentry-registration-attributes),
-    .registration-entry-shell :deep(.registrationentry-registrant),
-    .registration-entry-shell :deep(.registrationentry-registrant-details),
-    .registration-entry-shell :deep(.registrationentry-summary),
-    .registration-entry-shell :deep(.registrationentry-payment),
-    .registration-entry-shell :deep(.registrationentry-success) {
-        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-    }
+.re-step-back-enter-from {
+    opacity: 0;
+    transform: translateX(-36px);
+}
 
-    .registration-entry-shell :deep(.registrationentry-intro:hover),
-    .registration-entry-shell :deep(.registrationentry-registration-attributes:hover),
-    .registration-entry-shell :deep(.registrationentry-registrant:hover),
-    .registration-entry-shell :deep(.registrationentry-registrant-details:hover),
-    .registration-entry-shell :deep(.registrationentry-summary:hover),
-    .registration-entry-shell :deep(.registrationentry-payment:hover),
-    .registration-entry-shell :deep(.registrationentry-success:hover) {
-        transform: translateY(-2px);
-        border-color: rgba(37, 99, 235, 0.28);
-        box-shadow:
-            0 10px 24px rgba(17, 24, 39, 0.1),
-            inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    }
+.re-step-back-leave-to {
+    opacity: 0;
+    transform: translateX(36px);
 }
 
 .registration-entry-shell :deep(.well) {
-    border: 1px solid rgba(17, 24, 39, 0.1);
+    border: 1px solid var(--re-border);
     border-radius: var(--re-radius-lg);
-    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    background: #fbfcfe;
+    box-shadow: none;
 }
 
 .registration-entry-shell :deep(.alert) {
@@ -959,42 +964,58 @@
 }
 
 .registration-entry-shell :deep(.actions) {
-    margin-top: 22px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(189, 205, 225, 0.55);
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 28px calc(-1 * var(--re-pad)) calc(-1 * var(--re-pad));
+    padding: 16px var(--re-pad);
+    border-top: 1px solid var(--re-border);
+    border-radius: 0 0 var(--re-radius-xl) var(--re-radius-xl);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--re-surface) 32%);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.registration-entry-shell :deep(.actions::after) {
+    content: "";
+    display: block;
+    clear: both;
 }
 
 .registration-entry-shell :deep(.actions .btn-primary),
 .registration-entry-shell :deep(.actions .rock-button.btn-primary) {
-    min-height: 46px;
+    min-height: 54px;
     border-radius: 999px !important;
-    border: 1px solid rgba(37, 99, 235, 0.92) !important;
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    border: 0 !important;
+    background: var(--re-accent-grad) !important;
     color: #fff !important;
     font-family: "Manrope", "Segoe UI", sans-serif !important;
     font-weight: 800 !important;
+    font-size: 1.02rem;
     letter-spacing: 0.01em;
-    padding-inline: 22px !important;
-    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.24);
+    padding-inline: 30px !important;
+    box-shadow: 0 12px 26px -6px rgba(79, 70, 229, 0.5);
+    transition: transform 0.16s var(--re-ease), box-shadow 0.16s var(--re-ease);
 }
 
 .registration-entry-shell :deep(.actions .btn-primary:hover),
 .registration-entry-shell :deep(.actions .rock-button.btn-primary:hover) {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-    box-shadow: 0 12px 20px rgba(37, 99, 235, 0.28);
+    background: linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%) !important;
+    box-shadow: 0 16px 32px -6px rgba(79, 70, 229, 0.6);
+    transform: translateY(-2px);
 }
 
 .registration-entry-shell :deep(.actions .btn-default),
 .registration-entry-shell :deep(.actions .rock-button.btn-default) {
-    min-height: 46px;
+    min-height: 54px;
     border-radius: 999px !important;
-    border: 1px solid rgba(17, 24, 39, 0.18) !important;
-    background: rgba(255, 255, 255, 0.9) !important;
-    color: #111827 !important;
+    border: 1.5px solid rgba(16, 24, 40, 0.16) !important;
+    background: #ffffff !important;
+    color: var(--re-heading) !important;
     font-family: "Manrope", "Segoe UI", sans-serif !important;
     font-weight: 700 !important;
-    padding-inline: 20px !important;
-    backdrop-filter: blur(8px);
+    font-size: 1.02rem;
+    padding-inline: 26px !important;
 }
 
 .registration-entry-shell :deep(.remaining-time) {
@@ -1053,28 +1074,6 @@
     background: #3b43f6;
 }
 
-@keyframes registration-entry-rise {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes registration-entry-orbit {
-    0% {
-        transform: translate3d(-1.5%, -1%, 0) scale(1);
-    }
-
-    100% {
-        transform: translate3d(1.5%, 1.2%, 0) scale(1.03);
-    }
-}
-
 @keyframes registration-entry-pulse {
     0%,
     100% {
@@ -1087,15 +1086,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .registration-entry-shell::before,
     .registration-entry-shell :deep(.progress-tracker-icon.current),
-    .registration-entry-shell :deep(.registrationentry-intro),
-    .registration-entry-shell :deep(.registrationentry-registration-attributes),
-    .registration-entry-shell :deep(.registrationentry-registrant),
-    .registration-entry-shell :deep(.registrationentry-registrant-details),
-    .registration-entry-shell :deep(.registrationentry-summary),
-    .registration-entry-shell :deep(.registrationentry-payment),
-    .registration-entry-shell :deep(.registrationentry-success) {
+    .re-step-fwd-enter-active,
+    .re-step-fwd-leave-active,
+    .re-step-back-enter-active,
+    .re-step-back-leave-active {
         animation: none !important;
         transition: none !important;
     }
@@ -1111,6 +1106,7 @@
 
 @media (max-width: 767px) {
     .registration-entry-shell {
+        --re-pad: 16px;
         border-radius: 16px;
         padding: 10px;
     }
@@ -1122,8 +1118,8 @@
     .registration-entry-shell :deep(.registrationentry-summary),
     .registration-entry-shell :deep(.registrationentry-payment),
     .registration-entry-shell :deep(.registrationentry-success) {
-        padding: 14px;
-        border-radius: 14px;
+        padding: var(--re-pad);
+        border-radius: 16px;
     }
 
     .registration-entry-shell :deep(.progress-tracker) {
@@ -1131,8 +1127,14 @@
     }
 
     .registration-entry-shell :deep(h1) {
-        margin-bottom: 10px;
-        font-size: clamp(1.35rem, 6vw, 1.75rem);
+        margin-bottom: 14px;
+        font-size: clamp(1.8rem, 8vw, 2.3rem);
+    }
+
+    .registration-entry-shell :deep(h1)::before {
+        width: 44px;
+        height: 5px;
+        margin-bottom: 12px;
     }
 
     .registration-entry-shell :deep(.remaining-time) {
@@ -1146,8 +1148,8 @@
         display: flex;
         flex-direction: column-reverse;
         gap: 10px;
-        margin-left: 0;
-        margin-right: 0;
+        margin-left: calc(-1 * var(--re-pad));
+        margin-right: calc(-1 * var(--re-pad));
         text-align: left !important;
     }
 

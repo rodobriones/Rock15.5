@@ -29,7 +29,76 @@ Meta del proyecto:
 - Build validado:
   - `cd Rock.JavaScript.Obsidian.Blocks && npm run build:types` OK
 
-### Nota importante sobre mensaje final (Success)
+---
+
+## Rediseño UI/UX del wizard (2026-06-18)
+
+Rediseño **solo frontend/CSS** del wizard de inscripción, dirección estética 2026 + flujo más fluido. **No toca lógica ni backend.**
+
+### Dónde vive
+- **Capa central:** `<style scoped>` de `src/Event/registrationEntry.obs` (el shell). Define el design system con tokens CSS (`--re-primary`, `--re-primary-2`, `--re-accent-grad`, `--re-surface`, `--re-canvas`, `--re-border`, `--re-heading`, `--re-radius-xl`, `--re-pad`, `--re-ease`) y los aplica a los hijos vía `:deep(.registrationentry-*, .actions, .form-control, .btn-primary, .progress-tracker...)`. **Editar aquí cambia todas las pantallas a la vez.**
+- **Estilos propios (heredan tokens `--re-*` por cascada):** `summary.partial.obs` (tarjetas de registrante con avatar), `registrar.partial.obs` (header con ícono). `payment`/`success`/`costSummary`/`discountCodeForm` ya tenían su `<style>` autocontenido y **no se tocaron**.
+
+### Qué se hizo
+- **Estética:** se retiró el glassmorphism recargado (blob orbitando, doble gradiente radial, blur translúcido) → superficie sólida calmada + glow de acento sutil; jerarquía tipográfica fuerte (h1 grande con barra de acento `::before`; h4 de sección marcado).
+- **Flujo fluido:**
+  - **Barra de acción sticky:** `:deep(.actions) { position: sticky; bottom: 0 }` con márgenes negativos `calc(-1 * var(--re-pad))` para sangrar al borde de la tarjeta. Por esto el shell **ya NO usa `overflow: hidden`** (rompería el sticky).
+  - **Transición direccional:** template usa `<Transition :name="stepTransitionName">`; computed `stepTransitionName = navBack ? "re-step-back" : "re-step-fwd"`. Avanzar entra desde la derecha, retroceder desde la izquierda.
+- **Botones:** 54px, gradiente de acento, lift en hover.
+
+### Decisiones / pitfalls
+- **Acento azul (`#2563eb`) intacto** a propósito: `payment`/`success`/`costSummary` hardcodean ese azul; cambiar la marca obligaría a tocarlos para mantener cohesión (pasada aparte si se pide).
+- **Fix doble-tarjeta:** `intro.partial.obs` reusaba la clase de panel en un div anidado → se renombró a `registrationentry-intro-count`.
+- **Intro centrada** (hero): barra de acento centrada solo ahí; los demás pasos van a la izquierda.
+- **Sticky + transform:** durante la transición el panel se traslada (transform), lo que rompe `position: fixed` pero el sticky se recupera al terminar; OK.
+- Build: `cd Rock.JavaScript.Obsidian.Blocks && npm run build-fast` (regenera `dist/` y copia a `RockWeb/Obsidian/Blocks/`). Refrescar con `Ctrl+F5` (el `.obs.js` se cachea fuerte).
+
+---
+
+## Facturación FEL / NIT en la pantalla de pago (2026-06-15)
+
+Se integró la captura y validación del **NIT** en la **pantalla de pago** del flujo de inscripción, para alimentar la facturación electrónica (FEL) de eventos vía Odoo. **Mismo UX que el bloque de donaciones** (`Dar/CybersourceDonationEntry`): toggle "¿Desea factura?" + campo NIT + botón "Validar NIT" contra SAT + razón social readonly. El NIT validado viaja a los workflows de inscripción como atributos pre-poblados y la workflow action `PostEventSaleToOdoo` lo factura en Odoo.
+
+> ⚠️ Excepción a la convención "frontend primero / no tocar .cs": esta feature **sí** modifica el backend del bloque core (`RegistrationEntry.cs`) y un ViewModel. Es deliberado y necesario (no hay otra vía para que el NIT llegue al workflow). Documentado abajo.
+
+### Flujo end-to-end
+```
+payment.partial.obs (toggle + NIT + "Validar NIT")
+  └─ BlockAction ValidateNitInfo (RegistrationEntry.cs) → API SAT retornarDatosCliente → razón social
+  └─ al enviar, getRegistrationEntryBlockArgs incluye { nit, wantsInvoice }
+       └─ SubmitRegistration → ProcessPostSave → LaunchWorkflow pasa { Nit, WantsInvoice } como workflow attrs
+            └─ workflow action PostEventSaleToOdoo lee Nit/WantsInvoice (re-valida) → POST /api/event/sell (Odoo FEL)
+```
+
+### Archivos tocados
+**Frontend:**
+- `src/Event/RegistrationEntry/payment.partial.obs` — sección "re-invoice" (toggle, NIT, botón Validar, razón social readonly), `validateNit()`, guard en `onNext`, `:disabled` del botón Pagar
+- `src/Event/RegistrationEntry/types.partial.ts` — `wantsInvoice/nit/nitName/nitAddress` en `RegistrationEntryState`
+- `src/Event/registrationEntry.obs` — init del state + `getRegistrationEntryBlockArgs` envía `nit`/`wantsInvoice`
+- `Rock.JavaScript.Obsidian/Framework/ViewModels/Blocks/Event/RegistrationEntry/registrationEntryArgsBag.d.ts` — `nit`/`wantsInvoice`
+
+**Backend (core):**
+- `Rock.Blocks/Event/RegistrationEntry.cs` — region "Vida Real - NIT / FEL Validation": BlockAction `ValidateNitInfo` + `LookupNitFromExternalApi` (lee Global Attributes, anti-SSRF whitelist + https, rate-limit con cap de memoria, sanitización); y en `ProcessPostSave` el `LaunchWorkflow` pasa `{ Nit, WantsInvoice }`
+- `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` — props `Nit` (string) y `WantsInvoice` (bool)
+
+### Config requerida (resumen — detalle en `Plugin.OdooEventSale/README.md`)
+- **Global Attributes**: `OdooNitApiUrl` (Text) y `OdooNitApiBearerToken` (Encrypted Text) — los lee el block action `ValidateNitInfo` y la workflow action. Host en whitelist del código (`apiv2.ifacere-fel.com` / `dev2.api.ifacere-fel.com`).
+- **Workflow Type** "Odoo - Venta de Evento" con atributos de **Key exacto** `Nit` (Text) y `WantsInvoice` (Boolean) — si el Key no coincide, todo se factura como CF silenciosamente.
+- El NIT **ya no** es un campo del formulario de registrante.
+
+### Notas técnicas
+- La validación del NIT ocurre 2 veces server-side: en `ValidateNitInfo` (UX, pantalla de pago) y en la workflow action `LookupNit` (autoritativa al facturar). NO se pasan `nitName`/`nitAddress` por el workflow: la action re-deriva la razón social/dirección de SAT.
+- No se puede pagar con factura solicitada sin validar el NIT (guard en `onNext` cubre gateway y saved-account; `:disabled` como segunda red).
+- El estado del NIT vive en `registrationEntryState` (compartido) → persiste al navegar Pago↔Review y se persiste en la sesión vía `PersistSession`.
+- Build: requiere recompilar `Rock.Blocks`/`Rock.ViewModels` (Release) y el bundle Obsidian (`npm run build`, regenera `registrationEntry.obs.js`). Ver `Plugin.OdooEventSale/CONTEXT.md §8`.
+
+### Contexto completo del lado Odoo / workflow
+- `Plugin.OdooEventSale/CONTEXT.md` — decisiones, flujo, retry, estados, qué falta (§8 cubre esta sesión).
+- `Plugin.OdooEventSale/README.md` — configuración paso a paso en Rock admin + Odoo + checklist.
+
+---
+
+### Nota original sobre mensaje final (Success)
 - El texto final proviene del `SuccessText` del Registration Template (Lava), no solo del front.
 - El front SI hace limpieza/traduccion parcial en:
   - `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/success.partial.obs`
@@ -48,7 +117,8 @@ Meta del proyecto:
 ### Event Registration Entry
 - UI shell y flujo: `Rock.JavaScript.Obsidian.Blocks/src/Event/registrationEntry.obs`
 - Utilidades + diccionario: `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/utils.partial.ts`
-- Partials relacionadas: `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/*.partial.obs`
+- Partials relacionadas: `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/*.partial.obs` (incluye `payment.partial.obs` con la sección NIT/FEL)
+- Backend del bloque: `Rock.Blocks/Event/RegistrationEntry.cs` (BlockAction `ValidateNitInfo` + passthrough de NIT al workflow) y `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` (`Nit`/`WantsInvoice`) — ver sección "Facturación FEL / NIT"
 
 ### CRM Family Pre-Registration
 - Vista principal: `Rock.JavaScript.Obsidian.Blocks/src/Crm/familyPreRegistration.obs`

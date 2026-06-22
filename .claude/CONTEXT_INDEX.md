@@ -26,6 +26,21 @@
 
 ---
 
+### Modulo OdooEventSale (Facturación FEL de eventos via Odoo)
+
+| Archivo | Proposito | Cuando leerlo |
+|---|---|---|
+| `C:\Repos\Rock18.1\Plugin.OdooEventSale\CONTEXT.md` | **Contexto completo de la integración Rock eventos → Odoo FEL**: decisiones, flujo end-to-end, retry, NIT/SAT, cambios en el addon de Odoo, bugs corregidos, qué falta | Al retomar cualquier trabajo de facturación de eventos / Odoo / FEL. Leer primero. |
+| `C:\Repos\Rock18.1\Plugin.OdooEventSale\README.md` | Configuración manual en Rock admin (Global Attributes de NIT, workflow type con atributos `Nit`/`WantsInvoice`, activities), despliegue, estados, checklist de staging | Al configurar o probar la integración en un ambiente. |
+| `C:\Repos\Iglesia1\custom_event_sale_api\docs\API.md` | Contrato del endpoint POST /api/event/sell del addon Odoo (otro repo) | Al cambiar el payload o el manejo de respuestas. |
+
+**Componentes (referencia rapida):**
+- `Plugin.OdooEventSale/OdooEventSale/PostEventSaleToOdoo.cs` — Workflow action (POST a Odoo, retry idempotente, NIT/SAT). Lee `Nit`/`WantsInvoice` de workflow attrs y la config de NIT de Global Attributes.
+- **NIT capturado en la pantalla de pago del bloque `Event/RegistrationEntry`** (no en el formulario) — ver módulo Eventos abajo y `AI_HANDOFF_ROCK18_EVENT_CRM.md`.
+- `C:\Repos\Iglesia1\custom_event_sale_api` — Addon Odoo 17 (orden + factura FEL + pago, multi-línea)
+
+---
+
 ### Modulo QREVENT (Eventos con QR / Check-in)
 
 | Archivo | Proposito | Cuando leerlo |
@@ -62,13 +77,18 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\AI_HANDOFF_ROCK18_EVENT_CRM.md` | Contexto completo de i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration: reglas de idioma, decisiones de DatePicker, pitfalls Vue, template Lava recomendado para SuccessText | Al trabajar en cualquier aspecto de registro de eventos, internacionalizacion ES/EN, o DatePicker. Contiene el prompt base para iniciar nueva IA en este modulo. |
+| `C:\Repos\Rock18.1\AI_HANDOFF_ROCK18_EVENT_CRM.md` | Contexto completo de i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration: reglas de idioma, decisiones de DatePicker, pitfalls Vue, template Lava recomendado para SuccessText. **+ Sección "Facturación FEL / NIT en la pantalla de pago" (2026-06-15)**: captura/validación de NIT en el paso de pago que alimenta la facturación Odoo. | Al trabajar en cualquier aspecto de registro de eventos, internacionalizacion ES/EN, DatePicker, o la captura de NIT/factura en la pantalla de pago. Contiene el prompt base para iniciar nueva IA en este modulo. |
 
 **Archivos clave (referencia rapida):**
-- `Rock.JavaScript.Obsidian.Blocks/src/Event/registrationEntry.obs` — Shell del flujo
+- `Rock.JavaScript.Obsidian.Blocks/src/Event/registrationEntry.obs` — Shell del flujo (+ state NIT y args)
 - `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/utils.partial.ts` — Diccionario i18n + utilidades
+- `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/payment.partial.obs` — Pantalla de pago + **sección NIT/FEL** (toggle factura, validar NIT, razón social)
+- `Rock.Blocks/Event/RegistrationEntry.cs` — Backend del bloque: **BlockAction `ValidateNitInfo`** (valida NIT vs SAT) + passthrough `Nit`/`WantsInvoice` al workflow en `ProcessPostSave`
+- `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` — Args bag con `Nit`/`WantsInvoice`
 - `Rock.JavaScript.Obsidian.Blocks/src/Crm/familyPreRegistration.obs` — Pre-registro familiar
 - `Rock.JavaScript.Obsidian.Blocks/src/Crm/FamilyPreRegistration/utils.partial.ts` — Diccionario i18n CRM
+
+> El NIT capturado aquí alimenta el módulo **OdooEventSale** (ver sección arriba). La config (Global Attributes `OdooNitApiUrl`/`OdooNitApiBearerToken`, Workflow Type con atributos `Nit`/`WantsInvoice`) está en `Plugin.OdooEventSale/README.md`.
 
 ---
 
@@ -129,11 +149,13 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 
 ---
 
-## Estado del repositorio (2026-06-04)
+## Estado del repositorio (2026-06-15)
 
 - **Branch activo:** `hotfix-18.1`
-- **Ultimo commit:** `4f80ff56b0` — "BUGS y WA" (13 de mayo de 2026)
+- **Ultimo commit:** `c205d270a3` — "Documentacion"
 - **Archivos sin commit (nuevos, sin seguimiento):**
+  - `Plugin.OdooEventSale/` — módulo completo (workflow action Odoo FEL + docs)
   - `Rock.Blocks/Security/VRSimpleRegistration.cs`
   - `Rock.JavaScript.Obsidian.Blocks/src/Security/vrSimpleRegistration.obs`
+- **Último trabajo (2026-06-15):** NIT/FEL en la pantalla de pago de eventos. Modificados: `Rock.Blocks/Event/RegistrationEntry.cs`, `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs`, `src/Event/RegistrationEntry/payment.partial.obs` + `types.partial.ts`, `src/Event/registrationEntry.obs`, viewmodel `registrationEntryArgsBag.d.ts`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/CONTEXT.md`.
 - **Archivos con cambios sin commitear (modified):** Ver `git status` para lista actual.

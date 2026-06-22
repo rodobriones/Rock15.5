@@ -308,12 +308,12 @@ Lista las **últimas 100 transacciones** del usuario logueado.
 |---|---|---|---|
 | 1 | Validación de DTO | `ValidatePaymentRequest` ([línea 1083](CybersourceDonationEntry.cs#L1083)) | accountId, email, amount (0..99,999,999), card 12-19, expMonth 1-12, expYear ±25, cvv 3-4, currency GTQ\|USD. **Rechaza AmEx** (PAN comenzando con `34` o `37`) — ver §12.5. |
 | 2 | reCAPTCHA Enterprise | `VerifyRecaptchaToken` ([línea 976](CybersourceDonationEntry.cs#L976)) | POST a Google. Verifica `valid`, `action=="donation"`, `score>=minScore`. |
-| 3 | Idempotencia | inline en `ProcessPayment` ([línea 481-515](CybersourceDonationEntry.cs#L481-L515)) | Busca `IDEM={key}` en última hora; si existe + aprobada → retorna cached. |
-| 4 | Cuenta permitida | `GetAllowedAccountById` ([línea 825](CybersourceDonationEntry.cs#L825)) | Verifica que `accountId` esté en `AccountsToDisplay`. |
-| 5 | Settings Cybersource | `BuildGatewaySettings` ([línea 1147](CybersourceDonationEntry.cs#L1147)) | Carga credenciales según modo, desencripta secret. |
-| 6 | Cobro | `ChargeWithCybersource` ([línea 1202](CybersourceDonationEntry.cs#L1202)) | Construye payload, calcula digest, firma HMAC, intenta hasta 3 perfiles de firma. |
-| 7 | Parseo respuesta | `BuildChargeResultFromCybersourceResponse` ([línea 1404](CybersourceDonationEntry.cs#L1404)) | Determina `ok`, mapea error a español. |
-| 8 | Persistencia | `SaveFinancialTransaction` ([línea 593](CybersourceDonationEntry.cs#L593)) | Crea `FinancialTransaction`, `Detail`, `PaymentDetail`, asigna a `Batch`. |
+| 3 | Cuenta permitida | `GetAllowedAccountById` | Verifica que `accountId` esté en `AccountsToDisplay`. |
+| 4 | Reserva idempotencia | `ReserveIdempotencySlot` | `sp_getapplock` + busca `IDEM={key}` (autenticado por persona, anónimo por `AliasId NULL`); si existe `Approved`/`Pending` no cobra; si no, inserta fila `Pending` durable. |
+| 5 | Settings Cybersource | `BuildGatewaySettings` | Carga credenciales según modo, desencripta secret. |
+| 6 | Cobro | `ChargeWithCybersource` | Construye payload, **fuerza HTTPS**, calcula digest, firma HMAC, intenta hasta 3 perfiles. |
+| 7 | Parseo respuesta | `BuildChargeResultFromCybersourceResponse` | Determina `ok` y `ambiguous` (5xx/timeout), mapea error a español. |
+| 8 | Persistencia | `FinalizeApprovedTransaction` (o `DeletePendingTransaction`) | Aprobado → promueve `Pending`→`Approved`, batch por moneda. Rechazo definitivo → borra reserva. Ambiguo → conserva `Pending`. |
 | 9 | Auto-update Persona | `SavePersonEmail` + `SavePersonNitAttribute` | Si logueado, actualiza email vacío y agrega NIT al atributo. |
 | 10 | Workflows | `EnqueueFinancialTransactionWorkflow` x2 | Donación y recibo (si configurados y procede). |
 | 11 | Respuesta | `ProcessPaymentResponseBag` | Devuelve success, message, códigos, transactionId, history actualizado. |
@@ -344,15 +344,19 @@ Lista las **últimas 100 transacciones** del usuario logueado.
 - **Fallbacks:** si firstName vacío → `"Donante"`; dirección de respaldo `19 Avenida 16-02, Zona 10`, postal `01010`, país `GT`.
 - **Beneficio:** evita flags `COR-BA` y `MM-IPBC` de Cybersource Decision Manager y mejora ratio AVS-match.
 
-### Feature 4: Idempotencia
+### Feature 4: Idempotencia (reforzada 2026-06-21)
 
-- **Dónde:** inline en `ProcessPayment` ([líneas 481-515](CybersourceDonationEntry.cs#L481-L515)).
-- **Clave:** `idemKey` enviado por cliente (timestamp+random).
-- **Persistencia:** se almacena en `ForeignKey` con prefijo `IDEM=`.
-- **Ventana:** 1 hora.
-- **Resultado:** si encuentra duplicado:
-  - **Aprobado anterior** → retorna ese resultado (recovery).
-  - **Fallido anterior** → retorna error sin reintentar (evita charge-double).
+- **Dónde:** `ReserveIdempotencySlot` / `FinalizeApprovedTransaction` / `DeletePendingTransaction`.
+- **Clave:** `idemKey` enviado por cliente (timestamp+random), **obligatorio**, cap 32 chars.
+- **Patrón fila `Pending` durable:** la transacción se reserva en BD (`Status="Pending"`)
+  **antes** de cobrar y se promueve a `Approved` después. Esto da idempotencia a
+  donantes **anónimos** (antes no la tenían) y cierra el hueco "cobrado pero no guardado".
+- **Locks:** in-process por `idemKey` + `sp_getapplock` cross-node (transaction-scoped).
+- **Persistencia:** la clave se almacena en `ForeignKey` con prefijo `IDEM=`. Ventana 1 hora.
+- **Resultado si encuentra duplicado:** `Approved` → resultado recuperado;
+  `Pending` → "en proceso, no reintente". En ambos casos **no recobra**.
+- **Resultado ambiguo del cobro** (timeout/5xx) → conserva la fila `Pending` para
+  bloquear el recobro; rechazo definitivo → borra la reserva y permite reintento.
 
 ---
 
@@ -395,12 +399,13 @@ Body (XML):
 
 ## 10. Persistencia en Rock Finance
 
-`SaveFinancialTransaction` ([línea 593](CybersourceDonationEntry.cs#L593)) crea:
+`BuildPendingTransaction` (reserva, `Status="Pending"`) + `FinalizeApprovedTransaction`
+(promoción a `Approved`) crean:
 
 - **`FinancialPaymentDetail`** con `AccountNumberMasked` (`****1234`), `CreditCardTypeValueId` (detectado por IIN), `ExpirationMonth/Year`, `NameOnCard`.
-- **`FinancialTransaction`** con `Status="Approved"`, `TransactionTypeValueId` y `SourceTypeValueId` desde atributos, `ForeignCurrencyCodeValueId` si aplica.
+- **`FinancialTransaction`** con `Status` (`Pending`→`Approved`), `TransactionTypeValueId` y `SourceTypeValueId` desde atributos, `ForeignCurrencyCodeValueId` si aplica.
 - **`FinancialTransactionDetail`** ligado a la cuenta seleccionada.
-- **`FinancialBatch`** (busca o crea por prefijo+moneda+tipoTarjeta+fecha).
+- **`FinancialBatch`** (busca o crea por prefijo **con moneda** + tipoTarjeta + fecha — ver #5).
 - **`Summary`** legible con email, NIT, referencia, auth.
 
 ### Formato del `ForeignKey`
@@ -523,7 +528,8 @@ currency, mode, accountNumberMasked, summary
 | NIT API | "Error de API externa (HTTP {code})" | `ExceptionLogService.LogException()` |
 | Cybersource HTTP | "Error de comunicación con la pasarela" | `ExceptionLogService.LogException()` (no para 401 reintento) |
 | Cybersource response | Mapeo de 70+ errores a español ([`MapCybersourceErrorToSpanish` línea 1479](CybersourceDonationEntry.cs#L1479)) | — |
-| `SaveFinancialTransaction` | "Cobro aprobado pero falló registro. Contacta soporte con la referencia." | `ExceptionLogService.LogException()` |
+| `FinalizeApprovedTransaction` | "Cobro aprobado pero falló registro. Contacta soporte con la referencia." (conserva fila `Pending`) | `ExceptionLogService.LogException()` |
+| Cobro ambiguo (timeout/5xx) | "Tu pago se está procesando o requiere verificación. No vuelvas a intentar." (conserva fila `Pending`) | `ExceptionLogService.LogException()` |
 | Workflows / atributos | Silent fail (no rethrow) | `ExceptionLogService.LogException()` |
 
 ### Mapeo de errores Cybersource (extracto)
@@ -551,10 +557,17 @@ currency, mode, accountNumberMasked, summary
 | 441 | `GetPaymentHistory` | Top 100 transacciones del usuario. |
 | 459 | `ProcessPayment` | **Pipeline principal de cobro.** |
 
+> **Nota 2026-06-21:** los números de línea de este catálogo son aproximados;
+> el endurecimiento de idempotencia movió y dividió varios métodos. Usar la
+> búsqueda por nombre como referencia confiable.
+
 ### Finanzas
-| Línea | Método | Función |
-|---|---|---|
-| 593 | `SaveFinancialTransaction` | Persistencia completa de la donación. |
+| Método | Función |
+|---|---|
+| `ReserveIdempotencySlot` | Check + reserva atómica (fila `Pending`) con `sp_getapplock`. |
+| `BuildPendingTransaction` | Construye la fila `Pending` (token de idempotencia, pre-cobro). |
+| `FinalizeApprovedTransaction` | Promueve `Pending`→`Approved`, batch por moneda, workflows. |
+| `DeletePendingTransaction` | Borra la reserva en rechazo definitivo (permite reintento). |
 | 725 | `BuildReceiptWorkflowAttributes` | Atributos para workflows. |
 | 755 | `EnqueueFinancialTransactionWorkflow` | Encola workflow asíncrono. |
 | 802 | `GetAllowedAccounts` | Cuentas permitidas configuradas. |
@@ -641,9 +654,12 @@ using Rock.Web.Cache;
 
 - [ ] Donación de prueba (modo test) **anónima** + **logueada**.
 - [ ] Verificar `FinancialTransaction.ForeignKey` empieza con `CYBS|IDEM=`.
-- [ ] Confirmar batch creado en módulo Finance.
+- [ ] Confirmar batch creado en módulo Finance **separado por moneda** (`... (GTQ)` / `... (USD)`).
 - [ ] Workflows lanzados (revisar `WorkflowLog`).
-- [ ] Idempotencia: enviar mismo `idemKey` dos veces → segunda respuesta debe ser cached.
+- [ ] Idempotencia: enviar mismo `idemKey` dos veces → segunda respuesta recuperada, sin doble cobro.
+- [ ] **Idempotencia anónima**: repetir el doble-envío **sin estar logueado** → no debe duplicar el cobro.
+- [ ] **Cobro ambiguo**: simular timeout de Cybersource → debe quedar fila `Pending` y un reintento NO debe recobrar.
+- [ ] **HTTPS forzado**: configurar un Base URL `http://...` → el cobro debe fallar con error `CONFIG`.
 - [ ] Tarjeta inválida → mensaje en español visible al usuario.
 - [ ] **AmEx bloqueado**: probar con un PAN que empiece con `34` o `37` → frontend muestra "American Express no está disponible…" y backend devuelve 400 si se llama directo.
 - [ ] **Decision Manager**: confirmar en el dashboard de Cybersource que aparece `Device Fingerprint ID`, `AVS Code = Y`/`U`, y `Risk Score` razonable (<30 con donantes reales).

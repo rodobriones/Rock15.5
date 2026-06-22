@@ -1,7 +1,10 @@
 ﻿<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div v-if="isRegistrarPanelShown" class="well">
-        <h4>{{ t("headingThisRegistrationWasCompletedBy", { registration: registrationEntryTerms.registrationSingularTitleCase }) }}</h4>
+    <div v-if="isRegistrarPanelShown" class="well re-registrar">
+        <h4 class="re-registrar-heading">
+            <i class="fa fa-user-circle re-registrar-icon"></i>
+            {{ t("headingThisRegistrationWasCompletedBy", { registration: registrationEntryTerms.registrationSingularTitleCase }) }}
+        </h4>
         <template v-if="useLoggedInPersonForRegistrar">
             <div class="row">
                 <div class="col-md-6 col-sm-6">
@@ -205,3 +208,32 @@
 
     // #endregion
 </script>
+
+<style scoped>
+/* Inherits design tokens from the shell via the CSS cascade. */
+.re-registrar {
+    position: relative;
+    overflow: hidden;
+}
+
+.re-registrar::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, #3b82f6 0%, var(--re-primary, #2563eb) 100%);
+}
+
+.re-registrar-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+    color: var(--re-heading, #111827);
+}
+
+.re-registrar-icon {
+    color: var(--re-primary, #2563eb);
+    font-size: 1.1em;
+}
+</style>

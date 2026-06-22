@@ -85,6 +85,14 @@ export type RegistrationEntryState = {
     registrationSessionGuid: Guid;
     ownFamilyGuid: Guid;
     paymentPlan: RegistrationEntryCreatePaymentPlanRequestBag | null;
+    /** Vida Real: ¿el usuario desea factura FEL? Si es false se factura como CF. */
+    wantsInvoice: boolean;
+    /** Vida Real: NIT ingresado en la pantalla de pago. */
+    nit: string;
+    /** Vida Real: razón social devuelta por SAT (solo lectura/UX). */
+    nitName: string;
+    /** Vida Real: dirección devuelta por SAT (solo lectura/UX). */
+    nitAddress: string;
 };
 
 export type PaymentPlanConfiguration = {

@@ -264,6 +264,194 @@ namespace Rock.Blocks.Event
 
         #region Block Actions
 
+        #region Vida Real - NIT / FEL Validation
+
+        // Hosts permitidos para el endpoint de validación de NIT (anti-SSRF). Producción y pruebas.
+        private static readonly HashSet<string> _allowedNitApiHosts = new HashSet<string>( StringComparer.OrdinalIgnoreCase )
+        {
+            "apiv2.ifacere-fel.com",
+            "dev2.api.ifacere-fel.com"
+        };
+
+        // Rate limit best-effort en proceso para mitigar enumeración masiva de NITs (single-node).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Tuple<DateTime, int>> _nitRateBuckets
+            = new System.Collections.Concurrent.ConcurrentDictionary<string, Tuple<DateTime, int>>();
+
+        /// <summary>
+        /// Valida un NIT contra la API del certificador (retornarDatosCliente) y devuelve la razón
+        /// social registrada en SAT para mostrarla en la pantalla de pago antes de facturar en Odoo.
+        /// Mismo contrato que el bloque de donaciones. (Vida Real)
+        /// </summary>
+        [BlockAction( "ValidateNitInfo" )]
+        public BlockActionResult ValidateNitInfo( string nit )
+        {
+            var clientIp = RequestContext?.ClientInformation?.IpAddress ?? "unknown";
+            if ( !TryConsumeNitRateLimit( $"NitIp:{clientIp}", 10, TimeSpan.FromMinutes( 1 ) ) )
+            {
+                return ActionBadRequest( "Demasiadas validaciones. Espera un momento antes de reintentar." );
+            }
+
+            if ( nit.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "NIT vacío." );
+            }
+
+            // Limitar longitud del input para mitigar abuso/enumeración hacia la API externa.
+            if ( nit.Length > 32 )
+            {
+                return ActionBadRequest( "NIT inválido." );
+            }
+
+            var lookup = LookupNitFromExternalApi( nit );
+            if ( !lookup.ok )
+            {
+                return ActionBadRequest( lookup.errorMessage );
+            }
+
+            return ActionOk( new { name = lookup.name, address = lookup.address } );
+        }
+
+        /// <summary>
+        /// Consulta la API del certificador FEL usando los Global Attributes
+        /// <c>OdooNitApiUrl</c> / <c>OdooNitApiBearerToken</c> y devuelve nombre y dirección
+        /// saneados desde SAT. El nombre fiscal proviene siempre del proveedor, nunca del cliente. (Vida Real)
+        /// </summary>
+        private (bool ok, string name, string address, string errorMessage) LookupNitFromExternalApi( string nit )
+        {
+            if ( nit.IsNullOrWhiteSpace() )
+            {
+                return ( false, null, null, "NIT vacío." );
+            }
+
+            // FEL exige el NIT sin guiones/espacios: solo alfanumérico, en mayúsculas.
+            var cleanNit = new string( nit.Where( char.IsLetterOrDigit ).ToArray() ).ToUpperInvariant();
+            if ( cleanNit.IsNullOrWhiteSpace() || cleanNit.Length > 32 )
+            {
+                return ( false, null, null, "NIT inválido." );
+            }
+
+            var apiUrl = GlobalAttributesCache.Value( "OdooNitApiUrl" );
+            var rawToken = GlobalAttributesCache.Value( "OdooNitApiBearerToken" );
+            var apiToken = Encryption.DecryptString( rawToken );
+            if ( apiToken.IsNullOrWhiteSpace() )
+            {
+                // Fallback si el Global Attribute se guardó como texto plano en vez de encriptado.
+                apiToken = rawToken;
+            }
+
+            if ( apiUrl.IsNullOrWhiteSpace() || apiToken.IsNullOrWhiteSpace() )
+            {
+                return ( false, null, null, "La validación de NIT no está configurada (Global Attributes OdooNitApiUrl / OdooNitApiBearerToken)." );
+            }
+
+            // Validar que la URL sea HTTPS absoluta y apunte a un host permitido (anti-SSRF).
+            if ( !Uri.TryCreate( apiUrl.Trim(), UriKind.Absolute, out var apiUri ) || apiUri.Scheme != Uri.UriSchemeHttps )
+            {
+                return ( false, null, null, "La API de validación de NIT está mal configurada (debe ser https)." );
+            }
+
+            if ( !_allowedNitApiHosts.Contains( apiUri.Host ) )
+            {
+                return ( false, null, null, "La API de validación de NIT apunta a un host no permitido." );
+            }
+
+            try
+            {
+                var requestXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<RetornaDatosClienteRequest>\n"
+                    + "  <nit>" + System.Security.SecurityElement.Escape( cleanNit ) + "</nit>\n"
+                    + "</RetornaDatosClienteRequest>";
+
+                using ( var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds( 15 ) } )
+                {
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Bearer", apiToken );
+                    using ( var content = new System.Net.Http.StringContent( requestXml, Encoding.UTF8, "application/xml" ) )
+                    {
+                        var response = client.PostAsync( apiUri, content ).GetAwaiter().GetResult();
+                        var responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+
+                        if ( !response.IsSuccessStatusCode )
+                        {
+                            return ( false, null, null, $"Error de la API de NIT (HTTP {( int ) response.StatusCode})." );
+                        }
+
+                        // La API responde 200 también para NIT inexistente: sin <nombre> se trata como inválido.
+                        var matchName = System.Text.RegularExpressions.Regex.Match( responseString, @"<nombre>(.*?)</nombre>", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline );
+                        var name = matchName.Success ? SanitizeSatText( matchName.Groups[1].Value, 120 ) : string.Empty;
+
+                        if ( name.IsNullOrWhiteSpace() )
+                        {
+                            return ( false, null, null, "NIT no encontrado en SAT." );
+                        }
+
+                        var matchAddr = System.Text.RegularExpressions.Regex.Match( responseString, @"<direccion>(.*?)</direccion>", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline );
+                        var address = matchAddr.Success ? SanitizeSatText( matchAddr.Groups[1].Value, 200 ) : string.Empty;
+
+                        return ( true, name, address, null );
+                    }
+                }
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+                return ( false, null, null, "Ocurrió un error al consultar el NIT." );
+            }
+        }
+
+        /// <summary>
+        /// Limpia el texto devuelto por la API de SAT: quita tags, decodifica entidades,
+        /// elimina caracteres de control y recorta a la longitud máxima. (Vida Real)
+        /// </summary>
+        private static string SanitizeSatText( string value, int maxLength )
+        {
+            var clean = System.Text.RegularExpressions.Regex.Replace( value ?? string.Empty, "<[^>]*>", string.Empty );
+            clean = System.Net.WebUtility.HtmlDecode( clean ).Trim();
+            clean = new string( clean.Where( c => !char.IsControl( c ) ).ToArray() );
+            return clean.Length > maxLength ? clean.Substring( 0, maxLength ) : clean;
+        }
+
+        /// <summary>
+        /// Rate limit de ventana deslizante best-effort, en proceso. Devuelve true si se permite la operación. (Vida Real)
+        /// </summary>
+        private static bool TryConsumeNitRateLimit( string bucketKey, int maxRequests, TimeSpan window )
+        {
+            if ( bucketKey.IsNullOrWhiteSpace() || maxRequests <= 0 )
+            {
+                return true;
+            }
+
+            // Cota de memoria: el diccionario es estático y nunca se purga por entrada;
+            // si crece demasiado (muchas IPs distintas), se reinicia best-effort.
+            if ( _nitRateBuckets.Count > 5000 )
+            {
+                _nitRateBuckets.Clear();
+            }
+
+            var now = DateTime.UtcNow;
+            var allowed = true;
+            _nitRateBuckets.AddOrUpdate( bucketKey,
+                _ => Tuple.Create( now, 1 ),
+                ( _, existing ) =>
+                {
+                    if ( now - existing.Item1 > window )
+                    {
+                        return Tuple.Create( now, 1 );
+                    }
+
+                    if ( existing.Item2 >= maxRequests )
+                    {
+                        allowed = false;
+                        return existing;
+                    }
+
+                    return Tuple.Create( existing.Item1, existing.Item2 + 1 );
+                } );
+
+            return allowed;
+        }
+
+        #endregion Vida Real - NIT / FEL Validation
+
         /// <summary>
         /// Checks the discount code provided. If a null/blank string is used then checks for AutoApplied discounts.
         /// </summary>
@@ -5362,9 +5550,18 @@ namespace Rock.Blocks.Event
 
                     if ( settings.WorkflowTypeIds.Any() )
                     {
+                        // Vida Real: el NIT capturado en la pantalla de pago viaja a los workflows de
+                        // registro (p. ej. "Odoo - Venta de Evento") como atributos pre-poblados. Los
+                        // workflow types que no tengan estos atributos simplemente ignoran las llaves.
+                        var workflowAttributeValues = new Dictionary<string, string>
+                        {
+                            ["Nit"] = ( args.Nit ?? string.Empty ).Trim(),
+                            ["WantsInvoice"] = args.WantsInvoice.ToString()
+                        };
+
                         foreach ( var workflowTypeId in settings.WorkflowTypeIds )
                         {
-                            newRegistration.LaunchWorkflow( workflowTypeId, newRegistration.ToString(), null, null );
+                            newRegistration.LaunchWorkflow( workflowTypeId, newRegistration.ToString(), workflowAttributeValues, null );
                         }
                     }
                 }
