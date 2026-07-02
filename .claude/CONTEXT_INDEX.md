@@ -26,6 +26,20 @@
 
 ---
 
+### Modulo Eventos/Boletería Custom (producto propio, 2026-06-29 →)
+
+| Archivo | Proposito | Cuando leerlo |
+|---|---|---|
+| `C:\Repos\Rock18.1\docs\eventos-custom\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo de boletería propio**: modelo de datos `_com_vidareal_Events_*` (7 entidades incl. `EventStaff`), arquitectura, decisiones locked, y el historial completo de sesiones en §9.x (checkout 2026, hold/timer, mutex Charging, FEL multilínea, NIT/SAT, entrega QR+PDF, reportería, permisos por-usuario, scanner continuo con contadores, preguntas al asistente con catálogo/plantillas, invitados como personas reales + known relationships) | Al retomar CUALQUIER trabajo del módulo de eventos/boletería. Leer primero §9 (estado) y la sesión §9.x más reciente. |
+| `C:\Repos\Rock18.1\Plugin.VidaRealEvents\README.md` | Tabla de las migraciones 001–017, modelo de permisos (Rock Administration / Staff / asignados) y build/deploy del DLL | Al agregar una migración nueva o desplegar el plugin. |
+| `C:\Repos\Rock18.1\Rock\Model\Eventos\ARCHITECTURE.md` | **Mapa de capas de la arquitectura hexagonal** (adaptadores de entrada/núcleo/adaptadores de salida/dominio), convenciones (servicios estáticos sin interfaces, resultados de dominio, fronteras de concurrencia compartidas) y estructura del front en partials | Antes de tocar código del módulo — di dónde va cada cosa nueva. |
+| `C:\Repos\Rock18.1\docs\eventos-custom\SMOKE_TESTS.md` | Runbook de pruebas runtime: pago con tarjeta end-to-end, holds, gratis/promo, invitados/preguntas, permisos, job de mantenimiento — con qué verificar en BD/logs en cada una | Al probar en runtime después de un deploy o cambio del módulo. |
+
+**Código:** entidades+servicios en `Rock/Model/Eventos/` (incl. `AttendeeQuestionService`), bloques en `Rock.Blocks/Eventos/` + `src/Eventos/*.obs` (EventAdmin, EventCheckout, MyTickets, TicketScanner, EventReport, QuestionCatalog), bags en `Rock.ViewModels/Blocks/Eventos/`. NO reusa `Registration*`; supera a QREVENT para eventos con boleto. Preguntas al asistente = Person Attributes (categoría "Preguntas de Eventos"); plantillas en System Setting `com_vidareal_EventQuestionTemplates`.
+**Arquitectura (2026-07-02, hexagonal):** bloques = adaptadores delgados; lógica en servicios de `Rock/Model/Eventos/Services/` (`CheckoutService` cobro/finalize, `HoldService` reservas/cupo, `PricingService`, `CheckoutAttendeeService`, `NitLookupService`, + adaptadores FelService/PaymentService/TicketEmail/TicketPdf/Qr). **Leer primero `Rock/Model/Eventos/ARCHITECTURE.md`.**
+
+---
+
 ### Modulo OdooEventSale (Facturación FEL de eventos via Odoo)
 
 | Archivo | Proposito | Cuando leerlo |
@@ -149,13 +163,11 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 
 ---
 
-## Estado del repositorio (2026-06-15)
+## Estado del repositorio (2026-07-02)
 
 - **Branch activo:** `hotfix-18.1`
-- **Ultimo commit:** `c205d270a3` — "Documentacion"
+- **Ultimo commit:** `7fc618ef10` — "Up to Date, translate, eventos, odoo"
 - **Archivos sin commit (nuevos, sin seguimiento):**
-  - `Plugin.OdooEventSale/` — módulo completo (workflow action Odoo FEL + docs)
-  - `Rock.Blocks/Security/VRSimpleRegistration.cs`
-  - `Rock.JavaScript.Obsidian.Blocks/src/Security/vrSimpleRegistration.obs`
-- **Último trabajo (2026-06-15):** NIT/FEL en la pantalla de pago de eventos. Modificados: `Rock.Blocks/Event/RegistrationEntry.cs`, `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs`, `src/Event/RegistrationEntry/payment.partial.obs` + `types.partial.ts`, `src/Event/registrationEntry.obs`, viewmodel `registrationEntryArgsBag.d.ts`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/CONTEXT.md`.
+  - `Plugin.VidaRealEvents/`, `Rock/Model/Eventos/`, `Rock.Blocks/Eventos/`, `Rock.JavaScript.Obsidian.Blocks/src/Eventos/`, `Rock.ViewModels/Blocks/Eventos/`, `docs/` — módulo Eventos/Boletería custom completo
+- **Último trabajo (2026-07-02):** módulo Eventos/Boletería — **auditoría adversarial de seguridad + integridad financiera** (workflow 52 agentes; 9 hallazgos confirmados, todos corregidos). CRÍTICO: el pago con tarjeta reventaba en `SaveChanges` (FK `AccountId`/`TransactionTypeValueId` sin fijar) → toda orden pagada quedaba en `Charging`; fijado + valida `Event.FinancialAccountId` antes de cobrar. Además: SSTI Lava en correo, TOCTOU de sobreventa en el mutex, fuga de `UniqueCode`, `DeleteEvent`/`EventStaff`, write-back de homónimos. Diferidos también resueltos: **ServiceJob `Rock.Jobs.EventsMaintenance`** (limpia holds + reconcilia `Charging`, cron 5 min) e **índice UNIQUE `(EventId,Code)` en PromoCode** (migración 017). Detalle en `docs/eventos-custom/RESEARCH_Y_PLAN.md` §9.28. **Pendiente: reciclar app pool → migración 017; smoke test de pago con tarjeta real (requiere `FinancialAccountId` en el evento).**
 - **Archivos con cambios sin commitear (modified):** Ver `git status` para lista actual.

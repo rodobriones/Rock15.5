@@ -37,7 +37,8 @@ namespace com.vidareal.Translator.Rest
         private static int _newThisWindow;
         private static DateTime _windowStartUtc = DateTime.UtcNow;
 
-        private static bool TryReserveNewTranslations( int count )
+        // ¿Hay cupo en la ventana actual? (resetea la ventana si paso 1h).
+        private static bool ThrottleAllowsNew()
         {
             lock ( ThrottleLock )
             {
@@ -47,13 +48,22 @@ namespace com.vidareal.Translator.Rest
                     _newThisWindow = 0;
                 }
 
-                if ( _newThisWindow >= MaxNewPerHour )
-                {
-                    return false;
-                }
+                return _newThisWindow < MaxNewPerHour;
+            }
+        }
 
+        // Cuenta SOLO las traducciones realmente producidas. Si la IA falla o
+        // devuelve parcial, no consumimos cupo -> una caida transitoria de Azure
+        // ya no auto-deniega el servicio durante una hora.
+        private static void RecordNewTranslations( int count )
+        {
+            if ( count <= 0 )
+            {
+                return;
+            }
+            lock ( ThrottleLock )
+            {
                 _newThisWindow += count;
-                return true;
             }
         }
 
@@ -82,6 +92,10 @@ namespace com.vidareal.Translator.Rest
         public const string AttrIncludeSelectors = "IncludeSelectors";
         public const string AttrExcludeSelectors = "ExcludeSelectors";
         public const string AttrUiSelectWhitelist = "UiSelectWhitelist";
+        public const string AttrShowSwitcher = "ShowSwitcher";
+        public const string AttrSourceLanguage = "SourceLanguage";
+        public const string AttrAvailableLanguages = "AvailableLanguages";
+        public const string AttrSwitcherContainer = "SwitcherContainer";
 
         private static string Cfg( string key )
         {
@@ -103,10 +117,35 @@ namespace com.vidareal.Translator.Rest
                 lang = "es";
             }
 
+            var sourceLanguage = Cfg( AttrSourceLanguage );
+            if ( string.IsNullOrWhiteSpace( sourceLanguage ) )
+            {
+                sourceLanguage = "en";
+            }
+
+            // "codigo|Etiqueta" por linea -> [{ code, label }]
+            var availableLanguages = ( Cfg( AttrAvailableLanguages ) ?? string.Empty )
+                .Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries )
+                .Select( l => l.Trim() )
+                .Where( l => l.Length > 0 )
+                .Select( l =>
+                {
+                    var parts = l.Split( '|' );
+                    var code = parts[0].Trim();
+                    var label = parts.Length > 1 ? parts[1].Trim() : code;
+                    return new { code, label };
+                } )
+                .Where( x => x.code.Length > 0 )
+                .ToList();
+
             return Ok( new
             {
                 enabled,
                 targetLanguage = lang,
+                sourceLanguage,
+                showSwitcher = ( Cfg( AttrShowSwitcher ) ?? "false" ).AsBoolean(),
+                switcherContainer = Cfg( AttrSwitcherContainer ) ?? string.Empty,
+                availableLanguages,
                 include = Cfg( AttrIncludeSelectors ) ?? string.Empty,
                 exclude = Cfg( AttrExcludeSelectors ) ?? string.Empty,
                 uiSelectWhitelist = Cfg( AttrUiSelectWhitelist ) ?? string.Empty
@@ -143,6 +182,19 @@ namespace com.vidareal.Translator.Rest
             var lang = string.IsNullOrWhiteSpace( request.TargetLanguage )
                 ? ( Cfg( AttrTargetLanguage ) ?? "es" )
                 : request.TargetLanguage;
+
+            // El idioma viene del cliente (switcher/localStorage). La columna es
+            // nvarchar(10); validamos formato ISO razonable para evitar truncacion
+            // y cache basura por manipulacion. Si no, default configurado.
+            lang = ( lang ?? "" ).Trim();
+            if ( !Regex.IsMatch( lang, "^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,4})?$" ) )
+            {
+                lang = ( Cfg( AttrTargetLanguage ) ?? "es" ).Trim();
+                if ( lang.Length == 0 || lang.Length > 10 )
+                {
+                    lang = "es";
+                }
+            }
 
             // Normaliza, descarta vacios/gigantes, deduplica por texto normalizado.
             var byHash = new Dictionary<string, string>();   // hash -> textoNormalizado
@@ -182,43 +234,56 @@ namespace com.vidareal.Translator.Rest
                 // Faltantes = no estan en BD.
                 var missingHashes = hashes.Where( h => !resolvedHashes.Contains( h ) ).ToList();
 
-                if ( missingHashes.Count > 0 && TryReserveNewTranslations( missingHashes.Count ) )
+                // Provider primero: si no esta configurado, no consumimos el
+                // presupuesto del throttle (antes se reservaba aunque no tradujera).
+                var provider = missingHashes.Count > 0 ? GetProvider() : null;
+                if ( provider != null && ThrottleAllowsNew() )
                 {
-                    var provider = GetProvider();
-                    if ( provider != null )
+                    var missingTexts = missingHashes.Select( h => byHash[h] ).ToList();
+                    Dictionary<int, string> translated;
+                    try
                     {
-                        var missingTexts = missingHashes.Select( h => byHash[h] ).ToList();
-                        Dictionary<int, string> translated;
+                        translated = provider.TranslateBatch( missingTexts, lang );
+                    }
+                    catch ( Exception )
+                    {
+                        translated = new Dictionary<int, string>(); // degradar: dejar originales
+                    }
+
+                    var produced = 0;
+                    for ( int i = 0; i < missingTexts.Count; i++ )
+                    {
+                        if ( !translated.TryGetValue( i, out var t ) || string.IsNullOrWhiteSpace( t ) )
+                        {
+                            continue;
+                        }
+
+                        // Sanitiza y RE-VALIDA: si solo era markup, Sanitize deja "" ->
+                        // no persistir/devolver vacio (borraria el texto de la UI).
+                        t = Sanitize( t );
+                        if ( string.IsNullOrWhiteSpace( t ) )
+                        {
+                            continue;
+                        }
+
+                        var norm = missingTexts[i];
+                        var hash = missingHashes[i];
                         try
                         {
-                            translated = provider.TranslateBatch( missingTexts, lang );
+                            // El IF NOT EXISTS + indice unico cubre el caso normal; el
+                            // try cubre la carrera (dos requests, mismo string nuevo).
+                            TranslationStore.SaveTranslated( rockContext, lang, norm, hash, t, provider.Name );
                         }
                         catch ( Exception )
                         {
-                            translated = new Dictionary<int, string>(); // degradar: dejar originales
+                            // ya lo inserto otro request; igual devolvemos la traduccion
                         }
-
-                        for ( int i = 0; i < missingTexts.Count; i++ )
-                        {
-                            if ( translated.TryGetValue( i, out var t ) && !string.IsNullOrWhiteSpace( t ) )
-                            {
-                                t = Sanitize( t );
-                                var norm = missingTexts[i];
-                                var hash = missingHashes[i];
-                                try
-                                {
-                                    // El IF NOT EXISTS + indice unico cubre el caso normal; el
-                                    // try cubre la carrera (dos requests, mismo string nuevo).
-                                    TranslationStore.SaveTranslated( rockContext, lang, norm, hash, t, provider.Name );
-                                }
-                                catch ( Exception )
-                                {
-                                    // ya lo inserto otro request; igual devolvemos la traduccion
-                                }
-                                output[norm] = t;
-                            }
-                        }
+                        output[norm] = t;
+                        produced++;
                     }
+
+                    // Solo descuenta del cupo lo realmente traducido (no la falla).
+                    RecordNewTranslations( produced );
                 }
             }
 

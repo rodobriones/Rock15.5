@@ -1,0 +1,326 @@
+<template>
+    <Panel type="block" title="Eventos • Reportería">
+        <template #default>
+            <NotificationBox v-if="config.notLogged" alertType="warning">
+                Debes iniciar sesión para ver la reportería.
+            </NotificationBox>
+
+            <NotificationBox v-else-if="!config.canView" alertType="warning">
+                No tienes permiso para ver la reportería.
+            </NotificationBox>
+
+            <NotificationBox v-else-if="config.events.length === 0" alertType="info">
+                No tienes eventos asignados en la reportería. Pide a un administrador que te asigne
+                los eventos que puedes ver (Administrar Eventos → Permisos).
+            </NotificationBox>
+
+            <div v-else>
+                <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+
+                <div class="row">
+                    <div class="col-md-5">
+                        <DropDownList v-model="selectedEventId"
+                                      label="Evento"
+                                      :items="eventItems"
+                                      :showBlankItem="false"
+                                      :enhanceForLongLists="true"
+                                      :grouped="true" />
+                    </div>
+                    <div class="col-md-7 text-right">
+                        <RockButton btnType="default" btnSize="sm" :disabled="busy || !selectedEventId" @click="loadReport">
+                            {{ busy ? "Cargando..." : "Recargar" }}
+                        </RockButton>
+                        <RockButton btnType="primary" btnSize="sm" :disabled="!report || report.rows.length === 0" @click="downloadCsv">
+                            Descargar CSV
+                        </RockButton>
+                    </div>
+                </div>
+
+                <div v-if="busy" class="text-muted">Cargando reporte...</div>
+
+                <div v-else-if="report">
+                    <!-- Estadísticas -->
+                    <div class="erStats">
+                        <div class="erStat">
+                            <span class="erStatVal">{{ report.soldCount }}</span>
+                            <span class="erStatLabel">Inscritos</span>
+                        </div>
+                        <div class="erStat">
+                            <span class="erStatVal">{{ report.checkedInCount }}</span>
+                            <span class="erStatLabel">Check-ins</span>
+                        </div>
+                        <div class="erStat">
+                            <span class="erStatVal">{{ report.attendancePct }}%</span>
+                            <span class="erStatLabel">Asistencia</span>
+                        </div>
+                        <div class="erStat">
+                            <span class="erStatVal">{{ fmtCurrency(report.revenue) }}</span>
+                            <span class="erStatLabel">Ingresos</span>
+                        </div>
+                        <div class="erStat">
+                            <span class="erStatVal">{{ report.paidOrderCount }}</span>
+                            <span class="erStatLabel">Órdenes pagadas</span>
+                        </div>
+                    </div>
+
+                    <!-- Desglose por tipo de entrada -->
+                    <h5 class="mt-4">Por tipo de entrada</h5>
+                    <table class="grid-table table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th class="text-right">Vendidos</th>
+                                <th class="text-right">Check-ins</th>
+                                <th class="text-right">Cupo</th>
+                                <th class="text-right">Disponibles</th>
+                                <th class="text-right">Ingresos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="t in report.byType" :key="t.id">
+                                <td>{{ t.name }}</td>
+                                <td class="text-right">{{ t.sold }}</td>
+                                <td class="text-right">{{ t.checkedIn }}</td>
+                                <td class="text-right">{{ t.capacity == null ? "∞" : t.capacity }}</td>
+                                <td class="text-right">{{ t.capacity == null ? "∞" : Math.max(0, t.capacity - t.sold) }}</td>
+                                <td class="text-right">{{ fmtCurrency(revenueByType[t.id] ?? 0) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Listado de inscritos -->
+                    <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+                        <h5 class="mb-0">Inscritos ({{ filteredRows.length }})</h5>
+                        <div class="d-flex" style="gap: 8px;">
+                            <div style="width: 170px;">
+                                <DropDownList v-model="checkinFilter" :items="checkinFilterOptions" :showBlankItem="false" />
+                            </div>
+                            <div style="width: 260px;">
+                                <TextBox v-model="search" placeholder="Buscar por nombre, código, comprador..." />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="report.rows.length === 0" class="text-muted">Este evento aún no tiene inscritos.</div>
+
+                    <table v-else class="grid-table table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Asistente</th>
+                                <th>Tipo</th>
+                                <th>Código</th>
+                                <th>Check-in</th>
+                                <th>Comprador</th>
+                                <th>Compra</th>
+                                <th class="text-right">Orden</th>
+                                <th class="text-right">Precio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in filteredRows" :key="r.ticketId">
+                                <td>{{ r.attendeeName || "— (sin asignar)" }}</td>
+                                <td>{{ r.ticketTypeName }}</td>
+                                <td class="notranslate" style="font-family: monospace;">{{ r.uniqueCode }}</td>
+                                <td>
+                                    <span v-if="r.checkedIn" class="label label-success">✓ {{ fmtDateTime(r.checkedInDateTime) }}</span>
+                                    <span v-else class="label label-default">Pendiente</span>
+                                </td>
+                                <td>{{ r.buyerName }}</td>
+                                <td style="white-space:nowrap;">{{ r.purchasedDateTime ? fmtDateTime(r.purchasedDateTime) : "—" }}</td>
+                                <td class="text-right">#{{ r.orderId }}</td>
+                                <td class="text-right">{{ fmtCurrency(r.pricePaid) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+.erStats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.erStat {
+    flex: 1; min-width: 130px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 14px 18px; display: flex; flex-direction: column; gap: 2px;
+}
+.erStatVal { font-size: 22px; font-weight: 700; color: #0f172a; }
+.erStatLabel { font-size: 12px; color: #64748b; }
+</style>
+
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type EventOptionBag = { eventId: number; name: string; startDateTime: string; status: string };
+type TypeStatBag = { id: number; name: string; sold: number; checkedIn: number; capacity: number | null };
+type AttendeeRowBag = {
+    ticketId: number; attendeeName: string | null; ticketTypeId: number; ticketTypeName: string; uniqueCode: string;
+    checkedIn: boolean; checkedInDateTime: string | null; buyerName: string; orderId: number; pricePaid: number;
+    purchasedDateTime?: string | null;
+    answers?: Record<string, string> | null;
+};
+type ReportBag = {
+    eventName: string; startDateTime: string; venueName: string | null; status: string;
+    soldCount: number; checkedInCount: number; attendancePct: number; revenue: number; paidOrderCount: number;
+    byType: TypeStatBag[]; rows: AttendeeRowBag[];
+    questionColumns?: string[] | null;
+};
+type InitBag = { notLogged: boolean; canView: boolean; events: EventOptionBag[] };
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const busy = ref(false);
+const err = ref("");
+const report = ref<ReportBag | null>(null);
+const search = ref("");
+const checkinFilter = ref<string>("all");
+
+const checkinFilterOptions: ListItemBag[] = [
+    { value: "all", text: "Todos" },
+    { value: "in", text: "Con check-in" },
+    { value: "pending", text: "Pendientes" }
+];
+
+const statusEs: Record<string, string> = { Draft: "Borrador", Published: "Publicado", Closed: "Cerrado", Cancelled: "Cancelado" };
+
+// Selector agrupado: "Próximos" arriba, luego los pasados por año (con 200+ eventos al año
+// el dropdown plano era inmanejable; enhanceForLongLists agrega el buscador).
+const eventItems = computed<ListItemBag[]>(() =>
+    (config.events ?? []).map(e => {
+        const isUpcoming = new Date(e.startDateTime).getTime() >= Date.now() - 24 * 3600 * 1000;
+        return {
+            value: String(e.eventId),
+            text: `${e.name} — ${fmtDate(e.startDateTime)}${e.status !== "Published" ? ` (${statusEs[e.status] ?? e.status})` : ""}`,
+            category: isUpcoming ? "Próximos y en curso" : String(new Date(e.startDateTime).getFullYear())
+        };
+    }));
+
+const selectedEventId = ref<string>(config.events?.length ? String(config.events[0].eventId) : "");
+
+// Ingresos por tipo de entrada (suma de pricePaid de las filas; mismo criterio que el listado).
+const revenueByType = computed<Record<number, number>>(() => {
+    const map: Record<number, number> = {};
+    for (const r of report.value?.rows ?? []) {
+        map[r.ticketTypeId] = (map[r.ticketTypeId] ?? 0) + r.pricePaid;
+    }
+    return map;
+});
+
+const filteredRows = computed<AttendeeRowBag[]>(() => {
+    if (!report.value) {
+        return [];
+    }
+    const q = search.value.trim().toLowerCase();
+    return report.value.rows.filter(r => {
+        if (checkinFilter.value === "in" && !r.checkedIn) return false;
+        if (checkinFilter.value === "pending" && r.checkedIn) return false;
+        if (!q) return true;
+        return (r.attendeeName ?? "").toLowerCase().includes(q)
+            || r.uniqueCode.toLowerCase().includes(q)
+            || r.buyerName.toLowerCase().includes(q)
+            || r.ticketTypeName.toLowerCase().includes(q)
+            || String(r.orderId).includes(q);
+    });
+});
+
+async function loadReport(): Promise<void> {
+    if (!selectedEventId.value) {
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<ReportBag>("GetReport", { bag: { eventId: Number(selectedEventId.value) } });
+        if (res.isSuccess && res.data) {
+            report.value = res.data;
+        }
+        else {
+            err.value = res.errorMessage || "No se pudo cargar el reporte.";
+        }
+    }
+    catch {
+        err.value = "Error cargando el reporte.";
+    }
+    finally {
+        busy.value = false;
+    }
+}
+
+// CSV con BOM UTF-8 (para que Excel lea acentos), campos entrecomillados.
+// Anti CSV-injection: si el valor inicia con = + - @ (fórmula de Excel), se antepone un apóstrofo.
+function downloadCsv(): void {
+    if (!report.value) {
+        return;
+    }
+    const esc = (v: unknown): string => {
+        let s = String(v ?? "");
+        if (/^[=+\-@]/.test(s)) {
+            s = "'" + s;
+        }
+        return `"${s.replace(/"/g, "\"\"")}"`;
+    };
+    // Columnas dinámicas: las preguntas al asistente configuradas en el evento.
+    const qCols = report.value.questionColumns ?? [];
+    const lines = [
+        ["Asistente", "Tipo", "Código", "Check-in", "Fecha check-in", "Comprador", "Fecha compra", "Orden", "Precio", ...qCols].map(esc).join(","),
+        ...report.value.rows.map(r => [
+            r.attendeeName || "(sin asignar)",
+            r.ticketTypeName,
+            r.uniqueCode,
+            r.checkedIn ? "Sí" : "No",
+            r.checkedInDateTime ? fmtDateTime(r.checkedInDateTime) : "",
+            r.buyerName,
+            r.purchasedDateTime ? fmtDateTime(r.purchasedDateTime) : "",
+            r.orderId,
+            r.pricePaid.toFixed(2),
+            ...qCols.map(c => r.answers?.[c] ?? "")
+        ].map(esc).join(","))
+    ];
+    const blob = new Blob([String.fromCharCode(0xFEFF) + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reporte-${report.value.eventName.replace(/[^\w\dáéíóúñÁÉÍÓÚÑ -]/g, "").trim().replace(/\s+/g, "-").toLowerCase()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function fmtDate(value: string): string {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function fmtDateTime(value: string | null): string {
+    if (!value) {
+        return "";
+    }
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "" : d.toLocaleString("es-GT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtCurrency(value: number): string {
+    return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(value || 0);
+}
+
+// Al cambiar el evento seleccionado se recarga el reporte.
+watch(selectedEventId, () => {
+    search.value = "";
+    checkinFilter.value = "all";
+    void loadReport();
+});
+
+// Carga inicial del evento más reciente.
+if (selectedEventId.value) {
+    void loadReport();
+}
+</script>

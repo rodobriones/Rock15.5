@@ -1,5 +1,50 @@
 # Changes
 
+## 1.1.3 — Traducir etiquetas de botones `<input type=submit/button/reset>`
+- Rock (WebForms) usa `<input type="submit" value="...">` para muchos botones (p.ej. "Change Password"). El `value` de esos 3 tipos es la **etiqueta visible**, no un dato → ahora se traduce. **Sigue intacto** el `value` de cualquier otro input (text/password/email/hidden…) y de `<option>`. `ScriptVersion` → `9`.
+
+## 1.1.2 — Performance del observer + validación de idioma
+- **[Perf]** El `MutationObserver` ahora recolecta SOLO los subárboles añadidos/mutados (no re-barre todo `document.body` en cada mutación). Acumula roots y hace un único `resolve` por tanda (debounce). `matchingEls` incluye el propio root (un `<input>`/`<select>` añadido puede SER el root). Las pasadas full-body quedan solo para carga/late-render/navegación (`rescanBurst`). Eliminado `scheduleRun` (sin uso).
+- **[Robustez]** `Resolve` valida el código de idioma del cliente (regex ISO `^[a-zA-Z]{2,3}(-…)?$`, columna `nvarchar(10)`) → evita truncación SQL y caché basura por manipulación de localStorage.
+- `ScriptVersion` → `8`.
+
+## 1.1.1 — Endurecimiento de producción (auditoría C# + JS)
+**Backend:**
+- [Crítico] `AzureOpenAiProvider`: solo se confía en una respuesta COMPLETA (1 clave string por texto enviado); respuesta parcial/renumerada/no-JSON se descarta → evita envenenar la caché con traducciones cruzadas. Parseo en try/catch.
+- [Crítico ya hecho en 1.0.x] `ConfigureAwait(false)` en la llamada a Azure (evita deadlock sync-over-async).
+- [Alto] Sanitización re-valida: si tras quitar markup queda "", no se persiste ni se devuelve (no borra texto de UI).
+- [Alto] Throttle: cuenta SOLO traducciones realmente producidas (no reserva por adelantado) → una caída de Azure ya no auto-deniega el servicio 1h.
+- [Alto] `GetList`: `TOP (@take)` parametrizado + clamp 1..5000.
+- [Mantenibilidad] Migración 001 ahora solo crea la tabla (quitados los Global Attributes que 002 borraba).
+- [Medio] `TranslatorInjection`: `.Trim()` evita acumular líneas en blanco; el toggle envuelve `Apply` en try/catch (un sitio que falle no tumba el guardado).
+- [Bajo] Grid: `EncodeHtml` en el campo de texto original del modal de edición.
+
+**Frontend:**
+- [Alto] `seenText` se marca solo cuando el texto ya está en caché → un nodo no resuelto se reintenta en vez de quedar en inglés permanente.
+- [Medio] `localStorage`: al llenarse la cuota, purga las claves de traducción y reintenta (no degrada a "siempre pide al server").
+- Test: caso de BOM/zero-width INTERNO (blinda la paridad de normalización JS↔C#).
+- Cosmético: acentos por entidad en headers del grid.
+- Falso positivo descartado: la paridad de normalización JS↔C# es correcta (el `\s` de JS SÍ incluye U+FEFF; verificado con Node).
+
+`ScriptVersion` → `7`.
+
+## 1.1.0 — Switcher con diseño de pills deslizantes (estilo registrationEntry)
+- El switcher global ahora replica el `.re-language-switcher` de `registrationEntry.obs`: pill flotante al borde derecho que muestra el idioma activo (54px) y se expande en hover; activo en azul (`#3b43f6`). CSS inyectado vía `<style>` (las clases del .obs son scoped). z-index 1030 (debajo de modales), guard de iframe. Soporta N idiomas y modo en-contenedor (`vrtr-inline`).
+- `ScriptVersion` → `5`.
+
+## 1.0.9 — Switcher montable en el header (modo Weglot, no flotante)
+- Nueva setting `Switcher Container Selector`: si se pone un selector CSS (ej. `#secPageTitle`), el switcher se monta EN FLUJO dentro de ese elemento (no flota, no se sobrepone). Vacío = flotante abajo-derecha (fallback). `GetConfig` lo expone; `translator.js` lo consume con `safeQuery`.
+- `ScriptVersion` → `4`.
+
+## 1.0.8 — Fix posicionamiento del switcher (no tapa modales ni se duplica)
+- Switcher con `z-index:1030` (debajo del backdrop de modales de Rock = 1040): ya no tapa los diálogos.
+- No se renderiza dentro de iframes: los modales de Rock cargan contenido en iframe y el script corría ahí duplicando el switcher; ahora solo aparece en la ventana principal (la traducción dentro del iframe sigue funcionando).
+- `ScriptVersion` → `3` (cache-busting; re-activar el toggle re-inyecta `?v=3`).
+
+## 1.0.7 — Switcher de idioma (tipo Weglot) + grid de traducciones editable
+- **Switcher de idioma**: widget flotante (vanilla JS) que el usuario usa para elegir idioma; persiste en localStorage y recarga (cada idioma tiene su caché). Config nueva en el bloque: `Show Language Switcher`, `Source Language` (al elegirlo no traduce, muestra el original), `Available Languages` (`codigo|Etiqueta` por línea). `GetConfig` los expone.
+- **Grid de traducciones** (`TranslationList.ascx`, migración 003): página del plugin ahora tiene un 2º bloque para **ver / buscar / filtrar por idioma / editar / excluir / borrar** las traducciones cacheadas. `TranslationStore` ganó `GetList/GetById/Update/Delete/GetLanguages`.
+
 ## 1.0.6 — Prompt de traducción natural/idiomática
 - El system prompt de `AzureOpenAiProvider` ahora pide traducción **natural e idiomática** (no literal), con contexto (UI de Rock RMS), registro de microcopy de UI, consistencia de términos y desambiguación por significado más común en software. Antes solo decía "translate". (Las traducciones ya cacheadas no cambian retroactivamente; purgar caché para regenerarlas con el nuevo prompt.)
 

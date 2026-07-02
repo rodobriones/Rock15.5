@@ -1,0 +1,81 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- STEP 4: Pago — contador del hold + pasarela hospedada (o confirmación directa si es gratis). -->
+<template>
+    <div class="ecNarrow">
+        <!-- El contador de la reserva vive en el shell (visible en pasos 2-4). -->
+        <h2 class="ecSectionTitle">{{ isFree ? "Confirmación" : "Pago" }}</h2>
+
+        <div class="ecPayTotal">
+            <span class="ecPayTotalLabel">Total a pagar</span>
+            <span class="ecPayTotalValue ecMono">{{ isFree ? "Gratis" : formatCurrency(grandTotal) }}</span>
+        </div>
+
+        <!-- Entrada gratuita: sin pasarela, solo confirmar -->
+        <div v-if="isFree" class="ecPay">
+            <NotificationBox alertType="success">Estas entradas no tienen costo. Confirma para recibir tus boletos.</NotificationBox>
+            <NotificationBox v-if="gatewayError" alertType="danger">{{ gatewayError }}</NotificationBox>
+            <div class="ecActions">
+                <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
+                <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !holdActive || holdExpired" @click="confirmFree" autoDisable>
+                    {{ busy ? "Procesando…" : "Confirmar entradas" }}
+                </RockButton>
+            </div>
+        </div>
+
+        <!-- Entrada con costo: pasarela de pago -->
+        <div v-else class="ecPay">
+            <span class="ecPayHead">Datos de pago</span>
+            <RockForm ref="paymentForm" @submit="onPaymentFormSubmit">
+                <NotificationBox v-if="gatewayError" alertType="danger">{{ gatewayError }}</NotificationBox>
+                <RockValidation :errors="gatewayValidationFields" />
+
+                <div v-if="gatewayControlModel" class="ecGateway">
+                    <GatewayControl :gatewayControlModel="gatewayControlModel"
+                                    :amountToPay="grandTotal"
+                                    @success="onGatewaySuccess"
+                                    @error="onGatewayError"
+                                    @validation="onGatewayValidation" />
+                </div>
+                <NotificationBox v-else alertType="warning">
+                    Cargando pasarela de pago…
+                </NotificationBox>
+
+                <div class="ecActions">
+                    <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
+                    <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !gatewayControlModel || !holdActive || holdExpired" @click="onPayClick" autoDisable>
+                        {{ busy ? "Procesando…" : `Pagar ${formatCurrency(grandTotal)}` }}
+                    </RockButton>
+                </div>
+            </RockForm>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockForm from "@Obsidian/Controls/rockForm.obs";
+import RockValidation from "@Obsidian/Controls/rockValidation.obs";
+import GatewayControl from "@Obsidian/Controls/gatewayControl.obs";
+import { useCheckoutState } from "./checkoutState.partial";
+
+const {
+    busy,
+    isFree,
+    grandTotal,
+    formatCurrency,
+    holdActive,
+    holdExpired,
+    gatewayControlModel,
+    gatewayError,
+    gatewayValidationFields,
+    paymentForm,
+    backToReview,
+    confirmFree,
+    onPayClick,
+    onPaymentFormSubmit,
+    onGatewaySuccess,
+    onGatewayError,
+    onGatewayValidation
+} = useCheckoutState();
+</script>

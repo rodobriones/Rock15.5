@@ -47,6 +47,9 @@ namespace com.vidareal.Translator.Providers
 
             var systemPrompt =
                 $"You localize user-interface strings of Rock RMS (a church management web application) into the language with ISO code '{targetLanguage}'. " +
+                "The input strings may be in ANY language: the app mixes English core UI with custom modules written in Spanish or other languages. " +
+                $"For EACH string, detect its current language and translate it INTO '{targetLanguage}'. " +
+                $"If a string is ALREADY in '{targetLanguage}', return it unchanged. Never assume the source language is English. " +
                 "Produce NATURAL, IDIOMATIC translations using the standard UI terminology and conventions a native speaker expects in software - never literal word-for-word. " +
                 "Match the register of UI microcopy: concise, imperative for buttons/actions, and keep a similar length so it fits the layout. " +
                 "Be CONSISTENT: translate the same term the same way every time. " +
@@ -76,25 +79,36 @@ namespace com.vidareal.Translator.Providers
                 return result; // fallo duro tras reintento -> el llamador deja originales
             }
 
-            var parsed = JObject.Parse( content );
-            var message = parsed["choices"]?[0]?["message"]?["content"]?.ToString();
-            if ( string.IsNullOrWhiteSpace( message ) )
+            try
             {
-                return result;
-            }
-
-            var map = JObject.Parse( message );
-            foreach ( var prop in map.Properties() )
-            {
-                // Solo aceptamos valores string; un objeto/array seria basura como "traduccion".
-                if ( prop.Value.Type == JTokenType.String
-                    && int.TryParse( prop.Name, out var idx ) && idx >= 0 && idx < texts.Count )
+                var parsed = JObject.Parse( content );
+                var message = parsed["choices"]?[0]?["message"]?["content"]?.ToString();
+                if ( string.IsNullOrWhiteSpace( message ) )
                 {
-                    result[idx] = prop.Value.ToString();
+                    return result;
+                }
+
+                var map = JObject.Parse( message );
+                foreach ( var prop in map.Properties() )
+                {
+                    // Solo aceptamos valores string; un objeto/array seria basura como "traduccion".
+                    if ( prop.Value.Type == JTokenType.String
+                        && int.TryParse( prop.Name, out var idx ) && idx >= 0 && idx < texts.Count )
+                    {
+                        result[idx] = prop.Value.ToString();
+                    }
                 }
             }
+            catch ( Exception )
+            {
+                return new Dictionary<int, string>(); // respuesta no-JSON/basura -> dejar originales
+            }
 
-            return result;
+            // SEGURIDAD DE CACHE: solo confiamos en una respuesta COMPLETA (una clave
+            // string por cada texto enviado). Si falta/sobra/renumera, descartamos el
+            // lote entero para no persistir una traduccion bajo el hash equivocado.
+            // (Con temperature=0 la respuesta normal es completa; el reintento la recupera.)
+            return result.Count == texts.Count ? result : new Dictionary<int, string>();
         }
 
         private string PostWithRetry( string url, string json )
@@ -107,18 +121,24 @@ namespace com.vidareal.Translator.Providers
                     {
                         req.Headers.Add( "api-key", _apiKey );
                         req.Content = new StringContent( json, Encoding.UTF8, "application/json" );
-                        var resp = Http.SendAsync( req ).GetAwaiter().GetResult();
-                        var respBody = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                        if ( resp.IsSuccessStatusCode )
-                        {
-                            return respBody;
-                        }
 
-                        // 429/5xx: reintenta una vez; otros: abandona.
-                        var code = ( int ) resp.StatusCode;
-                        if ( code != 429 && code < 500 )
+                        // ConfigureAwait(false): este metodo se llama de forma sincrona
+                        // desde la accion WebApi; sin esto, el bloqueo sobre el await
+                        // puede causar DEADLOCK al recapturar el SynchronizationContext.
+                        using ( var resp = Http.SendAsync( req ).ConfigureAwait( false ).GetAwaiter().GetResult() )
                         {
-                            return null;
+                            var respBody = resp.Content.ReadAsStringAsync().ConfigureAwait( false ).GetAwaiter().GetResult();
+                            if ( resp.IsSuccessStatusCode )
+                            {
+                                return respBody;
+                            }
+
+                            // 429/5xx: reintenta una vez; otros: abandona.
+                            var code = ( int ) resp.StatusCode;
+                            if ( code != 429 && code < 500 )
+                            {
+                                return null;
+                            }
                         }
                     }
                 }

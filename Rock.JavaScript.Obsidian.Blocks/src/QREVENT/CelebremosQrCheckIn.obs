@@ -1,5 +1,5 @@
 <template>
-    <Panel type="block" title="Check-in Celebremos QR">
+    <Panel type="block" title="" :hasNoBodyPadding="true">
         <template #default>
             <div class="vrPage">
                 <div class="vrTopBar">
@@ -26,7 +26,7 @@
                                 <div class="ssLine" :class="{ done: step > 1 }"></div>
                                 <div class="ssStep" :class="{ active: step === 2, done: step > 2 }">
                                     <div class="ssDot">2</div>
-                                    <div class="ssStepText">Grupo</div>
+                                    <div class="ssStepText">Programa</div>
                                 </div>
                                 <div class="ssLine" :class="{ done: step > 2 }"></div>
                                 <div class="ssStep" :class="{ active: step === 3, done: step > 3 }">
@@ -61,32 +61,32 @@
                                     </div>
 
                                     <div v-else-if="step === 2" class="ssScreen">
-                                        <div class="ssScreenTitle">Selecciona grupo</div>
-                                        <div class="ssScreenSub text-muted">Se muestran los grupos Celebremos de la sede.</div>
+                                        <div class="ssScreenTitle">Selecciona el programa</div>
+                                        <div class="ssScreenSub text-muted">Solo se muestran los programas a los que tienes acceso.</div>
 
                                         <div class="ssSummaryPill" v-if="campusNameSelected">
                                             <div class="ssPillLabel">Sede</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
                                         </div>
 
-                                        <div v-if="groupsBusy" class="text-muted ssSmall">Cargando grupos...</div>
-                                        <div v-if="groupsError" class="ssAlert">
-                                            <NotificationBox alertType="danger">{{ groupsError }}</NotificationBox>
+                                        <div v-if="programsBusy" class="text-muted ssSmall">Cargando programas...</div>
+                                        <div v-if="programsError" class="ssAlert">
+                                            <NotificationBox alertType="danger">{{ programsError }}</NotificationBox>
                                         </div>
 
-                                        <div v-if="!groupsBusy && !groupsError && groups.length === 0" class="text-muted ssSmall">
-                                            No hay grupos Celebremos para esta sede.
+                                        <div v-if="!programsBusy && !programsError && stepPrograms.length === 0" class="text-muted ssSmall">
+                                            No hay programas disponibles para tu usuario.
                                         </div>
 
                                         <div class="ssList">
                                             <button
-                                                v-for="g in groups"
-                                                :key="g.groupId"
+                                                v-for="p in stepPrograms"
+                                                :key="p.stepProgramId"
                                                 type="button"
                                                 class="ssListBtn"
-                                                :class="{ isSelected: g.groupId === groupId }"
-                                                @click="selectGroup(g)">
-                                                <div class="ssListTitle">{{ g.groupName }}</div>
+                                                :class="{ isSelected: p.stepProgramId === stepProgramId }"
+                                                @click="selectProgram(p)">
+                                                <div class="ssListTitle">{{ p.stepProgramName }}</div>
                                             </button>
                                         </div>
 
@@ -103,9 +103,9 @@
                                             <div class="ssPillLabel">Sede</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
                                         </div>
-                                        <div class="ssSummaryPill" v-if="groupNameSelected">
-                                            <div class="ssPillLabel">Grupo</div>
-                                            <div class="ssPillValue">{{ groupNameSelected }}</div>
+                                        <div class="ssSummaryPill" v-if="programNameSelected">
+                                            <div class="ssPillLabel">Programa</div>
+                                            <div class="ssPillValue">{{ programNameSelected }}</div>
                                         </div>
 
                                         <div v-if="stepsBusy" class="text-muted ssSmall">Cargando pasos...</div>
@@ -144,9 +144,9 @@
                                             <div class="ssPillLabel">Sede</div>
                                             <div class="ssPillValue">{{ campusNameSelected }}</div>
                                         </div>
-                                        <div class="ssSummaryPill" v-if="groupNameSelected">
-                                            <div class="ssPillLabel">Grupo</div>
-                                            <div class="ssPillValue">{{ groupNameSelected }}</div>
+                                        <div class="ssSummaryPill" v-if="programNameSelected">
+                                            <div class="ssPillLabel">Programa</div>
+                                            <div class="ssPillValue">{{ programNameSelected }}</div>
                                         </div>
                                         <div class="ssSummaryPill" v-if="stepNameSelected">
                                             <div class="ssPillLabel">Paso</div>
@@ -219,7 +219,7 @@ import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
 
 type CampusOptionBag = { text: string; value: string };
-type GroupOptionBag = { groupId: number; groupName: string; campusId?: number | null };
+type StepProgramOptionBag = { stepProgramId: number; stepProgramName: string };
 type StepOptionBag = { stepTypeId: number; stepName: string };
 type InitBag = { notLogged: boolean; campuses: CampusOptionBag[] };
 
@@ -232,12 +232,12 @@ const err = ref<string>("");
 
 const campusOptions = ref<CampusOptionBag[]>(config.campuses || []);
 const campusId = ref<number | null>(null);
-const groupId = ref<number | null>(null);
+const stepProgramId = ref<number | null>(null);
 const stepTypeId = ref<number | null>(null);
 
-const groups = ref<GroupOptionBag[]>([]);
-const groupsBusy = ref<boolean>(false);
-const groupsError = ref<string>("");
+const stepPrograms = ref<StepProgramOptionBag[]>([]);
+const programsBusy = ref<boolean>(false);
+const programsError = ref<string>("");
 
 const steps = ref<StepOptionBag[]>([]);
 const stepsBusy = ref<boolean>(false);
@@ -267,9 +267,9 @@ const campusNameSelected = computed<string>(() => {
     return campusOptions.value.find(c => Number(c.value) === campusId.value)?.text || "";
 });
 
-const groupNameSelected = computed<string>(() => {
-    if (!groupId.value) return "";
-    return groups.value.find(g => g.groupId === groupId.value)?.groupName || "";
+const programNameSelected = computed<string>(() => {
+    if (!stepProgramId.value) return "";
+    return stepPrograms.value.find(p => p.stepProgramId === stepProgramId.value)?.stepProgramName || "";
 });
 
 const stepNameSelected = computed<string>(() => {
@@ -312,14 +312,14 @@ function closeModal() {
 }
 
 function resetAfterCampus() {
-    groupId.value = null;
+    stepProgramId.value = null;
     stepTypeId.value = null;
-    groups.value = [];
+    stepPrograms.value = [];
     steps.value = [];
     clearBanner();
 }
 
-function resetAfterGroup() {
+function resetAfterProgram() {
     stepTypeId.value = null;
     steps.value = [];
     clearBanner();
@@ -338,44 +338,46 @@ async function selectCampus(c: CampusOptionBag) {
 
     campusId.value = id;
     resetAfterCampus();
-    await loadGroups();
+    await loadStepPrograms();
     step.value = 2;
 }
 
-async function loadGroups() {
-    groupsBusy.value = true;
-    groupsError.value = "";
+async function loadStepPrograms() {
+    programsBusy.value = true;
+    programsError.value = "";
 
     try {
-        const res = await invokeBlockAction<any>("GetGroups", {});
+        const res = await invokeBlockAction<any>("GetStepPrograms", {});
         if (!res.isSuccess || !res.data) {
-            groupsError.value = res.errorMessage || "No se pudieron cargar los grupos.";
-            groups.value = [];
+            programsError.value = res.errorMessage || "No se pudieron cargar los programas.";
+            stepPrograms.value = [];
             return;
         }
 
-        groups.value = (res.data.groups || []) as GroupOptionBag[];
+        stepPrograms.value = (res.data.stepPrograms || []) as StepProgramOptionBag[];
     } catch {
-        groupsError.value = "Error cargando grupos.";
-        groups.value = [];
+        programsError.value = "Error cargando programas.";
+        stepPrograms.value = [];
     } finally {
-        groupsBusy.value = false;
+        programsBusy.value = false;
     }
 }
 
-async function selectGroup(g: GroupOptionBag) {
-    groupId.value = g.groupId;
-    resetAfterGroup();
+async function selectProgram(p: StepProgramOptionBag) {
+    stepProgramId.value = p.stepProgramId;
+    resetAfterProgram();
     await loadSteps();
     step.value = 3;
 }
 
 async function loadSteps() {
+    if (!stepProgramId.value) return;
+
     stepsBusy.value = true;
     stepsError.value = "";
 
     try {
-        const res = await invokeBlockAction<any>("GetSteps", {});
+        const res = await invokeBlockAction<any>("GetSteps", { bag: { stepProgramId: stepProgramId.value } });
         if (!res.isSuccess || !res.data) {
             stepsError.value = res.errorMessage || "No se pudieron cargar los pasos.";
             steps.value = [];
@@ -610,8 +612,10 @@ onBeforeUnmount(() => {
 .text-muted { color: var(--vr-muted) !important; }
 .sswrap { max-width: 980px; margin: 0 auto; }
 
-.panel-block .panel-heading { display: none !important; }
-.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; }
+.panel-block .panel-heading,
+.panel-block .panel-header { display: none !important; }
+.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+.panel-block .panel-body { padding: 0 !important; }
 
 .ssStepper { position: sticky; top: 54px; z-index: 20; background: var(--vr-bg); padding: 10px 8px 12px; border-bottom: 1px solid rgba(17,24,39,.06); display:grid; grid-template-columns:auto 1fr auto 1fr auto 1fr auto; align-items:center; gap:8px; }
 .ssStep { display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:center; min-width:0; }

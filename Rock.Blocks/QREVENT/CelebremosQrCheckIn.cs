@@ -1,27 +1,24 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 using Rock;
 using Rock.Attribute;
 using Rock.Blocks;
 using Rock.Data;
 using Rock.Model;
+using Rock.Security;
 using Rock.ViewModels.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Blocks.QREVENT
 {
     [DisplayName("Celebremos QR Check-in")]
     [Category("Custom")]
-    [Description("Check-in por QR (PersonId) para grupo Celebremos y marcación de Step en complete.")]
+    [Description("Check-in por QR (PersonId): el usuario elige programa y step (filtrados por seguridad VIEW) y se marca el step en su estatus 'complete'.")]
     public class CelebremosQrCheckIn : RockBlockType
     {
-        private const string GroupNameCelebremos = "Celebremos";
-        private const int StepProgramIdCelebremos = 5;
-        private const int StepStatusCompleteId = 8;
-
         public override object GetObsidianBlockInitialization()
         {
             var currentPerson = RequestContext?.CurrentPerson;
@@ -44,50 +41,63 @@ namespace Rock.Blocks.QREVENT
             }
         }
 
-        [BlockAction("GetGroups")]
-        public BlockActionResult GetGroups()
+        [BlockAction("GetStepPrograms")]
+        public BlockActionResult GetStepPrograms()
         {
-            if (RequestContext?.CurrentPerson == null)
+            var currentPerson = RequestContext?.CurrentPerson;
+            if (currentPerson == null)
             {
                 return ActionBadRequest("No autenticado.");
             }
 
             using (var rockContext = new RockContext())
             {
-                var groups = new GroupService(rockContext)
+                var entityTypeId = EntityTypeCache.Get(typeof(StepProgram)).Id;
+
+                var programs = new StepProgramService(rockContext)
                     .Queryable()
-                    .Where(g =>
-                        g.IsActive &&
-                        g.Name == GroupNameCelebremos)
-                    .Select(g => new GroupOptionBag
+                    .Where(sp => sp.IsActive)
+                    .OrderBy(sp => sp.Order)
+                    .ThenBy(sp => sp.Name)
+                    .ToList()
+                    .Where(sp => PersonInAllowedRoles(entityTypeId, sp.Id, currentPerson))
+                    .Select(sp => new StepProgramOptionBag
                     {
-                        groupId = g.Id,
-                        campusId = g.CampusId,
-                        groupName = g.Name
+                        stepProgramId = sp.Id,
+                        stepProgramName = sp.Name
                     })
-                    .OrderBy(g => g.groupName)
                     .ToList();
 
-                return ActionOk(new GetGroupsResponseBag { groups = groups });
+                return ActionOk(new GetStepProgramsResponseBag { stepPrograms = programs });
             }
         }
 
         [BlockAction("GetSteps")]
-        public BlockActionResult GetSteps()
+        public BlockActionResult GetSteps(GetStepsRequestBag bag)
         {
-            if (RequestContext?.CurrentPerson == null)
+            var currentPerson = RequestContext?.CurrentPerson;
+            if (currentPerson == null)
             {
                 return ActionBadRequest("No autenticado.");
             }
 
+            if (bag == null || bag.stepProgramId <= 0)
+            {
+                return ActionBadRequest("Programa inválido.");
+            }
 
             using (var rockContext = new RockContext())
             {
+                var entityTypeId = EntityTypeCache.Get(typeof(StepType)).Id;
+
+                // Filtrado por rol en memoria: se leen las reglas Allow del step.
                 var steps = new StepTypeService(rockContext)
                     .Queryable()
-                    .Where(st => st.IsActive && st.StepProgramId == StepProgramIdCelebremos)
+                    .Where(st => st.IsActive && st.StepProgramId == bag.stepProgramId)
                     .OrderBy(st => st.Order)
                     .ThenBy(st => st.Name)
+                    .ToList()
+                    .Where(st => PersonInAllowedRoles(entityTypeId, st.Id, currentPerson))
                     .Select(st => new StepOptionBag
                     {
                         stepTypeId = st.Id,
@@ -150,11 +160,30 @@ namespace Rock.Blocks.QREVENT
 
                 var stepType = new StepTypeService(rockContext)
                     .Queryable()
-                    .FirstOrDefault(st => st.Id == bag.stepTypeId && st.IsActive && st.StepProgramId == StepProgramIdCelebremos);
+                    .FirstOrDefault(st => st.Id == bag.stepTypeId && st.IsActive);
 
                 if (stepType == null)
                 {
                     return ActionOk(BuildResult("not_found", "", "Step no válido."));
+                }
+
+                var stepTypeEntityTypeId = EntityTypeCache.Get(typeof(StepType)).Id;
+                if (!PersonInAllowedRoles(stepTypeEntityTypeId, stepType.Id, currentPerson))
+                {
+                    return ActionOk(BuildResult("not_found", "", "No tienes acceso a este step."));
+                }
+
+                // Estatus 'complete' del programa del step (dinámico, sin Id quemado).
+                var completeStatusId = new StepStatusService(rockContext)
+                    .Queryable()
+                    .Where(ss => ss.StepProgramId == stepType.StepProgramId && ss.IsCompleteStatus && ss.IsActive)
+                    .OrderBy(ss => ss.Order)
+                    .Select(ss => (int?)ss.Id)
+                    .FirstOrDefault();
+
+                if (!completeStatusId.HasValue)
+                {
+                    return ActionOk(BuildResult("not_found", "", "El programa del step no tiene un estatus 'complete' configurado."));
                 }
 
                 var alreadyCompleted = new StepService(rockContext)
@@ -174,7 +203,7 @@ namespace Rock.Blocks.QREVENT
                 var step = new Step
                 {
                     StepTypeId = stepType.Id,
-                    StepStatusId = StepStatusCompleteId,
+                    StepStatusId = completeStatusId.Value,
                     PersonAliasId = personAliasId.Value,
                     CampusId = bag.campusId,
                     StartDateTime = now,
@@ -189,6 +218,29 @@ namespace Rock.Blocks.QREVENT
 
                 return ActionOk(BuildResult("checked_in", BuildPersonName(person.NickName, person.LastName), "Step marcado como complete."));
             }
+        }
+
+        /// <summary>
+        /// Lee las reglas Allow (View) del entity y devuelve true si la persona pertenece a alguno de esos roles.
+        /// Si el entity no tiene rol asignado, es visible para todos. No usa IsAuthorized (que cae en el Allow por defecto).
+        /// </summary>
+        private static bool PersonInAllowedRoles(int entityTypeId, int entityId, Person person)
+        {
+            var allowRoleIds = Authorization.AuthRules(entityTypeId, entityId, Authorization.VIEW)
+                .Where(r => r.AllowOrDeny == 'A' && r.GroupId.HasValue)
+                .Select(r => r.GroupId.Value)
+                .ToList();
+
+            if (allowRoleIds.Count == 0)
+            {
+                return true;
+            }
+
+            return allowRoleIds.Any(id =>
+            {
+                var role = RoleCache.Get(id);
+                return role != null && role.IsPersonInRole(person.Guid);
+            });
         }
 
         private static string BuildPersonName(string nickName, string lastName)
@@ -312,11 +364,10 @@ namespace Rock.Blocks.QREVENT
             public string text { get; set; }
         }
 
-        public class GroupOptionBag
+        public class StepProgramOptionBag
         {
-            public int groupId { get; set; }
-            public string groupName { get; set; }
-            public int? campusId { get; set; }
+            public int stepProgramId { get; set; }
+            public string stepProgramName { get; set; }
         }
 
         public class StepOptionBag
@@ -325,9 +376,14 @@ namespace Rock.Blocks.QREVENT
             public string stepName { get; set; }
         }
 
-        public class GetGroupsResponseBag
+        public class GetStepProgramsResponseBag
         {
-            public List<GroupOptionBag> groups { get; set; }
+            public List<StepProgramOptionBag> stepPrograms { get; set; }
+        }
+
+        public class GetStepsRequestBag
+        {
+            public int stepProgramId { get; set; }
         }
 
         public class GetStepsResponseBag

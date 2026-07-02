@@ -1,0 +1,528 @@
+<template>
+    <Panel type="block" title="Eventos • Catálogo de Preguntas">
+        <template #default>
+            <div class="qcWrap">
+                <NotificationBox v-if="config.notAuthorized" alertType="warning">
+                    No tienes permiso para administrar el catálogo de preguntas.
+                </NotificationBox>
+
+                <div v-else>
+                    <header class="qcHead">
+                        <div>
+                            <h1 class="qcTitle">Catálogo de Preguntas</h1>
+                            <p class="qcSub">
+                                Preguntas al asistente para los boletos. Las respuestas quedan en el perfil de la persona
+                                y se pre-llenan en eventos futuros. Arma plantillas para aplicarlas a un boleto en un clic.
+                            </p>
+                        </div>
+                    </header>
+
+                    <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+                    <NotificationBox v-if="ok" alertType="success" class="mb-3">{{ ok }}</NotificationBox>
+
+                    <!-- ===================== PREGUNTAS ===================== -->
+                    <section class="qcCard">
+                        <div class="qcCardHead">
+                            <h2 class="qcCardTitle">Preguntas</h2>
+                            <button type="button" class="qcBtn qcBtn--primary" @click="startNewQuestion">+ Nueva pregunta</button>
+                        </div>
+
+                        <div v-if="qForm" class="qcForm">
+                            <div class="qcGrid2">
+                                <TextBox v-model="qForm.name" label="Nombre" placeholder="Ej: Talla de camisa" />
+                                <DropDownList v-if="!qForm.guid" v-model="qForm.type" :items="typeOptions" label="Tipo" :showBlankItem="false" />
+                                <TextBox v-else :modelValue="qForm.typeLabel" label="Tipo" readonly disabled />
+                            </div>
+                            <TextBox v-model="qForm.description" label="Descripción (opcional)" />
+                            <TextBox v-if="qFormIsSelect"
+                                     v-model="qForm.options"
+                                     label="Opciones (una por línea)"
+                                     textMode="multiline"
+                                     :rows="4" />
+                            <CheckBox v-if="qForm.guid" v-model="qForm.isActive" label="" text="Activa (aparece para agregar en los boletos)" />
+                            <div class="qcFormActions">
+                                <button type="button" class="qcBtn qcBtn--primary" :disabled="busy || qForm.name.trim().length < 3" @click="saveQuestion">
+                                    {{ busy ? "Guardando…" : (qForm.guid ? "Guardar cambios" : "Crear pregunta") }}
+                                </button>
+                                <button type="button" class="qcBtn" @click="qForm = null">Cancelar</button>
+                            </div>
+                        </div>
+
+                        <div v-if="items.length === 0" class="qcEmpty">
+                            <div class="qcEmptyIcon">❓</div>
+                            <p>Aún no hay preguntas. Crea la primera con "+ Nueva pregunta".</p>
+                        </div>
+
+                        <div v-else class="qcList">
+                            <div v-for="q in items" :key="q.guid" class="qcRow" :class="{ 'qcRow--inactive': !q.isActive }">
+                                <div class="qcRowMain">
+                                    <span class="qcRowName">{{ q.name }}</span>
+                                    <span class="qcRowMeta">
+                                        {{ q.typeLabel }}<template v-if="q.description"> · {{ q.description }}</template>
+                                    </span>
+                                </div>
+                                <div class="qcRowRight">
+                                    <span v-if="!q.isActive" class="qcPill qcPill--muted">Inactiva</span>
+                                    <span v-if="q.usedByCount > 0" class="qcPill qcPill--use">{{ q.usedByCount }} boleto(s)</span>
+                                    <button type="button" class="qcLink" @click="editQuestion(q)">Editar</button>
+                                    <button type="button" class="qcLink qcLink--danger" :disabled="q.usedByCount > 0"
+                                            :title="q.usedByCount > 0 ? 'En uso por tipos de boleto; quítala de ellos primero.' : ''"
+                                            @click="deleteQuestion(q)">
+                                        Eliminar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===================== PLANTILLAS ===================== -->
+                    <section class="qcCard">
+                        <div class="qcCardHead">
+                            <h2 class="qcCardTitle">Plantillas</h2>
+                            <button type="button" class="qcBtn qcBtn--primary" @click="startNewTemplate">+ Nueva plantilla</button>
+                        </div>
+                        <p class="qcHint">
+                            Una plantilla es un conjunto de preguntas (básicos del perfil + preguntas del catálogo).
+                            En Administrar Eventos se aplica a un tipo de boleto con un clic.
+                        </p>
+
+                        <div v-if="tForm" class="qcForm">
+                            <TextBox v-model="tForm.name" label="Nombre de la plantilla" placeholder="Ej: Campamento de jóvenes" />
+
+                            <span class="qcFieldLabel">Básicos del perfil</span>
+                            <div class="qcBasics">
+                                <div v-for="b in BASIC_DEFS" :key="b.key" class="qcBasic">
+                                    <CheckBox :modelValue="tForm.basics[b.key]?.enabled ?? false"
+                                              @update:modelValue="v => tForm!.basics[b.key] = { enabled: v, required: v && (tForm!.basics[b.key]?.required ?? false) }"
+                                              :label="b.label" />
+                                    <CheckBox v-if="tForm.basics[b.key]?.enabled"
+                                              :modelValue="tForm.basics[b.key].required"
+                                              @update:modelValue="v => tForm!.basics[b.key] = { enabled: true, required: v }"
+                                              label="" text="Obligatoria" />
+                                </div>
+                            </div>
+
+                            <span class="qcFieldLabel">Preguntas del catálogo</span>
+                            <div v-if="tForm.attrs.length" class="qcList qcList--tight">
+                                <div v-for="a in tForm.attrs" :key="a.guid" class="qcRow">
+                                    <span class="qcRowName">{{ a.name }}</span>
+                                    <div class="qcRowRight">
+                                        <label class="qcInlineCheck"><input type="checkbox" v-model="a.required" /> Obligatoria</label>
+                                        <button type="button" class="qcLink qcLink--danger" @click="tForm.attrs = tForm.attrs.filter(x => x.guid !== a.guid)">Quitar</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="qcAddRow">
+                                <DropDownList v-model="tAttrToAdd" :items="templateAddOptions" />
+                                <button type="button" class="qcBtn" :disabled="!tAttrToAdd" @click="addTemplateAttr">Agregar</button>
+                            </div>
+
+                            <div class="qcFormActions">
+                                <button type="button" class="qcBtn qcBtn--primary" :disabled="busy || tForm.name.trim().length < 3" @click="saveTemplate">
+                                    {{ busy ? "Guardando…" : (tForm.guid ? "Guardar cambios" : "Crear plantilla") }}
+                                </button>
+                                <button type="button" class="qcBtn" @click="tForm = null">Cancelar</button>
+                            </div>
+                        </div>
+
+                        <div v-if="templates.length === 0" class="qcEmpty">
+                            <div class="qcEmptyIcon">📋</div>
+                            <p>Sin plantillas todavía.</p>
+                        </div>
+
+                        <div v-else class="qcList">
+                            <div v-for="t in templates" :key="t.guid" class="qcRow">
+                                <div class="qcRowMain">
+                                    <span class="qcRowName">{{ t.name }}</span>
+                                    <span class="qcRowMeta">{{ templateSummary(t) }}</span>
+                                </div>
+                                <div class="qcRowRight">
+                                    <button type="button" class="qcLink" @click="editTemplate(t)">Editar</button>
+                                    <button type="button" class="qcLink qcLink--danger" @click="deleteTemplate(t)">Eliminar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — Catálogo de Preguntas (diseño 2026, paleta slate)
+   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   ============================================================ */
+
+.panel-block:has(.qcWrap) > .panel-heading,
+.panel-block:has(.qcWrap) > .panel-header { display: none !important; }
+.panel-block:has(.qcWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.qcWrap) > .panel-body { padding: 0 !important; }
+
+.qcWrap {
+    --surface-mid: #f8fafc;
+    --surface-alt: #f1f5f9;
+    --primary-900: #1e293b;
+    --primary-800: #334155;
+    --primary-500: #64748b;
+    --primary-300: #94a3b8;
+    --primary-200: #cbd5e1;
+
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--primary-900);
+}
+
+.qcHead { margin-bottom: 22px; }
+.qcTitle { margin: 0; font-size: 26px; font-weight: 700; }
+.qcSub { margin: 4px 0 0; font-size: 14px; color: var(--primary-500); max-width: 640px; }
+
+.qcCard {
+    background: #fff; border: 1px solid var(--surface-alt); border-radius: 18px;
+    padding: 20px; margin-bottom: 22px; box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+}
+.qcCardHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.qcCardTitle { margin: 0; font-size: 18px; font-weight: 700; }
+.qcHint { font-size: 13px; color: var(--primary-500); margin: 0 0 14px; }
+
+.qcBtn {
+    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
+    padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.qcBtn:hover:not(:disabled) { background: var(--surface-mid); }
+.qcBtn:disabled { opacity: .5; cursor: default; }
+.qcBtn--primary { border-color: var(--primary-900); background: var(--primary-900); color: #fff; }
+.qcBtn--primary:hover:not(:disabled) { background: var(--primary-800); }
+
+.qcForm {
+    background: var(--surface-mid); border: 1px solid var(--surface-alt); border-radius: 14px;
+    padding: 16px; margin: 10px 0 16px;
+}
+.qcGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.qcFormActions { display: flex; gap: 10px; margin-top: 6px; }
+.qcFieldLabel { display: block; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--primary-500); margin: 12px 0 8px; }
+.qcBasics { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 14px; }
+.qcAddRow { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; }
+.qcAddRow > :first-child { flex: 1; }
+.qcInlineCheck { margin: 0; font-weight: 400; font-size: 12px; cursor: pointer; white-space: nowrap; color: var(--primary-500); }
+
+.qcList { border: 1px solid var(--surface-alt); border-radius: 14px; overflow: hidden; margin-top: 10px; }
+.qcList--tight { margin-top: 0; }
+.qcRow {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; background: #fff;
+}
+.qcRow + .qcRow { border-top: 1px solid var(--surface-alt); }
+.qcRow--inactive { opacity: .55; }
+.qcRowMain { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.qcRowName { font-size: 14px; font-weight: 700; }
+.qcRowMeta { font-size: 12px; color: var(--primary-500); }
+.qcRowRight { flex: none; display: flex; align-items: center; gap: 12px; }
+
+.qcPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.qcPill--muted { background: var(--surface-alt); color: var(--primary-500); }
+.qcPill--use { background: #eff6ff; color: #1d4ed8; }
+
+.qcLink {
+    border: none; background: none; padding: 0; color: var(--primary-500);
+    font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px;
+    cursor: pointer; font-family: inherit;
+}
+.qcLink:hover:not(:disabled) { color: var(--primary-900); }
+.qcLink:disabled { opacity: .4; cursor: default; text-decoration: none; }
+.qcLink--danger:hover:not(:disabled) { color: #991b1b; }
+
+.qcEmpty {
+    text-align: center; padding: 32px 20px; background: var(--surface-mid);
+    border: 1px dashed var(--primary-200); border-radius: 14px; margin-top: 10px;
+}
+.qcEmptyIcon { font-size: 30px; margin-bottom: 6px; }
+.qcEmpty p { margin: 0; font-size: 13px; color: var(--primary-500); }
+
+@media (max-width: 560px) {
+    .qcGrid2 { grid-template-columns: 1fr; }
+    .qcRow { flex-wrap: wrap; }
+    .qcRowRight { width: 100%; justify-content: flex-end; }
+}
+</style>
+
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import CheckBox from "@Obsidian/Controls/checkBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type CatalogItem = {
+    guid: string;
+    name: string;
+    description: string | null;
+    typeLabel: string;
+    isActive: boolean;
+    isSelect: boolean;
+    options: string | null;   // coma-separadas
+    usedByCount: number;
+};
+
+type QuestionTemplate = { guid: string; name: string; questionsJson: string };
+
+type InitBag = {
+    notAuthorized: boolean;
+    items?: CatalogItem[] | null;
+    templates?: QuestionTemplate[] | null;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const items = ref<CatalogItem[]>(config.items ?? []);
+const templates = ref<QuestionTemplate[]>(config.templates ?? []);
+const busy = ref(false);
+const err = ref("");
+const ok = ref("");
+
+const BASIC_DEFS: { key: string; label: string }[] = [
+    { key: "phone", label: "Teléfono" },
+    { key: "email", label: "Email" },
+    { key: "birthDate", label: "Fecha de nacimiento" },
+    { key: "gender", label: "Sexo" }
+];
+
+const typeOptions: ListItemBag[] = [
+    { value: "text", text: "Texto" },
+    { value: "memo", text: "Párrafo" },
+    { value: "select", text: "Selección (una opción)" },
+    { value: "multiselect", text: "Selección múltiple" },
+    { value: "number", text: "Número" },
+    { value: "date", text: "Fecha" },
+    { value: "boolean", text: "Sí / No" }
+];
+
+function flash(msg: string): void {
+    ok.value = msg;
+    err.value = "";
+    window.setTimeout(() => { ok.value = ""; }, 3000);
+}
+
+// ==================== Preguntas ====================
+
+type QForm = {
+    guid: string | null;
+    name: string;
+    description: string;
+    type: string;
+    typeLabel: string;
+    options: string;   // una por línea en el textarea
+    isActive: boolean;
+};
+const qForm = ref<QForm | null>(null);
+
+const qFormIsSelect = computed(() => {
+    if (!qForm.value) return false;
+    if (!qForm.value.guid) return qForm.value.type === "select" || qForm.value.type === "multiselect";
+    return items.value.find(i => i.guid === qForm.value!.guid)?.isSelect ?? false;
+});
+
+function startNewQuestion(): void {
+    qForm.value = { guid: null, name: "", description: "", type: "text", typeLabel: "", options: "", isActive: true };
+}
+
+function editQuestion(q: CatalogItem): void {
+    qForm.value = {
+        guid: q.guid,
+        name: q.name,
+        description: q.description ?? "",
+        type: "",
+        typeLabel: q.typeLabel,
+        options: (q.options ?? "").split(",").map(o => o.trim()).filter(o => o).join("\n"),
+        isActive: q.isActive
+    };
+}
+
+async function saveQuestion(): Promise<void> {
+    if (!qForm.value) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const options = qForm.value.options.split("\n").map(o => o.trim()).filter(o => o.length > 0);
+        const action = qForm.value.guid ? "UpdateQuestion" : "CreateQuestion";
+        const res = await invokeBlockAction<{ items: CatalogItem[] }>(action, {
+            bag: {
+                guid: qForm.value.guid,
+                name: qForm.value.name.trim(),
+                description: qForm.value.description.trim(),
+                type: qForm.value.type,
+                options,
+                isActive: qForm.value.isActive
+            }
+        });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo guardar la pregunta.";
+            return;
+        }
+        items.value = res.data.items || [];
+        qForm.value = null;
+        flash("Pregunta guardada.");
+    } catch {
+        err.value = "Error guardando la pregunta.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deleteQuestion(q: CatalogItem): Promise<void> {
+    if (!window.confirm(`¿Eliminar la pregunta "${q.name}"? También se borran las respuestas guardadas en las personas.`)) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ items: CatalogItem[] }>("DeleteQuestion", { guid: q.guid });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo eliminar.";
+            return;
+        }
+        items.value = res.data.items || [];
+        flash("Pregunta eliminada.");
+    } catch {
+        err.value = "Error eliminando la pregunta.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+// ==================== Plantillas ====================
+
+type TForm = {
+    guid: string | null;
+    name: string;
+    basics: Record<string, { enabled: boolean; required: boolean }>;
+    attrs: { guid: string; name: string; required: boolean }[];
+};
+const tForm = ref<TForm | null>(null);
+const tAttrToAdd = ref("");
+
+const templateAddOptions = computed<ListItemBag[]>(() => {
+    const used = new Set((tForm.value?.attrs ?? []).map(a => a.guid));
+    return items.value.filter(i => i.isActive && !used.has(i.guid))
+        .map(i => ({ value: i.guid, text: `${i.name} (${i.typeLabel})` }));
+});
+
+function blankBasics(): Record<string, { enabled: boolean; required: boolean }> {
+    const b: Record<string, { enabled: boolean; required: boolean }> = {};
+    for (const d of BASIC_DEFS) b[d.key] = { enabled: false, required: false };
+    return b;
+}
+
+function startNewTemplate(): void {
+    tForm.value = { guid: null, name: "", basics: blankBasics(), attrs: [] };
+    tAttrToAdd.value = "";
+}
+
+function editTemplate(t: QuestionTemplate): void {
+    const basics = blankBasics();
+    const attrs: { guid: string; name: string; required: boolean }[] = [];
+    try {
+        const entries = JSON.parse(t.questionsJson) as Record<string, unknown>[];
+        for (const e of entries) {
+            const kind = String(e.Kind ?? e.kind ?? "");
+            const required = Boolean(e.Required ?? e.required ?? false);
+            if (kind === "basic") {
+                const key = String(e.Key ?? e.key ?? "");
+                if (basics[key]) basics[key] = { enabled: true, required };
+            }
+            else if (kind === "attr") {
+                const guid = String(e.AttributeGuid ?? e.attributeGuid ?? "");
+                const cat = items.value.find(i => i.guid.toLowerCase() === guid.toLowerCase());
+                if (guid) attrs.push({ guid, name: cat?.name ?? guid, required });
+            }
+        }
+    } catch { /* plantilla corrupta: se abre vacía */ }
+    tForm.value = { guid: t.guid, name: t.name, basics, attrs };
+    tAttrToAdd.value = "";
+}
+
+function addTemplateAttr(): void {
+    const cat = items.value.find(i => i.guid === tAttrToAdd.value);
+    if (cat && tForm.value && !tForm.value.attrs.some(a => a.guid === cat.guid)) {
+        tForm.value.attrs.push({ guid: cat.guid, name: cat.name, required: false });
+    }
+    tAttrToAdd.value = "";
+}
+
+function serializeTemplate(f: TForm): string {
+    const entries: Record<string, unknown>[] = [];
+    for (const b of BASIC_DEFS) {
+        const s = f.basics[b.key];
+        if (s?.enabled) entries.push({ Kind: "basic", Key: b.key, Required: s.required });
+    }
+    for (const a of f.attrs) {
+        entries.push({ Kind: "attr", AttributeGuid: a.guid, Required: a.required });
+    }
+    return JSON.stringify(entries);
+}
+
+function templateSummary(t: QuestionTemplate): string {
+    try {
+        const entries = JSON.parse(t.questionsJson) as Record<string, unknown>[];
+        return `${entries.length} pregunta(s)`;
+    } catch {
+        return "—";
+    }
+}
+
+async function saveTemplate(): Promise<void> {
+    if (!tForm.value) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ templates: QuestionTemplate[] }>("SaveTemplate", {
+            bag: {
+                guid: tForm.value.guid,
+                name: tForm.value.name.trim(),
+                questionsJson: serializeTemplate(tForm.value)
+            }
+        });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo guardar la plantilla.";
+            return;
+        }
+        templates.value = res.data.templates || [];
+        tForm.value = null;
+        flash("Plantilla guardada.");
+    } catch {
+        err.value = "Error guardando la plantilla.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deleteTemplate(t: QuestionTemplate): Promise<void> {
+    if (!window.confirm(`¿Eliminar la plantilla "${t.name}"? Los boletos que ya la aplicaron conservan sus preguntas.`)) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ templates: QuestionTemplate[] }>("DeleteTemplate", { guid: t.guid });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo eliminar.";
+            return;
+        }
+        templates.value = res.data.templates || [];
+        flash("Plantilla eliminada.");
+    } catch {
+        err.value = "Error eliminando la plantilla.";
+    } finally {
+        busy.value = false;
+    }
+}
+</script>

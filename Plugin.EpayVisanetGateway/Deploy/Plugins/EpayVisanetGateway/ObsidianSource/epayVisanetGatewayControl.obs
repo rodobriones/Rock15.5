@@ -1,10 +1,11 @@
 <template>
     <div class="epayWrap" :id="controlId">
+        <!-- Sin overlay propio: el host (flujo de registro de Rock) muestra el estado de
+             "procesando" en el boton durante toda la operacion (tokenizacion + cobro). -->
         <div class="epayHeader">
             <div class="epayTitleWrap">
-                <span class="epayBadge">Pago seguro</span>
-                <h4 class="epayTitle">Tarjeta de credito</h4>
-                <p class="epaySubtitle">Ingresa los datos de la tarjeta para completar el pago.</p>
+                <h4 class="epayTitle">Tarjeta</h4>
+                <p class="epaySubtitle">Complete la informacion de pago segura.</p>
             </div>
         </div>
 
@@ -19,7 +20,38 @@
 
         <div class="epayFields">
             <label class="epayField">
-                <span>Numero de tarjeta</span>
+                <div class="epayFieldHead">
+                    <span>Numero de tarjeta</span>
+                    <div class="epayCardBrands" role="img" aria-label="Tarjetas aceptadas: Visa y Mastercard">
+                        <span
+                            class="epayBrandIcon"
+                            :class="{ isActive: cardBrand === 'visa', isDimmed: cardBrand !== 'unknown' && cardBrand !== 'visa' }"
+                            title="Visa">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 500" fill="none" aria-hidden="true">
+                                <g clip-path="url(#epay-visa-clip)">
+                                    <path d="M780 0H0V500H780V0Z" fill="#1434CB"/>
+                                    <path d="M489.823 143.111C442.988 143.111 401.134 167.393 401.134 212.256C401.134 263.706 475.364 267.259 475.364 293.106C475.364 303.989 462.895 313.731 441.6 313.731C411.377 313.731 388.789 300.119 388.789 300.119L379.123 345.391C379.123 345.391 405.145 356.889 439.692 356.889C490.898 356.889 531.19 331.415 531.19 285.784C531.19 231.419 456.652 227.971 456.652 203.981C456.652 195.455 466.887 186.114 488.122 186.114C512.081 186.114 531.628 196.014 531.628 196.014L541.087 152.289C541.087 152.289 519.818 143.111 489.823 143.111ZM61.3294 146.411L60.1953 153.011C60.1953 153.011 79.8988 156.618 97.645 163.814C120.495 172.064 122.122 176.868 125.971 191.786L167.905 353.486H224.118L310.719 146.411H254.635L198.989 287.202L176.282 167.861C174.199 154.203 163.651 146.411 150.74 146.411H61.3294ZM333.271 146.411L289.275 353.486H342.756L386.598 146.411H333.271ZM631.554 146.411C618.658 146.411 611.825 153.318 606.811 165.386L528.458 353.486H584.542L595.393 322.136H663.72L670.318 353.486H719.805L676.633 146.411H631.554ZM638.848 202.356L655.473 280.061H610.935L638.848 202.356Z" fill="white"/>
+                                </g>
+                                <defs>
+                                    <clipPath id="epay-visa-clip">
+                                        <rect width="780" height="500" fill="white"/>
+                                    </clipPath>
+                                </defs>
+                            </svg>
+                        </span>
+                        <span
+                            class="epayBrandIcon"
+                            :class="{ isActive: cardBrand === 'mastercard', isDimmed: cardBrand !== 'unknown' && cardBrand !== 'mastercard' }"
+                            title="Mastercard">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="80 0 620 410" fill="none" aria-hidden="true">
+                                <path d="M780 0H0V500H780V0Z" fill="#253747"/>
+                                <path d="M465.738 69.1387H313.812V342.088H465.738V69.1387Z" fill="#FF5A00"/>
+                                <path d="M323.926 205.613C323.926 150.158 349.996 100.94 390 69.1387C360.559 45.9902 323.42 32 282.91 32C186.945 32 109.297 109.648 109.297 205.613C109.297 301.578 186.945 379.227 282.91 379.227C323.42 379.227 360.559 365.237 390 342.088C349.94 310.737 323.926 261.069 323.926 205.613Z" fill="#EB001B"/>
+                                <path d="M670.711 205.613C670.711 301.578 593.062 379.227 497.098 379.227C456.588 379.227 419.449 365.237 390.008 342.088C430.518 310.231 456.082 261.069 456.082 205.613C456.082 150.158 430.012 100.94 390.008 69.1387C419.393 45.9902 456.532 32 497.041 32C593.062 32 670.711 110.154 670.711 205.613Z" fill="#F79E1B"/>
+                            </svg>
+                        </span>
+                    </div>
+                </div>
                 <div class="epayInputWrap" :class="{ isInvalid: !!fieldErrors.cardNumber }">
                     <input
                         v-model="form.cardNumber"
@@ -164,6 +196,16 @@ const emit = defineEmits<{
 }>();
 
 const controlId = `epay-${newGuid().replace(/-/g, "")}`;
+
+// Fuentes vía <link> (no @import) para no bloquear el render del CSS padre, igual que Cybersource.
+// display=swap pinta con fallback al instante y cambia a la web font al cargar.
+if (typeof document !== "undefined" && !document.getElementById("epay-fonts")) {
+    const fontLink = document.createElement("link");
+    fontLink.id = "epay-fonts";
+    fontLink.rel = "stylesheet";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap";
+    document.head.appendChild(fontLink);
+}
 
 const form = reactive({
     cardNumber: "",
@@ -462,11 +504,12 @@ onSubmitPayment(submit);
 
 <style>
 .epayWrap {
-    --epay-bg: #f3f3f3;
-    --epay-border: #d6d6d6;
+    --epay-bg: #fff;
+    --epay-border: #d7d7d7;
     --epay-text: #1f2933;
     --epay-muted: #6b7280;
     --epay-danger: #c22016;
+    --epay-radius-xl: 22px;
     --epay-radius-lg: 14px;
     --epay-radius-md: 10px;
     --epay-radius-pill: 999px;
@@ -475,66 +518,61 @@ onSubmitPayment(submit);
     border: 1px solid var(--epay-border);
     border-radius: var(--epay-radius-lg);
     color: var(--epay-text);
-    padding: 12px;
+    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    padding: 14px;
+    position: relative;
 }
 
 .epayHeader {
     margin-bottom: 10px;
 }
 
-.epayBadge {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid #bdbdbd;
-    border-radius: var(--epay-radius-pill);
-    padding: 4px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #3b3b3b;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    background: #ffffff;
-}
-
 .epayTitle {
-    margin: 8px 0 0;
-    font-size: 20px;
+    margin: 0;
+    font-family: Manrope, sans-serif;
+    font-size: 18px;
     font-weight: 800;
+    color: #222;
+    text-transform: none;
 }
 
 .epaySubtitle {
     margin: 4px 0 0;
     font-size: 13px;
-    color: var(--epay-muted);
+    color: #666;
 }
 
 .epayCardPreview {
-    margin-bottom: 12px;
+    margin: 12px 0;
     border-radius: 12px;
     border: 1px solid #cecece;
     background: #ffffff;
-    padding: 10px 12px;
+    padding: 12px 14px;
     display: grid;
     gap: 4px;
+    transition: all 0.2s ease;
 }
 
-.epayCardPreview.brand-visa { border-color: #bcd2ff; background: #eaf1ff; }
-.epayCardPreview.brand-mastercard { border-color: #ffd7c2; background: #fff1e8; }
-.epayCardPreview.brand-amex { border-color: #b7effa; background: #e8fbff; }
-.epayCardPreview.brand-discover { border-color: #fed7aa; background: #fff4ec; }
+.epayCardPreview.brand-visa { border-color: #bcd2ff; background: linear-gradient(135deg, #eaf1ff, #f4f8ff); }
+.epayCardPreview.brand-mastercard { border-color: #ffd7c2; background: linear-gradient(135deg, #fff1e8, #fff8f3); }
+.epayCardPreview.brand-amex { border-color: #b7effa; background: linear-gradient(135deg, #e8fbff, #f3fdff); }
+.epayCardPreview.brand-discover { border-color: #fed7aa; background: linear-gradient(135deg, #fff4ec, #fff9f4); }
 
 .epayPreviewBrand {
+    font-family: Manrope, sans-serif;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: #505050;
 }
 
 .epayPreviewNumber {
-    font-size: 15px;
+    font-family: Manrope, sans-serif;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: 0.04em;
+    color: #1d1d1d;
 }
 
 .epayPreviewMeta {
@@ -562,11 +600,55 @@ onSubmitPayment(submit);
 }
 
 .epayField > span {
+    font-family: Manrope, sans-serif;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: #4a4a4a;
+}
+
+.epayFieldHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.epayFieldHead > span {
+    margin: 0;
+}
+
+.epayCardBrands {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.epayBrandIcon {
+    display: inline-flex;
+    width: 34px;
+    height: 22px;
+    border-radius: 4px;
+    overflow: hidden;
+    transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.epayBrandIcon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.epayBrandIcon.isDimmed {
+    opacity: 0.32;
+    filter: grayscale(1);
+}
+
+.epayBrandIcon.isActive {
+    transform: scale(1.08);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
 }
 
 .epayInputWrap {
@@ -577,6 +659,7 @@ onSubmitPayment(submit);
     align-items: center;
     gap: 8px;
     padding: 0 10px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .epayInputWrap:focus-within {
@@ -590,11 +673,12 @@ onSubmitPayment(submit);
 
 .epayInput {
     width: 100%;
-    min-height: 42px;
+    min-height: 44px;
     border: 0;
     background: transparent;
     padding: 0;
     font-size: 14px;
+    color: #1e1e1e;
     box-shadow: none;
     outline: none;
 }
@@ -605,6 +689,7 @@ onSubmitPayment(submit);
     border: 1px solid #bfc6cf;
     background: #edf1f7;
     color: #405061;
+    font-family: Manrope, sans-serif;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.06em;
@@ -630,7 +715,8 @@ onSubmitPayment(submit);
 
 .epayInstallments {
     border-top: 1px solid var(--epay-border);
-    padding-top: 10px;
+    padding-top: 12px;
+    margin-top: 4px;
     display: grid;
     gap: 10px;
 }
@@ -639,15 +725,17 @@ onSubmitPayment(submit);
     display: flex;
     align-items: center;
     gap: 8px;
+    font-family: Manrope, sans-serif;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
+    color: #1e1e1e;
 }
 
 .epayCheckboxLabel input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: #1e44a8;
+    accent-color: #000;
     cursor: pointer;
 }
 
@@ -668,7 +756,7 @@ onSubmitPayment(submit);
     background: #fff8e1;
     border: 1px solid #ffe082;
     border-radius: var(--epay-radius-md);
-    padding: 8px 12px;
+    padding: 10px 12px;
 }
 
 .epaySurchargeLabel {
@@ -677,9 +765,73 @@ onSubmitPayment(submit);
 }
 
 .epaySurchargeAmount {
+    font-family: Manrope, sans-serif;
     font-size: 14px;
     font-weight: 800;
     color: #b8860b;
+}
+
+/* Overlay/Modal de procesamiento */
+.epayStateOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: epayFadeIn 0.3s ease;
+}
+
+.epayStateModal {
+    background: #fff;
+    border-radius: var(--epay-radius-xl, 22px);
+    padding: 34px 24px;
+    width: min(100%, 380px);
+    text-align: center;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    animation: epayScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.epayStateTitle {
+    margin: 20px 0 8px;
+    font-family: Manrope, sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: #111;
+}
+
+.epayStateText {
+    margin: 0;
+    color: #555;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.epaySpinner {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto;
+    border: 5px solid #eaeaea;
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: epaySpin 0.9s linear infinite;
+}
+
+@keyframes epayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes epayScaleUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes epaySpin {
+    to { transform: rotate(360deg); }
 }
 
 @media (min-width: 600px) {

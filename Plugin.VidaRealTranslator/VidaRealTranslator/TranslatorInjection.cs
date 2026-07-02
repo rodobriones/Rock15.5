@@ -17,7 +17,7 @@ namespace com.vidareal.Translator
     {
         // Subir al cambiar translator.js (cache-busting). El reemplazo es por
         // marcador, asi que al re-inyectar se actualiza la version sola.
-        public const string ScriptVersion = "2";
+        public const string ScriptVersion = "9";
 
         private const string ScriptPath = "/Plugins/com_vidareal/Translator/translator.js";
 
@@ -44,7 +44,7 @@ namespace com.vidareal.Translator
             foreach ( var site in siteService.Queryable() )
             {
                 var current = site.PageHeaderContent ?? string.Empty;
-                var cleaned = ExistingTag.Replace( current, string.Empty );
+                var cleaned = ExistingTag.Replace( current, string.Empty ).Trim();
                 var updated = enabled
                     ? ( string.IsNullOrWhiteSpace( cleaned ) ? Tag() : cleaned + Environment.NewLine + Tag() )
                     : cleaned;

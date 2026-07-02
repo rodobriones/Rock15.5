@@ -36,9 +36,8 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
         style.type = 'text/css';
         style.textContent = [
           ".epayWrap { --epay-bg:#fff; --epay-border:#d7d7d7; --epay-text:#1f2933; --epay-muted:#6b7280; --epay-danger:#c22016; --epay-radius-xl:22px; --epay-radius-lg:14px; --epay-radius-md:10px; --epay-radius-pill:999px; background:var(--epay-bg); border:1px solid var(--epay-border); border-radius:var(--epay-radius-lg); color:var(--epay-text); font-family:'Plus Jakarta Sans','Segoe UI',sans-serif; padding:14px; position:relative; }",
-          ".epayHeader { margin-bottom:12px; }",
-          ".epayBadge { display:inline-flex; align-items:center; border:1px solid #bdbdbd; border-radius:var(--epay-radius-pill); padding:4px 9px; font-size:11px; font-weight:700; color:#3b3b3b; letter-spacing:.04em; text-transform:uppercase; background:#fff; }",
-          ".epayTitle { margin:8px 0 0; font-family:Manrope,sans-serif; font-size:18px; font-weight:800; color:#222; }",
+          ".epayHeader { margin-bottom:10px; }",
+          ".epayTitle { margin:0; font-family:Manrope,sans-serif; font-size:18px; font-weight:800; color:#222; text-transform:none; }",
           ".epaySubtitle { margin:4px 0 0; font-size:13px; color:#666; }",
           ".epayCardPreview { margin:12px 0; border-radius:12px; border:1px solid #cecece; background:#fff; padding:12px 14px; display:grid; gap:4px; transition:all .2s ease; }",
           ".epayCardPreview.brand-visa { border-color:#bcd2ff; background:linear-gradient(135deg,#eaf1ff,#f4f8ff); }",
@@ -207,18 +206,14 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
       }
 
       function createMarkup(controlId, showNameField, installmentOpts) {
+        // Sin overlay propio: el flujo de registro de Rock (host) ya muestra el estado de
+        // "procesando" en el boton (isLoading + autoDisable) durante toda la operacion
+        // (tokenizacion + cobro). Un overlay aqui solo cubre la tokenizacion (~1s) y se quita
+        // antes de que el cobro termine, lo que se ve como un parpadeo que choca con el host.
         var html = "<div class='epayWrap'>" +
-          "<div class='epayStateOverlay' data-el='loadingOverlay' style='display:none;'>" +
-            "<div class='epayStateModal'>" +
-              "<div class='epaySpinner'></div>" +
-              "<h4 class='epayStateTitle'>Procesando pago</h4>" +
-              "<p class='epayStateText'>Por favor, no cierre esta ventana.</p>" +
-            "</div>" +
-          "</div>" +
           "<div class='epayHeader'>" +
-            "<span class='epayBadge'>Pago seguro</span>" +
-            "<h4 class='epayTitle'>Tarjeta de credito</h4>" +
-            "<p class='epaySubtitle'>Ingresa los datos de la tarjeta para completar el pago.</p>" +
+            "<h4 class='epayTitle'>Tarjeta</h4>" +
+            "<p class='epaySubtitle'>Complete la informacion de pago segura.</p>" +
           "</div>" +
           "<div class='epayCardPreview brand-unknown' data-el='preview'>" +
             "<span class='epayPreviewBrand' data-el='previewBrand'>Tarjeta</span>" +

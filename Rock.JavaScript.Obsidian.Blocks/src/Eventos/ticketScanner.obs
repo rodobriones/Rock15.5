@@ -1,0 +1,1018 @@
+<template>
+    <Panel type="block" title="Eventos • Escáner de Entradas">
+        <template #default>
+            <div class="tsWrap">
+                <NotificationBox v-if="config.notLogged" alertType="warning">
+                    Debes iniciar sesión para escanear tickets.
+                </NotificationBox>
+
+                <NotificationBox v-else-if="!config.hasAccess" alertType="info">
+                    No tienes eventos asignados para hacer check-in. Pide a un administrador que te
+                    asigne los eventos que puedes escanear (Administrar Eventos → Permisos).
+                </NotificationBox>
+
+                <div v-else>
+                    <!-- ENCABEZADO -->
+                    <header class="tsHead">
+                        <div>
+                            <h1 class="tsTitle">Check-in en puerta</h1>
+                            <p class="tsSub">Escanea el QR del boleto o busca al asistente por nombre.</p>
+                        </div>
+                        <span class="tsStatus" :class="statusPillClass">
+                            <span class="tsDot"></span>{{ statusPillText }}
+                        </span>
+                    </header>
+
+                    <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+
+                    <!-- ===== LISTA DE EVENTOS ===== -->
+                    <section v-if="view === 'list'">
+                        <div class="tsSearchRow">
+                            <input v-model="q"
+                                   type="text"
+                                   class="tsInput"
+                                   placeholder="Buscar evento…"
+                                   @input="onSearchKeyup" />
+                            <label class="tsToggle">
+                                <input v-model="showAll" type="checkbox" />
+                                <span>Incluir finalizados</span>
+                            </label>
+                        </div>
+
+                        <div v-if="loading" class="tsEmpty">
+                            <div class="tsEmptyIcon">⏳</div>
+                            <p>Cargando eventos…</p>
+                        </div>
+
+                        <div v-else-if="filteredEvents.length === 0" class="tsEmpty">
+                            <div class="tsEmptyIcon">🎟️</div>
+                            <h3>Sin eventos</h3>
+                            <p>No hay eventos que coincidan con la búsqueda.</p>
+                        </div>
+
+                        <div v-else class="tsEvents">
+                            <button v-for="ev in filteredEvents"
+                                    :key="ev.id"
+                                    type="button"
+                                    class="tsEvent"
+                                    @click="selectEvent(ev)">
+                                <span class="tsEventCal">
+                                    <span class="tsEventCalMonth">{{ calMonth(ev.dateBegin) }}</span>
+                                    <span class="tsEventCalDay">{{ calDay(ev.dateBegin) }}</span>
+                                </span>
+                                <span class="tsEventMain">
+                                    <span class="tsEventName">{{ ev.name }}</span>
+                                    <span class="tsEventMeta">{{ fmtDate(ev.dateBegin) }}<template v-if="ev.dateEnd"> → {{ fmtDate(ev.dateEnd) }}</template></span>
+                                </span>
+                                <span class="tsEventRight">
+                                    <span v-if="isFinished(ev)" class="tsPill tsPill--muted">Finalizado</span>
+                                    <span class="tsChevron">›</span>
+                                </span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- ===== ESCANEO / CHECK-IN ===== -->
+                    <section v-else class="tsScanView">
+                        <!-- Evento seleccionado -->
+                        <div class="tsSelected">
+                            <div class="tsSelectedInfo">
+                                <span class="tsSelectedLabel">Evento seleccionado</span>
+                                <span class="tsSelectedName">{{ selectedEvent?.name || ("ID " + selectedEventId) }}</span>
+                            </div>
+                            <button type="button" class="tsGhostBtn" :disabled="busy" @click="backToList">
+                                Cambiar
+                            </button>
+                        </div>
+
+                        <!-- Contadores del evento -->
+                        <div v-if="statsTotal !== null" class="tsStats">
+                            <div class="tsStatsRow">
+                                <div class="tsStat">
+                                    <span class="tsStatNum">{{ statsCheckedIn }}</span>
+                                    <span class="tsStatLabel">Ingresaron</span>
+                                </div>
+                                <div class="tsStat">
+                                    <span class="tsStatNum">{{ (statsTotal ?? 0) - (statsCheckedIn ?? 0) }}</span>
+                                    <span class="tsStatLabel">Faltan</span>
+                                </div>
+                                <div class="tsStat">
+                                    <span class="tsStatNum">{{ statsTotal }}</span>
+                                    <span class="tsStatLabel">Entradas</span>
+                                </div>
+                            </div>
+                            <div class="tsProgress">
+                                <div class="tsProgressFill" :style="{ width: statsPct + '%' }"></div>
+                            </div>
+                        </div>
+
+                        <!-- Cámara -->
+                        <div class="tsVideoShell">
+                            <video ref="videoRef" muted playsinline class="tsVideo"></video>
+                            <div class="tsOverlay">
+                                <div class="tsFrame" :class="frameClass"></div>
+                                <div v-if="!scanning" class="tsOverText">
+                                    <div class="tsOverTitle">Cámara apagada</div>
+                                    <div class="tsOverSub">Pulsa “Iniciar cámara” para escanear.</div>
+                                </div>
+                                <div v-else class="tsOverHint">Apunta al QR — el escaneo es continuo</div>
+                            </div>
+                        </div>
+
+                        <button v-if="!scanning"
+                                type="button"
+                                class="tsBtn tsBtn--primary tsBtn--block"
+                                :disabled="busy"
+                                @click="startScan">
+                            Iniciar cámara
+                        </button>
+
+                        <!-- Resultado (persistente, sin modal: la cámara sigue escaneando) -->
+                        <div class="tsBanner" :class="bannerClass">
+                            <div class="tsBannerIcon">{{ bannerIcon }}</div>
+                            <div class="tsBannerText">
+                                <span class="tsBannerTitle">{{ bannerTitle }}</span>
+                                <span v-if="bannerName" class="tsBannerName">{{ bannerName }}</span>
+                                <span v-if="bannerTicketType" class="tsBannerType">{{ bannerTicketType }}</span>
+                                <span v-if="lastCode" class="tsBannerCode ecMono notranslate">{{ lastCode }}</span>
+                                <span v-if="busy" class="tsBannerBusy">Procesando…</span>
+                            </div>
+                        </div>
+
+                        <!-- Buscar por nombre / email -->
+                        <div class="tsCard">
+                            <span class="tsCardLabel">Buscar asistente</span>
+                            <input v-model="manualName"
+                                   type="text"
+                                   class="tsInput"
+                                   placeholder="Nombre o email — ej: Juan Pérez"
+                                   @input="onNameKeyup" />
+
+                            <p v-if="searchingName" class="tsHint">Buscando…</p>
+                            <p v-else-if="manualName.trim().length >= 2 && nameResults.length === 0" class="tsHint">Sin resultados</p>
+
+                            <div v-if="nameResults.length" class="tsResults">
+                                <div v-for="r in nameResults"
+                                     :key="r.ticketId"
+                                     class="tsResult"
+                                     :class="{ 'tsResult--picked': lastPickedTicketId === r.ticketId }">
+                                    <div class="tsResultInfo">
+                                        <span class="tsResultName">{{ r.name }}</span>
+                                        <span v-if="r.email" class="tsResultEmail">{{ r.email }}</span>
+                                        <span class="tsResultType">{{ r.ticketTypeName }}</span>
+                                    </div>
+                                    <div class="tsResultRight">
+                                        <span v-if="r.checkedIn" class="tsPill tsPill--used">Ya ingresó</span>
+                                        <span v-else-if="lastPickedTicketId === r.ticketId" class="tsPill tsPill--ok">Marcado</span>
+                                        <button v-if="!r.checkedIn"
+                                                type="button"
+                                                class="tsBtnSm"
+                                                :disabled="busy"
+                                                @click="checkInFromList(r)">
+                                            Check-in
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Código manual -->
+                        <div class="tsCard">
+                            <span class="tsCardLabel">Código manual</span>
+                            <div class="tsManualRow">
+                                <input v-model="manualCode"
+                                       type="text"
+                                       class="tsInput ecMono"
+                                       placeholder="Código único del boleto…"
+                                       @keyup.enter="submitManualCode" />
+                                <button type="button" class="tsBtn" :disabled="busy || !manualCode" @click="submitManualCode">
+                                    Validar
+                                </button>
+                            </div>
+                        </div>
+
+                        <p class="tsTip">Tip: en iPhone, permite el acceso a la cámara en el navegador. Si cambiaste permisos, recarga la página.</p>
+
+                        <!-- Barra de acciones sticky (no tapa nada: es parte del flujo) -->
+                        <div class="tsBar">
+                            <button type="button" class="tsBtn tsBtn--danger" :disabled="!scanning" @click="stopScan">
+                                Detener cámara
+                            </button>
+                            <button type="button" class="tsBtn" :disabled="!bannerStatus" @click="clearResult">
+                                Limpiar
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — Escáner de Entradas (diseño 2026)
+   Misma paleta slate / Roboto del checkout y Mis Entradas.
+   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   ============================================================ */
+
+.panel-block:has(.tsWrap) > .panel-heading,
+.panel-block:has(.tsWrap) > .panel-header { display: none !important; }
+.panel-block:has(.tsWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.tsWrap) > .panel-body { padding: 0 !important; }
+
+.tsWrap {
+    --surface-card: #ffffff;
+    --surface-mid: #f8fafc;
+    --surface-alt: #f1f5f9;
+    --primary-900: #1e293b;
+    --primary-800: #334155;
+    --primary-500: #64748b;
+    --primary-300: #94a3b8;
+    --primary-200: #cbd5e1;
+    --ok-bg: #f0fdf4;
+    --ok-border: #bbf7d0;
+    --ok-text: #166534;
+    --warn-bg: #fffbeb;
+    --warn-border: #fde68a;
+    --warn-text: #92400e;
+    --bad-bg: #fef2f2;
+    --bad-border: #fecaca;
+    --bad-text: #991b1b;
+
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--primary-900);
+}
+.tsWrap .ecMono { font-family: "Roboto Mono", Consolas, Menlo, monospace; }
+
+/* ---------- Encabezado ---------- */
+.tsHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.tsTitle { margin: 0; font-size: 26px; font-weight: 700; color: var(--primary-900); }
+.tsSub { margin: 4px 0 0; font-size: 14px; color: var(--primary-500); }
+.tsStatus {
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
+    font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; margin-top: 4px;
+}
+.tsDot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-300); }
+.tsStatus--scan .tsDot { background: #16a34a; animation: tsPulse 1.2s ease-in-out infinite; }
+.tsStatus--busy .tsDot { background: #d97706; }
+@keyframes tsPulse { 50% { opacity: .35; } }
+
+/* ---------- Búsqueda / lista de eventos ---------- */
+.tsSearchRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.tsSearchRow .tsInput { flex: 1 1 220px; }
+.tsInput {
+    width: 100%; border: 1px solid var(--primary-200); border-radius: 12px;
+    background: #fff; color: var(--primary-900);
+    padding: 11px 14px; font-size: 15px; font-family: inherit; outline: none;
+}
+.tsInput:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(100, 116, 139, .15); }
+.tsInput::placeholder { color: var(--primary-300); }
+.tsToggle {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: var(--primary-500); margin: 0; white-space: nowrap;
+}
+.tsToggle input { margin: 0; accent-color: var(--primary-800); }
+
+.tsEvents { display: flex; flex-direction: column; gap: 10px; }
+.tsEvent {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+    background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
+    padding: 14px 16px; cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+    transition: transform .06s ease, box-shadow .06s ease, border-color .06s ease;
+}
+.tsEvent:hover { border-color: var(--primary-200); box-shadow: 0 8px 20px rgba(15, 23, 42, .08); transform: translateY(-1px); }
+.tsEventCal {
+    flex: none; width: 52px; display: flex; flex-direction: column; align-items: center;
+    background: var(--surface-mid); border: 1px solid var(--surface-alt); border-radius: 12px; padding: 6px 0;
+}
+.tsEventCalMonth { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--primary-500); }
+.tsEventCalDay { font-size: 20px; font-weight: 700; color: var(--primary-900); line-height: 1.1; }
+.tsEventMain { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.tsEventName { font-size: 15px; font-weight: 700; color: var(--primary-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsEventMeta { font-size: 12px; color: var(--primary-500); }
+.tsEventRight { flex: none; display: flex; align-items: center; gap: 8px; }
+.tsChevron { font-size: 22px; line-height: 1; color: var(--primary-300); }
+
+.tsPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.tsPill--muted { background: var(--surface-alt); color: var(--primary-500); }
+.tsPill--used { background: var(--surface-alt); color: var(--primary-500); }
+.tsPill--ok { background: var(--ok-bg); color: var(--ok-text); }
+
+.tsEmpty {
+    text-align: center; padding: 48px 20px; background: var(--surface-mid);
+    border: 1px dashed var(--primary-200); border-radius: 18px;
+}
+.tsEmptyIcon { font-size: 36px; margin-bottom: 8px; }
+.tsEmpty h3 { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--primary-900); }
+.tsEmpty p { margin: 0 auto; max-width: 360px; font-size: 14px; color: var(--primary-500); }
+
+/* ---------- Evento seleccionado ---------- */
+.tsSelected {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--primary-900); color: #fff; border-radius: 16px;
+    padding: 14px 18px; margin-bottom: 14px;
+}
+.tsSelectedInfo { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tsSelectedLabel { font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--primary-300); }
+.tsSelectedName { font-size: 16px; font-weight: 700; word-break: break-word; }
+.tsGhostBtn {
+    flex: none; border: 1px solid rgba(255, 255, 255, .35); background: transparent; color: #fff;
+    padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+}
+.tsGhostBtn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+.tsGhostBtn:disabled { opacity: .5; cursor: default; }
+
+/* ---------- Contadores del evento ---------- */
+.tsStats {
+    background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
+    padding: 14px 16px 16px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+}
+.tsStatsRow { display: flex; gap: 8px; margin-bottom: 12px; }
+.tsStat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tsStat + .tsStat { border-left: 1px solid var(--surface-alt); }
+.tsStatNum { font-size: 24px; font-weight: 800; color: var(--primary-900); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tsStatLabel { font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--primary-500); }
+.tsStat:first-child .tsStatNum { color: var(--ok-text); }
+.tsProgress { height: 8px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; }
+.tsProgressFill { height: 100%; border-radius: 999px; background: #22c55e; transition: width .35s ease; }
+
+/* ---------- Cámara ---------- */
+.tsVideoShell {
+    position: relative; border-radius: 20px; overflow: hidden;
+    background: #0f172a; box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+}
+.tsVideo { width: 100%; height: 340px; object-fit: cover; display: block; }
+.tsOverlay { position: absolute; inset: 0; pointer-events: none; }
+.tsFrame {
+    position: absolute; left: 50%; top: 50%; width: min(68vw, 280px); height: min(68vw, 280px);
+    transform: translate(-50%, -50%); border-radius: 20px;
+    border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 0 0 9999px rgba(15, 23, 42, .35);
+    transition: border-color .15s ease;
+}
+.tsFrame--live { border-color: rgba(74, 222, 128, .9); }
+.tsFrame--ok { border-color: #22c55e; border-width: 4px; }
+.tsFrame--warn { border-color: #f59e0b; border-width: 4px; }
+.tsFrame--bad { border-color: #ef4444; border-width: 4px; }
+.tsOverText { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; padding: 18px; }
+.tsOverTitle { font-weight: 700; font-size: 16px; }
+.tsOverSub { margin-top: 4px; font-size: 12px; opacity: .8; }
+.tsOverHint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); white-space: nowrap;
+    background: rgba(15, 23, 42, .72); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 999px;
+}
+
+.tsBtn {
+    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
+    padding: 12px 18px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.tsBtn:hover:not(:disabled) { background: var(--surface-mid); }
+.tsBtn:disabled { opacity: .5; cursor: default; }
+.tsBtn--primary { border-color: var(--primary-900); background: var(--primary-900); color: #fff; }
+.tsBtn--primary:hover:not(:disabled) { background: var(--primary-800); }
+.tsBtn--danger { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad-text); }
+.tsBtn--danger:hover:not(:disabled) { background: #fee2e2; }
+.tsBtn--block { display: block; width: 100%; margin-top: 12px; }
+.tsBtnSm {
+    border: 1px solid var(--primary-900); background: var(--primary-900); color: #fff;
+    padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.tsBtnSm:hover:not(:disabled) { background: var(--primary-800); }
+.tsBtnSm:disabled { opacity: .5; cursor: default; }
+
+/* ---------- Banner de resultado ---------- */
+.tsBanner {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--surface-mid); border: 1px solid var(--surface-alt); border-radius: 16px;
+    padding: 16px 18px; margin-top: 12px;
+}
+.tsBannerIcon {
+    flex: none; width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid var(--primary-200);
+    font-size: 24px; font-weight: 800; color: var(--primary-800);
+}
+.tsBannerText { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tsBannerTitle { font-size: 19px; font-weight: 800; color: var(--primary-900); line-height: 1.25; }
+.tsBannerName { font-size: 15px; font-weight: 600; color: var(--primary-800); }
+.tsBannerType { font-size: 13px; color: var(--primary-500); }
+.tsBannerCode { font-size: 12px; letter-spacing: 1px; color: var(--primary-300); }
+.tsBannerBusy { font-size: 12px; color: var(--primary-500); }
+
+.tsBanner--ok { background: var(--ok-bg); border-color: var(--ok-border); }
+.tsBanner--ok .tsBannerIcon { background: #fff; border-color: var(--ok-border); color: var(--ok-text); }
+.tsBanner--ok .tsBannerTitle { color: var(--ok-text); }
+.tsBanner--warn { background: var(--warn-bg); border-color: var(--warn-border); }
+.tsBanner--warn .tsBannerIcon { border-color: var(--warn-border); color: var(--warn-text); }
+.tsBanner--warn .tsBannerTitle { color: var(--warn-text); }
+.tsBanner--bad { background: var(--bad-bg); border-color: var(--bad-border); }
+.tsBanner--bad .tsBannerIcon { border-color: var(--bad-border); color: var(--bad-text); }
+.tsBanner--bad .tsBannerTitle { color: var(--bad-text); }
+
+/* ---------- Cards (búsqueda / código manual) ---------- */
+.tsCard {
+    background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
+    padding: 16px; margin-top: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+}
+.tsCardLabel {
+    display: block; font-size: 12px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--primary-500); margin-bottom: 10px;
+}
+.tsHint { margin: 8px 0 0; font-size: 12px; color: var(--primary-300); }
+.tsManualRow { display: flex; gap: 10px; }
+.tsManualRow .tsInput { flex: 1; }
+
+.tsResults { margin-top: 12px; border: 1px solid var(--surface-alt); border-radius: 14px; overflow: hidden; }
+.tsResult {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; background: #fff;
+}
+.tsResult + .tsResult { border-top: 1px dashed var(--primary-200); }
+.tsResult--picked { background: var(--ok-bg); }
+.tsResultInfo { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tsResultName { font-size: 14px; font-weight: 700; color: var(--primary-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsResultEmail { font-size: 12px; color: var(--primary-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsResultType { font-size: 11px; color: var(--primary-300); }
+.tsResultRight { flex: none; display: flex; align-items: center; gap: 8px; }
+
+.tsTip { margin: 16px 0 0; font-size: 12px; color: var(--primary-300); text-align: center; }
+
+/* ---------- Barra sticky de acciones (patrón de la app de check-in) ---------- */
+.tsBar {
+    position: sticky; bottom: 0; z-index: 20;
+    display: flex; gap: 10px; margin-top: 16px;
+    padding: 12px 0 14px;
+    background: rgba(255, 255, 255, .92); backdrop-filter: blur(6px);
+    border-top: 1px solid var(--surface-alt);
+}
+.tsBar .tsBtn { flex: 1; }
+
+@media (max-width: 480px) {
+    .tsWrap { padding-top: 18px; }
+    .tsVideo { height: 300px; }
+    .tsManualRow { flex-wrap: wrap; }
+    .tsEventRight .tsChevron { display: none; }
+}
+</style>
+
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type EventItem = {
+    id: number;
+    name: string;
+    dateBegin?: string | null;
+    dateEnd?: string | null;
+};
+
+type InitBag = {
+    notLogged: boolean;
+    hasAccess: boolean;
+    events: EventItem[];
+};
+
+type TicketResult = {
+    ticketId: number;
+    uniqueCode: string;
+    name: string;
+    email: string;
+    ticketTypeName: string;
+    checkedIn: boolean;
+    status: string;
+};
+
+type SearchTicketsResponse = {
+    results: TicketResult[];
+};
+
+type ScanResponse = {
+    status: string;
+    name: string;
+    ticketTypeName: string;
+    message: string;
+    total: number;
+    checkedIn: number;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const view = ref<"list" | "scan">("list");
+
+const q = ref<string>("");
+const showAll = ref<boolean>(false);
+const loading = ref<boolean>(false);
+const err = ref<string>("");
+
+const allEvents = ref<EventItem[]>(config.events || []);
+
+const selectedEvent = ref<EventItem | null>(null);
+const selectedEventId = ref<number>(0);
+
+const scanning = ref<boolean>(false);
+const busy = ref<boolean>(false);
+
+const lastCode = ref<string>("");
+const manualCode = ref<string>("");
+
+const bannerStatus = ref<string>("");
+const bannerName = ref<string>("");
+const bannerTitle = ref<string>("Listo para escanear");
+const bannerTicketType = ref<string>("");
+
+const debounceHandle = ref<number | null>(null);
+
+// video + stream
+const videoRef = ref<HTMLVideoElement | null>(null);
+let stream: MediaStream | null = null;
+
+// ZXing via vendor bundle (SystemJS) — mismo bundle que usa src/QREVENT/qrScanner.obs
+let zxingReader: any = null;
+
+async function getZxingModule(): Promise<any> {
+    const SystemJs = (window as any).System;
+    if (!SystemJs?.import) {
+        throw new Error("SystemJS no está disponible en esta página.");
+    }
+    return await SystemJs.import("/Obsidian/Blocks/QREVENT/vendor/zxing.lib.js");
+}
+
+// Escaneo continuo (patrón de la app de check-in): la cámara nunca se pausa.
+// - cooldown general entre envíos (evita ráfagas)
+// - el MISMO código se ignora por un rato (evita re-check-in del QR que sigue frente a la cámara)
+const COOLDOWN_MS = 2500;
+const SAME_CODE_HOLD_MS = 7000;
+let lastScanAt = 0;
+let lastSubmitted = { code: "", at: 0 };
+
+// El marco del visor "flashea" con el color del último resultado un instante.
+const frameFlash = ref<string>("");
+let frameFlashTimer: number | null = null;
+
+// Contadores del evento (null = aún no cargados). Se cargan al elegir evento y
+// cada respuesta de scan/check-in trae los valores actualizados.
+const statsTotal = ref<number | null>(null);
+const statsCheckedIn = ref<number | null>(null);
+
+const statsPct = computed(() => {
+    const total = statsTotal.value ?? 0;
+    if (total <= 0) return 0;
+    return Math.min(100, Math.round(((statsCheckedIn.value ?? 0) / total) * 100));
+});
+
+async function loadStats(): Promise<void> {
+    const evId = Number(selectedEventId.value || 0);
+    if (!evId) return;
+    try {
+        const res = await invokeBlockAction<{ total: number; checkedIn: number }>("GetEventStats", { bag: { eventId: evId } });
+        if (res.isSuccess && res.data) {
+            statsTotal.value = res.data.total;
+            statsCheckedIn.value = res.data.checkedIn;
+        }
+    } catch { /* los contadores son informativos; no bloquean el escaneo */ }
+}
+
+// Buscar por nombre/email
+const manualName = ref<string>("");
+const searchingName = ref<boolean>(false);
+const nameResults = ref<TicketResult[]>([]);
+const nameDebounceHandle = ref<number | null>(null);
+const lastPickedTicketId = ref<number | null>(null);
+
+// Vibración distinta por resultado (feedback táctil sin mirar la pantalla).
+function buzz(status: string): void {
+    try {
+        if (status === "checked_in") navigator.vibrate?.([30, 40, 30]);
+        else if (status === "already_used" || status === "wrong_event") navigator.vibrate?.([20, 30, 20]);
+        else navigator.vibrate?.([70, 50, 70]);
+    } catch { /* noop */ }
+}
+
+function parseDate(s?: string | null): Date | null {
+    if (!s) return null;
+    const d = new Date(String(s).replace(" ", "T"));
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isFinished(ev: EventItem): boolean {
+    const end = parseDate(ev.dateEnd);
+    if (!end) return false;
+    return end.getTime() < Date.now();
+}
+
+function fmtDate(s?: string | null): string {
+    if (!s) return "—";
+    const d = parseDate(s);
+    if (!d) return String(s);
+    return d.toLocaleDateString("es-GT", { weekday: "short", day: "numeric", month: "short" })
+        + " · " + d.toLocaleTimeString("es-GT", { hour: "numeric", minute: "2-digit" });
+}
+
+function calMonth(s?: string | null): string {
+    const d = parseDate(s);
+    return d ? d.toLocaleDateString("es-GT", { month: "short" }).replace(".", "") : "—";
+}
+
+function calDay(s?: string | null): string {
+    const d = parseDate(s);
+    return d ? String(d.getDate()) : "?";
+}
+
+const filteredEvents = computed<EventItem[]>(() => {
+    const list = allEvents.value || [];
+    const needle = q.value.trim().toLowerCase();
+    const byText = needle ? list.filter(e => (e.name || "").toLowerCase().includes(needle)) : list;
+    if (showAll.value) return byText;
+    return byText.filter(ev => !isFinished(ev));
+});
+
+const bannerClass = computed(() => {
+    if (!bannerStatus.value) return "";
+    if (bannerStatus.value === "checked_in") return "tsBanner--ok";
+    if (bannerStatus.value === "already_used") return "tsBanner--warn";
+    if (bannerStatus.value === "wrong_event") return "tsBanner--warn";
+    return "tsBanner--bad";
+});
+
+const bannerIcon = computed(() => {
+    if (!bannerStatus.value) return "◎";
+    if (bannerStatus.value === "checked_in") return "✓";
+    if (bannerStatus.value === "already_used") return "!";
+    if (bannerStatus.value === "wrong_event") return "!";
+    return "✕";
+});
+
+const frameClass = computed(() => {
+    if (frameFlash.value === "checked_in") return "tsFrame--ok";
+    if (frameFlash.value === "already_used" || frameFlash.value === "wrong_event") return "tsFrame--warn";
+    if (frameFlash.value) return "tsFrame--bad";
+    return scanning.value ? "tsFrame--live" : "";
+});
+
+const statusPillText = computed(() => {
+    if (busy.value) return "Procesando";
+    if (view.value === "list") return "Elige evento";
+    if (scanning.value) return "Escaneando";
+    return "Listo";
+});
+
+const statusPillClass = computed(() => {
+    if (busy.value) return "tsStatus--busy";
+    if (view.value === "list") return "";
+    if (scanning.value) return "tsStatus--scan";
+    return "";
+});
+
+function setBanner(status: string, title: string, name: string, ticketType: string, code: string): void {
+    bannerStatus.value = status || "";
+    bannerTitle.value = title || "—";
+    bannerName.value = name || "";
+    bannerTicketType.value = ticketType || "";
+    lastCode.value = code || "";
+}
+
+function clearResult(): void {
+    setBanner("", scanning.value ? "Escaneando…" : "Listo para escanear", "", "", "");
+    lastSubmitted = { code: "", at: 0 };
+}
+
+function flashFrame(status: string): void {
+    frameFlash.value = status || "error";
+    if (frameFlashTimer) window.clearTimeout(frameFlashTimer);
+    frameFlashTimer = window.setTimeout(() => {
+        frameFlash.value = "";
+        frameFlashTimer = null;
+    }, 1500);
+}
+
+async function reloadEvents(): Promise<void> {
+    loading.value = true;
+    err.value = "";
+
+    try {
+        const bag = { q: q.value || "", showAll: Boolean(showAll.value) };
+        const res = await invokeBlockAction<{ events: EventItem[] }>("SearchEvents", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudieron cargar los eventos.";
+            return;
+        }
+
+        allEvents.value = (res.data.events || []) as EventItem[];
+    } catch {
+        err.value = "Error cargando eventos.";
+    } finally {
+        loading.value = false;
+    }
+}
+
+watch(showAll, () => {
+    reloadEvents();
+});
+
+function onSearchKeyup(): void {
+    if (debounceHandle.value) window.clearTimeout(debounceHandle.value);
+    debounceHandle.value = window.setTimeout(() => {
+        reloadEvents();
+    }, 250);
+}
+
+function selectEvent(ev: EventItem): void {
+    selectedEvent.value = ev;
+    selectedEventId.value = ev.id;
+    view.value = "scan";
+    err.value = "";
+    setBanner("", "Listo para escanear", "", "", "");
+    manualName.value = "";
+    manualCode.value = "";
+    nameResults.value = [];
+    lastPickedTicketId.value = null;
+    lastSubmitted = { code: "", at: 0 };
+    statsTotal.value = null;
+    statsCheckedIn.value = null;
+    loadStats();
+
+    // La cámara arranca sola: elegir el evento ES el gesto del usuario que
+    // habilita getUserMedia. nextTick porque el <video> recién se monta.
+    nextTick(() => {
+        startScan();
+    });
+}
+
+async function backToList(): Promise<void> {
+    await stopScan();
+    selectedEvent.value = null;
+    selectedEventId.value = 0;
+    view.value = "list";
+    manualName.value = "";
+    manualCode.value = "";
+    nameResults.value = [];
+    lastPickedTicketId.value = null;
+}
+
+async function startScan(): Promise<void> {
+    err.value = "";
+
+    if (!videoRef.value) {
+        err.value = "No se encontró el elemento de video.";
+        return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        err.value = "Tu navegador no soporta cámara (getUserMedia).";
+        return;
+    }
+
+    try {
+        await stopScanInternal(true);
+
+        const constraints: MediaStreamConstraints = {
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoRef.value.srcObject = stream;
+        await videoRef.value.play();
+
+        scanning.value = true;
+        setBanner("", "Escaneando…", "", "", "");
+
+        const mod = await getZxingModule();
+        zxingReader = new mod.BrowserQRCodeReader();
+
+        scanLoopZXing();
+    } catch (e: any) {
+        await stopScanInternal(true);
+        const msg = String(e?.name || e?.message || "");
+        if (msg.includes("SystemJS") || msg.includes("zxing")) {
+            err.value = "El lector QR no está disponible en esta sesión. Recarga la página e intenta de nuevo.";
+        } else if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+            err.value = "Permiso de cámara denegado. Actívalo en el navegador y vuelve a intentar.";
+        } else if (msg.includes("NotFoundError")) {
+            err.value = "No se encontró cámara disponible en el dispositivo.";
+        } else {
+            err.value = "No se pudo iniciar la cámara.";
+        }
+        scanning.value = false;
+    }
+}
+
+// Bucle continuo: decodifica, valida dedupe/cooldown, envía y SIGUE escaneando
+// sin pausar la cámara (el resultado se ve en el banner y el flash del marco).
+function scanLoopZXing(): void {
+    if (!scanning.value || !videoRef.value || !zxingReader) return;
+
+    zxingReader.decodeOnceFromVideoElement(videoRef.value)
+        .then(async (result: any) => {
+            if (!scanning.value) return;
+
+            const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
+            const now = Date.now();
+
+            const isDuplicate = raw && raw === lastSubmitted.code && (now - lastSubmitted.at) < SAME_CODE_HOLD_MS;
+            const inCooldown = now - lastScanAt < COOLDOWN_MS;
+
+            if (raw && !isDuplicate && !inCooldown) {
+                lastScanAt = now;
+                lastSubmitted = { code: raw, at: now };
+
+                try { navigator.vibrate?.(35); } catch { /* noop */ }
+
+                await submitQrCode(raw);
+            }
+
+            if (scanning.value) scanLoopZXing();
+        })
+        .catch((e: any) => {
+            // Detención deliberada: el stream cortado hace rechazar la promesa pendiente;
+            // no es un error del lector.
+            if (!scanning.value) return;
+
+            const msg = String(e?.name || e?.message || e || "");
+            if (msg.toLowerCase().includes("notfound")) {
+                if (scanning.value) scanLoopZXing();
+                return;
+            }
+            err.value = "Error leyendo QR. Intenta reiniciar la cámara.";
+            scanning.value = false;
+        });
+}
+
+async function stopScan(): Promise<void> {
+    await stopScanInternal(false);
+}
+
+async function stopScanInternal(keepState: boolean): Promise<void> {
+    zxingReader = null;
+
+    try {
+        if (videoRef.value) {
+            const s: any = videoRef.value.srcObject;
+            if (s && s.getTracks) {
+                s.getTracks().forEach((t: any) => t.stop());
+            }
+            videoRef.value.srcObject = null;
+        }
+    } catch { /* noop */ }
+
+    stream = null;
+
+    if (!keepState) {
+        scanning.value = false;
+        setBanner(bannerStatus.value, bannerStatus.value ? bannerTitle.value : "Listo para escanear", bannerName.value, bannerTicketType.value, lastCode.value);
+    }
+}
+
+function applyScanResult(data: ScanResponse, code: string): void {
+    const status = String(data.status || "");
+    const name = String(data.name || "");
+    const ticketType = String(data.ticketTypeName || "");
+    const message = String(data.message || "");
+
+    const title =
+        status === "checked_in" ? "Ingreso registrado" :
+        status === "already_used" ? "Ya ingresó" :
+        status === "wrong_event" ? "Evento incorrecto" :
+        status === "invalid" ? "Ticket no válido" :
+        "No encontrado";
+
+    setBanner(status || "not_found", message || title, name, ticketType, code);
+    bannerTitle.value = title;
+    buzz(status);
+    flashFrame(status || "not_found");
+
+    // El servidor devuelve los contadores ya actualizados con este scan.
+    if (typeof data.total === "number") {
+        statsTotal.value = data.total;
+        statsCheckedIn.value = data.checkedIn;
+    }
+}
+
+async function submitQrCode(code: string): Promise<void> {
+    if (busy.value) return;
+
+    if (!selectedEventId.value) {
+        setBanner("error", "Selecciona un evento antes de escanear.", "", "", code);
+        return;
+    }
+
+    const c = String(code || "").trim();
+    if (!c) return;
+
+    busy.value = true;
+
+    try {
+        const bag = { eventId: Number(selectedEventId.value), code: c };
+        const res = await invokeBlockAction<ScanResponse>("ProcessQr", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            setBanner("error", res.errorMessage || "Error al validar el ticket.", "", "", c);
+            buzz("error");
+            flashFrame("error");
+            return;
+        }
+
+        applyScanResult(res.data, c);
+    } catch {
+        setBanner("error", "Error al validar el ticket.", "", "", c);
+        buzz("error");
+        flashFrame("error");
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function submitManualCode(): Promise<void> {
+    const c = manualCode.value.trim();
+    if (!c) return;
+    await submitQrCode(c);
+    manualCode.value = "";
+}
+
+function onNameKeyup(): void {
+    if (nameDebounceHandle.value) window.clearTimeout(nameDebounceHandle.value);
+    nameDebounceHandle.value = window.setTimeout(() => {
+        searchByName();
+    }, 250);
+}
+
+async function searchByName(): Promise<void> {
+    const evId = Number(selectedEventId.value || 0);
+    const needle = manualName.value.trim();
+
+    if (!evId || needle.length < 2) {
+        nameResults.value = [];
+        return;
+    }
+
+    searchingName.value = true;
+
+    try {
+        const bag = { eventId: evId, q: needle, take: 30 };
+        const res = await invokeBlockAction<SearchTicketsResponse>("SearchTickets", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            nameResults.value = [];
+            return;
+        }
+
+        nameResults.value = (res.data.results || []) as TicketResult[];
+    } catch {
+        nameResults.value = [];
+    } finally {
+        searchingName.value = false;
+    }
+}
+
+async function checkInFromList(r: TicketResult): Promise<void> {
+    if (busy.value) return;
+
+    const evId = Number(selectedEventId.value || 0);
+    if (!evId) {
+        setBanner("error", "Selecciona un evento.", "", "", "");
+        return;
+    }
+
+    busy.value = true;
+    lastPickedTicketId.value = r.ticketId;
+
+    try {
+        const bag = { eventId: evId, ticketId: r.ticketId };
+        const res = await invokeBlockAction<ScanResponse>("CheckInTicket", { bag });
+
+        if (!res.isSuccess || !res.data) {
+            setBanner("error", res.errorMessage || "No se pudo registrar el ingreso.", "", "", "");
+            buzz("error");
+            return;
+        }
+
+        applyScanResult(res.data, r.uniqueCode || "");
+        await searchByName();
+    } catch {
+        setBanner("error", "Error al registrar el ingreso.", "", "", "");
+        buzz("error");
+    } finally {
+        busy.value = false;
+    }
+}
+
+onBeforeUnmount(() => {
+    stopScan();
+    if (frameFlashTimer) window.clearTimeout(frameFlashTimer);
+});
+</script>

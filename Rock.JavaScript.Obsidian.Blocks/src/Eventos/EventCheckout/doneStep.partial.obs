@@ -1,0 +1,59 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- STEP 5: Listo — confirmación con QR por entrada, descarga de PDF y salida. -->
+<template>
+    <div class="ecDone">
+        <div class="ecDoneIcon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clip-rule="evenodd" />
+            </svg>
+        </div>
+        <h2 class="ecDoneTitle">¡Listo! Tus boletos están confirmados</h2>
+        <p class="ecDoneText">Enviamos el comprobante y tus entradas a tu correo.</p>
+
+        <div v-if="confirmation" class="ecDoneCard">
+            <div class="ecDoneTop">
+                <span class="ecDoneEvent">{{ config.event?.name }}</span>
+                <span class="ecDoneOrder ecMono">Orden #{{ confirmation.orderId }}</span>
+            </div>
+            <div v-if="eventDateLabel || eventSubtitle" class="ecDoneSub ecCap">{{ eventDateLabel }}<span v-if="eventDateLabel && eventSubtitle"> · </span>{{ eventSubtitle }}</div>
+            <div class="ecDoneDivider"></div>
+            <div class="ecDoneList">
+                <div v-for="t in confirmation.tickets" :key="t.uniqueCode" class="ecDoneItem">
+                    <img v-if="t.qrImageDataUri" :src="t.qrImageDataUri" class="ecDoneItemQr" alt="Código QR de la entrada" />
+                    <div class="ecDoneItemInfo">
+                        <span class="ecDoneMeta">{{ t.ticketTypeName }}<span v-if="t.attendeeName"> · {{ t.attendeeName }}</span></span>
+                        <span class="ecDoneCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ecDoneDivider"></div>
+            <div class="ecDoneFooter">
+                <div class="ecDoneTotalBox">
+                    <span class="ecDoneTotalLabel">Total</span>
+                    <span class="ecDoneTotalVal ecMono">{{ formatCurrency(confirmation.total) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="ecDoneActions">
+            <button type="button" class="ecDoneBtn" :disabled="pdfBusy" @click="downloadPdf">{{ pdfBusy ? "Generando PDF…" : "Descargar PDF" }}</button>
+            <button type="button" class="ecDoneBtn" disabled title="Muy pronto">Agregar a Wallet</button>
+        </div>
+        <button type="button" class="ecDoneRestart" @click="goHome">Volver al inicio</button>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { useCheckoutState } from "./checkoutState.partial";
+
+const {
+    config,
+    confirmation,
+    eventDateLabel,
+    eventSubtitle,
+    formatCurrency,
+    pdfBusy,
+    downloadPdf,
+    goHome
+} = useCheckoutState();
+</script>

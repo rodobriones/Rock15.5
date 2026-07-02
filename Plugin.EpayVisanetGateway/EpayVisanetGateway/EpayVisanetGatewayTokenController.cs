@@ -1,5 +1,6 @@
 using System;
 using System.Web.Http;
+using Rock;
 using Rock.Data;
 using Rock.Model;
 
@@ -13,9 +14,26 @@ namespace Rock.Plugin.EpayVisanet
         [System.Web.Http.Route( "api/EpayVisanetGateway/CreatePaymentToken" )]
         public IHttpActionResult CreatePaymentToken( [FromBody] CreatePaymentTokenRequest request )
         {
+            // Rate limit por IP: este endpoint es anonimo y recibe datos de tarjeta; sin limite es
+            // un vector de card-testing / enumeracion. Best-effort single-node, igual que Cybersource.
+            var clientIp = EpaySecurity.GetClientIp();
+            if ( !EpaySecurity.TryConsumeRateLimit( $"EpayToken:{clientIp}", 10, TimeSpan.FromMinutes( 5 ) ) )
+            {
+                return BadRequest( "Demasiados intentos. Espera unos minutos antes de reintentar." );
+            }
+
             if ( request == null )
             {
                 return BadRequest( "Request requerido." );
+            }
+
+            // Cap de tamanos antes de procesar/cachear, para no almacenar input abusivo.
+            if ( ( request.CardNumber ?? string.Empty ).Length > 25
+                || ( request.SecurityCode ?? string.Empty ).Length > 8
+                || ( request.NameOnCard ?? string.Empty ).Length > 120
+                || ( request.InstallmentCode ?? string.Empty ).Length > 16 )
+            {
+                return BadRequest( "Datos de pago invalidos." );
             }
 
             if ( !Guid.TryParse( request.GatewayGuid, out var gatewayGuid ) )

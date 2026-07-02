@@ -1,21 +1,11 @@
 <template>
     <div class="epayWrap" :id="controlId">
-        <!-- Overlay de procesamiento (durante tokenizacion) -->
-        <Teleport to="body">
-            <div v-if="isProcessing" class="epayStateOverlay">
-                <div class="epayStateModal">
-                    <div class="epaySpinner"></div>
-                    <h4 class="epayStateTitle">Procesando pago</h4>
-                    <p class="epayStateText">Por favor, no cierre esta ventana.</p>
-                </div>
-            </div>
-        </Teleport>
-
+        <!-- Sin overlay propio: el host (flujo de registro de Rock) muestra el estado de
+             "procesando" en el boton durante toda la operacion (tokenizacion + cobro). -->
         <div class="epayHeader">
             <div class="epayTitleWrap">
-                <span class="epayBadge">Pago seguro</span>
-                <h4 class="epayTitle">Tarjeta de credito</h4>
-                <p class="epaySubtitle">Ingresa los datos de la tarjeta para completar el pago.</p>
+                <h4 class="epayTitle">Tarjeta</h4>
+                <p class="epaySubtitle">Complete la informacion de pago segura.</p>
             </div>
         </div>
 
@@ -159,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, PropType, reactive, ref } from "vue";
+import { computed, PropType, reactive } from "vue";
 import { newGuid } from "@Obsidian/Utility/guid";
 import { onSubmitPayment } from "@Obsidian/Core/Controls/financialGateway";
 import { GatewayEmitStrings } from "@Obsidian/Enums/Controls/gatewayEmitStrings";
@@ -207,7 +197,15 @@ const emit = defineEmits<{
 
 const controlId = `epay-${newGuid().replace(/-/g, "")}`;
 
-const isProcessing = ref(false);
+// Fuentes vía <link> (no @import) para no bloquear el render del CSS padre, igual que Cybersource.
+// display=swap pinta con fallback al instante y cambia a la web font al cargar.
+if (typeof document !== "undefined" && !document.getElementById("epay-fonts")) {
+    const fontLink = document.createElement("link");
+    fontLink.id = "epay-fonts";
+    fontLink.rel = "stylesheet";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap";
+    document.head.appendChild(fontLink);
+}
 
 const form = reactive({
     cardNumber: "",
@@ -462,8 +460,6 @@ async function submit(): Promise<void> {
         return;
     }
 
-    isProcessing.value = true;
-
     try {
         const response = await fetch(endpoint, {
             method: "POST",
@@ -491,16 +487,13 @@ async function submit(): Promise<void> {
         const token = (result?.token || result?.Token || "").toString();
 
         if (!token) {
-            isProcessing.value = false;
             emit(GatewayEmitStrings.Error, "Gateway did not return a payment token.");
             return;
         }
 
-        isProcessing.value = false;
         emit(GatewayEmitStrings.Success, token);
     }
     catch (e) {
-        isProcessing.value = false;
         const message = e instanceof Error ? e.message : "Unknown error";
         emit(GatewayEmitStrings.Error, `Error creating payment token. ${message}`);
     }
@@ -510,8 +503,6 @@ onSubmitPayment(submit);
 </script>
 
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
-
 .epayWrap {
     --epay-bg: #fff;
     --epay-border: #d7d7d7;
@@ -533,29 +524,16 @@ onSubmitPayment(submit);
 }
 
 .epayHeader {
-    margin-bottom: 12px;
-}
-
-.epayBadge {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid #bdbdbd;
-    border-radius: var(--epay-radius-pill);
-    padding: 4px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #3b3b3b;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    background: #ffffff;
+    margin-bottom: 10px;
 }
 
 .epayTitle {
-    margin: 8px 0 0;
+    margin: 0;
     font-family: Manrope, sans-serif;
     font-size: 18px;
     font-weight: 800;
     color: #222;
+    text-transform: none;
 }
 
 .epaySubtitle {

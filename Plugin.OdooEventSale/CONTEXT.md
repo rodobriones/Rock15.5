@@ -64,6 +64,7 @@ Inscripción pagada (RegistrationEntry → ePay Visanet)
 
 ## 6. API Odoo — cambios hechos (requieren upgrade del módulo)
 
+- **(2026-06-30) `event_lines`** (addon v17.0.1.3.0): array opcional de **líneas de evento múltiples** (máx 100), p. ej. una por registrante/ticket. Cada una `{name, price>0, quantity}`. Cuando viene, los `price`/`quantity` top-level se ignoran. La action arma una `event_line` por registrante (a `r.TotalCost`, nombre "evento - asistente") **solo si la suma cuadra con lo cobrado** (±0.01); si no, cae a la línea única de siempre. Manda `price`/`quantity` igual como fallback → sin ventana de fallo si el addon viejo aún no está desplegado. El descuento/recargo siguen como `lines` aparte (el FEL reparte el descuento entre las positivas, §7 Riesgo #1).
 - `lines: [{type: "discount"|"surcharge", name, price, quantity}]` opcional (máx 10; discount price<0, surcharge >0; total redondeado > 0). Retrocompatible: sin `lines` el comportamiento es idéntico.
 - Productos nuevos en `data/default_product.xml`: EVENT-DISC, EVENT-SURCH + config params `discount_product_id`/`surcharge_product_id`; configurables en Ajustes → Event Sale API.
 - `partner.sat_name`/`partner.sat_address` (ver §5).

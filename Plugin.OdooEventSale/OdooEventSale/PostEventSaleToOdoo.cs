@@ -148,7 +148,7 @@ namespace Plugin.OdooEventSale
 
             var registrationService = new RegistrationService( rockContext );
             var registration = registrationId.HasValue
-                ? registrationService.Queryable( "RegistrationInstance,Registrants.Fees,PersonAlias.Person" )
+                ? registrationService.Queryable( "RegistrationInstance,Registrants.Fees,Registrants.PersonAlias.Person,PersonAlias.Person" )
                     .FirstOrDefault( r => r.Id == registrationId.Value )
                 : null;
 
@@ -268,6 +268,52 @@ namespace Plugin.OdooEventSale
                 includeSurcharge = false;
             }
 
+            // ----- Líneas por ticket (multilínea) -----
+            // En pago completo, una línea de evento por registrante a su costo
+            // real (descuento/recargo siguen como líneas aparte). Solo se usa si
+            // la suma cuadra con lo cobrado; si no, se cae al payload de una sola
+            // línea de arriba. Cap 100 = MAX_EVENT_LINES del addon.
+            var ticketLines = new JArray();
+            bool useTicketLines = false;
+            if ( fullPayment && registrantCount > 0 && registrantCount <= 100 )
+            {
+                decimal sumTickets = 0m;
+                var built = new List<JObject>();
+                foreach ( var r in activeRegistrants )
+                {
+                    decimal cost = Round2( r.TotalCost );
+                    if ( cost <= 0m )
+                    {
+                        continue; // FEL exige price > 0; los gratis no generan línea
+                    }
+                    string who = r.PersonAlias?.Person?.FullName;
+                    if ( who.IsNullOrWhiteSpace() )
+                    {
+                        who = "Asistente";
+                    }
+                    built.Add( new JObject
+                    {
+                        ["name"] = SanitizeSatText( instanceName + " - " + who, 500 ),
+                        ["price"] = cost,
+                        ["quantity"] = 1
+                    } );
+                    sumTickets += cost;
+                }
+
+                decimal ticketsTotal = Round2( sumTickets )
+                    + ( includeDiscount ? -discount : 0m )
+                    + ( includeSurcharge ? feeCoverage : 0m );
+
+                if ( built.Count > 0 && Math.Abs( ticketsTotal - charged ) <= 0.01m )
+                {
+                    foreach ( var line in built )
+                    {
+                        ticketLines.Add( line );
+                    }
+                    useTicketLines = true;
+                }
+            }
+
             // ----- NIT capturado en la pantalla de pago (workflow attributes) -----
             // El bloque de inscripción (RegistrationEntry) valida el NIT contra SAT en
             // la pantalla de pago y pre-pobla 'WantsInvoice' y 'Nit' al lanzar el workflow.
@@ -328,6 +374,10 @@ namespace Plugin.OdooEventSale
                 .Select( p => p.Number )
                 .FirstOrDefault();
 
+            // price/quantity (línea única) van SIEMPRE como fallback: un addon
+            // sin soporte de event_lines factura correcto con la línea única, y
+            // el addon nuevo los ignora cuando viene event_lines. Sin ventana de
+            // fallo por orden de despliegue.
             var payload = new JObject
             {
                 ["event_name"] = eventName,
@@ -347,6 +397,13 @@ namespace Plugin.OdooEventSale
                     ["reference"] = reference
                 }
             };
+
+            if ( useTicketLines )
+            {
+                // Multilínea: una línea de evento por ticket (el addon ≥17.0.1.3.0
+                // ignora price/quantity top-level cuando viene event_lines).
+                payload["event_lines"] = ticketLines;
+            }
 
             if ( satName.IsNotNullOrWhiteSpace() )
             {

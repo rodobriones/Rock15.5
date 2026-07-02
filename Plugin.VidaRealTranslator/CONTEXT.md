@@ -1,7 +1,7 @@
 # CONTEXT — VidaReal DOM Translator
 
 > Documento de contexto para que un dev/IA retome el plugin en una sesión futura.
-> Estado: **implementado y compilado** (`com.vidareal.Translator.dll` en `VidaRealTranslator\bin\Release\net472\`). Pendiente: configurar Azure + inyectar el script en los Sites + pruebas en ambiente real.
+> Estado: **implementado, compilado y endurecido para producción** (auditoría C#+JS aplicada). Incluye switcher de idioma (pill tipo Weglot), grid de administración (ver/editar/excluir/borrar traducciones) e inyección automática del script en todos los sitios al activar. Pendiente antes de prod: configurar Azure + smoke test en staging de los 2 bloques WebForms (runtime-compiled, no verificables en build).
 
 ## 1. Objetivo
 
@@ -16,11 +16,13 @@ Traducir la **interfaz** de Rock (inglés) al idioma destino **en el navegador, 
 | Normalización + hash (fuente única) | `VidaRealTranslator\TranslatorNormalization.cs` | Compilada |
 | Acceso a la tabla (SQL crudo) | `VidaRealTranslator\TranslationStore.cs` | Compilada |
 | Inyección global del script (auto on/off) | `VidaRealTranslator\TranslatorInjection.cs` | Compilada |
+| Bloque grid ver/editar traducciones (WebForms) | `RockWeb\Plugins\com_vidareal\Translator\TranslationList.ascx(.cs)` | Runtime-compiled |
+| Migración 003 (registra el grid en la página) | `VidaRealTranslator\Migrations\003_TranslationListBlock.cs` | Compilada |
 | Proveedor IA (abstracción) | `VidaRealTranslator\Providers\ITranslationProvider.cs` | Compilada |
 | Proveedor IA (Azure OpenAI) | `VidaRealTranslator\Providers\AzureOpenAiProvider.cs` | Compilada |
 | REST (`Config`, `Resolve`, `Purge`) | `VidaRealTranslator\Rest\TranslatorController.cs` | Compilada |
-| Migración 001 (tabla + Global Attributes) | `VidaRealTranslator\Migrations\001_TranslatorSetup.cs` | Compilada |
-| Migración 002 (página + bloque de config; borra los Global Attributes de 001) | `VidaRealTranslator\Migrations\002_TranslatorSettingsPage.cs` | Compilada |
+| Migración 001 (solo crea la tabla + índice único) | `VidaRealTranslator\Migrations\001_TranslatorSetup.cs` | Compilada |
+| Migración 002 (página + bloque de config; borra Global Attributes legacy si existieran) | `VidaRealTranslator\Migrations\002_TranslatorSettingsPage.cs` | Compilada |
 | Bloque de configuración (WebForms) | `RockWeb\Plugins\com_vidareal\Translator\TranslatorSettings.ascx(.cs)` | Runtime-compiled |
 | Traductor DOM (vanilla JS) | `RockWeb\Plugins\com_vidareal\Translator\translator.js` | Listo |
 | Self-check de salvaguardas | `RockWeb\Plugins\com_vidareal\Translator\test_translator.js` | `node test_translator.js` |
@@ -34,8 +36,9 @@ Docs: `README.md` (punto de entrada, instalación y afinación) · `CONTEXT.md` 
 2. **Sin entidad EF (`Model<T>`/`Service<T>`), SQL crudo parametrizado.** El único consumidor de la tabla es el controller REST; raw SQL evita todo el boilerplate de EF/DbContext (no hay grid ni REST auto-CRUD que justifique una entidad). Subir a `Model<T>` solo si después se quiere un grid/CRUD para la pantalla de revisión manual.
 3. **El cliente no hashea.** `translator.js` envía el **texto normalizado**; el servidor hashea (SHA-256). El único uso del hash es el índice único de BD, así que vive solo donde se necesita. Esto **elimina toda una clase de bugs**: "hash desincronizado cliente/servidor". La normalización sí está duplicada (debe coincidir), y por eso hay un test que lo verifica.
 4. **localStorage, no IndexedDB.** El mapeo es string→string; localStorage sobra. IndexedDB sería sobre-ingeniería.
-5. **Config por Global Attributes + editor nativo de Rock**, no un bloque admin nuevo. Reusa la UI de administración de Rock y el almacenamiento encriptado (`Encrypted Text` para la API key).
-6. **Degradación con gracia en todo el pipeline.** Config falla → arranca con defaults (`es`). IA falla/timeout → deja originales. localStorage lleno → ignora. Excepción en el observer → nunca rompe la página.
+5. **Config en página propia bajo Installed Plugins (block attributes), NO Global Attributes.** Encapsulada (no ensucia la lista global). Settings declaradas como decoradores `[…Field]` en el bloque (Rock genera el formulario, incl. `Encrypted Text` para la API key). El REST las lee por el Guid fijo del bloque vía `BlockCache`.
+6. **Degradación con gracia en todo el pipeline.** Config falla → arranca con defaults (`es`). IA falla/timeout/respuesta parcial → deja originales (no envenena caché). localStorage lleno → purga y reintenta. Selector de config inválido → se descarta. Excepción en cualquier punto → nunca rompe la página.
+7. **Performance del observer.** El `MutationObserver` recolecta solo los subárboles añadidos/mutados (no re-barre todo `document.body` en cada mutación); las pasadas completas quedan para carga/late-render/navegación.
 
 ## 4. Flujo end-to-end
 
@@ -43,11 +46,13 @@ Docs: `README.md` (punto de entrada, instalación y afinación) · `CONTEXT.md` 
 Carga de página (script inyectado AUTO en el PageHeaderContent de todos los sitios
                  al activar el toggle Habilitado -> TranslatorInjection.Apply)
   └─ boot(): GET api/com_vidareal/Translator/Config  (1 vez)
-       → { enabled, targetLanguage, include, exclude, uiSelectWhitelist }
-       (si falla → defaults: enabled=true, lang=es)
-  └─ start(): rescanBurst(body) + MutationObserver + hook postbacks (ASP.NET AJAX) + hook navegacion SPA (history)
+       → { enabled, targetLanguage, sourceLanguage, showSwitcher, availableLanguages[], switcherContainer, include, exclude, uiSelectWhitelist }
+       (si falla → defaults: enabled=true, lang=es). Idioma efectivo = localStorage 'vrtr:lang' || targetLanguage.
+  └─ start() [guard: una sola vez]: renderSwitcher() (pill) ; si lang==sourceLanguage NO traduce ;
+       si no: rescanBurst(body) + MutationObserver + hook postbacks (ASP.NET AJAX) + hook navegacion SPA (history)
        cobertura de bloques async: full load, postback parcial, inyeccion AJAX/Obsidian,
-       navegacion client-side (pushState/popstate) y render tardio (burst 0/600/1500ms)
+       navegacion client-side (pushState/popstate) y render tardio (burst 0/600/1500ms).
+       MutationObserver: recolecta SOLO subarboles anadidos/mutados (no todo el body).
        └─ collect(root): recorre text nodes, atributos visibles y <option>
             aplica salvaguardas translatable() (UI sí, datos no) → Map(normText → [applyFns])
        └─ resolve(map):
@@ -92,8 +97,6 @@ Tabla **`_com_vidareal_Translator_Translation`** (creada por la migración):
 
 Patrón tomado de `Plugin.CybersourceInlineRestGateway`: `Rock.Rest.ApiControllerBase` + `[RestControllerGuid]` + `[Route]` explícitas.
 
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
 El controller lleva `[Authenticate]` (Rock.Rest.Filters) → **todas** las acciones exigen usuario autenticado de Rock. Sin esto serían anónimas (ApiControllerBase no autentica por sí solo).
 
 | Método | Ruta | Auth | Descripción |
@@ -102,7 +105,7 @@ El controller lleva `[Authenticate]` (Rock.Rest.Filters) → **todas** las accio
 | `POST` | `api/com_vidareal/Translator/Resolve` | Autenticado | Lookup batch + traducir faltantes + persistir. Body: `{ targetLanguage, items[] }`. Devuelve `{ results: { norm: trad } }` solo con lo resuelto. |
 | `POST` | `api/com_vidareal/Translator/Purge` | **Admin** | Borra la caché (opcional `?targetLanguage=es`). Solo miembros del grupo "RSR - Rock Administration". Devuelve `{ deleted }`. |
 
-Topes anti-costo: `MaxItemsPerRequest = 250` y `MaxCharsPerItem = 2000` por request; `MaxNewPerHour = 5000` traducciones NUEVAS globales por ventana de 1h (contador estático con lock; al excederse se devuelven cacheadas/originales). Items vacíos o gigantes se descartan; se deduplica por hash dentro del request. La traducción de la IA se **sanitiza** (strip de etiquetas `<...>`) antes de persistir/devolver.
+Topes anti-costo: `MaxItemsPerRequest = 250` y `MaxCharsPerItem = 2000` por request; `MaxNewPerHour = 5000` traducciones NUEVAS por ventana de 1h (contador estático con lock; cuenta solo lo realmente traducido, no reserva → una caída de Azure no auto-deniega). Items vacíos/gigantes se descartan; dedup por hash. El `targetLanguage` del cliente se valida (regex ISO, columna `nvarchar(10)`). La traducción de la IA se **sanitiza** (strip de `<...>`) y se re-valida (si queda vacía no se persiste); solo se acepta la respuesta de la IA si está **completa** (1 clave por texto) para no envenenar la caché.
 
 ## 7. Configuración (página propia, block attributes — NO Global Attributes)
 
@@ -117,21 +120,27 @@ La config vive en una **página bajo Installed Plugins** (*Admin Tools → Insta
 | `AzureDeployment` | Text | (vacío) | Nombre del deployment. |
 | `AzureApiKey` | Encrypted Text | (vacío) | API key (se desencripta con `Encryption.DecryptString`). |
 | `AzureApiVersion` | Text | `2024-06-01` | api-version de Azure OpenAI. |
-| `IncludeSelectors` | Memo | (vacío) | Selectores extra a incluir (uno por línea). |
+| `IncludeSelectors` | Memo | (vacío) | Selectores extra a incluir (uno por línea). *(El JS aún no lo consume.)* |
 | `ExcludeSelectors` | Memo | (vacío) | Selectores extra a excluir (uno por línea). |
 | `UiSelectWhitelist` | Memo | (vacío) | `<select>` cuyas `<option>` sí se traducen. |
+| `ShowSwitcher` | Boolean | `False` | Muestra el switcher de idioma flotante. |
+| `SourceLanguage` | Text | `en` | Idioma original; al elegirlo en el switcher NO se traduce. |
+| `AvailableLanguages` | Memo | (vacío) | Idiomas del switcher: `código|Etiqueta` por línea. |
+
+> El bloque de settings (`TranslatorSettings`) y el de grid (`TranslationList`, migración 003) viven en la misma página *Installed Plugins → VidaReal Translator*. El `GetConfig` devuelve además `sourceLanguage`, `showSwitcher` y `availableLanguages` (lista `{code,label}`) que consume el switcher de `translator.js`.
 
 Si endpoint/deployment/apiKey faltan → `GetProvider()` devuelve `null` → no se traduce, se devuelven originales (no rompe nada).
 
-> ⚠️ El JS lee `include`/`exclude`/`uiSelectWhitelist` desde `Config`, pero **hoy solo aplica `exclude` y `uiSelectWhitelist`** (`mergeSelectors`/`linesToArray` en `boot()`). `include` se devuelve pero el JS no lo consume — los selectores de inclusión son los hardcodeados (text nodes + atributos + `<select>`). Ver `docs\TUNING.md`.
+> ⚠️ El JS lee `include`/`exclude`/`uiSelectWhitelist` desde `Config`, pero **hoy solo aplica `exclude` y `uiSelectWhitelist`** (`mergeSelectors`/`linesToArray` en `boot()`). `include` se devuelve pero el JS no lo consume — los selectores de inclusión son los hardcodeados (text nodes + atributos + `<select>`). Ver README → Afinación.
 
 ## 8. Riesgos conocidos / pendientes (deferred)
 
 - **Autorización del REST (RESUELTO en auditoría).** El controller lleva `[Authenticate]` → `Config`/`Resolve`/`Purge` exigen usuario autenticado; `Purge` además exige admin. Esto cierra el Denial-of-Wallet (endpoint anónimo que gastaba Azure). Residual: con auth por cookie de Rock hay riesgo teórico de CSRF en los POST (una página externa podría forzar el navegador del usuario autenticado). Mitigado parcialmente por `same-origin`; endurecer con token/validación de origen si se vuelve relevante. Rate-limit es global, no por-persona (un staff abusivo podría consumir la cuota de la ventana).
 - **`response_format` del modelo.** `AzureOpenAiProvider` pide `response_format: json_object`; **el deployment debe soportarlo** (modelos/api-version recientes). Si el modelo no lo soporta, la respuesta puede no ser JSON parseable → `JObject.Parse` lanza → la traducción se omite (deja originales). Verificar al elegir deployment.
 - **Afinación de selectores.** `translatable` y `DATA_CELLS` son conservadores pero no perfectos; pueden quedar strings de UI sin traducir (falsos negativos). ⚠️ Endurecido en auditoría: `shouldTranslateSelect` es ahora **whitelist-only** — las `<option>` NO se traducen salvo que el `<select>` esté en `UiSelectWhitelist` (antes una heurística podía mandar datos como nombres de campus a la IA). Afinar con los Global Attributes de selectores y `data-no-translate`/`.notranslate` (ver README → Afinación).
-- **`include` no consumido por el JS** (ver §7): si se necesita ampliar inclusión hay que tocar el JS, no basta el Global Attribute.
-- **Pantalla de revisión diferida.** No hay UI para revisar/editar/aprobar traducciones: hoy se hace editando la tabla a mano (`TranslatedText` o `Status='Excluded'`). Si hace falta UI, subir el store a `Model<T>` y montar un grid.
+- **`include` no consumido por el JS** (ver §7): si se necesita ampliar inclusión hay que tocar el JS, no basta el block attribute.
+- **Pantalla de revisión: IMPLEMENTADA.** El bloque grid `TranslationList` (migración 003) permite ver/buscar/filtrar/editar/excluir/borrar traducciones desde la misma página del plugin. (Sigue usando `TranslationStore` por SQL crudo, sin entidad EF.)
+- **Throttle es por proceso/AppDomain.** El tope `MaxNewPerHour` es por servidor; en granja el efectivo = tope × N servidores. Un límite distribuido real necesitaría estado compartido (no implementado, no necesario hoy).
 - **PII en atributos (riesgo residual, M5).** `title`/`aria-label`/`alt` traducibles se envían a Azure; podrían contener nombres de personas (p.ej. `title` de un avatar). El interior de grids (la fuente masiva de datos) ya se excluye, y el prompt instruye no traducir nombres propios, pero la exclusión heurística no es perfecta. Relevante por la política de confidencialidad de datos de miembros: si preocupa, excluir contenedores de persona vía `ExcludeSelectors` o quitar esos atributos del recolector en `translator.js`.
 - **Detección "ya está en español" omitida.** Si la UI ya tiene texto en el idioma destino, la IA lo devuelve sin cambios y se cachea igual (costo: una traducción por string). Aceptado.
 - **`UsageCount` no se incrementa** (la columna existe para futuro).

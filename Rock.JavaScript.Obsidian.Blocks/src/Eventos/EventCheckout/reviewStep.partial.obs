@@ -1,0 +1,119 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- STEP 3: Revisión — resumen de la orden, código promocional y factura (NIT validado en SAT). -->
+<template>
+    <div class="ecNarrow">
+        <h2 class="ecPaneTitle">Revisa tu orden</h2>
+        <p class="ecPaneText">Confirma el detalle, aplica un código y elige si necesitas factura.</p>
+
+        <div class="ecSummary">
+            <div v-for="row in summaryRows" :key="row.ticketTypeId" class="ecSumRow">
+                <span>{{ row.quantity }}× {{ row.name }}</span>
+                <span class="ecMono">{{ formatCurrency(row.lineTotal) }}</span>
+            </div>
+            <div class="ecSumRow ecSumIva">
+                <span>Incluye IVA (12%)</span>
+                <span class="ecMono">{{ formatCurrency(ivaIncluded) }}</span>
+            </div>
+            <div v-if="discount > 0" class="ecSumRow ecSumDiscount">
+                <span>Descuento ({{ appliedPromo?.code }})</span>
+                <span class="ecMono">− {{ formatCurrency(discount) }}</span>
+            </div>
+            <div class="ecSumRow ecSumTotal">
+                <span>Total al contado</span>
+                <span class="ecMono">{{ formatCurrency(grandTotal) }}</span>
+            </div>
+        </div>
+
+        <!-- Código de descuento -->
+        <div v-if="!appliedPromo" class="ecPromoRow">
+            <input v-model="promoInput"
+                   class="form-control ecInput ecPromoInput"
+                   type="text"
+                   maxlength="50"
+                   placeholder="¿Tienes un código de descuento?"
+                   @keyup.enter="applyPromo" />
+            <RockButton class="ecPromoBtn" btnType="primary" :disabled="promoBusy || !promoInput.trim()" @click="applyPromo">
+                {{ promoBusy ? "…" : "Aplicar" }}
+            </RockButton>
+        </div>
+        <div v-else class="ecPromoApplied">
+            <span class="ecPromoTag">✓ {{ appliedPromo.code }}</span>
+            <span class="ecPromoDesc">{{ appliedPromo.description }}</span>
+            <button type="button" class="ecPromoRemove" @click="removePromo">Quitar</button>
+        </div>
+        <p v-if="promoError" class="ecFieldError">{{ promoError }}</p>
+
+        <!-- Factura (no aplica en entradas gratuitas: Q0 no genera FEL) -->
+        <div v-if="!isFree" class="ecToggleRow">
+            <div class="ecToggleText">
+                <div class="ecToggleTitle">¿Necesitas factura?</div>
+                <div class="ecToggleDesc">Ingresa tu NIT y valídalo; la razón social se trae de SAT.</div>
+            </div>
+            <label class="ecSwitch">
+                <input type="checkbox" v-model="wantsInvoice">
+                <span class="ecSlider"></span>
+            </label>
+        </div>
+        <div v-show="!isFree && wantsInvoice" class="ecInvoice">
+            <div class="ecNitRow">
+                <input v-model="nit" class="form-control ecInput" type="text" placeholder="NIT" maxlength="32" />
+                <RockButton class="ecPromoBtn" btnType="default" :disabled="busyNit || !nit" @click="validateNit">
+                    {{ busyNit ? "Validando…" : "Validar NIT" }}
+                </RockButton>
+            </div>
+            <p v-if="nitError" class="ecFieldError">{{ nitError }}</p>
+            <div v-if="invoiceName || nitAddress" class="ecNitResult">
+                <label class="ecNitField">
+                    <span>Nombre / Razón Social</span>
+                    <input :value="invoiceName" class="form-control ecInput" type="text" readonly disabled />
+                </label>
+                <label v-if="nitAddress" class="ecNitField">
+                    <span>Dirección</span>
+                    <input :value="nitAddress" class="form-control ecInput" type="text" readonly disabled />
+                </label>
+            </div>
+        </div>
+
+        <p class="ecHint">
+            Precios en GTQ, IVA incluido. Si eliges pago en cuotas, el recargo se calcula y se
+            muestra en el control de pago y se suma al cargo final.
+        </p>
+
+        <div class="ecActions">
+            <RockButton class="ecGhost" btnType="default" @click="step = 2">← Atrás</RockButton>
+            <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy" @click="goToPayment">
+                {{ busy ? "Reservando…" : "Continuar a pago" }} <span v-if="!busy" class="ecCtaArrow">→</span>
+            </RockButton>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { useCheckoutState } from "./checkoutState.partial";
+
+const {
+    step,
+    busy,
+    summaryRows,
+    formatCurrency,
+    ivaIncluded,
+    discount,
+    grandTotal,
+    isFree,
+    appliedPromo,
+    promoInput,
+    promoBusy,
+    promoError,
+    applyPromo,
+    removePromo,
+    wantsInvoice,
+    nit,
+    invoiceName,
+    nitAddress,
+    busyNit,
+    nitError,
+    validateNit,
+    goToPayment
+} = useCheckoutState();
+</script>

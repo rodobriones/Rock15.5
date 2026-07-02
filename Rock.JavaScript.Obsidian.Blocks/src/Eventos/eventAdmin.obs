@@ -1,0 +1,1347 @@
+<template>
+    <Panel type="block" title="Eventos • Administración">
+        <template #default>
+            <NotificationBox v-if="config.notLogged" alertType="warning">
+                Debes iniciar sesión para administrar eventos.
+            </NotificationBox>
+
+            <NotificationBox v-else-if="!config.canEdit" alertType="warning">
+                No tienes permiso para administrar eventos.
+            </NotificationBox>
+
+            <div v-else>
+                <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+                <NotificationBox v-if="ok" alertType="success" class="mb-3">{{ ok }}</NotificationBox>
+
+                <!-- LIST VIEW -->
+                <div v-if="view === 'list'">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">Eventos <span v-if="!busy" class="text-muted small">({{ filteredEvents.length }} de {{ events.length }})</span></h4>
+                        <div>
+                            <RockButton v-if="config.canAdministrate" btnType="default" btnSize="sm" :disabled="busy" @click="openStaffView">
+                                Permisos
+                            </RockButton>
+                            <RockButton btnType="default" btnSize="sm" :disabled="busy" @click="loadEvents">
+                                {{ busy ? "Cargando..." : "Recargar" }}
+                            </RockButton>
+                            <RockButton btnType="primary" btnSize="sm" :disabled="busy" @click="newEvent">
+                                Nuevo evento
+                            </RockButton>
+                        </div>
+                    </div>
+
+                    <!-- Filtros del listado -->
+                    <div class="row">
+                        <div class="col-md-5">
+                            <TextBox v-model="listSearch" placeholder="Buscar por nombre, lugar o slug..." />
+                        </div>
+                        <div class="col-md-3">
+                            <DropDownList v-model="listStatus" :items="listStatusOptions" :showBlankItem="false" />
+                        </div>
+                        <div class="col-md-4">
+                            <CheckBox v-model="listShowPast" label="" text="Mostrar eventos pasados" />
+                        </div>
+                    </div>
+
+                    <div v-if="busy" class="text-muted">Cargando eventos...</div>
+
+                    <div v-else-if="events.length === 0" class="text-muted">
+                        No hay eventos. Crea el primero con “Nuevo evento”.
+                    </div>
+
+                    <div v-else-if="filteredEvents.length === 0" class="text-muted">
+                        Ningún evento coincide con el filtro.
+                    </div>
+
+                    <table v-else class="grid-table table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Evento</th>
+                                <th>Estado</th>
+                                <th>Inicia</th>
+                                <th class="text-right">Vendidos / Cupo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="e in filteredEvents" :key="e.eventId">
+                                <td>
+                                    <strong>{{ e.name }}</strong>
+                                    <div v-if="e.venueName" class="text-muted small">{{ e.venueName }}</div>
+                                </td>
+                                <td><span class="label" :class="statusBadgeClass(e.status)">{{ statusLabelEs(e.status) }}</span></td>
+                                <td>{{ fmtDate(e.startDateTime) }}</td>
+                                <td class="text-right">
+                                    {{ e.totalSold }} / {{ e.totalCapacity == null ? "∞" : e.totalCapacity }}
+                                    <span v-if="e.totalCapacity" class="text-muted small">({{ Math.round(e.totalSold * 100 / e.totalCapacity) }}%)</span>
+                                </td>
+                                <td class="text-right" style="white-space: nowrap;">
+                                    <a v-if="config.checkoutUrlTemplate" :href="checkoutUrl(e.eventId)" target="_blank" class="btn btn-link btn-sm">Checkout</a>
+                                    <RockButton btnType="link" btnSize="sm" :disabled="busy" @click="duplicateEvent(e)">Duplicar</RockButton>
+                                    <RockButton btnType="link" btnSize="sm" @click="openEvent(e.eventId)">Editar</RockButton>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- STAFF / PERMISOS VIEW -->
+                <div v-else-if="view === 'staff'">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">Permisos de escáner y reportería</h4>
+                        <RockButton btnType="link" btnSize="sm" @click="view = 'list'">← Volver al listado</RockButton>
+                    </div>
+
+                    <NotificationBox alertType="info">
+                        Los administradores y el staff de Rock ya ven todos los eventos. Aquí asignas acceso puntual a otras
+                        personas: qué eventos pueden <strong>escanear (check-in)</strong> y de cuáles pueden <strong>ver la reportería</strong>.
+                        Comparte con ellos las rutas <code>eventos/scanner</code> y <code>eventos/reporteria</code>.
+                    </NotificationBox>
+
+                    <div class="panel panel-block mb-3">
+                        <div class="panel-heading"><h3 class="panel-title">Nueva asignación</h3></div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <PersonPicker v-model="staffPerson" label="Persona" />
+                                </div>
+                                <div class="col-md-5">
+                                    <DropDownList v-model="staffEventIds"
+                                                  label="Eventos"
+                                                  :items="staffEventOptions"
+                                                  :multiple="true"
+                                                  :enhanceForLongLists="true" />
+                                </div>
+                                <div class="col-md-3">
+                                    <CheckBox v-model="staffCanScan" label="" text="Puede escanear (check-in)" />
+                                    <CheckBox v-model="staffCanReport" label="" text="Puede ver reportería" />
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <RockButton btnType="primary" btnSize="sm" :disabled="busy" @click="saveStaff">Guardar asignación</RockButton>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="staffBusy" class="text-muted">Cargando asignaciones...</div>
+                    <div v-else-if="staffRows.length === 0" class="text-muted">
+                        Aún no hay asignaciones. Solo administradores y staff pueden usar el escáner y la reportería.
+                    </div>
+                    <table v-else class="grid-table table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Persona</th>
+                                <th>Evento</th>
+                                <th class="text-center">Escáner</th>
+                                <th class="text-center">Reportería</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in staffRows" :key="r.id">
+                                <td>{{ r.personName }}</td>
+                                <td>
+                                    {{ r.eventName }}
+                                    <div class="text-muted small">{{ fmtDate(r.eventStartDateTime) }}</div>
+                                </td>
+                                <td class="text-center">
+                                    <input type="checkbox" :checked="r.canScan" :disabled="busy" @change="toggleStaffFlag(r, 'canScan')" />
+                                </td>
+                                <td class="text-center">
+                                    <input type="checkbox" :checked="r.canViewReport" :disabled="busy" @change="toggleStaffFlag(r, 'canViewReport')" />
+                                </td>
+                                <td class="text-right">
+                                    <RockButton btnType="link" btnSize="sm" :disabled="busy" @click="deleteStaff(r)">Quitar</RockButton>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- DETAIL VIEW -->
+                <div v-else-if="view === 'detail'">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">{{ eventForm.id ? "Editar evento" : "Nuevo evento" }}</h4>
+                        <RockButton btnType="link" btnSize="sm" @click="backToList">← Volver al listado</RockButton>
+                    </div>
+
+                    <!-- Dashboard -->
+                    <div v-if="eventForm.id" class="row mb-3">
+                        <div class="col-sm-4">
+                            <div class="panel panel-block">
+                                <div class="panel-body text-center">
+                                    <div class="text-muted small">Vendidos</div>
+                                    <div class="h2 mb-0">{{ dashboard.totalSold }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="panel panel-block">
+                                <div class="panel-body text-center">
+                                    <div class="text-muted small">Cupo total</div>
+                                    <div class="h2 mb-0">{{ dashboard.totalCapacity == null ? "∞" : dashboard.totalCapacity }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4">
+                            <div class="panel panel-block">
+                                <div class="panel-body text-center">
+                                    <div class="text-muted small">Disponibles</div>
+                                    <div class="h2 mb-0">{{ available }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Event form -->
+                    <div class="panel panel-block mb-3">
+                        <div class="panel-heading"><h3 class="panel-title">Datos del evento</h3></div>
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <TextBox v-model="eventForm.name" label="Nombre" :required="true" />
+                                </div>
+                                <div class="col-md-4">
+                                    <DropDownList v-model="eventForm.status" label="Estado" :items="statusOptions" :showBlankItem="false" />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <TextBox v-model="eventForm.slug" label="Slug" help="Identificador para URL (opcional)." />
+                                </div>
+                                <div class="col-md-6">
+                                    <TextBox v-model="eventForm.venueName" label="Lugar / Venue" />
+                                </div>
+                            </div>
+                            <div v-if="eventCheckoutSlugUrl" class="form-group">
+                                <label class="control-label">URL del checkout (por slug)</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" :value="eventCheckoutSlugUrl" readonly @focus="(e) => (e.target as HTMLInputElement).select()" />
+                                    <span class="input-group-btn">
+                                        <RockButton btnType="default" @click="copyCheckoutUrl">{{ copied ? "¡Copiada!" : "Copiar" }}</RockButton>
+                                    </span>
+                                </div>
+                                <span class="help-block">Comparte este enlace para vender entradas de este evento.</span>
+                            </div>
+                            <TextBox v-model="eventForm.description" label="Descripción" textMode="multiline" :rows="3" />
+                            <ImageUploader v-model="eventForm.image"
+                                           label="Imagen del evento"
+                                           help="Se muestra en el checkout, arriba de los boletos."
+                                           :uploadAsTemporary="true"
+                                           uploadButtonText="Subir imagen"
+                                           :showDeleteButton="true" />
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <DropDownList v-model="eventForm.headerStyle"
+                                                  label="Estilo del header en el checkout"
+                                                  help="Persistente: imagen grande tipo portada. Condensado: barra fina fija arriba (más boletos a la vista)."
+                                                  :items="headerStyleOptions"
+                                                  :showBlankItem="false" />
+                                </div>
+                                <div class="col-md-6">
+                                    <DropDownList v-model="eventForm.category"
+                                                  label="Categoría (badge del hero)"
+                                                  help="Muestra un badge de color en el checkout. Déjalo en blanco para no mostrar badge."
+                                                  :items="categoryOptions"
+                                                  :showBlankItem="true"
+                                                  blankValue="" />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <DateTimePicker v-model="eventForm.startDateTime" label="Inicia" />
+                                </div>
+                                <div class="col-md-6">
+                                    <DateTimePicker v-model="eventForm.endDateTime" label="Termina" />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <DropDownList v-model="eventForm.campusId" label="Campus" :items="campusOptions" :showBlankItem="true" />
+                                </div>
+                                <div class="col-md-4">
+                                    <DropDownList v-model="eventForm.financialGatewayId" label="Gateway" :items="gatewayOptions" :showBlankItem="true" />
+                                </div>
+                                <div class="col-md-4">
+                                    <DropDownList v-model="eventForm.financialAccountId" label="Cuenta" :items="accountOptions" :showBlankItem="true" />
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <RockButton btnType="primary" :disabled="busy" @click="saveEvent">Guardar evento</RockButton>
+                                <RockButton v-if="eventForm.id" btnType="danger" :disabled="busy" @click="deleteEvent">Eliminar</RockButton>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="!eventForm.id" class="text-muted">
+                        Guarda el evento para poder agregar tipos de ticket y códigos promocionales.
+                    </div>
+
+                    <!-- Ticket Types -->
+                    <div v-if="eventForm.id" class="panel panel-block mb-3">
+                        <div class="panel-heading d-flex justify-content-between align-items-center">
+                            <h3 class="panel-title">Tipos de ticket</h3>
+                            <RockButton btnType="primary" btnSize="xs" @click="newTicketType">Agregar tipo</RockButton>
+                        </div>
+                        <div class="panel-body">
+                            <table v-if="ticketTypes.length" class="grid-table table table-bordered table-striped mb-3">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th class="text-right">Precio</th>
+                                        <th class="text-right">Cupo</th>
+                                        <th class="text-right">Vendidos</th>
+                                        <th>Activo</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="t in ticketTypes" :key="t.id">
+                                        <td>{{ t.name }}</td>
+                                        <td class="text-right">{{ fmtMoney(t.price) }}</td>
+                                        <td class="text-right">{{ t.capacity == null ? "∞" : t.capacity }}</td>
+                                        <td class="text-right">{{ t.sold }}</td>
+                                        <td>{{ t.isActive ? "Sí" : "No" }}</td>
+                                        <td class="text-right">
+                                            <RockButton btnType="link" btnSize="sm" @click="editTicketType(t)">Editar</RockButton>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div v-else class="text-muted mb-3">Aún no hay tipos de ticket.</div>
+
+                            <!-- Ticket type editor -->
+                            <div v-if="ttForm" class="well">
+                                <h4>{{ ttForm.id ? "Editar tipo de ticket" : "Nuevo tipo de ticket" }}</h4>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <TextBox v-model="ttForm.name" label="Nombre" :required="true" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <CurrencyBox v-model="ttForm.price" label="Precio" />
+                                    </div>
+                                </div>
+                                <TextBox v-model="ttForm.description" label="Descripción" textMode="multiline" :rows="2" />
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <NumberBox v-model="ttForm.capacity" label="Cupo" help="Vacío = ilimitado." />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <NumberBox v-model="ttForm.maxPerOrder" label="Máx. por orden" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <NumberBox v-model="ttForm.sortOrder" label="Orden" />
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <CurrencyBox v-model="ttForm.earlyBirdPrice" label="Precio early-bird" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <DatePicker v-model="ttForm.earlyBirdUntil" label="Early-bird hasta" />
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <DatePicker v-model="ttForm.salesStart" label="Venta inicia" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <DatePicker v-model="ttForm.salesEnd" label="Venta termina" />
+                                    </div>
+                                </div>
+                                <CheckBox v-model="ttForm.isActive" label="Activo" />
+
+                                <hr />
+                                <h5>Preguntas al asistente</h5>
+                                <p class="text-muted" style="font-size:12px;">
+                                    Se preguntan por cada entrada de este tipo en el checkout. Las respuestas quedan en el
+                                    perfil de la persona: en futuros eventos ya salen pre-llenadas.
+                                </p>
+
+                                <div class="row">
+                                    <div v-for="b in BASIC_DEFS" :key="b.key" class="col-md-3 col-sm-6">
+                                        <CheckBox :modelValue="basicSel[b.key]?.enabled ?? false"
+                                                  @update:modelValue="v => basicSel[b.key] = { enabled: v, required: v && (basicSel[b.key]?.required ?? false) }"
+                                                  :label="b.label" />
+                                        <CheckBox v-if="basicSel[b.key]?.enabled"
+                                                  :modelValue="basicSel[b.key].required"
+                                                  @update:modelValue="v => basicSel[b.key] = { enabled: true, required: v }"
+                                                  label="" text="Obligatoria" />
+                                    </div>
+                                </div>
+
+                                <div v-if="attrSel.length" style="border:1px solid #ececf0; border-radius:10px; overflow:hidden; margin-bottom:10px;">
+                                    <div v-for="a in attrSel" :key="a.guid"
+                                         style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; border-bottom:1px solid #f0f0f3;">
+                                        <span style="font-weight:600;">{{ a.name }}</span>
+                                        <span style="display:flex; align-items:center; gap:12px; flex:none;">
+                                            <label style="margin:0; font-weight:400; font-size:12px; cursor:pointer;">
+                                                <input type="checkbox" v-model="a.required" /> Obligatoria
+                                            </label>
+                                            <RockButton btnType="link" btnSize="sm" @click="removeAttrQuestion(a.guid)">Quitar</RockButton>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <DropDownList v-model="attrToAdd" :items="catalogAddOptions" label="Agregar pregunta del catálogo" />
+                                    </div>
+                                    <div class="col-md-4" style="padding-top: 25px;">
+                                        <RockButton btnType="default" btnSize="sm" :disabled="!attrToAdd" @click="addCatalogQuestion">Agregar</RockButton>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <DropDownList v-model="templateToApply" :items="templateOptions" label="Aplicar plantilla" help="Reemplaza las preguntas de este boleto por las de la plantilla." />
+                                    </div>
+                                    <div class="col-md-4" style="padding-top: 25px;">
+                                        <RockButton btnType="default" btnSize="sm" :disabled="!templateToApply" @click="applyTemplate">Aplicar</RockButton>
+                                    </div>
+                                </div>
+
+                                <p class="text-muted" style="font-size:12px;">
+                                    Las preguntas y plantillas se crean y administran en <strong>Eventos → Catálogo de Preguntas</strong>.
+                                </p>
+                                <div class="actions">
+                                    <RockButton btnType="primary" btnSize="sm" :disabled="busy" @click="saveTicketType">Guardar</RockButton>
+                                    <RockButton v-if="ttForm.id" btnType="danger" btnSize="sm" :disabled="busy" @click="deleteTicketType">Eliminar</RockButton>
+                                    <RockButton btnType="link" btnSize="sm" @click="ttForm = null">Cancelar</RockButton>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Promo Codes -->
+                    <div v-if="eventForm.id" class="panel panel-block mb-3">
+                        <div class="panel-heading d-flex justify-content-between align-items-center">
+                            <h3 class="panel-title">Códigos promocionales</h3>
+                            <RockButton btnType="primary" btnSize="xs" @click="newPromoCode">Agregar código</RockButton>
+                        </div>
+                        <div class="panel-body">
+                            <table v-if="promoCodes.length" class="grid-table table table-bordered table-striped mb-3">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descuento</th>
+                                        <th class="text-right">Usos</th>
+                                        <th>Activo</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="p in promoCodes" :key="p.id">
+                                        <td>{{ p.code }}</td>
+                                        <td>{{ fmtDiscount(p) }}</td>
+                                        <td class="text-right">{{ p.usedCount }} / {{ p.maxUses || "∞" }}</td>
+                                        <td>{{ p.isActive ? "Sí" : "No" }}</td>
+                                        <td class="text-right">
+                                            <RockButton btnType="link" btnSize="sm" @click="editPromoCode(p)">Editar</RockButton>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div v-else class="text-muted mb-3">Aún no hay códigos promocionales.</div>
+
+                            <!-- Promo code editor -->
+                            <div v-if="pcForm" class="well">
+                                <h4>{{ pcForm.id ? "Editar código" : "Nuevo código" }}</h4>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <TextBox v-model="pcForm.code" label="Código" :required="true" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <DropDownList v-model="pcForm.discountType" label="Tipo de descuento" :items="discountTypeOptions" :showBlankItem="false" />
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <NumberBox v-model="pcForm.discountValue" label="Valor del descuento" :decimalCount="2" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <NumberBox v-model="pcForm.maxUses" label="Usos máximos" help="0 = ilimitado." />
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <DatePicker v-model="pcForm.validFrom" label="Válido desde" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <DatePicker v-model="pcForm.validUntil" label="Válido hasta" />
+                                    </div>
+                                </div>
+                                <DropDownList v-model="pcForm.appliesToTicketTypeId" label="Aplica solo a (tipo de ticket)" :items="ticketTypeOptions" :showBlankItem="true" />
+                                <CheckBox v-model="pcForm.isActive" label="Activo" />
+                                <div class="actions">
+                                    <RockButton btnType="primary" btnSize="sm" :disabled="busy" @click="savePromoCode">Guardar</RockButton>
+                                    <RockButton v-if="pcForm.id" btnType="danger" btnSize="sm" :disabled="busy" @click="deletePromoCode">Eliminar</RockButton>
+                                    <RockButton btnType="link" btnSize="sm" @click="pcForm = null">Cancelar</RockButton>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import NumberBox from "@Obsidian/Controls/numberBox.obs";
+import CurrencyBox from "@Obsidian/Controls/currencyBox.obs";
+import CheckBox from "@Obsidian/Controls/checkBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import DatePicker from "@Obsidian/Controls/datePicker.obs";
+import DateTimePicker from "@Obsidian/Controls/dateTimePicker.obs";
+import ImageUploader from "@Obsidian/Controls/imageUploader.obs";
+import PersonPicker from "@Obsidian/Controls/personPicker.obs";
+import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type OptionBag = { value: string; text: string };
+
+type InitBag = {
+    notLogged: boolean;
+    canEdit: boolean;
+    canAdministrate: boolean;
+    campuses: OptionBag[];
+    gateways: OptionBag[];
+    accounts: OptionBag[];
+    statusOptions: OptionBag[];
+    discountTypeOptions: OptionBag[];
+    checkoutUrlTemplate: string;
+    checkoutSlugUrlTemplate: string;
+};
+
+type EventListItemBag = {
+    eventId: number;
+    name: string;
+    slug: string | null;
+    status: number;
+    statusLabel: string;
+    startDateTime: string;
+    endDateTime: string;
+    campusId: number | null;
+    venueName: string | null;
+    totalSold: number;
+    totalCapacity: number | null;
+};
+
+type EventEditBag = {
+    id: number;
+    name: string;
+    slug: string | null;
+    description: string | null;
+    startDateTime: string | null;
+    endDateTime: string | null;
+    campusId: number | null;
+    venueName: string | null;
+    status: number;
+    organizerPersonAliasId: number | null;
+    financialGatewayId: number | null;
+    financialAccountId: number | null;
+    image: ListItemBag | null;
+    headerStyle: string | null;
+    category: string | null;
+};
+
+type TicketTypeEditBag = {
+    id: number;
+    eventId: number;
+    name: string;
+    description: string | null;
+    price: number;
+    capacity: number | null;
+    earlyBirdPrice: number | null;
+    earlyBirdUntil: string | null;
+    salesStart: string | null;
+    salesEnd: string | null;
+    maxPerOrder: number | null;
+    sortOrder: number;
+    isActive: boolean;
+    sold: number;
+    questionsJson: string | null;
+};
+
+type PromoCodeEditBag = {
+    id: number;
+    eventId: number;
+    code: string;
+    discountType: number;
+    discountValue: number;
+    maxUses: number;
+    usedCount: number;
+    validFrom: string | null;
+    validUntil: string | null;
+    appliesToTicketTypeId: number | null;
+    isActive: boolean;
+};
+
+type DashboardBag = { totalSold: number; totalCapacity: number | null };
+
+type EventDetailBag = {
+    ev: EventEditBag;
+    ticketTypes: TicketTypeEditBag[];
+    promoCodes: PromoCodeEditBag[];
+    dashboard: DashboardBag;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+// DropDownList items use string values; the bound model is a string.
+const campusOptions = ref<OptionBag[]>(config.campuses || []);
+const gatewayOptions = ref<OptionBag[]>(config.gateways || []);
+const accountOptions = ref<OptionBag[]>(config.accounts || []);
+const statusOptions = ref<OptionBag[]>(config.statusOptions || []);
+
+// Estilo del header del checkout (diseño 2026): hero completo vs barra fina sticky.
+const headerStyleOptions: OptionBag[] = [
+    { value: "persistente", text: "Persistente (hero grande)" },
+    { value: "condensado", text: "Condensado (barra fina)" }
+];
+
+// Categoría del evento: badge de color en el hero del checkout (o sin badge).
+const categoryOptions: OptionBag[] = [
+    { value: "Conferencia", text: "Conferencia" },
+    { value: "Concierto", text: "Concierto" },
+    { value: "Deportivo", text: "Deportivo" },
+    { value: "Familiar", text: "Familiar" }
+];
+const discountTypeOptions = ref<OptionBag[]>(config.discountTypeOptions || []);
+
+const view = ref<"list" | "detail" | "staff">("list");
+const busy = ref<boolean>(false);
+const err = ref<string>("");
+const ok = ref<string>("");
+
+const events = ref<EventListItemBag[]>([]);
+
+// --- Filtros del listado (client-side; el volumen anual cabe en memoria) ---
+const listSearch = ref<string>("");
+const listStatus = ref<string>("all");
+const listShowPast = ref<boolean>(false);
+
+const listStatusOptions: OptionBag[] = [
+    { value: "all", text: "Todos los estados" },
+    { value: "0", text: "Borrador" },
+    { value: "1", text: "Publicado" },
+    { value: "2", text: "Cerrado" },
+    { value: "3", text: "Cancelado" }
+];
+
+const statusEs: Record<number, string> = { 0: "Borrador", 1: "Publicado", 2: "Cerrado", 3: "Cancelado" };
+
+function statusLabelEs(status: number): string {
+    return statusEs[status] ?? String(status);
+}
+
+const statusBadge: Record<number, string> = { 0: "label-default", 1: "label-success", 2: "label-warning", 3: "label-danger" };
+
+function statusBadgeClass(status: number): string {
+    return statusBadge[status] ?? "label-default";
+}
+
+const filteredEvents = computed<EventListItemBag[]>(() => {
+    const q = listSearch.value.trim().toLowerCase();
+    const now = Date.now();
+    return events.value.filter(e => {
+        if (!listShowPast.value && new Date(e.endDateTime).getTime() < now) return false;
+        if (listStatus.value !== "all" && String(e.status) !== listStatus.value) return false;
+        if (q && !(`${e.name} ${e.venueName ?? ""} ${e.slug ?? ""}`.toLowerCase().includes(q))) return false;
+        return true;
+    });
+});
+
+// --- Permisos (EventStaff) ---
+type EventStaffRowBag = {
+    id: number;
+    personName: string;
+    personAliasGuid: string;
+    eventId: number;
+    eventName: string;
+    eventStartDateTime: string;
+    canScan: boolean;
+    canViewReport: boolean;
+};
+
+const staffRows = ref<EventStaffRowBag[]>([]);
+const staffBusy = ref<boolean>(false);
+const staffPerson = ref<ListItemBag | undefined>(undefined);
+const staffEventIds = ref<string[]>([]);
+const staffCanScan = ref<boolean>(true);
+const staffCanReport = ref<boolean>(false);
+
+const staffEventOptions = computed<OptionBag[]>(() =>
+    events.value.map(e => ({ value: String(e.eventId), text: `${e.name} — ${fmtDate(e.startDateTime)}` })));
+
+// Event form state (DropDownList-bound numeric ids stored as strings).
+type EventForm = {
+    id: number;
+    name: string;
+    slug: string;
+    description: string;
+    startDateTime: string | null;
+    endDateTime: string | null;
+    campusId: string;
+    venueName: string;
+    status: string;
+    organizerPersonAliasId: number | null;
+    financialGatewayId: string;
+    financialAccountId: string;
+    image: ListItemBag | null;
+    headerStyle: string;
+    category: string;
+};
+
+const eventForm = ref<EventForm>(blankEventForm());
+const ticketTypes = ref<TicketTypeEditBag[]>([]);
+const promoCodes = ref<PromoCodeEditBag[]>([]);
+const dashboard = ref<DashboardBag>({ totalSold: 0, totalCapacity: null });
+
+type TtForm = TicketTypeEditBag & { earlyBirdUntil: string | null; salesStart: string | null; salesEnd: string | null };
+const ttForm = ref<TtForm | null>(null);
+
+type PcForm = Omit<PromoCodeEditBag, "discountType" | "appliesToTicketTypeId"> & {
+    discountType: string;
+    appliesToTicketTypeId: string;
+};
+const pcForm = ref<PcForm | null>(null);
+
+const ticketTypeOptions = computed<OptionBag[]>(() =>
+    ticketTypes.value.map(t => ({ value: String(t.id), text: t.name }))
+);
+
+const available = computed<string>(() => {
+    if (dashboard.value.totalCapacity == null) return "∞";
+    const a = dashboard.value.totalCapacity - dashboard.value.totalSold;
+    return String(a < 0 ? 0 : a);
+});
+
+const copied = ref<boolean>(false);
+
+// URL de checkout por slug, absoluta, lista para copiar. Vacía si no hay slug o no
+// se configuró la "Checkout Page" en los settings del bloque.
+const eventCheckoutSlugUrl = computed<string>(() => {
+    const slug = eventForm.value.slug.trim();
+    const tpl = config.checkoutSlugUrlTemplate || "";
+    if (!slug || !tpl) return "";
+    const rel = tpl.replace("((Slug))", encodeURIComponent(slug));
+    // ponytail: origin del sitio admin; si el sitio externo usa otro host, ajustar manualmente.
+    return rel.startsWith("http") ? rel : window.location.origin + rel;
+});
+
+async function copyCheckoutUrl(): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(eventCheckoutSlugUrl.value);
+        copied.value = true;
+        window.setTimeout(() => { copied.value = false; }, 2000);
+    } catch {
+        err.value = "No se pudo copiar al portapapeles.";
+    }
+}
+
+function blankEventForm(): EventForm {
+    return {
+        id: 0,
+        name: "",
+        slug: "",
+        description: "",
+        startDateTime: null,
+        endDateTime: null,
+        campusId: "",
+        venueName: "",
+        status: "0",
+        organizerPersonAliasId: null,
+        financialGatewayId: "",
+        financialAccountId: "",
+        image: null,
+        headerStyle: "persistente",
+        category: ""
+    };
+}
+
+function toIntOrNull(v: string): number | null {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+function checkoutUrl(eventId: number): string {
+    return (config.checkoutUrlTemplate || "").replace("((Key))", String(eventId));
+}
+
+function fmtDate(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+}
+
+function fmtMoney(n: number): string {
+    return "Q " + (Number(n) || 0).toFixed(2);
+}
+
+function fmtDiscount(p: PromoCodeEditBag): string {
+    return p.discountType === 0 ? `${p.discountValue}%` : fmtMoney(p.discountValue);
+}
+
+function flash(message: string): void {
+    ok.value = message;
+    window.setTimeout(() => { ok.value = ""; }, 3000);
+}
+
+async function loadEvents(): Promise<void> {
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ events: EventListItemBag[] }>("GetEvents", {});
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudieron cargar los eventos.";
+            return;
+        }
+        events.value = res.data.events || [];
+    } catch {
+        err.value = "Error cargando eventos.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+function newEvent(): void {
+    eventForm.value = blankEventForm();
+    ticketTypes.value = [];
+    promoCodes.value = [];
+    dashboard.value = { totalSold: 0, totalCapacity: null };
+    ttForm.value = null;
+    pcForm.value = null;
+    err.value = "";
+    view.value = "detail";
+}
+
+async function openEvent(id: number): Promise<void> {
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<EventDetailBag>("GetEventDetail", { bag: { id } });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo cargar el evento.";
+            return;
+        }
+        applyDetail(res.data);
+        view.value = "detail";
+    } catch {
+        err.value = "Error cargando el evento.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+function applyDetail(d: EventDetailBag): void {
+    const e = d.ev;
+    eventForm.value = {
+        id: e.id,
+        name: e.name || "",
+        slug: e.slug || "",
+        description: e.description || "",
+        startDateTime: e.startDateTime,
+        endDateTime: e.endDateTime,
+        campusId: e.campusId == null ? "" : String(e.campusId),
+        venueName: e.venueName || "",
+        status: String(e.status),
+        organizerPersonAliasId: e.organizerPersonAliasId,
+        financialGatewayId: e.financialGatewayId == null ? "" : String(e.financialGatewayId),
+        financialAccountId: e.financialAccountId == null ? "" : String(e.financialAccountId),
+        image: e.image ?? null,
+        headerStyle: e.headerStyle || "persistente",
+        category: e.category || ""
+    };
+    ticketTypes.value = d.ticketTypes || [];
+    promoCodes.value = d.promoCodes || [];
+    dashboard.value = d.dashboard || { totalSold: 0, totalCapacity: null };
+    ttForm.value = null;
+    pcForm.value = null;
+}
+
+async function reloadDetail(): Promise<void> {
+    if (!eventForm.value.id) return;
+    const res = await invokeBlockAction<EventDetailBag>("GetEventDetail", { bag: { id: eventForm.value.id } });
+    if (res.isSuccess && res.data) {
+        applyDetail(res.data);
+    }
+}
+
+function backToList(): void {
+    view.value = "list";
+    loadEvents();
+}
+
+async function saveEvent(): Promise<void> {
+    if (!eventForm.value.name.trim()) {
+        err.value = "El nombre del evento es obligatorio.";
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const f = eventForm.value;
+        const bag = {
+            id: f.id,
+            name: f.name,
+            slug: f.slug,
+            description: f.description,
+            startDateTime: f.startDateTime,
+            endDateTime: f.endDateTime,
+            campusId: toIntOrNull(f.campusId),
+            venueName: f.venueName,
+            status: Number(f.status),
+            organizerPersonAliasId: f.organizerPersonAliasId,
+            financialGatewayId: toIntOrNull(f.financialGatewayId),
+            financialAccountId: toIntOrNull(f.financialAccountId),
+            image: f.image,
+            headerStyle: f.headerStyle,
+            category: f.category || null
+        };
+        const res = await invokeBlockAction<{ eventId: number; saved: boolean }>("SaveEvent", { bag });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo guardar el evento.";
+            return;
+        }
+        eventForm.value.id = res.data.eventId;
+        flash("Evento guardado.");
+        await reloadDetail();
+    } catch {
+        err.value = "Error guardando el evento.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deleteEvent(): Promise<void> {
+    if (!eventForm.value.id) return;
+    if (!window.confirm("¿Eliminar este evento? Esta acción no se puede deshacer.")) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("DeleteEvent", { bag: { id: eventForm.value.id } });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo eliminar el evento.";
+            return;
+        }
+        backToList();
+    } catch {
+        err.value = "Error eliminando el evento.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+// ============ Preguntas al asistente (por tipo de boleto) ============
+// Catálogo = Person Attributes de la categoría "Preguntas de Eventos"; los básicos son
+// columnas del perfil. La config viaja como JSON en TicketType.questionsJson.
+
+type CatalogItem = { guid: string; name: string; description: string | null; typeLabel: string };
+
+const BASIC_DEFS: { key: string; label: string }[] = [
+    { key: "phone", label: "Teléfono" },
+    { key: "email", label: "Email" },
+    { key: "birthDate", label: "Fecha de nacimiento" },
+    { key: "gender", label: "Sexo" }
+];
+
+const catalog = ref<CatalogItem[]>([]);
+const catalogLoaded = ref(false);
+
+// Plantillas de preguntas (se administran en la página Catálogo de Preguntas).
+type QuestionTemplate = { guid: string; name: string; questionsJson: string };
+const templates = ref<QuestionTemplate[]>([]);
+const templateToApply = ref<string>("");
+
+const templateOptions = computed<OptionBag[]>(() =>
+    templates.value.map(t => ({ value: t.guid, text: t.name })));
+
+const basicSel = ref<Record<string, { enabled: boolean; required: boolean }>>({});
+const attrSel = ref<{ guid: string; name: string; required: boolean }[]>([]);
+const attrToAdd = ref<string>("");
+
+const catalogAddOptions = computed<OptionBag[]>(() => {
+    const used = new Set(attrSel.value.map(a => a.guid));
+    return catalog.value.filter(c => !used.has(c.guid))
+        .map(c => ({ value: c.guid, text: `${c.name} (${c.typeLabel})` }));
+});
+
+async function ensureCatalog(): Promise<void> {
+    if (catalogLoaded.value) return;
+    try {
+        const res = await invokeBlockAction<{ items: CatalogItem[]; templates: QuestionTemplate[] }>("GetQuestionCatalog", {});
+        if (res.isSuccess && res.data) {
+            catalog.value = res.data.items || [];
+            templates.value = res.data.templates || [];
+            catalogLoaded.value = true;
+        }
+    } catch { /* catálogo vacío; el resto del form sigue funcionando */ }
+}
+
+// Aplica una plantilla: REEMPLAZA la selección actual de preguntas del boleto.
+function applyTemplate(): void {
+    const tpl = templates.value.find(t => t.guid === templateToApply.value);
+    if (!tpl) return;
+    loadTtQuestions(tpl.questionsJson);
+    templateToApply.value = "";
+}
+
+function loadTtQuestions(json: string | null): void {
+    const sel: Record<string, { enabled: boolean; required: boolean }> = {};
+    for (const b of BASIC_DEFS) sel[b.key] = { enabled: false, required: false };
+    const attrs: { guid: string; name: string; required: boolean }[] = [];
+
+    if (json) {
+        try {
+            const entries = JSON.parse(json) as Record<string, unknown>[];
+            for (const e of entries) {
+                const kind = String(e.Kind ?? e.kind ?? "");
+                const required = Boolean(e.Required ?? e.required ?? false);
+                if (kind === "basic") {
+                    const key = String(e.Key ?? e.key ?? "");
+                    if (sel[key]) sel[key] = { enabled: true, required };
+                }
+                else if (kind === "attr") {
+                    const guid = String(e.AttributeGuid ?? e.attributeGuid ?? "");
+                    if (guid) {
+                        const cat = catalog.value.find(c => c.guid.toLowerCase() === guid.toLowerCase());
+                        attrs.push({ guid, name: cat?.name ?? guid, required });
+                    }
+                }
+            }
+        } catch { /* config corrupta: se parte de cero */ }
+    }
+
+    basicSel.value = sel;
+    attrSel.value = attrs;
+    attrToAdd.value = "";
+}
+
+// El nombre de los atributos llega del catálogo (async); refresca labels pendientes.
+watch(catalog, () => {
+    for (const a of attrSel.value) {
+        const cat = catalog.value.find(c => c.guid.toLowerCase() === a.guid.toLowerCase());
+        if (cat) a.name = cat.name;
+    }
+});
+
+function serializeTtQuestions(): string | null {
+    const entries: Record<string, unknown>[] = [];
+    for (const b of BASIC_DEFS) {
+        const s = basicSel.value[b.key];
+        if (s?.enabled) entries.push({ Kind: "basic", Key: b.key, Required: s.required });
+    }
+    for (const a of attrSel.value) {
+        entries.push({ Kind: "attr", AttributeGuid: a.guid, Required: a.required });
+    }
+    return entries.length ? JSON.stringify(entries) : null;
+}
+
+function addCatalogQuestion(): void {
+    const guid = attrToAdd.value;
+    if (!guid) return;
+    const cat = catalog.value.find(c => c.guid === guid);
+    if (cat && !attrSel.value.some(a => a.guid === guid)) {
+        attrSel.value.push({ guid: cat.guid, name: cat.name, required: false });
+    }
+    attrToAdd.value = "";
+}
+
+function removeAttrQuestion(guid: string): void {
+    attrSel.value = attrSel.value.filter(a => a.guid !== guid);
+}
+
+function newTicketType(): void {
+    ttForm.value = {
+        id: 0,
+        eventId: eventForm.value.id,
+        name: "",
+        description: "",
+        price: 0,
+        capacity: null,
+        earlyBirdPrice: null,
+        earlyBirdUntil: null,
+        salesStart: null,
+        salesEnd: null,
+        maxPerOrder: null,
+        sortOrder: ticketTypes.value.length,
+        isActive: true,
+        sold: 0,
+        questionsJson: null
+    };
+    loadTtQuestions(null);
+    ensureCatalog();
+}
+
+function editTicketType(t: TicketTypeEditBag): void {
+    ttForm.value = { ...t };
+    loadTtQuestions(t.questionsJson);
+    ensureCatalog();
+}
+
+async function saveTicketType(): Promise<void> {
+    if (!ttForm.value) return;
+    if (!ttForm.value.name.trim()) {
+        err.value = "El nombre del tipo de ticket es obligatorio.";
+        return;
+    }
+    ttForm.value.questionsJson = serializeTtQuestions();
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("SaveTicketType", { bag: ttForm.value });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo guardar el tipo de ticket.";
+            return;
+        }
+        ttForm.value = null;
+        flash("Tipo de ticket guardado.");
+        await reloadDetail();
+    } catch {
+        err.value = "Error guardando el tipo de ticket.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deleteTicketType(): Promise<void> {
+    if (!ttForm.value?.id) return;
+    if (!window.confirm("¿Eliminar este tipo de ticket?")) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("DeleteTicketType", { bag: { id: ttForm.value.id } });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo eliminar el tipo de ticket.";
+            return;
+        }
+        ttForm.value = null;
+        flash("Tipo de ticket eliminado.");
+        await reloadDetail();
+    } catch {
+        err.value = "Error eliminando el tipo de ticket.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+function newPromoCode(): void {
+    pcForm.value = {
+        id: 0,
+        eventId: eventForm.value.id,
+        code: "",
+        discountType: "0",
+        discountValue: 0,
+        maxUses: 0,
+        usedCount: 0,
+        validFrom: null,
+        validUntil: null,
+        appliesToTicketTypeId: "",
+        isActive: true
+    };
+}
+
+function editPromoCode(p: PromoCodeEditBag): void {
+    pcForm.value = {
+        ...p,
+        discountType: String(p.discountType),
+        appliesToTicketTypeId: p.appliesToTicketTypeId == null ? "" : String(p.appliesToTicketTypeId)
+    };
+}
+
+async function savePromoCode(): Promise<void> {
+    if (!pcForm.value) return;
+    if (!pcForm.value.code.trim()) {
+        err.value = "El código es obligatorio.";
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const f = pcForm.value;
+        const bag = {
+            id: f.id,
+            eventId: f.eventId,
+            code: f.code,
+            discountType: Number(f.discountType),
+            discountValue: f.discountValue,
+            maxUses: f.maxUses,
+            validFrom: f.validFrom,
+            validUntil: f.validUntil,
+            appliesToTicketTypeId: toIntOrNull(f.appliesToTicketTypeId),
+            isActive: f.isActive
+        };
+        const res = await invokeBlockAction<{ saved: boolean }>("SavePromoCode", { bag });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo guardar el código.";
+            return;
+        }
+        pcForm.value = null;
+        flash("Código guardado.");
+        await reloadDetail();
+    } catch {
+        err.value = "Error guardando el código.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deletePromoCode(): Promise<void> {
+    if (!pcForm.value?.id) return;
+    if (!window.confirm("¿Eliminar este código?")) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("DeletePromoCode", { bag: { id: pcForm.value.id } });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo eliminar el código.";
+            return;
+        }
+        pcForm.value = null;
+        flash("Código eliminado.");
+        await reloadDetail();
+    } catch {
+        err.value = "Error eliminando el código.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function duplicateEvent(e: EventListItemBag): Promise<void> {
+    if (!window.confirm(`¿Duplicar "${e.name}"? La copia queda en Borrador con sus tipos de ticket y códigos.`)) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ eventId: number; saved: boolean }>("DuplicateEvent", { bag: { id: e.eventId } });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo duplicar el evento.";
+            return;
+        }
+        flash("Evento duplicado (en Borrador).");
+        await openEvent(res.data.eventId);
+    } catch {
+        err.value = "Error duplicando el evento.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+// --- Permisos (EventStaff) ---
+
+function openStaffView(): void {
+    if (!config.canAdministrate) return;
+    view.value = "staff";
+    err.value = "";
+    void loadStaff();
+}
+
+async function loadStaff(): Promise<void> {
+    staffBusy.value = true;
+    try {
+        const res = await invokeBlockAction<{ rows: EventStaffRowBag[] }>("GetEventStaff", {});
+        if (res.isSuccess && res.data) {
+            staffRows.value = res.data.rows || [];
+        } else {
+            err.value = res.errorMessage || "No se pudieron cargar las asignaciones.";
+        }
+    } catch {
+        err.value = "Error cargando las asignaciones.";
+    } finally {
+        staffBusy.value = false;
+    }
+}
+
+async function saveStaff(): Promise<void> {
+    const personAliasGuid = staffPerson.value?.value;
+    if (!personAliasGuid) {
+        err.value = "Selecciona una persona.";
+        return;
+    }
+    if (staffEventIds.value.length === 0) {
+        err.value = "Selecciona al menos un evento.";
+        return;
+    }
+    if (!staffCanScan.value && !staffCanReport.value) {
+        err.value = "Marca al menos un permiso (escáner o reportería).";
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("SaveEventStaff", {
+            bag: {
+                personAliasGuid,
+                eventIds: staffEventIds.value.map(Number),
+                canScan: staffCanScan.value,
+                canViewReport: staffCanReport.value
+            }
+        });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo guardar la asignación.";
+            return;
+        }
+        staffPerson.value = undefined;
+        staffEventIds.value = [];
+        flash("Asignación guardada.");
+        await loadStaff();
+    } catch {
+        err.value = "Error guardando la asignación.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function toggleStaffFlag(r: EventStaffRowBag, flag: "canScan" | "canViewReport"): Promise<void> {
+    const canScan = flag === "canScan" ? !r.canScan : r.canScan;
+    const canViewReport = flag === "canViewReport" ? !r.canViewReport : r.canViewReport;
+    // Sin ningún permiso la fila no tiene sentido: se elimina.
+    if (!canScan && !canViewReport) {
+        await deleteStaff(r, true);
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("SaveEventStaff", {
+            bag: { personAliasGuid: r.personAliasGuid, eventIds: [r.eventId], canScan, canViewReport }
+        });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo actualizar la asignación.";
+        }
+        await loadStaff();
+    } catch {
+        err.value = "Error actualizando la asignación.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function deleteStaff(r: EventStaffRowBag, skipConfirm = false): Promise<void> {
+    if (!skipConfirm && !window.confirm(`¿Quitar el acceso de ${r.personName} a "${r.eventName}"?`)) return;
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ saved: boolean }>("DeleteEventStaff", { bag: { id: r.id } });
+        if (!res.isSuccess || !res.data?.saved) {
+            err.value = res.errorMessage || "No se pudo quitar la asignación.";
+        }
+        await loadStaff();
+    } catch {
+        err.value = "Error quitando la asignación.";
+    } finally {
+        busy.value = false;
+    }
+}
+
+// Initial load.
+loadEvents();
+</script>

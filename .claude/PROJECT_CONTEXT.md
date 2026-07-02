@@ -146,6 +146,17 @@ Modulo nuevo de comunicacion.
 - Configuracion: Phone Number ID, Access Token, plantillas de mensajes
 - Webhook entrante: `RockWeb/Webhooks/WhatsAppSms.ashx`
 
+### 7. Eventos/Boletería Custom — `Rock/Model/Eventos/` + `Rock.Blocks/Eventos/` (2026-06-29 →)
+Producto propio de boletería end-to-end. **NO reusa `Registration*`**; esquema propio `_com_vidareal_Events_*` (7 entidades: Event, TicketType, Order, Ticket, PromoCode, CheckinLog, EventStaff).
+
+- **6 bloques Obsidian** (`src/Eventos/*.obs`): Event Admin (CRUD + vista Permisos + preguntas por boleto/plantillas), Event Checkout (rediseño 2026: hold/timer, promo, NIT/SAT, FEL multilínea, gratis, mutex Charging, preguntas al asistente con prefill, invitados = personas reales + known relationship), My Tickets (hub + visor QR), Ticket Scanner (escaneo continuo + contadores en vivo), Event Report (respuestas + fecha de compra en CSV), Question Catalog (catálogo central de preguntas y plantillas, `eventos/preguntas`).
+- **Migraciones** en plugin aislado `Plugin.VidaRealEvents/` (assembly `com.vidareal.Events`, 001–017); el DLL NO se autocopia a `RockWeb/Bin`.
+- **Permisos por-usuario** (`EventStaff`): acceso total solo `RSR - Rock Administration`; staff gestiona eventos pero escanea/reporta solo lo asignado; gestión de permisos exige ADMINISTRATE.
+- **Preguntas al asistente**: catálogo = Person Attributes (categoría "Preguntas de Eventos"); config por boleto en `TicketType.QuestionsJson`; snapshot por compra en `Ticket.AnswersJson`; write-back al perfil tras el pago; plantillas en System Setting `com_vidareal_EventQuestionTemplates`.
+- **Arquitectura hexagonal (2026-07-02)**: los bloques son adaptadores delgados (auth + mapeo bags); la lógica vive en `Rock/Model/Eventos/Services/` — núcleo: CheckoutService (mutex Charging + finalize atómico), HoldService (reservas/cupo), PricingService (puro), CheckoutAttendeeService (invitados/KR/anti-IDOR), AttendeeQuestionService, CheckinService; adaptadores de salida: PaymentService, FelService, NitLookupService (SAT), QrService, TicketEmailService, TicketPdfService (⚠️ `PaperFormat`, no `Width/Height` — bug cultura es-GT). Los servicios devuelven resultados de dominio, nunca `BlockActionResult`.
+- **Front del checkout** en partials (patrón RegistrationEntry): `eventCheckout.obs` = shell + CSS global; estado en `src/Eventos/EventCheckout/checkoutState.partial.ts` (+ `attendeeState.partial.ts`) por provide/inject; 5 `*Step.partial.obs`.
+- **Doc de arquitectura (leer primero):** `Rock/Model/Eventos/ARCHITECTURE.md`. **Doc maestro:** `docs/eventos-custom/RESEARCH_Y_PLAN.md` (§9.x = historial de sesiones). **Pruebas runtime:** `docs/eventos-custom/SMOKE_TESTS.md`.
+
 ---
 
 ## Areas que NO deben tocarse sin extremo cuidado
@@ -261,6 +272,8 @@ Estos archivos `.md` en la raiz del repositorio documentan sesiones de trabajo a
 
 | Archivo | Modulo | Descripcion |
 |---|---|---|
+| `docs/eventos-custom/RESEARCH_Y_PLAN.md` | Eventos/Boletería Custom | Doc maestro del módulo propio de boletería: modelo de datos, arquitectura, decisiones y todas las sesiones (§9.x) |
+| `Plugin.VidaRealEvents/README.md` | Eventos/Boletería Custom | Migraciones 001–017, modelo de permisos, build/deploy del DLL |
 | `AI_HANDOFF_ROCK18_EVENT_CRM.md` | Eventos / CRM | i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration, reglas ES/EN, DatePicker, pitfalls Vue, template Lava recomendado, + Facturación FEL/NIT en pantalla de pago (2026-06-15) |
 | `Plugin.OdooEventSale/CONTEXT.md` + `README.md` | OdooEventSale | Integración Rock eventos → Odoo FEL: workflow action, NIT/SAT, Global Attributes, configuración staging, checklist |
 | `EPAY_FLOW_SUMMARY.md` | DAR / ePay | Flujo completo de cobro con cuotas ePay Visanet: SOAP, FeeCoverageAmount, calculo de balance, checklist de despliegue |
@@ -385,3 +398,9 @@ Del mas simple al mas complejo, para onboarding de nuevos desarrolladores:
 - **Facturación FEL / NIT (2026-06-15):** la pantalla de pago captura y valida el NIT (toggle "¿Desea factura?" + botón "Validar NIT" vs SAT) y lo pasa a los workflows de inscripción para facturar en Odoo. Toca el backend del bloque core: `RegistrationEntry.cs` (BlockAction `ValidateNitInfo` + passthrough `Nit`/`WantsInvoice` en `ProcessPostSave`) y `RegistrationEntryArgsBag.cs`. Config en Global Attributes `OdooNitApiUrl`/`OdooNitApiBearerToken`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` y `Plugin.OdooEventSale/`.
 - **Rediseño UI/UX 2026 (2026-06-18):** solo frontend/CSS, sin lógica. Design system del wizard en el `<style scoped>` de `registrationEntry.obs` (tokens `--re-*` que cascadean a hijos vía `:deep()`); barra de acción sticky; transiciones direccionales (`stepTransitionName`/`navBack`); jerarquía tipográfica. Acento azul intacto para cohesión con `payment`/`success`. Build con `npm run build-fast`. Detalle en `AI_HANDOFF_ROCK18_EVENT_CRM.md` § "Rediseño UI/UX del wizard".
 - **Archivos:** `src/Event/RegistrationEntry/` (incl. `payment.partial.obs`), `src/Crm/FamilyPreRegistration/`, `Rock.Blocks/Event/RegistrationEntry.cs`, `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs`, `Rock/Model/Event/Registration/`
+
+### 8. Eventos/Boletería Custom — Complejidad: MUY ALTA
+- Módulo completo propio (ver sección 7 de "Modulos y bloques"): esquema de datos, pagos con hold/timer y mutex anti doble-cobro, FEL multilínea, QR seguro + PDF de boletos, permisos por-usuario.
+- Áreas delicadas: **`Rock/Model/Eventos/Services/CheckoutService.cs`** (mutex Pending→Charging + finalize atómico: las invariantes financieras viven ahí) y **`HoldService.cs`** (la ventana `HoldMinutes` es la MISMA frontera en `CountSoldTickets`, el mutex y el SP de limpieza — si cambias una, cambia las tres); `FelService` (idempotencia por Guid de transacción); `TicketPdfService` (⚠️ `PaperFormat`, no `Width/Height`).
+- Front: el build de Obsidian NO typecheckea bindings de template — tras tocar un `*.partial.obs`, verificar que el bundle compilado no contenga `_ctx.` ni `resolveComponent`.
+- Leer SIEMPRE `Rock/Model/Eventos/ARCHITECTURE.md` y `docs/eventos-custom/RESEARCH_Y_PLAN.md` §9.x antes de tocar nada.

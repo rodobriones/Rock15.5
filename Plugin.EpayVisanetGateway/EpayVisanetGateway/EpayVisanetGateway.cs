@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
@@ -7,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Services.Protocols;
 using System.Xml;
@@ -218,101 +220,135 @@ namespace Rock.Plugin.EpayVisanet
                 paymentInfo.FeeCoverageAmount = surchargeAmount > 0m ? surchargeAmount : (decimal?)null;
 
                 var amount = FormatAmount(chargeAmount);
-                var auditNumber = EpayAuditNumberManager.GetNextAuditNumber();
 
-                var soapParams = new Dictionary<string, string>
+                // auditNumber fijado al crear el token: un reintento del mismo token lo reusa para que
+                // ePay deduplique (codigo 94) en lugar de generar un segundo cobro. Fallback para el flujo
+                // directo CreditCardPaymentInfo, que no pasa por el cache de tokens.
+                var auditNumber = cardData.AuditNumber.IsNotNullOrWhiteSpace()
+                    ? cardData.AuditNumber
+                    : EpayAuditNumberManager.GetNextAuditNumber();
+
+                // Idempotencia por token (solo flujo inline): el lock in-process serializa cobros
+                // concurrentes del mismo token y el marcador "charged:" impide recobrar uno ya procesado.
+                // El reuso del auditNumber es el respaldo cross-node (ePay rechaza el duplicado con 94).
+                var isInlineToken = sourceToken.IsNotNullOrWhiteSpace()
+                    && sourceToken.StartsWith(InlinePaymentTokenStore.TokenPrefix, StringComparison.OrdinalIgnoreCase);
+                var tokenLock = isInlineToken ? EpayChargeLocks.GetLock(sourceToken) : null;
+                if (tokenLock != null)
                 {
-                    { "posEntryMode", "012" },
-                    { "pan", cardData.CardNumber },
-                    { "expdate", expDate },
-                    { "amount", amount },
-                    { "track2Data", "" },
-                    { "cvv2", cardData.SecurityCode ?? "" },
-                    { "paymentgwIP", cfg.ServerIp },
-                    { "shopperIP", GetClientIp() },
-                    { "merchantServerIP", GetServerIp() },
-                    { "messageType", "0200" },
-                    { "additionalData", additionalData },
-                    { "auditNumber", auditNumber },
-                    { "merchantUser", cfg.MerchantUser },
-                    { "merchantPasswd", cfg.MerchantPasswd },
-                    { "terminalId", cfg.TerminalId },
-                    { "merchant", cfg.MerchantId }
-                };
-
-                var client = new EpaySoapClient(cfg);
-                EpaySoapResponse response;
+                    Monitor.Enter(tokenLock);
+                }
 
                 try
                 {
-                    response = client.AuthorizationRequest(soapParams);
-                }
-                catch (Exception soapEx)
-                {
-                    Log.LogWarning(soapEx, "[EpayVisanetGateway] SOAP exception during charge, attempting reversal");
+                    if (isInlineToken && InlinePaymentTokenStore.IsAlreadyCharged(sourceToken))
+                    {
+                        errorMessage = "Este pago ya fue procesado.";
+                        return null;
+                    }
 
-                    soapParams["messageType"] = "0400";
+                    var soapParams = new Dictionary<string, string>
+                    {
+                        { "posEntryMode", "012" },
+                        { "pan", cardData.CardNumber },
+                        { "expdate", expDate },
+                        { "amount", amount },
+                        { "track2Data", "" },
+                        { "cvv2", cardData.SecurityCode ?? "" },
+                        { "paymentgwIP", cfg.ServerIp },
+                        { "shopperIP", GetClientIp() },
+                        { "merchantServerIP", GetServerIp() },
+                        { "messageType", "0200" },
+                        { "additionalData", additionalData },
+                        { "auditNumber", auditNumber },
+                        { "merchantUser", cfg.MerchantUser },
+                        { "merchantPasswd", cfg.MerchantPasswd },
+                        { "terminalId", cfg.TerminalId },
+                        { "merchant", cfg.MerchantId }
+                    };
+
+                    var client = new EpaySoapClient(cfg);
+                    EpaySoapResponse response;
+
                     try
                     {
-                        client.AuthorizationRequest(soapParams);
+                        response = client.AuthorizationRequest(soapParams);
                     }
-                    catch (Exception revEx)
+                    catch (Exception soapEx)
                     {
-                        Log.LogError(revEx, "[EpayVisanetGateway] Reversal also failed");
+                        Log.LogWarning(soapEx, "[EpayVisanetGateway] SOAP exception during charge, attempting reversal");
+
+                        soapParams["messageType"] = "0400";
+                        try
+                        {
+                            client.AuthorizationRequest(soapParams);
+                        }
+                        catch (Exception revEx)
+                        {
+                            Log.LogError(revEx, "[EpayVisanetGateway] Reversal also failed");
+                        }
+
+                        errorMessage = "Error de comunicacion con ePay. Se intento reversa automatica.";
+                        return null;
                     }
 
-                    errorMessage = "Error de comunicacion con ePay. Se intento reversa automatica.";
-                    return null;
-                }
-
-                if (response.ResponseCode != "00")
-                {
-                    errorMessage = "ePay rechazo el cobro: " + GetEpayErrorMessage(response.ResponseCode);
-                    return null;
-                }
-
-                InlinePaymentTokenStore.MarkSuccess(sourceToken, response.ReferenceNumber);
-
-                var transaction = new FinancialTransaction
-                {
-                    FinancialGatewayId = gateway.Id,
-                    TransactionDateTime = RockDateTime.Now,
-                    TransactionCode = response.ReferenceNumber,
-                    ForeignKey = sourceToken,
-                    Status = "AUTHORIZED",
-                    StatusMessage = "responseCode=" + response.ResponseCode + " auth=" + response.AuthorizationNumber + " surcharge=" + surchargeAmount.ToString("0.00", CultureInfo.InvariantCulture),
-                    ForeignCurrencyCodeValueId = null,
-                    FinancialPaymentDetail = new FinancialPaymentDetail
+                    if (response.ResponseCode != "00")
                     {
-                        CurrencyTypeValueId = DefinedValueCache.GetId(Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_CREDIT_CARD.AsGuid()),
-                        CreditCardTypeValueId = CreditCardPaymentInfo.GetCreditCardTypeFromCreditCardNumber(cardData.CardNumber)?.Id,
-                        AccountNumberMasked = cardData.CardNumber.Masked(true),
-                        NameOnCard = cardData.NameOnCard.IsNotNullOrWhiteSpace() ? cardData.NameOnCard : paymentInfo.FullName,
-                        ExpirationMonth = cardData.ExpirationMonth,
-                        ExpirationYear = cardData.ExpirationYear
+                        errorMessage = "ePay rechazo el cobro: " + GetEpayErrorMessage(response.ResponseCode);
+                        return null;
                     }
-                };
 
-                // Pre-populate a transaction detail so surcharge is persisted even if
-                // the caller does not explicitly map FeeCoverageAmount from PaymentInfo.
-                var transactionDetail = transaction.TransactionDetails.FirstOrDefault();
-                if (transactionDetail == null)
-                {
-                    transactionDetail = new FinancialTransactionDetail();
-                    transaction.TransactionDetails.Add(transactionDetail);
+                    InlinePaymentTokenStore.MarkSuccess(sourceToken, response.ReferenceNumber);
+
+                    var transaction = new FinancialTransaction
+                    {
+                        FinancialGatewayId = gateway.Id,
+                        TransactionDateTime = RockDateTime.Now,
+                        TransactionCode = response.ReferenceNumber,
+                        ForeignKey = sourceToken,
+                        Status = "AUTHORIZED",
+                        StatusMessage = "responseCode=" + response.ResponseCode + " auth=" + response.AuthorizationNumber + " surcharge=" + surchargeAmount.ToString("0.00", CultureInfo.InvariantCulture),
+                        ForeignCurrencyCodeValueId = null,
+                        FinancialPaymentDetail = new FinancialPaymentDetail
+                        {
+                            CurrencyTypeValueId = DefinedValueCache.GetId(Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_CREDIT_CARD.AsGuid()),
+                            CreditCardTypeValueId = CreditCardPaymentInfo.GetCreditCardTypeFromCreditCardNumber(cardData.CardNumber)?.Id,
+                            AccountNumberMasked = cardData.CardNumber.Masked(true),
+                            NameOnCard = cardData.NameOnCard.IsNotNullOrWhiteSpace() ? cardData.NameOnCard : paymentInfo.FullName,
+                            ExpirationMonth = cardData.ExpirationMonth,
+                            ExpirationYear = cardData.ExpirationYear
+                        }
+                    };
+
+                    // Pre-populate a transaction detail so surcharge is persisted even if
+                    // the caller does not explicitly map FeeCoverageAmount from PaymentInfo.
+                    var transactionDetail = transaction.TransactionDetails.FirstOrDefault();
+                    if (transactionDetail == null)
+                    {
+                        transactionDetail = new FinancialTransactionDetail();
+                        transaction.TransactionDetails.Add(transactionDetail);
+                    }
+                    transactionDetail.Amount = chargeAmount;
+                    transactionDetail.FeeCoverageAmount = surchargeAmount > 0m ? surchargeAmount : (decimal?)null;
+
+                    transaction.SetAttributeValue("EpayAuditNumber", auditNumber);
+                    transaction.SetAttributeValue("EpayAuthorizationNumber", response.AuthorizationNumber);
+
+                    if (paymentInfo is ReferencePaymentInfo referencePaymentInfo)
+                    {
+                        transaction.FinancialPaymentDetail.GatewayPersonIdentifier = referencePaymentInfo.GatewayPersonIdentifier;
+                    }
+
+                    return transaction;
                 }
-                transactionDetail.Amount = chargeAmount;
-                transactionDetail.FeeCoverageAmount = surchargeAmount > 0m ? surchargeAmount : (decimal?)null;
-
-                transaction.SetAttributeValue("EpayAuditNumber", auditNumber);
-                transaction.SetAttributeValue("EpayAuthorizationNumber", response.AuthorizationNumber);
-
-                if (paymentInfo is ReferencePaymentInfo referencePaymentInfo)
+                finally
                 {
-                    transaction.FinancialPaymentDetail.GatewayPersonIdentifier = referencePaymentInfo.GatewayPersonIdentifier;
+                    if (tokenLock != null)
+                    {
+                        Monitor.Exit(tokenLock);
+                        EpayChargeLocks.Release(sourceToken);
+                    }
                 }
-
-                return transaction;
             }
             catch (Exception ex)
             {
@@ -540,6 +576,20 @@ namespace Rock.Plugin.EpayVisanet
                 return false;
             }
 
+            // Cap de input para que datos del cliente no inflen el cache ni el body SOAP.
+            if (cardData.NameOnCard.Length > 120)
+            {
+                errorMessage = "Nombre del titular demasiado largo.";
+                return false;
+            }
+
+            cardData.InstallmentCode = (cardData.InstallmentCode ?? string.Empty).Trim();
+            if (cardData.InstallmentCode.Length > 0 && !Regex.IsMatch(cardData.InstallmentCode, @"^[A-Za-z0-9_-]{1,16}$"))
+            {
+                errorMessage = "Codigo de cuotas invalido.";
+                return false;
+            }
+
             var now = RockDateTime.Now;
             var expiryBoundary = new DateTime(cardData.ExpirationYear, cardData.ExpirationMonth, 1).AddMonths(1).AddMinutes(-1);
             if (expiryBoundary < now)
@@ -575,6 +625,14 @@ namespace Rock.Plugin.EpayVisanet
             if (cfg.WsdlUrl.IsNullOrWhiteSpace() || cfg.MerchantUser.IsNullOrWhiteSpace() || cfg.MerchantPasswd.IsNullOrWhiteSpace() || cfg.TerminalId.IsNullOrWhiteSpace() || cfg.MerchantId.IsNullOrWhiteSpace())
             {
                 err = "Configuracion incompleta (WSDL/MerchantUser/MerchantPasswd/TerminalId/MerchantId).";
+                return null;
+            }
+
+            // Forzar HTTPS: el PAN, el CVV y las credenciales del comercio viajan en el body SOAP.
+            // Nunca deben salir en claro aunque el admin configure mal la URL.
+            if (!Uri.TryCreate(cfg.WsdlUrl, UriKind.Absolute, out var wsdlUri) || wsdlUri.Scheme != Uri.UriSchemeHttps)
+            {
+                err = "La URL de ePay debe ser HTTPS.";
                 return null;
             }
 
@@ -745,6 +803,9 @@ namespace Rock.Plugin.EpayVisanet
         public string SecurityCode { get; set; }
         public string NameOnCard { get; set; }
         public string InstallmentCode { get; set; }
+        // auditNumber fijado al crear el token: un reintento del mismo token reusa este valor
+        // para que ePay deduplique (codigo 94) en vez de generar un segundo cobro.
+        public string AuditNumber { get; set; }
         public DateTime CreatedUtc { get; set; }
     }
 
@@ -769,7 +830,7 @@ namespace Rock.Plugin.EpayVisanet
         private const string Region = "EpayVisanetGateway";
         private const string DataPrefix = "card-data:";
         private const string SuccessPrefix = "charged:";
-        private const string TokenPrefix = "epay-cache-";
+        internal const string TokenPrefix = "epay-cache-";
 
         public static bool CreateToken(FinancialGateway gateway, InlineCardData cardData, out string token, out string errorMessage)
         {
@@ -789,10 +850,22 @@ namespace Rock.Plugin.EpayVisanet
 
             cardData.GatewayGuid = gateway.Guid.ToString("N");
             cardData.CreatedUtc = DateTime.UtcNow;
+            // Se fija aqui (no en Charge) para que sea identico en cada cobro/reintento del token.
+            cardData.AuditNumber = EpayAuditNumberManager.GetNextAuditNumber();
 
             token = TokenPrefix + Guid.NewGuid().ToString("N");
             RockCache.AddOrUpdate(GetDataKey(token), Region, cardData, TimeSpan.FromMinutes(15));
             return true;
+        }
+
+        public static bool IsAlreadyCharged(string token)
+        {
+            if (token.IsNullOrWhiteSpace())
+            {
+                return false;
+            }
+
+            return RockCache.Get(GetSuccessKey(token), Region) != null;
         }
 
         public static bool TryGetCardData(FinancialGateway gateway, string token, out InlineCardData cardData, out string errorMessage)
@@ -866,6 +939,140 @@ namespace Rock.Plugin.EpayVisanet
 
     #endregion
 
+    #region Security Helpers
+
+    /// <summary>
+    /// Locks in-process por token para serializar cobros concurrentes del mismo token de pago.
+    /// </summary>
+    internal static class EpayChargeLocks
+    {
+        private static readonly ConcurrentDictionary<string, object> _locks = new ConcurrentDictionary<string, object>();
+
+        public static object GetLock(string token) => _locks.GetOrAdd(token, _ => new object());
+
+        public static void Release(string token)
+        {
+            if (token.IsNotNullOrWhiteSpace())
+            {
+                _locks.TryRemove(token, out _);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Utilidades de seguridad compartidas: rate limiting in-memory (con purga oportunista),
+    /// enmascaramiento de PAN para logs e IP del cliente.
+    /// </summary>
+    internal static class EpaySecurity
+    {
+        private static readonly ConcurrentDictionary<string, RateLimitEntry> _buckets = new ConcurrentDictionary<string, RateLimitEntry>();
+        private static long _lastSweepTicks = 0;
+        private static readonly TimeSpan PurgeAfter = TimeSpan.FromHours(2);
+        private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
+
+        private class RateLimitEntry
+        {
+            public DateTime WindowStartUtc;
+            public int Count;
+        }
+
+        /// <summary>Sliding window best-effort, in-process. Devuelve true si la operacion se permite.</summary>
+        public static bool TryConsumeRateLimit(string bucketKey, int maxRequests, TimeSpan window)
+        {
+            if (bucketKey.IsNullOrWhiteSpace() || maxRequests <= 0)
+            {
+                return true;
+            }
+
+            var now = DateTime.UtcNow;
+            var allowed = true;
+            _buckets.AddOrUpdate(bucketKey,
+                _ => new RateLimitEntry { WindowStartUtc = now, Count = 1 },
+                (_, existing) =>
+                {
+                    if (now - existing.WindowStartUtc > window)
+                    {
+                        existing.WindowStartUtc = now;
+                        existing.Count = 1;
+                    }
+                    else
+                    {
+                        existing.Count++;
+                        if (existing.Count > maxRequests)
+                        {
+                            allowed = false;
+                        }
+                    }
+                    return existing;
+                });
+
+            MaybeSweep(now);
+            return allowed;
+        }
+
+        // Purga entradas abandonadas (mas viejas que PurgeAfter) como mucho una vez por intervalo,
+        // para que el diccionario no crezca sin limite.
+        private static void MaybeSweep(DateTime now)
+        {
+            var lastTicks = Interlocked.Read(ref _lastSweepTicks);
+            if (now - new DateTime(lastTicks, DateTimeKind.Utc) < SweepInterval)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _lastSweepTicks, now.Ticks, lastTicks) != lastTicks)
+            {
+                return;
+            }
+
+            foreach (var kvp in _buckets)
+            {
+                if (now - kvp.Value.WindowStartUtc > PurgeAfter)
+                {
+                    _buckets.TryRemove(kvp.Key, out _);
+                }
+            }
+        }
+
+        public static string GetClientIp()
+        {
+            try
+            {
+                var context = System.Web.HttpContext.Current;
+                if (context != null)
+                {
+                    var forwarded = context.Request.ServerVariables["HTTP_X_FORWARDED_FOR"];
+                    if (forwarded.IsNotNullOrWhiteSpace())
+                    {
+                        return forwarded.Split(',')[0].Trim();
+                    }
+
+                    return context.Request.ServerVariables["REMOTE_ADDR"] ?? "unknown";
+                }
+            }
+            catch { }
+
+            return "unknown";
+        }
+
+        /// <summary>Enmascara secuencias que parecen PANs (13-19 digitos) dejando solo los ultimos 4.</summary>
+        public static string MaskPan(string text)
+        {
+            if (text.IsNullOrWhiteSpace())
+            {
+                return text;
+            }
+
+            return Regex.Replace(text, @"\b\d{13,19}\b", m =>
+            {
+                var v = m.Value;
+                return "***" + v.Substring(v.Length - 4);
+            });
+        }
+    }
+
+    #endregion
+
     #region SOAP Client
 
     internal class EpaySoapClient
@@ -925,7 +1132,7 @@ namespace Rock.Plugin.EpayVisanet
 
                 if (responseXml.IsNotNullOrWhiteSpace())
                 {
-                    Log.LogWarning(ex, "[EpaySoapClient] HTTP/SOAP fault while calling ePay. Body: {Body}", responseXml);
+                    Log.LogWarning(ex, "[EpaySoapClient] HTTP/SOAP fault while calling ePay. Body: {Body}", EpaySecurity.MaskPan(responseXml));
                     return ParseSoapResponse(responseXml);
                 }
 

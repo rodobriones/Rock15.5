@@ -1,0 +1,92 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- STEP 1: Entradas — selección de boletos con cupo en vivo y subtotal. -->
+<template>
+    <div class="ecGrid2">
+        <div class="ecCol">
+            <h2 class="ecSectionTitle">Boletos</h2>
+
+            <div v-if="busy && !ticketTypes.length" class="ecEmpty">Cargando entradas…</div>
+            <div v-else-if="!ticketTypes.length" class="ecEmpty">No hay entradas disponibles por ahora.</div>
+
+            <div v-for="tt in ticketTypes" :key="tt.id"
+                 class="ecTType"
+                 :class="{ isDisabled: tt.soldOut || !tt.onSale, isPicked: getQty(tt.id) > 0 }">
+                <div class="ecTTtop">
+                    <span class="ecTTname">{{ tt.name }}</span>
+                    <span class="ecTTprice">
+                        {{ formatCurrency(tt.effectivePrice) }}
+                        <span v-if="tt.isEarlyBird && tt.price > tt.effectivePrice" class="ecPriceStrike">{{ formatCurrency(tt.price) }}</span>
+                    </span>
+                </div>
+                <p v-if="tt.description" class="ecTTdesc">{{ tt.description }}</p>
+                <p v-if="tt.isEarlyBird && tt.earlyBirdUntil" class="ecTTearly">
+                    Early bird hasta {{ formatShortDate(tt.earlyBirdUntil) }}<span v-if="earlyBirdCountdown(tt)"> · faltan {{ earlyBirdCountdown(tt) }}</span>
+                </p>
+                <p class="ecTTavail">
+                    <span v-if="tt.soldOut">Agotado</span>
+                    <span v-else-if="tt.remaining != null">Quedan {{ tt.remaining }}</span>
+                    <span v-else>Disponible</span>
+                    <span v-if="!tt.onSale && !tt.soldOut"> · Venta no disponible</span>
+                </p>
+                <div class="ecStepper">
+                    <button type="button" class="ecStepBtn"
+                            :disabled="getQty(tt.id) <= 0"
+                            @click="setQty(tt, getQty(tt.id) - 1)">−</button>
+                    <span class="ecStepQty ecMono">{{ getQty(tt.id) }}</span>
+                    <button type="button" class="ecStepBtn"
+                            :disabled="tt.soldOut || !tt.onSale || getQty(tt.id) >= maxQtyFor(tt)"
+                            @click="setQty(tt, getQty(tt.id) + 1)">+</button>
+                </div>
+            </div>
+
+            <div class="ecDetailsGrid">
+                <div v-if="eventDateRange" class="ecDetail">
+                    <div class="ecDetailLabel">Fecha y hora</div>
+                    <div class="ecDetailValue ecCap">{{ eventDateRange }}</div>
+                </div>
+                <div v-if="eventSubtitle" class="ecDetail">
+                    <div class="ecDetailLabel">Ubicación</div>
+                    <div class="ecDetailValue">{{ eventSubtitle }}</div>
+                </div>
+                <div v-if="config.event?.organizerName" class="ecDetail">
+                    <div class="ecDetailLabel">Organizador</div>
+                    <div class="ecDetailValue">{{ config.event.organizerName }}</div>
+                </div>
+            </div>
+
+            <p v-if="config.event?.description" class="ecEventDesc">{{ config.event.description }}</p>
+        </div>
+
+        <aside class="ecAside">
+            <div class="ecAsideLabel">Subtotal</div>
+            <div class="ecAsideValue">{{ formatCurrency(total) }}</div>
+            <RockButton class="ecCta ecCtaBlock" btnType="primary" :disabled="!hasSelection || busy" @click="goToAttendees">
+                {{ busy ? "Reservando…" : "Continuar" }} <span v-if="!busy" class="ecCtaArrow">→</span>
+            </RockButton>
+            <RockButton class="ecGhostLink" btnType="link" :disabled="busy" @click="reloadTicketTypes">Actualizar disponibilidad</RockButton>
+        </aside>
+    </div>
+</template>
+
+<script setup lang="ts">
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { useCheckoutState } from "./checkoutState.partial";
+
+const {
+    config,
+    busy,
+    ticketTypes,
+    hasSelection,
+    total,
+    getQty,
+    setQty,
+    maxQtyFor,
+    formatCurrency,
+    formatShortDate,
+    earlyBirdCountdown,
+    reloadTicketTypes,
+    goToAttendees,
+    eventDateRange,
+    eventSubtitle
+} = useCheckoutState();
+</script>

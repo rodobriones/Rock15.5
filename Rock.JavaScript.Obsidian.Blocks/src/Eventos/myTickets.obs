@@ -1,0 +1,452 @@
+<template>
+    <Panel type="block" title="Eventos • Mis Entradas">
+        <template #default>
+            <div class="mtWrap">
+                <NotificationBox v-if="config.notLogged" alertType="warning">
+                    Debes iniciar sesión para ver tus entradas.
+                </NotificationBox>
+
+                <div v-else>
+                    <header class="mtHead">
+                        <div>
+                            <h1 class="mtTitle">Mis Eventos</h1>
+                            <p class="mtSub">Tus entradas, listas para presentar en el ingreso.</p>
+                        </div>
+                        <button type="button" class="mtReload" :disabled="busy" @click="loadTickets">
+                            {{ busy ? "Cargando…" : "Recargar" }}
+                        </button>
+                    </header>
+
+                    <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+                    <NotificationBox v-if="notice" alertType="success" class="mb-3">{{ notice }}</NotificationBox>
+
+                    <div v-if="!busy && tickets.length === 0" class="mtEmpty">
+                        <div class="mtEmptyIcon">🎟️</div>
+                        <h3>Aún no tienes entradas</h3>
+                        <p>Cuando compres entradas — o alguien de tu familia te asigne una — aparecerán aquí.</p>
+                    </div>
+
+                    <!-- Próximos eventos -->
+                    <section v-if="upcomingGroups.length" class="mtSection">
+                        <div v-for="g in upcomingGroups" :key="g.eventId" class="mtEvent">
+                            <div class="mtEventHero" :class="{ 'mtEventHero--noimg': !g.imageUrl }"
+                                 :style="g.imageUrl ? { backgroundImage: `url('${g.imageUrl}')` } : {}">
+                                <div class="mtEventHeroShade"></div>
+                                <div class="mtEventHeroInner">
+                                    <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
+                                    <h2 class="mtEventName">{{ g.name }}</h2>
+                                    <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
+                                </div>
+                                <span class="mtEventCount">{{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}</span>
+                            </div>
+                            <div class="mtTickets">
+                                <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket mtTicket--tappable"
+                                     role="button" tabindex="0"
+                                     @click="showTicket(t, g)"
+                                     @keydown.enter="showTicket(t, g)">
+                                    <img v-if="t.qrImageUrl" :src="t.qrImageUrl" :alt="'QR ' + t.uniqueCode" class="mtQr" />
+                                    <div class="mtTicketInfo">
+                                        <div class="mtTicketTags">
+                                            <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
+                                            <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
+                                                {{ t.status === "CheckedIn" ? "Utilizada" : "Válida" }}
+                                            </span>
+                                        </div>
+                                        <span class="mtTicketType">{{ t.ticketTypeName }}</span>
+                                        <span v-if="t.attendeeName && !t.isCurrentUser" class="mtTicketAttendee">{{ t.attendeeName }}</span>
+                                        <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                                        <div class="mtTicketFoot">
+                                            <button type="button" class="mtResend" :disabled="resendingId === t.ticketId" @click.stop="resend(t.ticketId)" @keydown.enter.stop="resend(t.ticketId)">
+                                                {{ resendingId === t.ticketId ? "Enviando…" : "Reenviar por correo" }}
+                                            </button>
+                                            <span v-if="t.emailSentCount > 0" class="mtSent">Enviado {{ t.emailSentCount }}×</span>
+                                        </div>
+                                        <span class="mtShowHint">Toca para mostrar el QR en grande</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Eventos pasados -->
+                    <section v-if="pastGroups.length" class="mtSection">
+                        <button type="button" class="mtPastToggle" @click="showPast = !showPast">
+                            <span>Eventos pasados ({{ pastGroups.length }})</span>
+                            <span class="mtPastChevron">{{ showPast ? "▲" : "▼" }}</span>
+                        </button>
+                        <div v-if="showPast">
+                            <div v-for="g in pastGroups" :key="g.eventId" class="mtEvent mtEvent--past">
+                                <div class="mtEventHero mtEventHero--noimg">
+                                    <div class="mtEventHeroInner">
+                                        <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
+                                        <h2 class="mtEventName">{{ g.name }}</h2>
+                                        <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
+                                    </div>
+                                    <span class="mtEventCount">{{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}</span>
+                                </div>
+                                <div class="mtTickets">
+                                    <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket">
+                                        <div class="mtTicketInfo">
+                                            <div class="mtTicketTags">
+                                                <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
+                                                <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
+                                                    {{ t.status === "CheckedIn" ? "Asististe" : "No utilizada" }}
+                                                </span>
+                                            </div>
+                                            <span class="mtTicketType">{{ t.ticketTypeName }}</span>
+                                            <span v-if="t.attendeeName && !t.isCurrentUser" class="mtTicketAttendee">{{ t.attendeeName }}</span>
+                                            <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Visor fullscreen del QR (para enseñar en la puerta) -->
+                <div v-if="shownTicket" class="mtViewer" @click.self="shownTicket = null">
+                    <div class="mtViewerCard">
+                        <button type="button" class="mtViewerClose" aria-label="Cerrar" @click="shownTicket = null">✕</button>
+                        <span class="mtViewerEvent">{{ shownEventName }}</span>
+                        <img v-if="shownTicket.qrImageUrl" :src="shownTicket.qrImageUrl" class="mtViewerQr" :alt="'QR ' + shownTicket.uniqueCode" />
+                        <span class="mtViewerCode ecMono notranslate">{{ shownTicket.uniqueCode }}</span>
+                        <span class="mtViewerMeta">
+                            {{ shownTicket.ticketTypeName }}<template v-if="shownTicket.attendeeName"> · {{ shownTicket.attendeeName }}</template>
+                        </span>
+                        <span class="mtViewerNote">Muestra este código en el ingreso del evento</span>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — Mis Entradas (hub de eventos, diseño 2026)
+   Misma paleta slate / Roboto del checkout de Eventos.
+   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   ============================================================ */
+
+.panel-block:has(.mtWrap) > .panel-heading,
+.panel-block:has(.mtWrap) > .panel-header { display: none !important; }
+.panel-block:has(.mtWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.mtWrap) > .panel-body { padding: 0 !important; }
+
+.mtWrap {
+    --surface-card: #ffffff;
+    --surface-mid: #f8fafc;
+    --surface-alt: #f1f5f9;
+    --primary-900: #1e293b;
+    --primary-800: #334155;
+    --primary-500: #64748b;
+    --primary-300: #94a3b8;
+    --primary-200: #cbd5e1;
+    --success-bg: #f0fdf4;
+    --success-text: #166534;
+
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--primary-900);
+}
+.mtWrap .ecMono { font-family: "Roboto Mono", Consolas, Menlo, monospace; }
+.mtWrap .ecCap::first-letter { text-transform: uppercase; }
+
+/* ---------- Encabezado ---------- */
+.mtHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.mtTitle { margin: 0; font-size: 26px; font-weight: 700; color: var(--primary-900); }
+.mtSub { margin: 4px 0 0; font-size: 14px; color: var(--primary-500); }
+.mtReload {
+    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
+    padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.mtReload:hover:not(:disabled) { background: var(--surface-mid); }
+.mtReload:disabled { opacity: .6; cursor: default; }
+
+/* ---------- Vacío ---------- */
+.mtEmpty {
+    text-align: center; padding: 56px 20px; background: var(--surface-mid);
+    border: 1px dashed var(--primary-200); border-radius: 18px;
+}
+.mtEmptyIcon { font-size: 40px; margin-bottom: 8px; }
+.mtEmpty h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--primary-900); }
+.mtEmpty p { margin: 0 auto; max-width: 380px; font-size: 14px; color: var(--primary-500); }
+
+/* ---------- Card de evento ---------- */
+.mtSection { margin-bottom: 28px; }
+.mtEvent {
+    background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 20px;
+    overflow: hidden; box-shadow: 0 8px 24px rgba(15, 23, 42, .06); margin-bottom: 20px;
+}
+.mtEventHero {
+    position: relative; min-height: 132px; display: flex; align-items: flex-end;
+    background-size: cover; background-position: center;
+}
+.mtEventHero--noimg { background: linear-gradient(135deg, #1e293b, #334155); }
+.mtEventHeroShade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,23,42,.15) 0%, rgba(15,23,42,.72) 100%);
+}
+.mtEventHeroInner { position: relative; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; }
+.mtEventDate { font-size: 12px; font-weight: 600; letter-spacing: .5px; color: rgba(255,255,255,.85); }
+.mtEventName { margin: 0; font-size: 20px; font-weight: 700; color: #fff; line-height: 1.2; }
+.mtEventVenue { font-size: 13px; color: rgba(255,255,255,.8); }
+.mtEventCount {
+    position: absolute; top: 14px; right: 14px;
+    background: rgba(255,255,255,.92); color: var(--primary-900);
+    font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
+}
+
+/* ---------- Tickets dentro del evento ---------- */
+.mtTickets { display: flex; flex-direction: column; }
+.mtTicket {
+    display: flex; gap: 18px; align-items: center; padding: 18px 22px;
+}
+.mtTicket + .mtTicket { border-top: 1px dashed var(--primary-200); }
+.mtQr {
+    width: 108px; height: 108px; flex: none; border: 1px solid var(--surface-alt);
+    border-radius: 12px; background: #fff; padding: 5px;
+}
+.mtTicketInfo { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.mtTicketTags { display: flex; gap: 6px; flex-wrap: wrap; }
+.mtPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.mtPill--mine { background: var(--primary-900); color: #fff; }
+.mtPill--valid { background: var(--success-bg); color: var(--success-text); }
+.mtPill--used { background: var(--surface-alt); color: var(--primary-500); }
+.mtTicketType { font-size: 15px; font-weight: 700; color: var(--primary-900); }
+.mtTicketAttendee { font-size: 13px; color: var(--primary-500); }
+.mtTicketCode { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--primary-800); }
+.mtTicketFoot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.mtResend {
+    border: none; background: none; padding: 0; color: var(--primary-500);
+    font-size: 12px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.mtResend:hover:not(:disabled) { color: var(--primary-900); }
+.mtResend:disabled { opacity: .6; cursor: default; }
+.mtSent { font-size: 11px; color: var(--primary-300); }
+
+/* ---------- Eventos pasados ---------- */
+.mtPastToggle {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    border: 1px solid var(--surface-alt); background: var(--surface-mid); color: var(--primary-800);
+    padding: 14px 20px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+    margin-bottom: 16px;
+}
+.mtPastChevron { font-size: 11px; color: var(--primary-300); }
+.mtEvent--past { opacity: .82; }
+.mtEvent--past .mtEventHero { min-height: 84px; }
+
+/* ---------- Visor fullscreen del QR ---------- */
+.mtTicket--tappable { cursor: pointer; }
+.mtTicket--tappable:hover { background: var(--surface-mid); }
+.mtShowHint { font-size: 11px; color: var(--primary-300); margin-top: 2px; }
+.mtViewer {
+    position: fixed; inset: 0; z-index: 1050;
+    background: rgba(15, 23, 42, .78); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.mtViewerCard {
+    position: relative; background: #fff; border-radius: 24px;
+    padding: 36px 32px 28px; max-width: 380px; width: 100%;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, .4);
+}
+.mtViewerClose {
+    position: absolute; top: 12px; right: 14px; border: none; background: var(--surface-alt);
+    color: var(--primary-800); width: 32px; height: 32px; border-radius: 50%;
+    font-size: 14px; cursor: pointer; line-height: 1;
+}
+.mtViewerEvent { font-size: 15px; font-weight: 700; color: var(--primary-900); }
+.mtViewerQr {
+    width: min(280px, 72vw); height: auto; aspect-ratio: 1;
+    image-rendering: pixelated;
+}
+.mtViewerCode { font-size: 19px; font-weight: 700; letter-spacing: 3px; color: var(--primary-900); }
+.mtViewerMeta { font-size: 13px; color: var(--primary-500); }
+.mtViewerNote { font-size: 11px; color: var(--primary-300); margin-top: 4px; }
+
+@media (max-width: 560px) {
+    .mtTicket { flex-direction: column; align-items: flex-start; }
+    .mtQr { width: 140px; height: 140px; align-self: center; }
+}
+</style>
+
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type TicketBag = {
+    ticketId: number;
+    eventId: number;
+    eventName: string | null;
+    eventStartDateTime: string | null;
+    eventEndDateTime: string | null;
+    eventImageUrl: string | null;
+    venueName: string | null;
+    ticketTypeName: string | null;
+    attendeeName: string | null;
+    isCurrentUser: boolean;
+    uniqueCode: string | null;
+    qrImageUrl: string | null;
+    status: string | null;
+    emailSentCount: number;
+    emailSentDateTime: string | null;
+};
+type InitBag = { notLogged: boolean; tickets: TicketBag[] };
+
+type EventGroup = {
+    eventId: number;
+    name: string;
+    startDateTime: string | null;
+    endDateTime: string | null;
+    imageUrl: string | null;
+    venueName: string | null;
+    tickets: TicketBag[];
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const tickets = ref<TicketBag[]>(config.tickets || []);
+const busy = ref<boolean>(false);
+const resendingId = ref<number | null>(null);
+const err = ref<string>("");
+const notice = ref<string>("");
+const showPast = ref<boolean>(false);
+
+// Visor fullscreen: la entrada seleccionada para enseñar el QR en la puerta.
+const shownTicket = ref<TicketBag | null>(null);
+const shownEventName = ref<string>("");
+
+function showTicket(t: TicketBag, g: EventGroup): void {
+    if (!t.qrImageUrl) {
+        return;
+    }
+    shownTicket.value = t;
+    shownEventName.value = g.name;
+}
+
+// Agrupa los tickets por evento conservando el orden (ya viene por fecha desc del servidor).
+function groupByEvent(list: TicketBag[]): EventGroup[] {
+    const groups = new Map<number, EventGroup>();
+    for (const t of list) {
+        let g = groups.get(t.eventId);
+        if (!g) {
+            g = {
+                eventId: t.eventId,
+                name: t.eventName || "Evento",
+                startDateTime: t.eventStartDateTime,
+                endDateTime: t.eventEndDateTime,
+                imageUrl: t.eventImageUrl,
+                venueName: t.venueName,
+                tickets: []
+            };
+            groups.set(t.eventId, g);
+        }
+        g.tickets.push(t);
+    }
+    // Dentro de cada evento: primero "tu entrada", luego el resto.
+    for (const g of groups.values()) {
+        g.tickets.sort((a, b) => Number(b.isCurrentUser) - Number(a.isCurrentUser) || a.ticketId - b.ticketId);
+    }
+    return Array.from(groups.values());
+}
+
+// Un evento es "pasado" cuando su HORA DE FIN ya quedó atrás. Si no tiene hora de fin, se asume
+// una duración implícita de 12 h desde el inicio, para que un evento en curso (empezó pero no ha
+// terminado) siga en "próximos" y conserve su QR visible en la puerta — no se caiga a "pasados"
+// apenas pasa la hora de inicio.
+const IMPLICIT_EVENT_HOURS = 12;
+function isPast(g: EventGroup): boolean {
+    let refMs: number;
+    if (g.endDateTime) {
+        refMs = new Date(g.endDateTime).getTime();
+    }
+    else if (g.startDateTime) {
+        refMs = new Date(g.startDateTime).getTime() + IMPLICIT_EVENT_HOURS * 3600_000;
+    }
+    else {
+        return false;
+    }
+    return !isNaN(refMs) && refMs < Date.now();
+}
+
+const upcomingGroups = computed<EventGroup[]>(() =>
+    groupByEvent(tickets.value).filter(g => !isPast(g))
+        .sort((a, b) => new Date(a.startDateTime ?? 0).getTime() - new Date(b.startDateTime ?? 0).getTime()));
+
+const pastGroups = computed<EventGroup[]>(() =>
+    groupByEvent(tickets.value).filter(g => isPast(g))
+        .sort((a, b) => new Date(b.startDateTime ?? 0).getTime() - new Date(a.startDateTime ?? 0).getTime()));
+
+function formatEventDate(value: string | null): string {
+    if (!value) {
+        return "";
+    }
+    const d = new Date(value);
+    if (isNaN(d.getTime())) {
+        return "";
+    }
+    return d.toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+        + " · " + d.toLocaleTimeString("es-GT", { hour: "numeric", minute: "2-digit" });
+}
+
+async function loadTickets(): Promise<void> {
+    busy.value = true;
+    err.value = "";
+    notice.value = "";
+    try {
+        const res = await invokeBlockAction<{ tickets: TicketBag[] }>("GetMyTickets", {});
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudieron cargar tus entradas.";
+            return;
+        }
+        tickets.value = res.data.tickets || [];
+    }
+    catch {
+        err.value = "Error cargando tus entradas.";
+    }
+    finally {
+        busy.value = false;
+    }
+}
+
+async function resend(ticketId: number): Promise<void> {
+    resendingId.value = ticketId;
+    err.value = "";
+    notice.value = "";
+    try {
+        // Rock bindea los parámetros del block action por NOMBRE: la firma C# es (bag), así que
+        // el payload debe ser { bag: { ticketId } } — con { ticketId } suelto responde 400.
+        const res = await invokeBlockAction<{ sent: boolean; ticket: TicketBag | null }>("ResendTicketEmail", { bag: { ticketId } });
+        if (!res.isSuccess || !res.data || !res.data.sent) {
+            err.value = res.errorMessage || "No se pudo reenviar el correo.";
+            return;
+        }
+        if (res.data.ticket) {
+            const idx = tickets.value.findIndex(t => t.ticketId === ticketId);
+            if (idx >= 0) {
+                tickets.value[idx] = res.data.ticket;
+            }
+        }
+        notice.value = "Correo reenviado: revisa tu bandeja (lleva el PDF con tu boleto).";
+    }
+    catch {
+        err.value = "Error reenviando el correo.";
+    }
+    finally {
+        resendingId.value = null;
+    }
+}
+</script>

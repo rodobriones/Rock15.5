@@ -1,0 +1,151 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- STEP 2: Asistentes — asignación de cada entrada (familia / invitado) + preguntas del boleto. -->
+<template>
+    <div class="ecNarrow">
+        <h2 class="ecPaneTitle">¿Quién asiste?</h2>
+        <p class="ecPaneText">Asigna cada entrada a tu familia o a un invitado.</p>
+
+        <div class="ecStack">
+            <div v-for="unit in attendeeUnits" :key="unit.key" class="ecAttendee">
+                <div class="ecAttendeeTag"
+                     :class="{ 'ecAttendeeTag--nav': accordionMode }"
+                     @click="accordionMode && toggleUnit(unit)">
+                    <span class="ecAttendeeType">{{ unit.ticketTypeName }}</span>
+                    <span class="ecAttendeeTagRight">
+                        <span v-if="accordionMode"
+                              class="ecAttState"
+                              :class="unitValid(unit) ? 'ecAttState--ok' : 'ecAttState--pending'">
+                            {{ unitValid(unit) ? "✓ Completo" : "Falta información" }}
+                        </span>
+                        <span class="ecAttendeeNo">#{{ unit.indexInType }}</span>
+                        <span v-if="accordionMode" class="ecAttChevron">{{ openUnitKey === unit.key ? "▾" : "▸" }}</span>
+                    </span>
+                </div>
+
+                <!-- Colapsado: resumen de a quién quedó asignada -->
+                <div v-if="accordionMode && openUnitKey !== unit.key" class="ecAttSummary">
+                    {{ attendeeDisplayName(unit) }}
+                </div>
+
+                <template v-else>
+                    <DropDownList :modelValue="unit.selection"
+                                  @update:modelValue="v => onAttendeeSelect(unit, v)"
+                                  :items="choicesFor(unit)"
+                                  :showBlankItem="false" />
+
+                    <!-- Invitado nuevo: datos completos (el servidor crea la persona
+                         y la enlaza contigo con la relación elegida). -->
+                    <div v-if="unit.selection === guestValue" class="ecQForm">
+                        <div class="ecTwoCol">
+                            <TextBox v-model="unit.guestFirstName" label="Nombre *" :maxLength="100" />
+                            <TextBox v-model="unit.guestLastName" label="Apellido *" :maxLength="100" />
+                        </div>
+                        <div class="form-group">
+                            <label class="control-label">Fecha de nacimiento *</label>
+                            <div class="ecDobRow">
+                                <DropDownList :modelValue="unit.dobParts.d"
+                                              @update:modelValue="v => setDobPart(unit, 'd', v)"
+                                              :items="dobDayOptions" />
+                                <DropDownList :modelValue="unit.dobParts.m"
+                                              @update:modelValue="v => setDobPart(unit, 'm', v)"
+                                              :items="dobMonthOptions" />
+                                <DropDownList :modelValue="unit.dobParts.y"
+                                              @update:modelValue="v => setDobPart(unit, 'y', v)"
+                                              :items="dobYearOptions" />
+                            </div>
+                        </div>
+                        <div class="ecTwoCol">
+                            <DropDownList v-model="unit.answers.gender" label="Sexo *" :items="genderOptions" />
+                            <DropDownList v-model="unit.guestRelation" label="¿Qué relación tiene contigo? *" :items="relationRoles" />
+                        </div>
+                    </div>
+
+                    <!-- Preguntas del tipo de boleto (básicos + catálogo). Prefill al elegir persona.
+                         Para invitados, nacimiento y sexo ya van en el bloque de arriba. -->
+                    <div v-if="questionsFor(unit).length" class="ecQForm">
+                        <template v-for="q in questionsFor(unit)" :key="q.key ?? q.attributeGuid ?? ''">
+                            <TextBox v-if="q.kind === 'basic' && q.key === 'phone'"
+                                     v-model="unit.answers.phone"
+                                     :label="'Teléfono' + (q.required ? ' *' : '')" />
+                            <TextBox v-else-if="q.kind === 'basic' && q.key === 'email'"
+                                     v-model="unit.answers.email"
+                                     :label="'Email' + (q.required ? ' *' : '')" />
+                            <div v-else-if="q.kind === 'basic' && q.key === 'birthDate' && unit.selection !== guestValue"
+                                 class="form-group">
+                                <label class="control-label">Fecha de nacimiento{{ q.required ? " *" : "" }}</label>
+                                <div class="ecDobRow">
+                                    <DropDownList :modelValue="unit.dobParts.d"
+                                                  @update:modelValue="v => setDobPart(unit, 'd', v)"
+                                                  :items="dobDayOptions" />
+                                    <DropDownList :modelValue="unit.dobParts.m"
+                                                  @update:modelValue="v => setDobPart(unit, 'm', v)"
+                                                  :items="dobMonthOptions" />
+                                    <DropDownList :modelValue="unit.dobParts.y"
+                                                  @update:modelValue="v => setDobPart(unit, 'y', v)"
+                                                  :items="dobYearOptions" />
+                                </div>
+                            </div>
+                            <DropDownList v-else-if="q.kind === 'basic' && q.key === 'gender' && unit.selection !== guestValue"
+                                          v-model="unit.answers.gender"
+                                          :label="'Sexo' + (q.required ? ' *' : '')"
+                                          :items="genderOptions" />
+                        </template>
+                        <AttributeValuesContainer v-if="hasAttrQuestions(unit)"
+                                                  v-model="unit.attrValues"
+                                                  :attributes="attrBagsFor(unit)"
+                                                  isEditMode
+                                                  :showCategoryLabel="false" />
+                    </div>
+
+                    <button v-if="accordionMode && nextUnitAfter(unit)"
+                            type="button"
+                            class="ecAttNext"
+                            @click="goNextUnit(unit)">
+                        Siguiente asistente ↓
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <div class="ecActions">
+            <RockButton class="ecGhost" btnType="default" @click="backToTickets">← Atrás</RockButton>
+            <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="!attendeesValid" @click="goToReview">
+                Continuar <span class="ecCtaArrow">→</span>
+            </RockButton>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import AttributeValuesContainer from "@Obsidian/Controls/attributeValuesContainer.obs";
+import { guestValue } from "./types.partial";
+import { useCheckoutState } from "./checkoutState.partial";
+
+const {
+    attendeeUnits,
+    attendeesValid,
+    accordionMode,
+    openUnitKey,
+    choicesFor,
+    onAttendeeSelect,
+    setDobPart,
+    questionsFor,
+    attrBagsFor,
+    hasAttrQuestions,
+    unitValid,
+    toggleUnit,
+    nextUnitAfter,
+    goNextUnit,
+    attendeeDisplayName,
+    backToTickets,
+    goToReview,
+    genderOptions,
+    relationRoles,
+    dobDayOptions,
+    dobMonthOptions,
+    dobYearOptions
+} = useCheckoutState();
+</script>
