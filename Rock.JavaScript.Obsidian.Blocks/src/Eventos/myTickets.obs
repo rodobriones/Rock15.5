@@ -36,6 +36,9 @@
                                     <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
                                     <h2 class="mtEventName">{{ g.name }}</h2>
                                     <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
+                                    <ul v-if="g.sessions.length" class="mtEventSessions">
+                                        <li v-for="s in g.sessions" :key="s">{{ s }}</li>
+                                    </ul>
                                 </div>
                                 <span class="mtEventCount">{{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}</span>
                             </div>
@@ -200,6 +203,11 @@
 .mtEventDate { font-size: 12px; font-weight: 600; letter-spacing: .5px; color: rgba(255,255,255,.85); }
 .mtEventName { margin: 0; font-size: 20px; font-weight: 700; color: #fff; line-height: 1.2; }
 .mtEventVenue { font-size: 13px; color: rgba(255,255,255,.8); }
+.mtEventSessions {
+    list-style: none; margin: 4px 0 0; padding: 0;
+    font-size: 12px; color: rgba(255,255,255,.75);
+}
+.mtEventSessions li::before { content: "•"; margin-right: 6px; color: rgba(255,255,255,.45); }
 .mtEventCount {
     position: absolute; top: 14px; right: 14px;
     background: rgba(255,255,255,.92); color: var(--primary-900);
@@ -292,6 +300,7 @@ type TicketBag = {
     eventName: string | null;
     eventStartDateTime: string | null;
     eventEndDateTime: string | null;
+    eventSessions: string[] | null;
     eventImageUrl: string | null;
     venueName: string | null;
     ticketTypeName: string | null;
@@ -310,6 +319,7 @@ type EventGroup = {
     name: string;
     startDateTime: string | null;
     endDateTime: string | null;
+    sessions: string[];
     imageUrl: string | null;
     venueName: string | null;
     tickets: TicketBag[];
@@ -348,6 +358,7 @@ function groupByEvent(list: TicketBag[]): EventGroup[] {
                 name: t.eventName || "Evento",
                 startDateTime: t.eventStartDateTime,
                 endDateTime: t.eventEndDateTime,
+                sessions: t.eventSessions || [],
                 imageUrl: t.eventImageUrl,
                 venueName: t.venueName,
                 tickets: []

@@ -17,7 +17,8 @@ namespace Rock.Migrations
     /// niveles). Seguridad: "Boleteria" hereda del padre; las paginas movidas conservan sus
     /// reglas explicitas de la 003. Idempotente.
     /// </summary>
-    [MigrationNumber( 10, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventsMenuSection : Migration
     {
         // --- Existentes ---

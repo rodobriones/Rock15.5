@@ -16,7 +16,8 @@ namespace Rock.Migrations
     ///    "No tienes permiso". Se agrega Edit para Rock Administration y Staff Workers (mismo
     ///    modelo que la página Administrar Eventos, migración 003).
     /// </summary>
-    [MigrationNumber( 16, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class FixCategoryGuidAndCatalogSecurity : Migration
     {
         private const string CATEGORY_GUID_OLD = "b2e4d8f1-2c3e-4f7b-ad12-300000000001";

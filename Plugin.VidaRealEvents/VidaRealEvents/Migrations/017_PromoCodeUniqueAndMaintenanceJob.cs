@@ -16,7 +16,8 @@ namespace Rock.Migrations
     ///      holds expirados pasando @Now (zona horaria correcta) y reconcilia órdenes atascadas en
     ///      Charging (cobradas pero sin finalizar) de forma idempotente y segura. Idempotente por Guid.
     /// </summary>
-    [MigrationNumber( 17, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class PromoCodeUniqueAndMaintenanceJob : Migration
     {
         private const string JobGuid = "4E9E0017-9A17-4017-B017-C0DE00000017";

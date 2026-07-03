@@ -18,7 +18,8 @@ namespace Rock.Migrations
     /// Tambien se cablea el block-setting "Checkout Page" del Event Admin a la pagina de checkout
     /// para que el enlace "Ir al checkout" funcione sin configuracion manual.
     /// </summary>
-    [MigrationNumber( 3, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventsPages : Migration
     {
         // --- Core (existentes) ---

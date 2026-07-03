@@ -88,7 +88,9 @@ namespace Rock.Model
 
             var ev = order.Event;
             var personAliasService = new PersonAliasService( rockContext );
-            var buyerEmail = GetPersonAliasEmail( personAliasService, order.BuyerPersonAliasId );
+            // El comprador eligió a dónde enviar (Order.DeliveryEmail, paso de pago); null = perfil.
+            var buyerProfileEmail = GetPersonAliasEmail( personAliasService, order.BuyerPersonAliasId );
+            var buyerEmail = !string.IsNullOrWhiteSpace( order.DeliveryEmail ) ? order.DeliveryEmail : buyerProfileEmail;
 
             var sentTicketIds = new HashSet<int>();
 
@@ -105,10 +107,13 @@ namespace Rock.Model
             }
 
             // 2) Asistentes con correo propio (distinto al del comprador): sus entradas.
+            // Se excluye también el correo de PERFIL del comprador: si reemplazó el correo de envío,
+            // su boleto como asistente no debe irse además a la dirección vieja/errónea del perfil.
             var attendeeGroups = tickets
                 .Select( t => new { Ticket = t, Email = t.AttendeePersonAliasId.HasValue ? GetPersonAliasEmail( personAliasService, t.AttendeePersonAliasId.Value ) : null } )
                 .Where( x => !string.IsNullOrWhiteSpace( x.Email )
-                    && !string.Equals( x.Email, buyerEmail, StringComparison.OrdinalIgnoreCase ) )
+                    && !string.Equals( x.Email, buyerEmail, StringComparison.OrdinalIgnoreCase )
+                    && !string.Equals( x.Email, buyerProfileEmail, StringComparison.OrdinalIgnoreCase ) )
                 .GroupBy( x => x.Email, StringComparer.OrdinalIgnoreCase );
 
             foreach ( var group in attendeeGroups )
@@ -208,18 +213,37 @@ namespace Rock.Model
                 ExceptionLogService.LogException( ex );
             }
 
+            // Adjunto .ics: "Agregar a mi calendario" universal (Apple Calendar, Outlook de
+            // escritorio, Thunderbird…). Un VEVENT por sesión (o uno solo si el evento es de un
+            // bloque). Best-effort: si falla, el correo sale sin él.
+            var occurrences = GetOccurrences( ev );
+            BinaryFile icsFile = null;
+            try
+            {
+                icsFile = SaveIcsToBinaryFile( BuildIcs( ev, occurrences ), rockContext );
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+            }
+
             var emailMessage = new RockEmailMessage
             {
                 Subject = tickets.Count == 1
                     ? $"Tu entrada — {eventNameSubject}"
                     : $"Tus {tickets.Count} entradas — {eventNameSubject}",
-                Message = BuildHtmlBody( tickets, order, ev, eventName, pdfFile != null ),
+                Message = BuildHtmlBody( tickets, order, ev, eventName, pdfFile != null, occurrences, icsFile != null ),
                 CreateCommunicationRecord = false
             };
 
             if ( pdfFile != null )
             {
                 emailMessage.Attachments.Add( pdfFile );
+            }
+
+            if ( icsFile != null )
+            {
+                emailMessage.Attachments.Add( icsFile );
             }
             else
             {
@@ -264,7 +288,7 @@ namespace Rock.Model
         /// en el plan B). Estilos inline y layout de tablas (compatibilidad con clientes de
         /// correo); códigos con <c>.notranslate</c> para que el plugin de traducción no los altere.
         /// </summary>
-        private static string BuildHtmlBody( List<Ticket> tickets, Order order, Rock.Model.Event ev, string eventName, bool pdfAttached )
+        private static string BuildHtmlBody( List<Ticket> tickets, Order order, Rock.Model.Event ev, string eventName, bool pdfAttached, List<EventOccurrence> occurrences, bool icsAttached )
         {
             // HtmlEncode + neutraliza llaves Lava: el cuerpo se resuelve como Lava al enviarse
             // (RockEmailMessage.Send), y AttendeeName lo controla el comprador. Sin esto, un nombre
@@ -279,6 +303,40 @@ namespace Rock.Model
             var subtitleParts = new[] { when, venue }.Where( s => !string.IsNullOrWhiteSpace( s ) );
             var subtitle = string.Join( " · ", subtitleParts );
             var total = tickets.Count > 1 ? order?.Total : null;
+
+            // Agenda de sesiones (evento multi-día) bajo el subtítulo.
+            var sessionLines = EventSessionService.Format( ev?.SessionsJson );
+            var agendaHtml = sessionLines.Any()
+                ? $@"<div style='background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;padding:12px 16px;margin-top:14px;'>
+        <div style='font-size:11px;font-weight:700;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;'>Sesiones del evento</div>
+        {string.Join( "", sessionLines.Select( s => $"<div style='font-size:13px;color:#334155;line-height:1.7;'>&#8226;&nbsp; {E( s )}</div>" ) )}
+        <div style='font-size:12px;color:#64748b;margin-top:6px;'>Tu entrada da acceso a todas las sesiones.</div>
+      </div>"
+                : string.Empty;
+
+            // "Agregar a mi calendario": links por ocurrencia (Google / Outlook web) + .ics adjunto
+            // (Apple Calendar y Outlook de escritorio). Las URLs se generan server-side.
+            var calendarHtml = string.Empty;
+            if ( occurrences != null && occurrences.Any() && ev != null )
+            {
+                string A( string url, string text ) =>
+                    $"<a href='{System.Web.HttpUtility.HtmlAttributeEncode( url )}' style='color:#2563eb;text-decoration:underline;'>{text}</a>";
+
+                var rows = occurrences.Count == 1
+                    ? $"<div style='font-size:13px;color:#334155;line-height:1.9;'>{A( BuildGoogleCalendarUrl( ev, occurrences[0] ), "Google Calendar" )} &nbsp;&#183;&nbsp; {A( BuildOutlookCalendarUrl( ev, occurrences[0] ), "Outlook.com" )}</div>"
+                    : string.Join( "", occurrences.Select( o =>
+                        $"<div style='font-size:13px;color:#334155;line-height:1.9;'>{E( o.Display )} &nbsp;&#8212;&nbsp; {A( BuildGoogleCalendarUrl( ev, o ), "Google" )} &#183; {A( BuildOutlookCalendarUrl( ev, o ), "Outlook" )}</div>" ) );
+
+                var icsNote = icsAttached
+                    ? $"<div style='font-size:12px;color:#64748b;margin-top:6px;'>&#191;Usas Apple Calendar u Outlook de escritorio? Abre el archivo adjunto <strong>evento.ics</strong>{( occurrences.Count > 1 ? " (incluye todas las sesiones)" : "" )}.</div>"
+                    : string.Empty;
+
+                calendarHtml = $@"<div style='margin-top:14px;'>
+        <div style='font-size:11px;font-weight:700;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;'>&#128197; Agregar a mi calendario</div>
+        {rows}
+        {icsNote}
+      </div>";
+            }
 
             var cards = new System.Text.StringBuilder();
             var n = tickets.Count;
@@ -321,9 +379,11 @@ namespace Rock.Model
       <h1 style='margin:6px 0 2px;font-size:22px;line-height:1.25;color:#0f172a;'>{E( eventName )}</h1>
       {( string.IsNullOrWhiteSpace( subtitle ) ? "" : $"<p style='margin:0;color:#64748b;font-size:14px;'>{E( subtitle )}</p>" )}
       <p style='margin:4px 0 0;color:#94a3b8;font-size:12px;'>Orden #{order?.Id}</p>
+{agendaHtml}
       <div style='height:1px;margin:20px 0;background:#e2e8f0;'></div>
 {cards}
 {totalRow}
+{calendarHtml}
       <div style='height:1px;margin:16px 0 18px;background:#e2e8f0;'></div>
       <p style='margin:0;color:#64748b;font-size:13px;line-height:1.5;'>{( pdfAttached
                 ? "&#127903;&#65039; <strong>Tus boletos van adjuntos en PDF</strong> (un boleto por p&#225;gina con su c&#243;digo QR). Pres&#233;ntalos en el ingreso del evento &#8212; impresos o desde tu tel&#233;fono."
@@ -334,6 +394,161 @@ namespace Rock.Model
 </div>";
         }
 
+        #region Agregar a mi calendario
+
+        /// <summary>One calendar occurrence of the event: a session, or the whole single-block event.</summary>
+        private class EventOccurrence
+        {
+            public DateTime Start { get; set; }
+            public DateTime End { get; set; }
+            public string Display { get; set; }
+            public string Label { get; set; }
+        }
+
+        /// <summary>
+        /// The event's calendar occurrences: one per session for multi-session events, otherwise
+        /// the single Start–End block (with a 1h implicit duration if End is not after Start).
+        /// </summary>
+        private static List<EventOccurrence> GetOccurrences( Rock.Model.Event ev )
+        {
+            var result = new List<EventOccurrence>();
+            if ( ev == null )
+            {
+                return result;
+            }
+
+            var sessions = EventSessionService.Parse( ev.SessionsJson );
+            if ( sessions.Any() )
+            {
+                var displays = EventSessionService.Format( sessions );
+                for ( var i = 0; i < sessions.Count; i++ )
+                {
+                    result.Add( new EventOccurrence
+                    {
+                        Start = sessions[i].GetStartDateTime().Value,
+                        End = sessions[i].GetEndDateTime().Value,
+                        Display = displays[i],
+                        Label = sessions[i].Label
+                    } );
+                }
+            }
+            else
+            {
+                result.Add( new EventOccurrence
+                {
+                    Start = ev.StartDateTime,
+                    End = ev.EndDateTime > ev.StartDateTime ? ev.EndDateTime : ev.StartDateTime.AddHours( 1 ),
+                    Display = null,
+                    Label = null
+                } );
+            }
+
+            return result;
+        }
+
+        private static string BuildOccurrenceTitle( Rock.Model.Event ev, EventOccurrence o )
+        {
+            return string.IsNullOrWhiteSpace( o.Label ) ? ev.Name : $"{ev.Name} — {o.Label}";
+        }
+
+        /// <summary>
+        /// Google Calendar "add event" URL. Times go as local wall-clock plus
+        /// <c>ctz=America/Guatemala</c> so they land at the right hour for everyone.
+        /// </summary>
+        private static string BuildGoogleCalendarUrl( Rock.Model.Event ev, EventOccurrence o )
+        {
+            var url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+                + $"&text={Uri.EscapeDataString( BuildOccurrenceTitle( ev, o ) )}"
+                + $"&dates={o.Start:yyyyMMddTHHmmss}/{o.End:yyyyMMddTHHmmss}"
+                + "&ctz=America/Guatemala";
+
+            if ( !string.IsNullOrWhiteSpace( ev.VenueName ) )
+            {
+                url += $"&location={Uri.EscapeDataString( ev.VenueName )}";
+            }
+
+            return url;
+        }
+
+        /// <summary>Outlook.com (web) "add event" deep link.</summary>
+        private static string BuildOutlookCalendarUrl( Rock.Model.Event ev, EventOccurrence o )
+        {
+            var url = "https://outlook.live.com/calendar/0/action/compose?rru=addevent"
+                + $"&subject={Uri.EscapeDataString( BuildOccurrenceTitle( ev, o ) )}"
+                + $"&startdt={o.Start:yyyy-MM-ddTHH:mm:ss}"
+                + $"&enddt={o.End:yyyy-MM-ddTHH:mm:ss}";
+
+            if ( !string.IsNullOrWhiteSpace( ev.VenueName ) )
+            {
+                url += $"&location={Uri.EscapeDataString( ev.VenueName )}";
+            }
+
+            return url;
+        }
+
+        /// <summary>
+        /// Builds the .ics content (one VEVENT per occurrence) with Ical.Net (already a Rock
+        /// dependency). Times are floating local — Guatemala has no DST, so wall-clock is exact —
+        /// and UIDs are deterministic per event/occurrence so re-importing doesn't duplicate.
+        /// </summary>
+        private static string BuildIcs( Rock.Model.Event ev, List<EventOccurrence> occurrences )
+        {
+            if ( ev == null || occurrences == null || !occurrences.Any() )
+            {
+                return null;
+            }
+
+            var calendar = new Ical.Net.Calendar();
+
+            for ( var i = 0; i < occurrences.Count; i++ )
+            {
+                var o = occurrences[i];
+                calendar.Events.Add( new Ical.Net.CalendarComponents.CalendarEvent
+                {
+                    Uid = $"vidareal-evento-{ev.Id}-{i}@vidareal.tv",
+                    Summary = BuildOccurrenceTitle( ev, o ),
+                    Location = ev.VenueName,
+                    DtStart = new Ical.Net.DataTypes.CalDateTime( o.Start ),
+                    DtEnd = new Ical.Net.DataTypes.CalDateTime( o.End )
+                } );
+            }
+
+            return new Ical.Net.Serialization.CalendarSerializer().SerializeToString( calendar );
+        }
+
+        /// <summary>
+        /// Persists the .ics as a TEMPORARY BinaryFile (the SMTP transport re-queries attachments
+        /// by Id; RockCleanup purges temporaries later). Same pattern as the tickets PDF.
+        /// </summary>
+        private static BinaryFile SaveIcsToBinaryFile( string ics, RockContext rockContext )
+        {
+            if ( string.IsNullOrWhiteSpace( ics ) )
+            {
+                return null;
+            }
+
+            var binaryFileType = Rock.Web.Cache.BinaryFileTypeCache.Get( QrService.TicketQrBinaryFileTypeGuid.AsGuid() )
+                ?? Rock.Web.Cache.BinaryFileTypeCache.Get( Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid() );
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes( ics );
+            var binaryFile = new BinaryFile
+            {
+                IsTemporary = true,
+                BinaryFileTypeId = binaryFileType?.Id,
+                MimeType = "text/calendar",
+                FileName = "evento.ics",
+                FileSize = bytes.Length,
+                ContentStream = new System.IO.MemoryStream( bytes )
+            };
+
+            new BinaryFileService( rockContext ).Add( binaryFile );
+            rockContext.SaveChanges();
+
+            return binaryFile;
+        }
+
+        #endregion
+
         /// <summary>
         /// Resolves the email address the ticket should be delivered to. Prefers the attendee's
         /// email (<see cref="Ticket.AttendeePersonAliasId"/>), falling back to the buyer's email
@@ -342,6 +557,23 @@ namespace Rock.Model
         private string ResolveRecipientEmail( Ticket ticket, Order order, RockContext rockContext )
         {
             var personAliasService = new PersonAliasService( rockContext );
+
+            // Si el asistente ES el comprador y la orden tiene correo de envío elegido, ese manda
+            // (el comprador pudo reemplazarlo justamente porque el de su perfil está mal/viejo).
+            if ( order != null && !string.IsNullOrWhiteSpace( order.DeliveryEmail ) && ticket.AttendeePersonAliasId.HasValue )
+            {
+                var attendeePersonId = personAliasService.Queryable()
+                    .Where( pa => pa.Id == ticket.AttendeePersonAliasId.Value )
+                    .Select( pa => pa.PersonId ).FirstOrDefault();
+                var buyerPersonId = personAliasService.Queryable()
+                    .Where( pa => pa.Id == order.BuyerPersonAliasId )
+                    .Select( pa => pa.PersonId ).FirstOrDefault();
+
+                if ( attendeePersonId > 0 && attendeePersonId == buyerPersonId )
+                {
+                    return order.DeliveryEmail;
+                }
+            }
 
             if ( ticket.AttendeePersonAliasId.HasValue )
             {
@@ -354,6 +586,12 @@ namespace Rock.Model
 
             if ( order != null )
             {
+                // El correo de envío elegido en la compra manda sobre el del perfil.
+                if ( !string.IsNullOrWhiteSpace( order.DeliveryEmail ) )
+                {
+                    return order.DeliveryEmail;
+                }
+
                 var buyerEmail = GetPersonAliasEmail( personAliasService, order.BuyerPersonAliasId );
                 if ( !string.IsNullOrWhiteSpace( buyerEmail ) )
                 {

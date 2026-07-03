@@ -97,7 +97,34 @@ namespace Rock.Model
                     }
                     else if ( ticket.Status == TicketStatus.CheckedIn )
                     {
-                        result = CheckinResult.AlreadyUsed;
+                        // Evento con sesiones (varios días): la entrada re-admite en un día
+                        // distinto al del último ingreso — "ya usado" es solo dentro del mismo día.
+                        // El Status queda CheckedIn desde el primer día (reportería = "asistió al
+                        // menos una vez"); CheckinLog guarda cada ingreso.
+                        // ponytail: dedupe por día calendario; si algún evento llega a tener dos
+                        // sesiones el mismo día, subir a dedupe por ventana de sesión.
+                        var hasSessions = new EventService( rockContext ).Queryable()
+                            .Where( e => e.Id == eventId )
+                            .Select( e => e.SessionsJson )
+                            .FirstOrDefault()
+                            .IsNotNullOrWhiteSpace();
+
+                        var today = RockDateTime.Now.Date;
+                        var alreadyInToday = !hasSessions || checkinLogService.Queryable()
+                            .Any( l => l.TicketId == ticket.Id
+                                && l.Result == CheckinResult.Ok
+                                && l.ScannedDateTime >= today );
+
+                        if ( alreadyInToday )
+                        {
+                            result = CheckinResult.AlreadyUsed;
+                        }
+                        else
+                        {
+                            ticket.CheckedInDateTime = RockDateTime.Now;
+                            ticket.CheckedInByPersonAliasId = scannedByPersonAliasId;
+                            result = CheckinResult.Ok;
+                        }
                     }
                     else if ( ticket.Status != TicketStatus.Valid )
                     {

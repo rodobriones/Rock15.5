@@ -9,7 +9,28 @@ Documentación del módulo: **`Rock/Model/Eventos/ARCHITECTURE.md`** (mapa de ca
 `docs/eventos-custom/RESEARCH_Y_PLAN.md` (doc maestro, historial de sesiones en §9.x) ·
 `docs/eventos-custom/SMOKE_TESTS.md` (runbook de pruebas runtime).
 
-## Migraciones
+## Migración consolidada para producción (2026-07-02)
+
+El assembly expone **UNA sola migración**: `017_ProductionSetup.cs` (`[MigrationNumber(17, "18.1")]`),
+que ejecuta EN ORDEN los 17 pasos históricos de abajo dentro de una sola transacción (todo-o-nada).
+Los archivos 001–017 siguen en el folder pero **ya no llevan `[MigrationNumber]`**: son "pasos" que
+solo corren a través de la consolidada — el SQL que corre en producción es byte-idéntico al que
+construyó la instancia de desarrollo.
+
+**Deploy a producción (instancia limpia):** copiar `com.vidareal.Events.dll` a `RockWeb/Bin` (junto
+con los demás DLLs del fork), reciclar el app pool, y verificar:
+```sql
+SELECT MigrationNumber, MigrationName FROM [PluginMigration] WHERE PluginAssemblyName LIKE '%vidareal.Events%';
+-- Esperado: una fila — 17 / ProductionSetup
+```
+
+**En dev no pasa nada:** Rock registra cada número individualmente y dev ya tiene 1–17 en
+`[PluginMigration]` ⇒ la consolidada (nº 17) se salta.
+
+> ⚠️ **La PRÓXIMA migración debe numerarse 18 (o mayor).** Nunca reutilizar 1–16: correrían en
+> producción (que solo registró el 17) pero no en dev, y las instancias divergirían.
+
+## Pasos históricos (ejecutados por la 017 consolidada, en este orden)
 
 | # | Archivo | Qué hace |
 |---|---|---|
@@ -30,6 +51,14 @@ Documentación del módulo: **`Rock/Model/Eventos/ARCHITECTURE.md`** (mapa de ca
 | 015 | `015_QuestionCatalogPage.cs` | Página "Catálogo de Preguntas" (`eventos/preguntas`) + bloque Question Catalog (CRUD de preguntas y plantillas; plantillas en System Setting `com_vidareal_EventQuestionTemplates`). |
 | 016 | `016_FixCategoryGuidAndCatalogSecurity.cs` | Corrige el guid de la categoría "Preguntas de Eventos" (30xx→35xx; colisionaba con la página Eventos) + Edit explícito Admins/Staff en la página del catálogo. |
 | 017 | `017_PromoCodeUniqueAndMaintenanceJob.cs` | Índice **UNIQUE `(EventId,Code)`** en PromoCode (dedupe defensivo + reemplaza el IX no único; cierra la carrera del `.Any()`) + registra el ServiceJob **`Rock.Jobs.EventsMaintenance`** (cron cada 5 min, INSERT idempotente por Guid): limpia holds expirados (`sp_...CleanupExpiredHolds @Now`) y reconcilia órdenes atascadas en `Charging`. |
+
+## Migraciones posteriores a la consolidada (corren por sí solas, en dev Y en producción)
+
+| # | Archivo | Qué hace |
+|---|---------|----------|
+| 018 | `018_EventSessions.cs` | Columna `Event.SessionsJson`: agenda de sesiones para eventos de varios días/horarios (JSON `[{Date,Start,End,Label}]`). Null = evento de un solo bloque. |
+| 019 | `019_OrderDeliveryEmail.cs` | Columna `Order.DeliveryEmail`: correo al que se envían las entradas (elegido en el paso de pago; null = perfil del comprador). |
+| 020 | `020_EventVisibilityAndCalendar.cs` | Columnas `Event.Visibility` (0=Público/1=Privado/2=Con contraseña) + `Event.AccessPassword`; BlockType **Event Calendar** + página pública `eventos/calendario`; cablea "Checkout Page" del calendario y "Calendar Page" del checkout (botón "Volver al inicio"). La próxima migración debe ser la 21+. |
 
 ## Modelo de permisos (desde 011–013)
 

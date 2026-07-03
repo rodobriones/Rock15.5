@@ -48,13 +48,13 @@
                     <div class="ecDetailLabel">Ubicación</div>
                     <div class="ecDetailValue">{{ eventSubtitle }}</div>
                 </div>
-                <div v-if="config.event?.organizerName" class="ecDetail">
+                <div v-if="event?.organizerName" class="ecDetail">
                     <div class="ecDetailLabel">Organizador</div>
-                    <div class="ecDetailValue">{{ config.event.organizerName }}</div>
+                    <div class="ecDetailValue">{{ event.organizerName }}</div>
                 </div>
             </div>
 
-            <p v-if="config.event?.description" class="ecEventDesc">{{ config.event.description }}</p>
+            <p v-if="event?.description" class="ecEventDesc">{{ event.description }}</p>
         </div>
 
         <aside class="ecAside">
@@ -73,7 +73,7 @@ import RockButton from "@Obsidian/Controls/rockButton.obs";
 import { useCheckoutState } from "./checkoutState.partial";
 
 const {
-    config,
+    event,
     busy,
     ticketTypes,
     hasSelection,

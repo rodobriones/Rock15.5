@@ -43,6 +43,22 @@ namespace Rock.Enums.Eventos
     }
 
     /// <summary>
+    /// Who can find an <see cref="Rock.Model.Event"/>: it controls the public calendar listing
+    /// and whether the checkout link asks for a password. See <c>EventAccessService</c>.
+    /// </summary>
+    public enum EventVisibility
+    {
+        /// <summary>Listed in the public events calendar; anyone with the link can buy.</summary>
+        Public = 0,
+
+        /// <summary>Not listed in the calendar; only people with the direct link can buy.</summary>
+        Private = 1,
+
+        /// <summary>Not listed in the calendar; the checkout link asks for a password.</summary>
+        Password = 2
+    }
+
+    /// <summary>
     /// The status of an <see cref="Rock.Model.Order"/>.
     /// </summary>
     public enum OrderStatus

@@ -16,6 +16,7 @@ export type EventBag = {
     organizerName?: string | null;
     headerStyle?: string | null;
     category?: string | null;
+    sessions?: string[] | null;
 };
 
 export type TicketTypeBag = {
@@ -69,6 +70,9 @@ export type InitBag = {
     buyer?: AttendeeOptionBag | null;
     hasGateway: boolean;
     relationRoles?: ListItemBag[] | null;
+    currentPersonEmail?: string | null;
+    requiresPassword?: boolean;
+    calendarUrl?: string | null;
 };
 
 export type ConfirmationTicketBag = {

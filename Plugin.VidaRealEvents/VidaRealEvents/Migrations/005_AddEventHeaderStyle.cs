@@ -8,7 +8,8 @@ namespace Rock.Migrations
     /// barra fina sticky). Null/vacío se trata como "persistente".
     /// Idempotente (COL_LENGTH guard).
     /// </summary>
-    [MigrationNumber( 5, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class AddEventHeaderStyle : Migration
     {
         public override void Up()

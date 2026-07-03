@@ -160,6 +160,17 @@ namespace Rock.Model
             }
             var venue = ev?.VenueName;
 
+            // Agenda de sesiones (evento multi-día): franja compacta bajo el hero. La página es
+            // fija (4.5x7in), así que se muestran máximo 4 líneas + "+N sesiones más".
+            var agendaHtml = string.Empty;
+            var sessionLines = EventSessionService.Format( ev?.SessionsJson );
+            if ( sessionLines.Any() )
+            {
+                var shown = sessionLines.Take( 4 ).Select( s => $"<div>{E( s )}</div>" );
+                var more = sessionLines.Count > 4 ? $"<div>+{sessionLines.Count - 4} sesiones m&#225;s</div>" : string.Empty;
+                agendaHtml = $"<div class='agenda'>{string.Join( "", shown )}{more}</div>";
+            }
+
             // Imagen del evento para el hero del boleto (como la card de Mis Entradas), incrustada
             // como data URI (Chromium renderiza el PDF sin acceso a URLs del sitio). Best-effort:
             // sin imagen (o si falla la lectura) el hero cae al degradado slate y sigue viéndose bien.
@@ -208,6 +219,7 @@ namespace Rock.Model
           {( string.IsNullOrWhiteSpace( venue ) ? "" : $"<div class='heroVenue'>{E( venue )}</div>" )}
         </div>
       </div>
+      {agendaHtml}
       <div class='body'>
         <img class='qr' src='{qrDataUri}' alt='QR' />
         <div class='code'>{E( ticket.UniqueCode )}</div>
@@ -231,16 +243,19 @@ namespace Rock.Model
 <style>
   * {{ box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   body {{ margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }}
-  .page {{ page-break-after: always; display: flex; justify-content: center; }}
+  /* La página mide EXACTO el área imprimible (papel 4.5x7in menos márgenes 0.22in) y recorta:
+     el contenido JAMÁS puede derramarse a una segunda hoja. Si algo crece (agenda, nombres
+     largos), el QR — el único elemento flexible del body — se encoge para absorberlo. */
+  .page {{ page-break-after: always; display: flex; justify-content: center; height: 6.56in; overflow: hidden; }}
   .page:last-child {{ page-break-after: auto; }}
   .ticket {{
-      width: 100%; border: 2px solid #1e293b; border-radius: 22px;
+      width: 100%; height: 100%; border: 2px solid #1e293b; border-radius: 22px;
       padding: 0; overflow: hidden; text-align: center;
       display: flex; flex-direction: column;
   }}
   /* ---- Hero (mismo diseño que la card de Mis Entradas): imagen del evento + degradado,
      fecha, nombre y lugar en blanco, pill '1 entrada' arriba a la derecha. ---- */
-  .hero {{ position: relative; height: 150px; background: linear-gradient(160deg, #334155 0%, #0f172a 100%); }}
+  .hero {{ position: relative; height: 150px; flex: 0 0 auto; background: linear-gradient(160deg, #334155 0%, #0f172a 100%); }}
   .heroImg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }}
   .heroShade {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0;
       background: linear-gradient(180deg, rgba(15,23,42,0.10) 0%, rgba(15,23,42,0.45) 55%, rgba(15,23,42,0.85) 100%); }}
@@ -250,9 +265,13 @@ namespace Rock.Model
   .heroWhen {{ font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.92); margin-bottom: 3px; }}
   .heroName {{ font-size: 20px; font-weight: 800; line-height: 1.15; }}
   .heroVenue {{ font-size: 11px; color: rgba(255,255,255,0.78); margin-top: 3px; }}
-  .body {{ padding: 14px 26px 20px; display: flex; flex-direction: column; align-items: center; gap: 11px; }}
+  .agenda {{ padding: 8px 26px 0; font-size: 10px; line-height: 1.45; color: #475569; flex: 0 0 auto; }}
+  .agenda div::before {{ content: '\2022'; margin-right: 6px; color: #94a3b8; }}
+  .body {{ padding: 14px 26px 16px; display: flex; flex-direction: column; align-items: center; gap: 11px; flex: 1 1 auto; min-height: 0; }}
   .divider {{ width: 100%; height: 1px; background: repeating-linear-gradient(90deg, #94a3b8 0 8px, transparent 8px 16px); }}
-  .qr {{ width: 240px; height: 240px; image-rendering: pixelated; }}
+  /* flex-basis 240px pero puede encogerse hasta 110px si la página va justa (width:auto
+     mantiene el cuadrado por aspect ratio del PNG). */
+  .qr {{ flex: 0 1 240px; min-height: 110px; width: auto; image-rendering: pixelated; }}
   .code {{ font-family: Consolas, Menlo, monospace; font-size: 21px; font-weight: 700; letter-spacing: 3px; color: #0f172a; }}
   .type {{ font-size: 15px; font-weight: 600; color: #334155; }}
   .attendee {{ font-size: 14px; color: #475569; margin-top: -6px; }}

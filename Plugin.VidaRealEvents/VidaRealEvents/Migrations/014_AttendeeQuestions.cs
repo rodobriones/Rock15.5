@@ -13,7 +13,8 @@ namespace Rock.Migrations
     ///   amarradas a la persona vía AttributeValue → prefill automático en eventos futuros).
     /// Idempotente.
     /// </summary>
-    [MigrationNumber( 14, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class AttendeeQuestions : Migration
     {
         /// <summary>

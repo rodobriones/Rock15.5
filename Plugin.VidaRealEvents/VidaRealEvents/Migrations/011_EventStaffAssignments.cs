@@ -19,7 +19,8 @@ namespace Rock.Migrations
     ///
     /// Idempotente: guard IF OBJECT_ID para la tabla; AddSecurityAuthForPage hace skip por Guid.
     /// </summary>
-    [MigrationNumber( 11, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventStaffAssignments : Migration
     {
         // --- Paginas existentes ---

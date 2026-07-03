@@ -54,12 +54,19 @@ namespace Rock.Blocks.Eventos
         IsRequired = false,
         Order = 1 )]
 
+    [LinkedPage( "Calendar Page",
+        Description = "Página del calendario de eventos: destino del botón \"Volver al inicio\".",
+        IsRequired = false,
+        Key = AttributeKey.CalendarPage,
+        Order = 2 )]
+
     [Rock.SystemGuid.BlockTypeGuid( "b2e4d8f1-2c3e-4f7b-ad12-200000000002" )]
     public class EventCheckout : RockBlockType
     {
         private static class AttributeKey
         {
             public const string AvailableKnownRelationshipRoles = "AvailableKnownRelationshipRoles";
+            public const string CalendarPage = "CalendarPage";
         }
 
         // Mismo SQL que FamilyHub.cs (roles del group type Known Relationships, sin Owner).
@@ -110,15 +117,29 @@ namespace Rock.Blocks.Eventos
                     };
                 }
 
+                // Evento con contraseña: init LIMITADO (nombre/imagen/fechas para el hero, SIN
+                // descripción, organizador ni tipos de entrada). El front pide la contraseña y
+                // UnlockEvent devuelve el resto. La contraseña nunca viaja al cliente.
+                var requiresPassword = EventAccessService.RequiresPassword( ev );
+                var eventBag = BuildEventBag( ev, rockContext );
+                if ( requiresPassword )
+                {
+                    eventBag.Description = null;
+                    eventBag.OrganizerName = null;
+                }
+
                 return new EventCheckoutInitBag
                 {
                     NotLogged = false,
                     EventFound = true,
-                    Event = BuildEventBag( ev, rockContext ),
-                    TicketTypes = BuildTicketTypeBags( ev.Id, rockContext ),
+                    RequiresPassword = requiresPassword,
+                    Event = eventBag,
+                    TicketTypes = requiresPassword ? null : BuildTicketTypeBags( ev.Id, rockContext ),
                     Buyer = BuildBuyerBag( currentPerson ),
                     HasGateway = ev.FinancialGatewayId.HasValue,
-                    RelationRoles = GetRelationRoleOptions()
+                    RelationRoles = GetRelationRoleOptions(),
+                    CurrentPersonEmail = currentPerson.Email,
+                    CalendarUrl = this.GetLinkedPageUrl( AttributeKey.CalendarPage )
                 };
             }
         }
@@ -128,11 +149,13 @@ namespace Rock.Blocks.Eventos
         #region Block Actions
 
         /// <summary>
-        /// Devuelve los tipos de entrada con el cupo recalculado en vivo. El front lo llama
-        /// al entrar al paso de entradas para reflejar "quedan N / Agotado" lo mas fresco posible.
+        /// Valida la contraseña de un evento con visibilidad "Con contraseña" y devuelve lo que el
+        /// init limitado omitió (evento completo + tipos de entrada). Rate-limit por persona+evento
+        /// en <see cref="EventAccessService"/>. El front conserva la contraseña y la reenvía en las
+        /// acciones de venta (el servidor nunca confía en un "ya desbloqueado" del cliente).
         /// </summary>
-        [BlockAction( "GetTicketTypes" )]
-        public BlockActionResult GetTicketTypes()
+        [BlockAction( "UnlockEvent" )]
+        public BlockActionResult UnlockEvent( EventAccessRequestBag bag )
         {
             var currentPerson = GetCurrentPerson();
             if ( currentPerson == null )
@@ -146,6 +169,47 @@ namespace Rock.Blocks.Eventos
                 if ( ev == null )
                 {
                     return ActionNotFound( "Evento no encontrado." );
+                }
+
+                var accessError = EventAccessService.CheckAccess( ev, bag?.Password, currentPerson.Id );
+                if ( accessError != null )
+                {
+                    return ActionBadRequest( accessError );
+                }
+
+                return ActionOk( new UnlockEventResponseBag
+                {
+                    Event = BuildEventBag( ev, rockContext ),
+                    TicketTypes = BuildTicketTypeBags( ev.Id, rockContext )
+                } );
+            }
+        }
+
+        /// <summary>
+        /// Devuelve los tipos de entrada con el cupo recalculado en vivo. El front lo llama
+        /// al entrar al paso de entradas para reflejar "quedan N / Agotado" lo mas fresco posible.
+        /// </summary>
+        [BlockAction( "GetTicketTypes" )]
+        public BlockActionResult GetTicketTypes( EventAccessRequestBag bag )
+        {
+            var currentPerson = GetCurrentPerson();
+            if ( currentPerson == null )
+            {
+                return ActionUnauthorized( "Debes iniciar sesión para comprar entradas." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var ev = ResolveEvent( rockContext );
+                if ( ev == null )
+                {
+                    return ActionNotFound( "Evento no encontrado." );
+                }
+
+                var accessError = EventAccessService.CheckAccess( ev, bag?.Password, currentPerson.Id );
+                if ( accessError != null )
+                {
+                    return ActionForbidden( accessError );
                 }
 
                 return ActionOk( new GetTicketTypesResponseBag
@@ -380,6 +444,12 @@ namespace Rock.Blocks.Eventos
                     return ActionNotFound( "Evento no encontrado." );
                 }
 
+                var promoAccessError = EventAccessService.CheckAccess( ev, bag.AccessPassword, currentPerson.Id );
+                if ( promoAccessError != null )
+                {
+                    return ActionForbidden( promoAccessError );
+                }
+
                 var promo = PricingService.FindValidPromo( rockContext, ev.Id, bag.Code, out var promoError );
                 if ( promo == null )
                 {
@@ -491,6 +561,14 @@ namespace Rock.Blocks.Eventos
                 if ( ev.EndDateTime < RockDateTime.Now )
                 {
                     return ActionBadRequest( "Este evento ya finalizó; la venta de entradas está cerrada." );
+                }
+
+                // Evento con contraseña: la reserva exige la contraseña correcta (el front la
+                // conserva del desbloqueo y la reenvía en el bag).
+                var holdAccessError = EventAccessService.CheckAccess( ev, bag.AccessPassword, currentPerson.Id );
+                if ( holdAccessError != null )
+                {
+                    return ActionForbidden( holdAccessError );
                 }
 
                 // Los asistentes con PersonAliasId deben pertenecer al comprador o su familia.
@@ -705,6 +783,15 @@ namespace Rock.Blocks.Eventos
                             return ActionBadRequest( "Tu reserva expiró. Vuelve a iniciar la compra." );
                         }
 
+                        // Evento con contraseña: el cobro también la exige (nunca se confía en un
+                        // "ya desbloqueado" del cliente).
+                        var holdEvent = new EventService( rockContext ).Get( existingOrder.EventId );
+                        var holdAccessError = EventAccessService.CheckAccess( holdEvent, bag.AccessPassword, currentPerson.Id );
+                        if ( holdAccessError != null )
+                        {
+                            return ActionForbidden( holdAccessError );
+                        }
+
                         // La reserva se creó SIN asistentes (paso Entradas). Aquí los invitados de
                         // texto se vuelven personas reales y cada asistente + sus respuestas se
                         // amarran a los tickets reservados (valida preguntas obligatorias).
@@ -748,6 +835,12 @@ namespace Rock.Blocks.Eventos
                 if ( ev.EndDateTime < RockDateTime.Now )
                 {
                     return ActionBadRequest( "Este evento ya finalizó; la venta de entradas está cerrada." );
+                }
+
+                var directAccessError = EventAccessService.CheckAccess( ev, bag.AccessPassword, currentPerson.Id );
+                if ( directAccessError != null )
+                {
+                    return ActionForbidden( directAccessError );
                 }
 
                 // Invitados de texto -> personas reales (solo ruta directa; con hold ya se resolvieron).
@@ -869,7 +962,8 @@ namespace Rock.Blocks.Eventos
                 ImageUrl = imageUrl,
                 OrganizerName = organizerName,
                 HeaderStyle = ev.HeaderStyle.IsNullOrWhiteSpace() ? "persistente" : ev.HeaderStyle,
-                Category = ev.Category
+                Category = ev.Category,
+                Sessions = EventSessionService.Format( ev.SessionsJson )
             };
         }
 

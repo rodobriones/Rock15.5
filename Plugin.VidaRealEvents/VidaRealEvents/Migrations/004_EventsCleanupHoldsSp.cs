@@ -18,7 +18,8 @@ namespace Rock.Migrations
     ///   (Charging=5 es el mutex de cobro: el SP NUNCA debe tocarlo; el filtro Status=0 ya lo excluye.)
     ///   TicketStatus: Valid=0, CheckedIn=1, Cancelled=2, Refunded=3, Held=4
     /// </summary>
-    [MigrationNumber( 4, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventsCleanupHoldsSp : Migration
     {
         public override void Up()

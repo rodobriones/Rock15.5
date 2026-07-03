@@ -12,7 +12,7 @@
 
         <div v-if="confirmation" class="ecDoneCard">
             <div class="ecDoneTop">
-                <span class="ecDoneEvent">{{ config.event?.name }}</span>
+                <span class="ecDoneEvent">{{ event?.name }}</span>
                 <span class="ecDoneOrder ecMono">Orden #{{ confirmation.orderId }}</span>
             </div>
             <div v-if="eventDateLabel || eventSubtitle" class="ecDoneSub ecCap">{{ eventDateLabel }}<span v-if="eventDateLabel && eventSubtitle"> · </span>{{ eventSubtitle }}</div>
@@ -47,7 +47,7 @@
 import { useCheckoutState } from "./checkoutState.partial";
 
 const {
-    config,
+    event,
     confirmation,
     eventDateLabel,
     eventSubtitle,

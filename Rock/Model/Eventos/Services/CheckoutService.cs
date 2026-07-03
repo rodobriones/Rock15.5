@@ -178,6 +178,23 @@ namespace Rock.Model
                 order.InvoiceName = null;
             }
 
+            // Correo de envío de entradas (elegido en el paso de pago). Solo para la ENTREGA de
+            // esta orden — nunca actualiza el perfil desde aquí. Null = correo del perfil.
+            var deliveryEmail = ( bag.DeliveryEmail ?? string.Empty ).Trim();
+            if ( deliveryEmail.Length > 0 )
+            {
+                if ( deliveryEmail.Length > 254 || !Rock.Communication.EmailAddressFieldValidator.IsValid( deliveryEmail ) )
+                {
+                    return "El correo para el envío de entradas no es válido.";
+                }
+
+                order.DeliveryEmail = deliveryEmail;
+            }
+            else
+            {
+                order.DeliveryEmail = null;
+            }
+
             rockContext.SaveChanges();
             return null;
         }
@@ -392,10 +409,25 @@ namespace Rock.Model
             // un carrito abandonado nunca toca el perfil). Última entrada gana si la misma persona
             // tiene varias. En QueueBackgroundWork (no Task.Run): sobrevive a un reciclo gracioso. ----------
             var orderIdForAnswers = order.Id;
+            var buyerAliasIdForEmail = order.BuyerPersonAliasId;
+            var deliveryEmailForProfile = order.DeliveryEmail;
             EventsRuntime.QueueBackgroundWork( "AttendeeWriteBack", ct =>
             {
                 using ( var wbContext = new RockContext() )
                 {
+                    // Si el perfil del comprador NO tenía correo, el que escribió para el envío se
+                    // le guarda al perfil (regla del usuario). Si ya tenía, NO se toca: el campo
+                    // del paso de pago es solo para la entrega de esta orden.
+                    if ( !string.IsNullOrWhiteSpace( deliveryEmailForProfile ) )
+                    {
+                        var buyerPerson = new PersonAliasService( wbContext ).GetPerson( buyerAliasIdForEmail );
+                        if ( buyerPerson != null && string.IsNullOrWhiteSpace( buyerPerson.Email ) )
+                        {
+                            buyerPerson.Email = deliveryEmailForProfile;
+                            wbContext.SaveChanges();
+                        }
+                    }
+
                     var withAnswers = new TicketService( wbContext ).Queryable()
                         .AsNoTracking()
                         .Where( t => t.OrderId == orderIdForAnswers && t.AttendeePersonAliasId != null && t.AnswersJson != null )

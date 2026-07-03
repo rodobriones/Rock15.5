@@ -138,6 +138,17 @@ namespace Rock.Model
         public string InvoiceName { get; set; }
 
         /// <summary>
+        /// Gets or sets the email address the tickets are delivered to. The buyer types it at the
+        /// payment step (prefilled with their profile email); it overrides the profile email for
+        /// DELIVERY ONLY — the profile is never updated from here (except when it was blank).
+        /// Null falls back to the buyer's profile email. Persisted so the EventsMaintenance sweep
+        /// retries missed emails to the same address.
+        /// </summary>
+        [MaxLength( 254 )]
+        [DataMember]
+        public string DeliveryEmail { get; set; }
+
+        /// <summary>
         /// Gets or sets the Odoo synchronization status of the order.
         /// </summary>
         [MaxLength( 50 )]

@@ -13,7 +13,8 @@ namespace Rock.Migrations
     ///
     /// Idempotente: DeleteSecurityAuth por Guid hace no-op si la regla no existe.
     /// </summary>
-    [MigrationNumber( 12, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class OnlyAdminsFullAccess : Migration
     {
         private const string PAGE_SCANNER = "b2e4d8f1-2c3e-4f7b-ad12-300000000003";

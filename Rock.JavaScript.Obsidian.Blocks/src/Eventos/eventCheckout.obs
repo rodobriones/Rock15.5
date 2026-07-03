@@ -30,31 +30,34 @@
 
                     <!-- HERO persistente (imagen grande tipo portada) -->
                     <div v-if="!slimHeader" class="ecHero">
-                        <img v-if="config.event?.imageUrl"
-                             :src="config.event.imageUrl"
-                             :alt="config.event?.name"
+                        <img v-if="event?.imageUrl"
+                             :src="event.imageUrl"
+                             :alt="event?.name"
                              class="ecHeroImg" />
                         <div class="ecHeroOverlay"></div>
                         <div class="ecHeroContent">
-                            <span v-if="config.event?.category" class="ecBadge" :class="'ecBadge--' + categorySlug">{{ config.event.category }}</span>
-                            <h1 class="ecHeroTitle">{{ config.event?.name }}</h1>
+                            <span v-if="event?.category" class="ecBadge" :class="'ecBadge--' + categorySlug">{{ event.category }}</span>
+                            <h1 class="ecHeroTitle">{{ event?.name }}</h1>
                             <div class="ecHeroMeta">
                                 <span v-if="eventDateLabel" class="ecCap">{{ eventDateLabel }}</span>
                                 <span v-if="eventDateLabel && eventSubtitle" class="ecHeroDot"></span>
                                 <span v-if="eventSubtitle">{{ eventSubtitle }}</span>
                             </div>
+                            <ul v-if="event?.sessions?.length" class="ecHeroSessions">
+                                <li v-for="s in event.sessions" :key="s">{{ s }}</li>
+                            </ul>
                         </div>
                     </div>
 
                     <!-- HERO condensado (barra fina sticky) -->
                     <div v-else class="ecSlimHeader">
                         <div class="ecSlimInner">
-                            <img v-if="config.event?.imageUrl"
-                                 :src="config.event.imageUrl"
-                                 :alt="config.event?.name"
+                            <img v-if="event?.imageUrl"
+                                 :src="event.imageUrl"
+                                 :alt="event?.name"
                                  class="ecSlimImg" />
                             <div class="ecSlimText">
-                                <span class="ecSlimName">{{ config.event?.name }}</span>
+                                <span class="ecSlimName">{{ event?.name }}</span>
                                 <span v-if="eventDateLabel || eventSubtitle" class="ecSlimMeta ecCap">{{ eventDateLabel }}<span v-if="eventDateLabel && eventSubtitle"> · </span>{{ eventSubtitle }}</span>
                             </div>
                         </div>
@@ -71,10 +74,37 @@
                             </div>
                             <h2 class="ecEndedTitle">Este evento ya pasó</h2>
                             <p class="ecEndedText">
-                                <strong>{{ config.event?.name }}</strong> se realizó el
+                                <strong>{{ event?.name }}</strong> se realizó el
                                 <span class="ecCap">{{ eventDateLabel }}</span>. La venta de entradas está cerrada.
                             </p>
                             <button type="button" class="ecEndedBtn" @click="goHome">Volver al inicio</button>
+                        </div>
+
+                        <!-- Evento con contraseña: gate antes del wizard (el init llega sin tipos de entrada) -->
+                        <div v-else-if="passwordRequired" class="ecCard ecEnded" :class="{ ecCardSlim: slimHeader }">
+                            <div class="ecEndedIcon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="10" width="16" height="10" rx="2"></rect>
+                                    <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                                </svg>
+                            </div>
+                            <h2 class="ecEndedTitle">Evento con contraseña</h2>
+                            <p class="ecEndedText">
+                                <strong>{{ event?.name }}</strong> es un evento privado. Escribe la contraseña
+                                que te compartió el organizador para continuar.
+                            </p>
+                            <div class="ecLockRow">
+                                <input type="password"
+                                       class="form-control ecLockInput"
+                                       v-model="accessPassword"
+                                       placeholder="Contraseña del evento"
+                                       autocomplete="off"
+                                       @keydown.enter="unlockEvent" />
+                                <button type="button" class="ecEndedBtn" :disabled="unlockBusy || !accessPassword.trim()" @click="unlockEvent">
+                                    {{ unlockBusy ? "Validando…" : "Entrar" }}
+                                </button>
+                            </div>
+                            <p v-if="unlockError" class="ecLockErr">{{ unlockError }}</p>
                         </div>
 
                         <div v-else class="ecCard" :class="{ ecCardSlim: slimHeader }">
@@ -217,6 +247,14 @@
     font-size: 15px; color: rgba(255,255,255,0.82);
 }
 .ecHeroDot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.5); }
+
+/* Agenda de sesiones (evento multi-día): lista compacta bajo la meta del hero. */
+.ecHeroSessions {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 3px;
+    font-size: 13.5px; color: rgba(255,255,255,0.72);
+}
+.ecHeroSessions li::before { content: "•"; margin-right: 8px; color: rgba(255,255,255,0.45); }
 
 /* Badge de categoría (colores del mockup). */
 .ecBadge {
@@ -466,6 +504,12 @@
 .ecPayTotalLabel { font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-300); }
 .ecPayTotalValue { font-size: 22px; font-weight: 700; color: var(--primary-900); }
 
+/* Correo de envío de entradas (paso 4). */
+.ecPayEmail { display: flex; flex-direction: column; gap: 6px; margin-bottom: 22px; }
+.ecPayEmailLabel { font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-300); margin: 0; }
+.ecPayEmailHint { font-size: 12px; color: var(--primary-300); }
+.ecPayEmailErr { font-size: 12px; color: #b91c1c; }
+
 .ecPay { display: flex; flex-direction: column; gap: 12px; }
 .ecPayHead { font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-300); }
 .ecGateway {
@@ -546,6 +590,15 @@
     padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer;
 }
 .ecEndedBtn:hover { background: var(--surface-mid); }
+.ecEndedBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Gate de contraseña (evento con visibilidad "Con contraseña") */
+.ecLockRow {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    margin-top: 8px; width: 100%; max-width: 420px; margin-left: auto; margin-right: auto;
+}
+.ecLockInput { flex: 1 1 200px; text-align: center; }
+.ecLockErr { margin: 10px 0 0; color: #b91c1c; font-size: 13.5px; }
 
 /* ---------- Overlay de procesamiento ---------- */
 .ecOverlay {
@@ -596,6 +649,7 @@ import { provideCheckoutState } from "./EventCheckout/checkoutState.partial";
 // Crea el estado compartido (refs/acciones de los 5 pasos) y lo provee a los partials.
 const {
     config,
+    event,
     step,
     busy,
     err,
@@ -611,6 +665,11 @@ const {
     holdExpired,
     holdRemaining,
     holdCountdownLabel,
-    holdProgressPct
+    holdProgressPct,
+    passwordRequired,
+    accessPassword,
+    unlockBusy,
+    unlockError,
+    unlockEvent
 } = provideCheckoutState();
 </script>

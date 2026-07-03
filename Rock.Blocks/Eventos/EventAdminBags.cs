@@ -37,6 +37,7 @@ namespace Rock.Blocks.Eventos
             public List<OptionBag> accounts { get; set; }
             public List<OptionBag> statusOptions { get; set; }
             public List<OptionBag> discountTypeOptions { get; set; }
+            public List<OptionBag> visibilityOptions { get; set; }
             public string checkoutUrlTemplate { get; set; }
             public string checkoutSlugUrlTemplate { get; set; }
         }
@@ -95,6 +96,21 @@ namespace Rock.Blocks.Eventos
             public ListItemBag image { get; set; }
             public string headerStyle { get; set; }
             public string category { get; set; }
+            public int visibility { get; set; }
+            public string accessPassword { get; set; }
+            public List<SessionRowBag> sessions { get; set; }
+        }
+
+        /// <summary>
+        /// One session row of a multi-session event as edited in the admin
+        /// (mirror of <see cref="Rock.Model.EventSession"/>; strings keep the wire format dumb).
+        /// </summary>
+        public class SessionRowBag
+        {
+            public string date { get; set; }
+            public string start { get; set; }
+            public string end { get; set; }
+            public string label { get; set; }
         }
 
         public class SaveEventResponseBag

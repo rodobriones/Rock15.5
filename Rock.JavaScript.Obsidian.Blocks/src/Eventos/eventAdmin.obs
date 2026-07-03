@@ -249,11 +249,58 @@
                             </div>
                             <div class="row">
                                 <div class="col-md-6">
+                                    <DropDownList v-model="eventForm.visibility"
+                                                  label="Visibilidad"
+                                                  help="Público aparece en el calendario de eventos. Privado y Con contraseña solo se llega con el enlace directo; Con contraseña además pide la contraseña antes de vender."
+                                                  :items="config.visibilityOptions || []"
+                                                  :showBlankItem="false" />
+                                </div>
+                                <div v-if="eventForm.visibility === '2'" class="col-md-6">
+                                    <TextBox v-model="eventForm.accessPassword"
+                                             label="Contraseña del evento"
+                                             help="Compártela con los invitados; se pide al abrir el enlace del evento."
+                                             :maxLength="100" />
+                                </div>
+                            </div>
+                            <div v-if="!hasSessions" class="row">
+                                <div class="col-md-6">
                                     <DateTimePicker v-model="eventForm.startDateTime" label="Inicia" />
                                 </div>
                                 <div class="col-md-6">
                                     <DateTimePicker v-model="eventForm.endDateTime" label="Termina" />
                                 </div>
+                            </div>
+
+                            <!-- Sesiones (evento de varios días u horarios). Un boleto = acceso a todas. -->
+                            <div class="form-group">
+                                <label class="control-label">Sesiones</label>
+                                <div class="help-block" style="margin-top: 0;">
+                                    Para eventos de varios días u horarios (p. ej. lunes 8–9, martes 8–9). Un boleto da acceso a todas las sesiones.
+                                    <template v-if="hasSessions"> El inicio y fin del evento se calculan automáticamente de las sesiones.</template>
+                                </div>
+                                <table v-if="hasSessions" class="table table-condensed" style="max-width: 720px; margin-bottom: 8px;">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Inicia</th>
+                                            <th>Termina</th>
+                                            <th>Etiqueta (opcional)</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(s, i) in eventForm.sessions" :key="i">
+                                            <td><input type="date" class="form-control input-sm" v-model="s.date" /></td>
+                                            <td><input type="time" class="form-control input-sm" v-model="s.start" /></td>
+                                            <td><input type="time" class="form-control input-sm" v-model="s.end" /></td>
+                                            <td><input type="text" class="form-control input-sm" v-model="s.label" placeholder="Taller, Sesión 1…" /></td>
+                                            <td class="text-right">
+                                                <RockButton btnType="link" btnSize="sm" @click="removeSession(i)">Quitar</RockButton>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <RockButton btnType="default" btnSize="xs" @click="addSession">Agregar sesión</RockButton>
                             </div>
                             <div class="row">
                                 <div class="col-md-4">
@@ -515,6 +562,7 @@ type InitBag = {
     accounts: OptionBag[];
     statusOptions: OptionBag[];
     discountTypeOptions: OptionBag[];
+    visibilityOptions: OptionBag[];
     checkoutUrlTemplate: string;
     checkoutSlugUrlTemplate: string;
 };
@@ -549,6 +597,16 @@ type EventEditBag = {
     image: ListItemBag | null;
     headerStyle: string | null;
     category: string | null;
+    visibility: number;
+    accessPassword: string | null;
+    sessions: SessionRow[] | null;
+};
+
+type SessionRow = {
+    date: string;
+    start: string;
+    end: string;
+    label: string | null;
 };
 
 type TicketTypeEditBag = {
@@ -698,9 +756,33 @@ type EventForm = {
     image: ListItemBag | null;
     headerStyle: string;
     category: string;
+    visibility: string;
+    accessPassword: string;
+    sessions: SessionRow[];
 };
 
 const eventForm = ref<EventForm>(blankEventForm());
+
+// Evento multi-sesión: con sesiones cargadas, Inicio/Fin se derivan server-side (min/max).
+const hasSessions = computed<boolean>(() => eventForm.value.sessions.length > 0);
+
+function addSession(): void {
+    const prev = eventForm.value.sessions[eventForm.value.sessions.length - 1];
+    // Prellenar con la fila anterior (mismo horario, día siguiente) — el caso típico es un curso.
+    let date = "";
+    if (prev?.date) {
+        const d = new Date(prev.date + "T00:00:00");
+        if (!Number.isNaN(d.getTime())) {
+            d.setDate(d.getDate() + 1);
+            date = d.toISOString().slice(0, 10);
+        }
+    }
+    eventForm.value.sessions.push({ date, start: prev?.start || "", end: prev?.end || "", label: "" });
+}
+
+function removeSession(index: number): void {
+    eventForm.value.sessions.splice(index, 1);
+}
 const ticketTypes = ref<TicketTypeEditBag[]>([]);
 const promoCodes = ref<PromoCodeEditBag[]>([]);
 const dashboard = ref<DashboardBag>({ totalSold: 0, totalCapacity: null });
@@ -763,7 +845,10 @@ function blankEventForm(): EventForm {
         financialAccountId: "",
         image: null,
         headerStyle: "persistente",
-        category: ""
+        category: "",
+        visibility: "0",
+        accessPassword: "",
+        sessions: []
     };
 }
 
@@ -859,7 +944,10 @@ function applyDetail(d: EventDetailBag): void {
         financialAccountId: e.financialAccountId == null ? "" : String(e.financialAccountId),
         image: e.image ?? null,
         headerStyle: e.headerStyle || "persistente",
-        category: e.category || ""
+        category: e.category || "",
+        visibility: String(e.visibility ?? 0),
+        accessPassword: e.accessPassword || "",
+        sessions: (e.sessions || []).map(s => ({ date: s.date || "", start: s.start || "", end: s.end || "", label: s.label || "" }))
     };
     ticketTypes.value = d.ticketTypes || [];
     promoCodes.value = d.promoCodes || [];
@@ -905,7 +993,10 @@ async function saveEvent(): Promise<void> {
             financialAccountId: toIntOrNull(f.financialAccountId),
             image: f.image,
             headerStyle: f.headerStyle,
-            category: f.category || null
+            category: f.category || null,
+            visibility: Number(f.visibility) || 0,
+            accessPassword: f.accessPassword || null,
+            sessions: f.sessions
         };
         const res = await invokeBlockAction<{ eventId: number; saved: boolean }>("SaveEvent", { bag });
         if (!res.isSuccess || !res.data?.saved) {

@@ -21,7 +21,8 @@ namespace Rock.Migrations
     /// Idempotente: AddBlock/AddBlockAttributeValue/AddSecurityAuthForPage hacen skip si existen;
     /// los UPDATE son por Guid (y el rename esta condicionado al nombre original).
     /// </summary>
-    [MigrationNumber( 8, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class PolishEventsPages : Migration
     {
         // --- Paginas creadas por 003 ---

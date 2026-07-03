@@ -130,6 +130,34 @@ namespace Rock.Model
         [DataMember]
         public string Category { get; set; }
 
+        /// <summary>
+        /// Gets or sets who can find this event: <see cref="EventVisibility.Public"/> (listed in
+        /// the public calendar), <see cref="EventVisibility.Private"/> (direct link only) or
+        /// <see cref="EventVisibility.Password"/> (direct link + password gate at checkout).
+        /// </summary>
+        [DataMember]
+        public EventVisibility Visibility { get; set; }
+
+        /// <summary>
+        /// Gets or sets the access password for <see cref="EventVisibility.Password"/> events.
+        /// Plain text on purpose: it is a shareable access gate the organizer needs to read back
+        /// (like a meeting password), not a credential. It is never sent to the checkout client;
+        /// only Event Admin (EDIT) can read it.
+        /// </summary>
+        [MaxLength( 100 )]
+        [DataMember]
+        public string AccessPassword { get; set; }
+
+        /// <summary>
+        /// Gets or sets the JSON list of sessions for multi-session events (e.g. a course that
+        /// meets Mon/Tue/Wed at specific hours): <c>[{"Date":"2026-08-03","Start":"08:00","End":"09:00","Label":""}]</c>.
+        /// Null/empty means a single continuous block (<see cref="StartDateTime"/>–<see cref="EndDateTime"/>).
+        /// When sessions exist, StartDateTime/EndDateTime are derived (min/max) so existing
+        /// guards (sales cutoff, past events) keep working. See <see cref="EventSessionService"/>.
+        /// </summary>
+        [DataMember]
+        public string SessionsJson { get; set; }
+
         #endregion
 
         #region Navigation Properties

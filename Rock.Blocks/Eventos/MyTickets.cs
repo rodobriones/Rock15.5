@@ -207,6 +207,7 @@ namespace Rock.Blocks.Eventos
                     eventName = ev?.Name,
                     eventStartDateTime = ev?.StartDateTime,
                     eventEndDateTime = ev?.EndDateTime,
+                    eventSessions = EventSessionService.Format( ev?.SessionsJson ),
                     eventImageUrl = imageUrl,
                     venueName = ev?.VenueName,
                     ticketTypeName = t.TicketType?.Name,
@@ -257,6 +258,7 @@ namespace Rock.Blocks.Eventos
             public string eventName { get; set; }
             public DateTime? eventStartDateTime { get; set; }
             public DateTime? eventEndDateTime { get; set; }
+            public List<string> eventSessions { get; set; }
             public string eventImageUrl { get; set; }
             public string venueName { get; set; }
             public string ticketTypeName { get; set; }

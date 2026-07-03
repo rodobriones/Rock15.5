@@ -12,7 +12,8 @@ namespace Rock.Migrations
     /// Patron: Rock.Plugin.Migration + [MigrationNumber] (igual que VidaRealTranslator).
     /// Las tablas se crean en orden de dependencia; Down() las elimina en orden inverso.
     /// </summary>
-    [MigrationNumber( 1, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventsSetup : Migration
     {
         public override void Up()

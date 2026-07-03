@@ -10,7 +10,8 @@ namespace Rock.Migrations
     /// Idempotente (COL_LENGTH guard): corre tanto sobre BD ya migrada con 001 como
     /// sobre instalacion nueva (001 crea las tablas, 002 las completa).
     /// </summary>
-    [MigrationNumber( 2, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class AddEntityForeignColumns : Migration
     {
         private static readonly string[] Tables =

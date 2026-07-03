@@ -13,7 +13,8 @@ namespace Rock.Migrations
     ///
     /// Idempotente (AddPage/AddBlock/AddOrUpdateEntityBlockType hacen skip/update si existen).
     /// </summary>
-    [MigrationNumber( 9, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class EventsReportPage : Migration
     {
         // --- Existentes ---

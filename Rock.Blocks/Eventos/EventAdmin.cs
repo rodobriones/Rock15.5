@@ -70,6 +70,7 @@ namespace Rock.Blocks.Eventos
                     accounts = new List<OptionBag>(),
                     statusOptions = GetEnumOptions<EventStatus>(),
                     discountTypeOptions = GetEnumOptions<DiscountType>(),
+                    visibilityOptions = GetVisibilityOptions(),
                     checkoutUrlTemplate = "",
                     checkoutSlugUrlTemplate = ""
                 };
@@ -87,6 +88,7 @@ namespace Rock.Blocks.Eventos
                     accounts = GetAccountOptions( rockContext ),
                     statusOptions = GetEnumOptions<EventStatus>(),
                     discountTypeOptions = GetEnumOptions<DiscountType>(),
+                    visibilityOptions = GetVisibilityOptions(),
                     // URL con marcador ((Key)) que el front reemplaza por el EventId de cada fila.
                     checkoutUrlTemplate = this.GetLinkedPageUrl( AttributeKey.CheckoutPage, "EventId", "((Key))" ),
                     // URL por slug (BuildUrl elige la ruta eventos/evento/{Slug}); el front sustituye ((Slug)).
@@ -227,8 +229,27 @@ namespace Rock.Blocks.Eventos
                     service.Add( ev );
                 }
 
-                var startDateTime = bag.startDateTime ?? RockDateTime.Now;
-                var endDateTime = bag.endDateTime ?? startDateTime;
+                // Sesiones (evento de varios días/horarios): normaliza server-side y deriva
+                // Inicio/Fin = min/max de las sesiones, así todos los guards existentes (venta
+                // cerrada al terminar, "eventos pasados", orden en listados) siguen correctos.
+                var sessionRows = ( bag.sessions ?? new List<SessionRowBag>() )
+                    .Where( s => s != null )
+                    .Select( s => new EventSession { Date = s.date, Start = s.start, End = s.end, Label = s.label } )
+                    .ToList();
+                var sessionsJson = EventSessionService.Normalize( sessionRows, out var sessionsError );
+                if ( sessionsError != null )
+                {
+                    return ActionBadRequest( sessionsError );
+                }
+
+                var sessions = EventSessionService.Parse( sessionsJson );
+
+                var startDateTime = sessions.Any()
+                    ? sessions.First().GetStartDateTime().Value
+                    : ( bag.startDateTime ?? RockDateTime.Now );
+                var endDateTime = sessions.Any()
+                    ? sessions.Max( s => s.GetEndDateTime().Value )
+                    : ( bag.endDateTime ?? startDateTime );
                 if ( endDateTime < startDateTime )
                 {
                     return ActionBadRequest( "La fecha de fin no puede ser anterior a la fecha de inicio." );
@@ -249,6 +270,18 @@ namespace Rock.Blocks.Eventos
                 ev.HeaderStyle = bag.headerStyle == "condensado" ? "condensado" : "persistente";
                 // Categoría (badge del hero): solo valores conocidos; cualquier otro => sin badge.
                 ev.Category = IsKnownCategory( bag.category ) ? bag.category.Trim() : null;
+                ev.SessionsJson = sessionsJson;
+
+                // Visibilidad: Público (calendario) / Privado (solo enlace) / Con contraseña.
+                var visibility = Enum.IsDefined( typeof( EventVisibility ), bag.visibility )
+                    ? ( EventVisibility ) bag.visibility
+                    : EventVisibility.Public;
+                if ( visibility == EventVisibility.Password && bag.accessPassword.IsNullOrWhiteSpace() )
+                {
+                    return ActionBadRequest( "Un evento con contraseña necesita que definas la contraseña." );
+                }
+                ev.Visibility = visibility;
+                ev.AccessPassword = visibility == EventVisibility.Password ? bag.accessPassword.Trim() : null;
 
                 // Imagen del evento (BinaryFile). El uploader manda un ListItemBag con el Guid del archivo.
                 var imageGuid = bag.image?.Value.AsGuidOrNull();
@@ -649,7 +682,10 @@ namespace Rock.Blocks.Eventos
                     FinancialGatewayId = source.FinancialGatewayId,
                     FinancialAccountId = source.FinancialAccountId,
                     HeaderStyle = source.HeaderStyle,
-                    Category = source.Category
+                    Category = source.Category,
+                    SessionsJson = source.SessionsJson,
+                    Visibility = source.Visibility,
+                    AccessPassword = source.AccessPassword
                 };
                 new EventService( rockContext ).Add( copy );
                 rockContext.SaveChanges();
@@ -963,7 +999,12 @@ namespace Rock.Blocks.Eventos
                     financialAccountId = ev.FinancialAccountId,
                     image = BuildImageListItem( rockContext, ev.ImageBinaryFileId ),
                     headerStyle = ev.HeaderStyle.IsNullOrWhiteSpace() ? "persistente" : ev.HeaderStyle,
-                    category = ev.Category
+                    category = ev.Category,
+                    visibility = ( int ) ev.Visibility,
+                    accessPassword = ev.AccessPassword,
+                    sessions = EventSessionService.Parse( ev.SessionsJson )
+                        .Select( s => new SessionRowBag { date = s.Date, start = s.Start, end = s.End, label = s.Label } )
+                        .ToList()
                 },
                 ticketTypes = ticketTypeBags,
                 promoCodes = promoCodes,
@@ -972,6 +1013,17 @@ namespace Rock.Blocks.Eventos
                     totalSold = totalSold,
                     totalCapacity = totalCapacity
                 }
+            };
+        }
+
+        // Etiquetas en español (el enum viaja como int; el texto es solo UI).
+        private static List<OptionBag> GetVisibilityOptions()
+        {
+            return new List<OptionBag>
+            {
+                new OptionBag { value = "0", text = "Público (aparece en el calendario)" },
+                new OptionBag { value = "1", text = "Privado (solo con enlace)" },
+                new OptionBag { value = "2", text = "Con contraseña (enlace + contraseña)" }
             };
         }
 

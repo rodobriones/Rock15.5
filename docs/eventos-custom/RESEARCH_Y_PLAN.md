@@ -1,9 +1,9 @@
 # Módulo de Eventos/Boletería Custom — Research & Plan
 
 > **Producto propio y completo** de boletería sobre Rock 18.1. Esquema de datos propio (tablas nuevas). NO reusa `Registration*`.
-> Estado (2026-07-02): **v1 en producción-candidato** — 7 entidades (`_com_vidareal_Events_*`, incl. `EventStaff` de permisos por-usuario),
-> **6 bloques** (Event Admin con vista Permisos, Event Checkout rediseño 2026, My Tickets hub, Ticket Scanner, Event Report, Question Catalog),
-> **migraciones 001–017** en `Plugin.VidaRealEvents`. Historial de sesiones en §9.x (última: §9.29).
+> Estado (2026-07-03): **v1 en producción-candidato** — 7 entidades (`_com_vidareal_Events_*`, incl. `EventStaff` de permisos por-usuario),
+> **7 bloques** (Event Admin con vista Permisos, Event Checkout rediseño 2026, My Tickets hub, Ticket Scanner, Event Report, Question Catalog, Event Calendar público),
+> **migraciones 001–020** en `Plugin.VidaRealEvents`. Historial de sesiones en §9.x (última: §9.35).
 > Reemplaza el flujo nativo de eventos de Rock end-to-end: admin, venta, QR, envío/reenvío, check-in, reportería, permisos.
 >
 > **Arquitectura (mapa de capas y convenciones): `Rock/Model/Eventos/ARCHITECTURE.md`** — leer primero.
@@ -728,3 +728,118 @@ Preparación para ventas con cientos de compradores simultáneos (decisión del 
   gratuita + service account → JWT firmado localmente (sin API por venta); Apple Wallet = Developer
   Program ($99/año) + certificado Pass Type ID → .pkpass firmado en C#. Sin SaaS intermedios.
   Implementar Google primero cuando exista la cuenta.
+
+### §9.32 — Hold al paso Entradas + reserva que sobrevive navegación + caché NIT (2026-07-02 j)
+
+Tres cambios de la primera tanda de pruebas runtime reales (localhost:6229):
+
+- **Hold al "Continuar" de Entradas** (pedido del usuario: enterarse de cupo agotado ANTES de llenar
+  asistentes). Contrato nuevo: la reserva nace SIN asistentes (`BuildPendingOrder(...,
+  snapshotAnswers:false)` no valida preguntas) y al pagar `CheckoutService.ApplyAttendeesToHeldTickets`
+  amarra asistente + `AnswersJson` a los tickets Held (por tipo, en orden de Id; rechaza mismatch de
+  tipos/cantidades vs la reserva). El hold-path de `ProcessCheckout` ahora también resuelve invitados
+  (`ResolveGuestAttendees`), no solo la ruta directa. Front: `goToAttendees` reserva (falla ⇒ se queda
+  en paso 1 + refresh de cupo); banner del contador movido al shell (visible en pasos 2–4); botón
+  "Reservando…". Expirar ⇒ paso 1 con datos conservados (units reusadas por key).
+- **Bug #2 (reporte del usuario) — la reserva sobrevive a la navegación**: "← Atrás" desde Pago
+  liberaba el hold y reiniciaba el contador. Regla: el hold solo se consume al pagar OK, expirar o
+  abandonar la página. `backToReview`/`backToTickets` ya no liberan; `goToAttendees` reutiliza el hold
+  vigente si la huella `typeId:qty` (`heldQuantitiesKey`) no cambió — cantidades distintas ⇒ re-reserva
+  (el server ya liberaba la anterior vía `ReleaseBuyerHolds`). Solo frontend: el server nunca confió en
+  el timer del cliente (vigencia por `CreatedDateTime` en el predicado de cupo y en el mutex).
+- **Caché de lookup NIT** (`NitLookupService._lookupCache`, TTL 15 min, solo éxitos): el botón
+  "Validar NIT" puebla el caché y el re-lookup del hardening en el PAGO lo consume sin salir a la red
+  (era el último wait externo del request de pago; Odoo ya era fire-and-forget encolado).
+- Bug #1 de las pruebas (prefill que no repintaba, raw-vs-proxy) documentado en §9.30.
+
+### §9.33 — Migración consolidada para producción (2026-07-02 k)
+
+El plugin ahora expone **UNA sola migración**: `017_ProductionSetup.cs` (`[MigrationNumber(17,"18.1")]`)
+que ejecuta los 17 pasos históricos en orden inyectándoles su `SqlConnection`/`SqlTransaction` —
+el SQL de producción es byte-idéntico al que construyó dev, en una transacción todo-o-nada. Los
+archivos 001–017 quedaron SIN `[MigrationNumber]` (pasos, no migraciones). Rock registra números
+individuales (verificado en `RockApplicationStartupHelper`), dev tiene 1–17 registradas ⇒ la salta;
+producción limpia corre solo la 17. **Regla: próxima migración = nº 18+, nunca reutilizar 1–16.**
+Consolidar fue un corte único de arranque; en adelante, migraciones incrementales normales.
+Detalle y pasos de deploy: `Plugin.VidaRealEvents/README.md`.
+
+### §9.33 — Eventos multi-sesión (agenda informativa) + "Agregar a mi calendario" (2026-07-03)
+
+Eventos con varias sesiones (curso: lunes 8–9, martes 8–9, miércoles 7–10). **Alcance decidido con
+el usuario: informativo** — un boleto = pase a TODAS las sesiones; capacidad/precio siguen por
+TicketType; NO hay venta por sesión (si urge, se simula con un TicketType por sesión).
+
+- **Modelo**: `Event.SessionsJson` (`[{Date:"yyyy-MM-dd",Start:"HH:mm",End:"HH:mm",Label}]`,
+  **migración 018** — primera post-consolidada, `[MigrationNumber(18,"18.1")]`). Sin tabla nueva.
+  Helper único `EventSessionService` (parse/normaliza/formatea es-GT).
+- **Admin**: editor de filas (inputs nativos date/time + etiqueta) en el form del evento; con
+  sesiones, Inicia/Termina se ocultan y **se derivan server-side (min/max)** ⇒ los guards de
+  venta cerrada/"evento pasado"/orden de listados no cambian. DuplicateEvent copia SessionsJson.
+- **Display**: hero del checkout (`ecHeroSessions`), card de Mis Entradas (`mtEventSessions`),
+  PDF del boleto (franja `agenda` bajo el hero, máx. 4 líneas + "+N más"), correo de entrega
+  (bloque "Sesiones del evento").
+- **Correo — Agregar a mi calendario** (todos los eventos, no solo multi-sesión): adjunto
+  **`evento.ics`** (Ical.Net, ya era dependencia de Rock; un VEVENT por sesión, UIDs
+  deterministas `vidareal-evento-{id}-{i}`, hora local flotante — GT no tiene DST) para
+  Apple/Outlook escritorio + links **Google Calendar** (`ctz=America/Guatemala`) y
+  **Outlook.com** por sesión. El .ics se persiste como BinaryFile TEMPORAL (el transporte SMTP
+  re-consulta adjuntos por Id), mismo patrón que el PDF.
+- **Check-in**: sigue siendo "un check-in" — pero si el evento tiene sesiones, el ticket
+  CheckedIn **re-admite en un día calendario distinto** (busca CheckinLog Ok de hoy; ponytail:
+  si un evento tuviera 2 sesiones el mismo día, subir a dedupe por ventana de sesión). Sin
+  sesiones el comportamiento es idéntico al de antes.
+
+Compilado C#+TS 0 errores; bundles sin `_ctx.`; DLLs+bundles desplegados. Runtime pendiente:
+reciclar app pool ⇒ migración 018.
+
+**Fix post-prueba (2026-07-03 b): el PDF nunca puede partirse en 2 páginas.** La agenda empujaba
+el pie ("Presenta este código QR…") a una segunda hoja. Ahora `.page` mide EXACTO el área
+imprimible (`height: 6.56in` = 7in − 2×0.22in de márgenes) con `overflow: hidden`, `.ticket` llena
+la página, `.body` es `flex: 1` y el **QR es el único elemento flexible** (`flex: 0 1 240px;
+min-height: 110px; width: auto`): si la agenda o nombres largos ocupan espacio, el QR se encoge
+en vez de desbordar. Regla general del boleto: contenido variable ⇒ absorbe el QR, no la página.
+
+### §9.34 — Correo de envío de entradas elegible en el paso Pago (2026-07-03 c)
+
+Campo **"Enviar entradas a"** en el paso 4 (pago y confirmación gratis), precargado con el email
+del perfil del comprador (`InitBag.CurrentPersonEmail`). Reglas del usuario: si el perfil NO tiene
+correo, el que escriba **se guarda al perfil** (post-pago, en el carril AttendeeWriteBack — carrito
+abandonado no toca el perfil); si SÍ tiene, puede **reemplazarlo solo para el envío** (el perfil no
+se actualiza). Persistencia: **`Order.DeliveryEmail`** (migración **019**) para que el barrido de
+`EventsMaintenance` reintente al mismo correo. Server: `PrepareHeldOrderForCharge` valida
+(`EmailAddressFieldValidator`, namespace `Rock.Communication`, NO `Rock.Utility` como dice el
+[Obsolete]) y guarda; `TicketEmailService.Send` usa `DeliveryEmail ?? perfil` y excluye el correo
+de PERFIL del comprador de los envíos a asistentes (si lo reemplazó, su boleto no va además a la
+dirección vieja); `ResolveRecipientEmail` (reenvío de Mis Entradas): asistente==comprador ⇒
+DeliveryEmail manda. Front: input nativo email en `paymentStep.partial.obs`, `deliveryEmail`/
+`deliveryEmailValid` en checkoutState, botones Pagar/Confirmar deshabilitados sin correo válido.
+
+### §9.35 — Calendario público + visibilidad de eventos (Público/Privado/Con contraseña) (2026-07-03 d)
+
+Arquitectura hexagonal: las reglas viven en **`EventAccessService`** (dominio); los bloques son
+adaptadores delgados.
+
+- **Modelo (migración 020)**: `Event.Visibility` (enum `EventVisibility`: 0=Public, 1=Private,
+  2=Password) + `Event.AccessPassword` (texto plano a propósito: es un gate compartible tipo
+  contraseña de reunión, no credencial; nunca viaja al cliente del checkout — solo Event Admin
+  la lee). `EventAccessService`: `RequiresPassword` (Password con contraseña en blanco ⇒ se
+  comporta Privado, la mala config no bloquea ventas), `CheckAccess` (comparación
+  case-insensitive + **rate-limit 10 intentos/5 min por persona+evento**, en memoria) y
+  `GetCalendarEvents` (Published + Public + no terminados).
+- **Calendario (7º bloque `EventCalendar`, guid `…200000000007`)**: página externa pública
+  **`eventos/calendario`** (migración 020; título/breadcrumb ocultos). Solo lectura, sin login,
+  TODO en el init bag (sin block actions). Cards agrupadas por mes (paleta slate, badge de
+  categoría con los mismos oklch, sesiones hasta 3+"+N más", descripción clamp 2 líneas), enlace
+  al checkout por Slug (bonito) o EventId vía LinkedPage "Checkout Page" (cableada en la 020).
+  Privados y con contraseña NUNCA se listan (siguen accesibles por enlace directo).
+- **"Volver al inicio" → calendario**: LinkedPage "Calendar Page" en Event Checkout (cableada en
+  la 020) → `InitBag.CalendarUrl` → `goHome()` (pantallas "Listo" y "evento ya pasó"); fallback `/`.
+- **Gate de contraseña en el checkout**: init LIMITADO (hero: nombre/imagen/fechas; SIN
+  descripción/organizador/tipos) + tarjeta de contraseña en el shell; action **`UnlockEvent`**
+  devuelve lo omitido. El front conserva la contraseña en memoria y la reenvía en
+  **GetTicketTypes / ApplyPromoCode / CreateHold / ProcessCheckout (ambas rutas)** — el servidor
+  re-valida SIEMPRE (`CheckAccess`), nunca confía en un "ya desbloqueado" del cliente.
+  **Refactor front clave: `config.event` → ref `event` en checkoutState** (el unlock lo completa);
+  shell/ticketsStep/doneStep leen el ref.
+- **Admin**: dropdown Visibilidad (etiquetas ES) + campo contraseña (visible solo en "Con
+  contraseña"; SaveEvent la exige y la limpia en los otros modos). DuplicateEvent copia ambos.

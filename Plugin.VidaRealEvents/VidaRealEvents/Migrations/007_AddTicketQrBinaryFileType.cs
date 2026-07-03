@@ -11,7 +11,8 @@ namespace Rock.Migrations
     /// llega al comprador como adjunto del correo y se muestra en la app como base64, nunca por URL
     /// pública. Idempotente (UpdateBinaryFileTypeRecord hace UPSERT por Guid).
     /// </summary>
-    [MigrationNumber( 7, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class AddTicketQrBinaryFileType : Migration
     {
         public override void Up()

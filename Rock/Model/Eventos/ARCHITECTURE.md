@@ -11,7 +11,7 @@ conocen HTTP (`BlockActionResult`) ni parámetros de página.
 ```
 ┌─ Adaptadores de ENTRADA (Rock.Blocks/Eventos/*.cs)
 │    EventCheckout, EventAdmin(+EventAdminBags), TicketScanner, EventReport,
-│    MyTickets, QuestionCatalog
+│    MyTickets, QuestionCatalog, EventCalendar (público, solo lectura, sin login)
 │    → autenticación/autorización, PageParameter, block settings, mapeo bag↔dominio.
 │    → NUNCA lógica de negocio. Devuelven BlockActionResult mapeando resultados de dominio.
 │
@@ -24,7 +24,20 @@ conocen HTTP (`BlockActionResult`) ni parámetros de página.
 │    CheckoutAttendeeService asistentes: familia + known relationships, anti-IDOR,
 │                           invitados→personas reales (paridad FamilyHub).
 │    AttendeeQuestionService preguntas por boleto: catálogo, snapshot, write-back al perfil.
-│    CheckinService         check-in de tickets (scanner).
+│    CheckinService         check-in de tickets (scanner). Evento CON sesiones: re-admite en un
+│                           día distinto (dedupe de "ya usado" por día calendario vía CheckinLog).
+│    EventAccessService     visibilidad (Event.Visibility, migr. 020): qué se lista en el
+│                           calendario público (Published+Public+no terminado) y el gate de
+│                           contraseña (rate-limit 10/5min por persona+evento; comparación del
+│                           password SIEMPRE server-side — el front solo transporta la
+│                           contraseña en cada acción de venta, nunca un "ya desbloqueado").
+│    EventSessionService    agenda de sesiones (Event.SessionsJson, migr. 018): parse/normaliza/
+│                           formatea es-GT. Informativa — un boleto admite a TODAS las sesiones;
+│                           capacidad/precio siguen por TicketType. Start/End del evento se
+│                           derivan (min/max de sesiones) al guardar en Admin, así los guards de
+│                           "evento pasado"/venta cerrada no cambian. El correo de entrega agrega
+│                           "Agregar a mi calendario": .ics adjunto (Ical.Net, un VEVENT por
+│                           sesión) + links Google/Outlook (TicketEmailService).
 │
 ├─ Adaptadores de SALIDA (Rock/Model/Eventos/Services/)
 │    PaymentService         pasarela (ePay Visanet vía IObsidianHostedGatewayComponent).
@@ -59,6 +72,11 @@ Fuera del árbol: `Rock/Jobs/EventsMaintenance.cs` (job de conciliación: holds 
   (exclusivo, orden por Id, timeout 8s → mensaje amigable). NO volver a SERIALIZABLE: los
   range-locks producen deadlocks con cientos de compradores. Los caminos que liberan cupo no
   toman el lock (liberar concurrente solo hace el conteo más conservador).
+- **Ciclo del hold**: se crea al "Continuar" de Entradas (SIN asistentes: `snapshotAnswers:false`);
+  los asistentes/respuestas se amarran al pagar (`CheckoutService.ApplyAttendeesToHeldTickets`,
+  con guard de mismatch). La reserva sobrevive a la navegación atrás/adelante — solo se consume
+  al pagar, expirar o abandonar; el server valida vigencia por `CreatedDateTime`, nunca confía
+  en el timer del cliente.
 - **Reciclos del app pool** (`EventsRuntime`): la sección crítica del cobro corre dentro de
   `EnterCriticalPaymentScope()` — un shutdown gracioso ESPERA (hasta 60s) a los cobros en vuelo;
   el trabajo post-pago (correo, write-back) va por `QueueBackgroundWork` (no `Task.Run`, que un

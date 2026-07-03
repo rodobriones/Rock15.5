@@ -46,6 +46,31 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         /// <summary>Gets or sets a value indicating whether the event has a payment gateway configured.</summary>
         public bool HasGateway { get; set; }
+
+        /// <summary>The buyer's profile email, used to prefill the delivery-email field at the payment step.</summary>
+        public string CurrentPersonEmail { get; set; }
+
+        /// <summary>
+        /// True when the event requires a password: the init only carries the hero basics (no
+        /// description/organizer/ticket types) and the front must call UnlockEvent first.
+        /// </summary>
+        public bool RequiresPassword { get; set; }
+
+        /// <summary>URL of the public events calendar page ("Volver al inicio" target), or null.</summary>
+        public string CalendarUrl { get; set; }
+    }
+
+    /// <summary>Request payload carrying the access password of a password-protected event.</summary>
+    public class EventAccessRequestBag
+    {
+        public string Password { get; set; }
+    }
+
+    /// <summary>Response of UnlockEvent: what the limited init omitted.</summary>
+    public class UnlockEventResponseBag
+    {
+        public EventBag Event { get; set; }
+        public List<TicketTypeBag> TicketTypes { get; set; }
     }
 
     /// <summary>
@@ -74,6 +99,12 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         /// <summary>Event category shown as a colored badge in the hero, or null for no badge.</summary>
         public string Category { get; set; }
+
+        /// <summary>
+        /// Pre-formatted session lines for multi-session events (e.g. "Lunes 3 de agosto · 8:00 a. m. – 9:00 a. m.").
+        /// Empty for single-block events.
+        /// </summary>
+        public List<string> Sessions { get; set; }
     }
 
     /// <summary>
@@ -218,6 +249,15 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         /// <summary>The promo code to apply, if any. Re-validated server-side (the client discount is never trusted).</summary>
         public string PromoCode { get; set; }
+
+        /// <summary>
+        /// Email address to deliver the tickets to (prefilled client-side with the buyer's profile
+        /// email; editable). Delivery-only override — the profile is not updated (unless blank).
+        /// </summary>
+        public string DeliveryEmail { get; set; }
+
+        /// <summary>Access password for password-protected events (kept client-side after UnlockEvent).</summary>
+        public string AccessPassword { get; set; }
     }
 
     /// <summary>Request payload for ApplyPromoCode (validates a code against the current selection).</summary>
@@ -227,6 +267,9 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         /// <summary>The current selected lines (only ticket type + quantity are used to compute the discount).</summary>
         public List<CheckoutLineBag> Lines { get; set; }
+
+        /// <summary>Access password for password-protected events.</summary>
+        public string AccessPassword { get; set; }
     }
 
     /// <summary>Response for CreateHold (a temporary reservation that holds capacity while paying).</summary>

@@ -10,13 +10,26 @@
             <span class="ecPayTotalValue ecMono">{{ isFree ? "Gratis" : formatCurrency(grandTotal) }}</span>
         </div>
 
+        <!-- Correo de envío de las entradas: precargado con el del perfil; cambiarlo NO toca el perfil. -->
+        <div class="ecPayEmail">
+            <label class="ecPayEmailLabel" for="ecDeliveryEmail">Enviar entradas a</label>
+            <input id="ecDeliveryEmail"
+                   type="email"
+                   class="form-control"
+                   v-model="deliveryEmail"
+                   placeholder="correo@ejemplo.com"
+                   autocomplete="email" />
+            <span v-if="!deliveryEmailValid" class="ecPayEmailErr">Escribe un correo válido para recibir tus entradas.</span>
+            <span v-else class="ecPayEmailHint">Tus boletos (PDF con código QR) llegarán a este correo.</span>
+        </div>
+
         <!-- Entrada gratuita: sin pasarela, solo confirmar -->
         <div v-if="isFree" class="ecPay">
             <NotificationBox alertType="success">Estas entradas no tienen costo. Confirma para recibir tus boletos.</NotificationBox>
             <NotificationBox v-if="gatewayError" alertType="danger">{{ gatewayError }}</NotificationBox>
             <div class="ecActions">
                 <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
-                <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !holdActive || holdExpired" @click="confirmFree" autoDisable>
+                <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !holdActive || holdExpired || !deliveryEmailValid" @click="confirmFree" autoDisable>
                     {{ busy ? "Procesando…" : "Confirmar entradas" }}
                 </RockButton>
             </div>
@@ -42,7 +55,7 @@
 
                 <div class="ecActions">
                     <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
-                    <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !gatewayControlModel || !holdActive || holdExpired" @click="onPayClick" autoDisable>
+                    <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !gatewayControlModel || !holdActive || holdExpired || !deliveryEmailValid" @click="onPayClick" autoDisable>
                         {{ busy ? "Procesando…" : `Pagar ${formatCurrency(grandTotal)}` }}
                     </RockButton>
                 </div>
@@ -66,6 +79,8 @@ const {
     formatCurrency,
     holdActive,
     holdExpired,
+    deliveryEmail,
+    deliveryEmailValid,
     gatewayControlModel,
     gatewayError,
     gatewayValidationFields,

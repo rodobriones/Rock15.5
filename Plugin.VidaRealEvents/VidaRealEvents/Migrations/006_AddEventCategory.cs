@@ -7,7 +7,8 @@ namespace Rock.Migrations
     /// que se muestra como badge de color en el hero del checkout (Conferencia/Concierto/Deportivo/
     /// Familiar). Null/vacío oculta el badge. Idempotente (COL_LENGTH guard).
     /// </summary>
-    [MigrationNumber( 6, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class AddEventCategory : Migration
     {
         public override void Up()

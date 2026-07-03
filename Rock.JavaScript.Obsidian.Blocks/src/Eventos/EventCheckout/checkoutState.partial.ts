@@ -14,6 +14,7 @@ import { useBlockActionUrl, useConfigurationValues, useInvokeBlockAction } from 
 import {
     ApplyPromoResponseBag,
     CreateHoldResponseBag,
+    EventBag,
     InitBag,
     ProcessCheckoutResponseBag,
     TicketTypeBag
@@ -45,10 +46,54 @@ function createCheckoutState() {
     const ticketTypes = ref<TicketTypeBag[]>(config.ticketTypes ?? []);
     const quantities = ref<Record<number, number>>({});
 
+    // El evento vive en un ref (no directo de config): un evento con contraseña llega LIMITADO
+    // en el init (sin descripción/tipos) y UnlockEvent lo completa aquí.
+    const event = ref<EventBag | null>(config.event ?? null);
+
+    // Gate de contraseña (visibilidad "Con contraseña"). La contraseña se conserva en memoria y
+    // viaja en cada acción de venta: el servidor re-valida siempre (no confía en el desbloqueo).
+    const passwordRequired = ref<boolean>(config.requiresPassword === true);
+    const accessPassword = ref<string>("");
+    const unlockBusy = ref<boolean>(false);
+    const unlockError = ref<string>("");
+
+    async function unlockEvent(): Promise<void> {
+        if (!accessPassword.value.trim() || unlockBusy.value) {
+            return;
+        }
+        unlockBusy.value = true;
+        unlockError.value = "";
+        try {
+            const res = await invokeBlockAction<{ event: EventBag; ticketTypes: TicketTypeBag[] }>("UnlockEvent", {
+                bag: { password: accessPassword.value.trim() }
+            });
+            if (res.isSuccess && res.data?.event) {
+                event.value = res.data.event;
+                ticketTypes.value = res.data.ticketTypes ?? [];
+                passwordRequired.value = false;
+            }
+            else {
+                unlockError.value = res.errorMessage || "No se pudo validar la contraseña.";
+            }
+        }
+        catch {
+            unlockError.value = "Error validando la contraseña.";
+        }
+        finally {
+            unlockBusy.value = false;
+        }
+    }
+
     // Asistentes y preguntas (unidades, prefill, validación, acordeón, buildLines):
     // sub-composable propio — ver attendeeState.partial.ts.
     const attendee = createAttendeeState({ config, invokeBlockAction, ticketTypes, getQty });
     const { buildAttendeeUnits, loadFamilyMembers, buildLines } = attendee;
+
+    // Correo al que se envían las entradas (paso 4): precargado con el del perfil, editable.
+    // Reemplazarlo NO actualiza el perfil (solo el envío); si el perfil no tenía correo, el
+    // servidor se lo guarda al confirmar el pago.
+    const deliveryEmail = ref((config.currentPersonEmail || "").trim());
+    const deliveryEmailValid = computed<boolean>(() => /^\S+@\S+\.\S+$/.test(deliveryEmail.value.trim()));
 
     const wantsInvoice = ref(false);
     const nit = ref("");
@@ -103,6 +148,18 @@ function createCheckoutState() {
     const holdRemaining = ref(0); // segundos restantes
     const holdTotalSeconds = ref(600); // ventana total del hold (para la barra de progreso)
     let holdTimerId: number | undefined;
+    // Huella de la selección con la que se creó el hold vigente: navegar atrás/adelante NO toca la
+    // reserva; solo se re-reserva si las cantidades cambiaron (o no hay hold vigente). El hold se
+    // consume únicamente al pagar, al expirar o al abandonar la página.
+    let heldQuantitiesKey = "";
+
+    function quantitiesKey(): string {
+        return Object.entries(quantities.value)
+            .filter(([, q]) => q > 0)
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([id, q]) => `${id}:${q}`)
+            .join("|");
+    }
 
     const submitGatewayPayment = provideSubmitPayment();
 
@@ -111,11 +168,11 @@ function createCheckoutState() {
     // #region Computed
 
     // Estilo del header elegido por el organizador (default persistente = hero grande).
-    const slimHeader = computed(() => config.event?.headerStyle === "condensado");
+    const slimHeader = computed(() => event.value?.headerStyle === "condensado");
 
     // El evento ya terminó: la venta está cerrada (el servidor también lo valida en CreateHold/ProcessCheckout).
     const eventEnded = computed(() => {
-        const end = config.event?.endDateTime;
+        const end = event.value?.endDateTime;
         if (!end) {
             return false;
         }
@@ -124,10 +181,10 @@ function createCheckoutState() {
     });
 
     // Slug de la categoría para el color del badge (ecBadge--conferencia, etc.).
-    const categorySlug = computed(() => (config.event?.category ?? "").toLowerCase());
+    const categorySlug = computed(() => (event.value?.category ?? "").toLowerCase());
 
     const eventSubtitle = computed(() => {
-        const ev = config.event;
+        const ev = event.value;
         if (!ev) {
             return "";
         }
@@ -142,7 +199,7 @@ function createCheckoutState() {
     });
 
     const eventDateLabel = computed(() => {
-        const ev = config.event;
+        const ev = event.value;
         if (!ev?.startDateTime) {
             return "";
         }
@@ -155,7 +212,7 @@ function createCheckoutState() {
 
     // Fecha + rango horario para el detalle del evento, ej: "sábado, 04 de julio de 2026 · 08:00 → 13:00".
     const eventDateRange = computed(() => {
-        const ev = config.event;
+        const ev = event.value;
         if (!ev?.startDateTime) {
             return "";
         }
@@ -301,7 +358,8 @@ function createCheckoutState() {
 
     // "Volver al inicio": vuelve a la portada del sitio.
     function goHome(): void {
-        window.location.href = "/";
+        // "Volver al inicio" lleva al calendario público de eventos (LinkedPage "Calendar Page").
+        window.location.href = config.calendarUrl || "/";
     }
 
     function formatShortDate(value: string): string {
@@ -357,7 +415,7 @@ function createCheckoutState() {
         promoError.value = "";
         try {
             const res = await invokeBlockAction<ApplyPromoResponseBag>("ApplyPromoCode", {
-                bag: { code, lines: buildLines() }
+                bag: { code, lines: buildLines(), accessPassword: accessPassword.value }
             });
             if (res.isSuccess && res.data) {
                 appliedPromo.value = {
@@ -391,7 +449,9 @@ function createCheckoutState() {
         busy.value = true;
         err.value = "";
         try {
-            const res = await invokeBlockAction<{ ticketTypes: TicketTypeBag[] }>("GetTicketTypes", {});
+            const res = await invokeBlockAction<{ ticketTypes: TicketTypeBag[] }>("GetTicketTypes", {
+                bag: { password: accessPassword.value }
+            });
             if (res.isSuccess && res.data) {
                 ticketTypes.value = res.data.ticketTypes ?? [];
             }
@@ -412,10 +472,14 @@ function createCheckoutState() {
         // Reservar el cupo AQUÍ (al salir de Entradas): si está agotado, el cliente se entera de
         // inmediato — no después de llenar los datos de los asistentes. La reserva se crea sin
         // asistentes; se amarran al pagar (el servidor los aplica sobre los tickets reservados).
-        const ok = await createHold();
-        if (!ok) {
-            await reloadTicketTypes();
-            return;
+        // Si ya hay un hold vigente con LA MISMA selección (volvió atrás sin cambiar cantidades),
+        // se reutiliza: el contador NO se reinicia.
+        if (!holdActive.value || holdExpired.value || quantitiesKey() !== heldQuantitiesKey) {
+            const ok = await createHold();
+            if (!ok) {
+                await reloadTicketTypes();
+                return;
+            }
         }
         await loadFamilyMembers();
         buildAttendeeUnits();
@@ -489,9 +553,9 @@ function createCheckoutState() {
         }
     }
 
-    // Paso 4 (Pago) -> 3 (Revisión): libera el hold (el cupo puede cambiar al volver).
-    async function backToReview(): Promise<void> {
-        await releaseHold();
+    // Paso 4 (Pago) -> 3 (Revisión): la reserva SIGUE VIVA (solo se consume al pagar, expirar o
+    // abandonar); únicamente se descarga la pasarela para recargarla limpia al volver.
+    function backToReview(): void {
         gatewayControlModel.value = null;
         gatewayError.value = "";
         step.value = 3;
@@ -504,13 +568,14 @@ function createCheckoutState() {
         paymentReference = newGuid();
         try {
             const res = await invokeBlockAction<CreateHoldResponseBag>("CreateHold", {
-                bag: { lines: buildLines(), paymentReference }
+                bag: { lines: buildLines(), paymentReference, accessPassword: accessPassword.value }
             });
             if (res.isSuccess && res.data) {
                 paymentReference = res.data.paymentReference || paymentReference;
                 holdTotalSeconds.value = res.data.holdSeconds || 600;
                 holdActive.value = true;
                 holdExpired.value = false;
+                heldQuantitiesKey = quantitiesKey();
                 startHoldTimer(res.data.expiresDateTime);
                 return true;
             }
@@ -583,9 +648,10 @@ function createCheckoutState() {
         await reloadTicketTypes();
     }
 
-    // Volver a elegir entradas: libera el hold (el cupo puede cambiar).
-    async function backToTickets(): Promise<void> {
-        await releaseHold();
+    // Volver a elegir entradas: la reserva SIGUE VIVA. Si cambia cantidades, el próximo
+    // "Continuar" re-reserva (el servidor libera el hold anterior); si no cambia nada, el mismo
+    // hold y contador continúan. Abandonar en el paso 1 deja que expire solo (10 min).
+    function backToTickets(): void {
         gatewayControlModel.value = null;
         step.value = 1;
     }
@@ -621,7 +687,9 @@ function createCheckoutState() {
                     nit: nit.value,
                     wantsInvoice: !isFree.value && wantsInvoice.value,
                     invoiceName: isFree.value ? "" : invoiceName.value,
-                    promoCode: appliedPromo.value?.code ?? ""
+                    promoCode: appliedPromo.value?.code ?? "",
+                    deliveryEmail: deliveryEmail.value.trim(),
+                    accessPassword: accessPassword.value
                 }
             });
 
@@ -742,6 +810,8 @@ function createCheckoutState() {
         applyPromo,
         removePromo,
         wantsInvoice,
+        deliveryEmail,
+        deliveryEmailValid,
         nit,
         invoiceName,
         nitAddress,
@@ -774,13 +844,21 @@ function createCheckoutState() {
         goHome,
 
         // Shell (hero, progreso, evento finalizado)
+        event,
         slimHeader,
         eventEnded,
         categorySlug,
         eventSubtitle,
         eventDateLabel,
         eventDateRange,
-        progressPct
+        progressPct,
+
+        // Gate de contraseña (visibilidad "Con contraseña")
+        passwordRequired,
+        accessPassword,
+        unlockBusy,
+        unlockError,
+        unlockEvent
     };
 }
 

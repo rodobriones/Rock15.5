@@ -11,7 +11,8 @@ namespace Rock.Migrations
     /// Seguridad: hereda de la seccion Boleteria (Admins+Staff); las acciones del bloque exigen
     /// EDIT (mismo modelo que Administrar Eventos). Idempotente.
     /// </summary>
-    [MigrationNumber( 15, "18.1" )]
+    // Paso de la migración consolidada (017_ProductionSetup la ejecuta en orden).
+    // SIN [MigrationNumber]: ya no corre por sí sola.
     public class QuestionCatalogPage : Migration
     {
         // --- Existentes ---
