@@ -160,3 +160,26 @@ En `eventos` (interno) > Administrar Eventos:
 5. "Volver al inicio" (pantalla Listo y "evento ya pasó") lleva a `eventos/calendario`.
 6. Event Admin: cambiar visibilidad a "Con contraseña" sin contraseña → error de validación;
    Duplicar conserva visibilidad y contraseña.
+
+## 14. Archivar + workflows + reenvío admin (agregado 2026-07-04, requiere migración 021)
+
+1. **Migración**: tras reciclar, `SELECT * FROM [PluginMigration] WHERE MigrationNumber = 21` →
+   1 fila; `Event` y `TicketType` tienen `RegistrationWorkflowTypeId`/`CheckinWorkflowTypeId`.
+2. **Archivar**: en Administrar Eventos abre un evento con órdenes → botón **Archivar**
+   (modal de Rock, ya no alert del navegador) → desaparece del listado; filtra estado
+   "Archivado" → aparece; su checkout directo dice "ventas no disponibles"; no sale en el
+   scanner ni en el calendario; Reportería SÍ lo lista. Restaurar: cambiar estado y guardar
+   (debe salir el toast verde abajo-derecha, no el aviso de arriba).
+3. **Workflow al inscribirse**: crea un WorkflowType simple (p. ej. activar + Log/Persist) con
+   atributos `Person` (Person field type) y `EventName` (Text). Asígnalo en el evento
+   ("Workflow al inscribirse") → compra 2 entradas → en Admin > Power Tools > Workflows deben
+   aparecer 2 instancias (una por ticket) con Person = asistente y EventName lleno.
+   Repite asignándolo al TIPO de boleto (y quita el del evento). Si evento y tipo apuntan al
+   MISMO workflow, se lanza solo una vez por ticket.
+4. **Workflow al check-in**: asigna uno en "Workflow al hacer check-in" → escanea una entrada →
+   1 instancia nueva; escaneo repetido (AlreadyUsed) NO lanza otra.
+5. **Reenvío desde Reportería**: como staff con CanScan, busca un inscrito → ✉ → corrige el
+   correo → "Guardar y reenviar" → llega el correo con PDF al correo NUEVO;
+   `SELECT DeliveryEmail FROM _com_vidareal_Events_Order WHERE Id = <orden>` = corregido;
+   reintento inmediato SIN cambiar correo → mensaje de cooldown (2 min). Con un usuario
+   solo-CanViewReport: la columna de correo y el botón ✉ NO aparecen.

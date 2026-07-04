@@ -264,6 +264,7 @@ import CheckBox from "@Obsidian/Controls/checkBox.obs";
 import DropDownList from "@Obsidian/Controls/dropDownList.obs";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+import { confirm } from "@Obsidian/Utility/dialogs";
 
 type CatalogItem = {
     guid: string;
@@ -383,7 +384,7 @@ async function saveQuestion(): Promise<void> {
 }
 
 async function deleteQuestion(q: CatalogItem): Promise<void> {
-    if (!window.confirm(`¿Eliminar la pregunta "${q.name}"? También se borran las respuestas guardadas en las personas.`)) return;
+    if (!(await confirm(`¿Eliminar la pregunta "${q.name}"? También se borran las respuestas guardadas en las personas.`))) return;
     busy.value = true;
     err.value = "";
     try {
@@ -508,7 +509,7 @@ async function saveTemplate(): Promise<void> {
 }
 
 async function deleteTemplate(t: QuestionTemplate): Promise<void> {
-    if (!window.confirm(`¿Eliminar la plantilla "${t.name}"? Los boletos que ya la aplicaron conservan sus preguntas.`)) return;
+    if (!(await confirm(`¿Eliminar la plantilla "${t.name}"? Los boletos que ya la aplicaron conservan sus preguntas.`))) return;
     busy.value = true;
     err.value = "";
     try {

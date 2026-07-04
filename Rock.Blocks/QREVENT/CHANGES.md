@@ -227,17 +227,35 @@ Las estadisticas se calculan siempre sobre el universo completo del evento (no s
 
 ---
 
-## SundayServiceCapacityAdmin
+## SundayServiceCapacityAdmin (Obsidian, 2026-07-04)
 
 ### Archivos
-- `RockWeb/Blocks/SundayService/SundayServiceCapacityAdmin.ascx`
-- `RockWeb/Blocks/SundayService/SundayServiceCapacityAdmin.ascx.cs`
+- `Rock.Blocks/QREVENT/SundayServiceCapacityAdmin.cs`
+- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceCapacityAdmin.obs`
 
-**Proposito:** Administracion de capacidades de slots por campus, aplicando plantillas de capacidad para domingos por rango de fechas.
+**Proposito:** Administracion de la disponibilidad (slots) por campus: aplica una plantilla de horarios x fechas y permite ajustar capacidad o estado de slots individuales.
+
+Reemplaza al bloque WebForms legacy (`RockWeb/Blocks/SundayService/SundayServiceCapacityAdmin.ascx`), que queda obsoleto. Rediseño del flujo en una sola pantalla:
+1. **Contexto**: sede + rango de fechas con presets (4 semanas / 3 meses / 6 meses).
+2. **Plantilla de horarios**: cada horario permitido con su capacidad (se prellenan con la ultima capacidad usada en esa sede), vista previa en vivo ("Se aplicara a N slots"), y dos opciones en lenguaje claro (sobrescribir capacidad / desactivar horarios fuera de plantilla).
+3. **Disponibilidad del rango**: agrupada por fecha, con barra de ocupacion, contadores (reservados/holds/disponibles), edicion inline de capacidad y activar/desactivar por slot.
+
+**Guardas de seguridad (mismas reglas que el legacy, ahora tambien respaldadas por las CHECK constraints):**
+- Nunca baja la capacidad por debajo de `ReservedCount + HoldCount`.
+- Nunca desactiva un slot con reservas o holds.
+- Solo acepta ScheduleIds del atributo `Allowed Schedule Ids`.
+- Todas las acciones requieren permiso `EDIT` sobre el bloque.
+
+**Block Actions:**
+- `GetSlots(campusId, startDate, endDate)`: slots agrupados por fecha + ultima capacidad por horario.
+- `Generate(campusId, startDate, endDate, items[], overwriteCapacity, deactivateOthers)`: aplica la plantilla en una transaccion; retorna conteos (creados/actualizados/reactivados/desactivados/omitidos) y advertencias.
+- `UpdateSlot(slotId, capacity?, isActive?)`: ajuste individual con las mismas guardas.
 
 **Block Attributes:**
 - `Allowed Schedule Ids`: CSV de ScheduleIds permitidos.
 - `Default Campus Id`: Campus por defecto.
+
+**Registro:** el BlockType se auto-registra al reiniciar Rock via `[Rock.SystemGuid.BlockTypeGuid("54953569-5e80-40ac-90b1-d43d20a2c34d")]`. Sustituir el bloque legacy en la pagina de administracion por este.
 
 ---
 

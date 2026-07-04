@@ -40,6 +40,21 @@
 >   durante toda la operación (tokenización + cobro). Es la convención de los
 >   gateway controls de Rock.
 >
+> **Rediseño visual 2026-07-04 — paleta slate del checkout de eventos.**
+> El control se alineó al lenguaje visual del módulo de Eventos/Boletería
+> (`eventCheckout.obs`): Roboto/Roboto Mono (antes Manrope/Jakarta), labels
+> 11px uppercase `#94a3b8`, inputs radius 12 borde `#cbd5e1` focus `#475569`,
+> errores `#dc2626`. El **card preview ahora es una tarjeta oscura** (gradiente
+> slate 160°, chip dorado CSS nuevo `epayChip`, número en Roboto Mono). El
+> checkbox de cuotas pasó a **fila con switch** (patrón `ecToggleRow`/`ecSwitch`)
+> sin cambiar el markup del input; el recargo usa los colores warning del
+> checkout. **Móvil:** inputs a 16px (elimina el auto-zoom de iOS), altura 48px,
+> Vencimiento/CVV en 2 columnas siempre (1 columna solo <360px), recargo con
+> `flex-wrap`. Se eliminó el CSS muerto del overlay `epayState*` (el elemento no
+> existía en el markup). Sin cambios de lógica JS. Editado en el `.obs.js`
+> servido + `.obs` fuente sincronizado (raíz y Deploy) + copiado a
+> `RockWeb/Plugins/EpayVisanetGateway/Obsidian/` (requiere hard-refresh).
+
 > **Importante — el control Obsidian desplegado es hecho a mano, NO compilado.**
 > El archivo servido es `Deploy/Plugins/EpayVisanetGateway/Obsidian/epayVisanetGatewayControl.obs.js`
 > (un `System.register` escrito a mano con el CSS inline en `ensureStyleTag`).

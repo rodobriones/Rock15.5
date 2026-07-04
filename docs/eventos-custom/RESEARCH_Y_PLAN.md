@@ -1,9 +1,9 @@
 # Módulo de Eventos/Boletería Custom — Research & Plan
 
 > **Producto propio y completo** de boletería sobre Rock 18.1. Esquema de datos propio (tablas nuevas). NO reusa `Registration*`.
-> Estado (2026-07-03): **v1 en producción-candidato** — 7 entidades (`_com_vidareal_Events_*`, incl. `EventStaff` de permisos por-usuario),
+> Estado (2026-07-04): **v1 en producción-candidato** — 7 entidades (`_com_vidareal_Events_*`, incl. `EventStaff` de permisos por-usuario),
 > **7 bloques** (Event Admin con vista Permisos, Event Checkout rediseño 2026, My Tickets hub, Ticket Scanner, Event Report, Question Catalog, Event Calendar público),
-> **migraciones 001–020** en `Plugin.VidaRealEvents`. Historial de sesiones en §9.x (última: §9.35).
+> **migraciones 001–021** en `Plugin.VidaRealEvents`. Historial de sesiones en §9.x (última: §9.36).
 > Reemplaza el flujo nativo de eventos de Rock end-to-end: admin, venta, QR, envío/reenvío, check-in, reportería, permisos.
 >
 > **Arquitectura (mapa de capas y convenciones): `Rock/Model/Eventos/ARCHITECTURE.md`** — leer primero.
@@ -843,3 +843,53 @@ adaptadores delgados.
   shell/ticketsStep/doneStep leen el ref.
 - **Admin**: dropdown Visibilidad (etiquetas ES) + campo contraseña (visible solo en "Con
   contraseña"; SaveEvent la exige y la limpia en los otros modos). DuplicateEvent copia ambos.
+- **Pulido front del calendario (2026-07-03 e, solo `eventCalendar.obs`, sin C#)**: página
+  full-bleed slate + variables CSS del checkout, hero oscuro (gradiente 160°), **navegación por
+  mes** — barra flotante tipo `ecCard` con flechas ‹ › y chips por mes con contador (scroll
+  horizontal, chip activo auto-centrado; navega solo entre meses CON eventos, salta vacíos),
+  un mes visible a la vez (pensado para muchos eventos). Cards: cubo de fecha (día Roboto Mono
+  + mes) arriba-derecha del hero, flecha CTA animada, grid 1 columna en móvil. Todo client-side
+  (init bag sin cambios). Bundle verificado 0 `_ctx.`.
+
+### §9.36 — Soporte post-venta, archivado y workflow launcher (2026-07-04)
+
+- **Corregir correo + reenviar entradas desde Reportería** (caso "no me llegó el correo" = lo
+  teclearon mal): la fila del inscrito muestra el correo de envío efectivo
+  (`Order.DeliveryEmail ?? perfil del comprador`) bajo el comprador + botón ✉ → editor inline
+  que corrige y reenvía TODAS las entradas de la orden. Action **`UpdateEmailAndResend`**
+  `{eventId, orderId, newEmail}` en `EventReport`: gate = acceso total o `CanScan` del evento
+  (mismo criterio que `uniqueCode`; sin CanScan el correo ni viaja — `ReportBag.canResend`);
+  valida con `EmailAddressFieldValidator`; escribe `Order.DeliveryEmail` (los barridos de
+  `EventsMaintenance` y reenvíos futuros usan el corregido); cooldown 2 min por orden SOLO si
+  no cambió el correo (destino nuevo = reenvío inmediato); `TicketEmailService.Send` síncrono
+  (el admin quiere confirmación).
+- **Archivar en vez de eliminar**: `DeleteEvent` ELIMINADO → **`ArchiveEvent`**
+  (`EventStatus.Archived = 4`, solo enum, sin SQL). Conserva órdenes/tickets/historial. Oculto
+  por defecto en la lista admin (visible filtrando estado "Archivado", que ignora el filtro de
+  pasados) y excluido del scanner; Reportería lo conserva (historial); checkout/calendario ya
+  lo excluían (exigen Published). Restaurar = abrir el evento y cambiarle el estado (el
+  dropdown Estado ahora sale en español).
+- **Workflow launcher (migración 021)**: por **Evento** Y por **TicketType**, dos disparadores
+  cada uno — `RegistrationWorkflowTypeId` (orden pagada → se lanza POR TICKET; cubre gratis) y
+  `CheckinWorkflowTypeId` (ingreso exitoso en puerta). Columnas INT **sin FK** a propósito
+  (WorkflowType borrado solo deja de lanzarse). **`EventWorkflowService`** (núcleo hexagonal):
+  encolado en `EventsRuntime` (nunca dentro del request de pago/scan), best-effort con log de
+  excepciones, dedupe si evento y boleto apuntan al mismo workflow. Entidad del workflow =
+  **Ticket**; atributos por convención SI el workflow los define: `Person` (alias del
+  asistente, fallback comprador), `Buyer`, `Event`, `EventName`, `Order`, `Ticket`,
+  `TicketType`, `TicketTypeName`, `AttendeeName` (los Person-type reciben Guid de PersonAlias;
+  las entidades su Guid). Hooks: `CheckoutService` post-finalize, `EventsMaintenance` ruta
+  reconciliada (la normal nunca los lanzó), `CheckinService.Scan` post-commit solo en `Ok`.
+  Admin: `WorkflowTypePicker` ×2 en el form del evento + ×2 en el form del boleto
+  (ListItemBag guid ↔ Id vía `WorkflowTypeCache`); DuplicateEvent copia ambos.
+- **UX admin**: TODOS los `window.confirm` de eventAdmin/questionCatalog → `confirm()` de
+  `@Obsidian/Utility/dialogs` (modal estilado, async). Avisos ok/err dejaron el NotificationBox
+  de arriba (invisible con scroll) → **toasts flotantes fijos abajo-derecha** (`.evAdToast`):
+  éxito verde auto-oculta 3 s, error rojo persistente con ✕. Patrón a replicar en los demás
+  bloques admin.
+- **Mis Entradas plegable + dueño visible**: cards de evento colapsadas por defecto (tocar el
+  hero despliega/pliega, chevron en la pill de conteo, auto-abre si hay UN solo evento
+  próximo, teclado Enter); el **nombre del asistente SIEMPRE visible** en cada entrada (antes
+  se ocultaba si era el usuario logueado; fallback "Sin nombre asignado").
+- ⚠️ Deploy: las DLLs nuevas mapean 4 columnas de la 021 — **reciclar apenas se despliegue**
+  (queries de Event/TicketType fallan hasta que corra, mismo caso que la migración 002).

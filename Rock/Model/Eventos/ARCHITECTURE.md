@@ -38,6 +38,12 @@ conocen HTTP (`BlockActionResult`) ni parámetros de página.
 │                           "evento pasado"/venta cerrada no cambian. El correo de entrega agrega
 │                           "Agregar a mi calendario": .ics adjunto (Ical.Net, un VEVENT por
 │                           sesión) + links Google/Outlook (TicketEmailService).
+│    EventWorkflowService   workflow launcher (migr. 021): workflows Rock configurables por
+│                           Evento Y TicketType, disparadores inscripción (orden pagada, se
+│                           lanza POR ticket) y check-in (Ok). Encolado en EventsRuntime,
+│                           best-effort, dedupe evento/tipo. Entidad = Ticket; atributos por
+│                           convención si el workflow los define: Person/Buyer/Event/EventName/
+│                           Order/Ticket/TicketType/TicketTypeName/AttendeeName.
 │
 ├─ Adaptadores de SALIDA (Rock/Model/Eventos/Services/)
 │    PaymentService         pasarela (ePay Visanet vía IObsidianHostedGatewayComponent).

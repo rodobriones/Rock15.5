@@ -151,6 +151,13 @@ namespace Rock.Model
                     rockContext.SaveChanges();
                     dbTransaction.Commit();
 
+                    // Workflows post-check-in (evento y tipo de boleto), en segundo plano y solo
+                    // en ingreso exitoso — fuera de la transacción: no pueden afectar el scan.
+                    if ( result == CheckinResult.Ok )
+                    {
+                        EventWorkflowService.QueueCheckinWorkflows( ticket.Id );
+                    }
+
                     return ( result, ticket );
                 }
                 catch

@@ -29,8 +29,11 @@
                     <!-- Próximos eventos -->
                     <section v-if="upcomingGroups.length" class="mtSection">
                         <div v-for="g in upcomingGroups" :key="g.eventId" class="mtEvent">
-                            <div class="mtEventHero" :class="{ 'mtEventHero--noimg': !g.imageUrl }"
-                                 :style="g.imageUrl ? { backgroundImage: `url('${g.imageUrl}')` } : {}">
+                            <div class="mtEventHero mtEventHero--tappable" :class="{ 'mtEventHero--noimg': !g.imageUrl }"
+                                 :style="g.imageUrl ? { backgroundImage: `url('${g.imageUrl}')` } : {}"
+                                 role="button" tabindex="0" :aria-expanded="isExpanded(g)"
+                                 @click="toggleEvent(g.eventId)"
+                                 @keydown.enter="toggleEvent(g.eventId)">
                                 <div class="mtEventHeroShade"></div>
                                 <div class="mtEventHeroInner">
                                     <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
@@ -40,9 +43,12 @@
                                         <li v-for="s in g.sessions" :key="s">{{ s }}</li>
                                     </ul>
                                 </div>
-                                <span class="mtEventCount">{{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}</span>
+                                <span class="mtEventCount">
+                                    {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
+                                    <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
+                                </span>
                             </div>
-                            <div class="mtTickets">
+                            <div v-show="isExpanded(g)" class="mtTickets">
                                 <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket mtTicket--tappable"
                                      role="button" tabindex="0"
                                      @click="showTicket(t, g)"
@@ -56,7 +62,7 @@
                                             </span>
                                         </div>
                                         <span class="mtTicketType">{{ t.ticketTypeName }}</span>
-                                        <span v-if="t.attendeeName && !t.isCurrentUser" class="mtTicketAttendee">{{ t.attendeeName }}</span>
+                                        <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
                                         <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
                                         <div class="mtTicketFoot">
                                             <button type="button" class="mtResend" :disabled="resendingId === t.ticketId" @click.stop="resend(t.ticketId)" @keydown.enter.stop="resend(t.ticketId)">
@@ -79,15 +85,21 @@
                         </button>
                         <div v-if="showPast">
                             <div v-for="g in pastGroups" :key="g.eventId" class="mtEvent mtEvent--past">
-                                <div class="mtEventHero mtEventHero--noimg">
+                                <div class="mtEventHero mtEventHero--noimg mtEventHero--tappable"
+                                     role="button" tabindex="0" :aria-expanded="isExpanded(g)"
+                                     @click="toggleEvent(g.eventId)"
+                                     @keydown.enter="toggleEvent(g.eventId)">
                                     <div class="mtEventHeroInner">
                                         <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
                                         <h2 class="mtEventName">{{ g.name }}</h2>
                                         <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
                                     </div>
-                                    <span class="mtEventCount">{{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}</span>
+                                    <span class="mtEventCount">
+                                        {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
+                                        <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
+                                    </span>
                                 </div>
-                                <div class="mtTickets">
+                                <div v-show="isExpanded(g)" class="mtTickets">
                                     <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket">
                                         <div class="mtTicketInfo">
                                             <div class="mtTicketTags">
@@ -97,7 +109,7 @@
                                                 </span>
                                             </div>
                                             <span class="mtTicketType">{{ t.ticketTypeName }}</span>
-                                            <span v-if="t.attendeeName && !t.isCurrentUser" class="mtTicketAttendee">{{ t.attendeeName }}</span>
+                                            <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
                                             <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
                                         </div>
                                     </div>
@@ -213,6 +225,12 @@
     background: rgba(255,255,255,.92); color: var(--primary-900);
     font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
 }
+.mtEventChevron { font-size: 9px; color: var(--primary-500); margin-left: 4px; }
+.mtEventHero--tappable { cursor: pointer; }
+.mtEventHero--tappable:hover .mtEventHeroShade {
+    background: linear-gradient(180deg, rgba(15,23,42,.28) 0%, rgba(15,23,42,.8) 100%);
+}
+.mtEventHero--tappable:hover.mtEventHero--noimg { filter: brightness(1.08); }
 
 /* ---------- Tickets dentro del evento ---------- */
 .mtTickets { display: flex; flex-direction: column; }
@@ -334,6 +352,27 @@ const resendingId = ref<number | null>(null);
 const err = ref<string>("");
 const notice = ref<string>("");
 const showPast = ref<boolean>(false);
+
+// Cards de evento plegadas por defecto: con varios eventos (y varias entradas c/u) la página
+// se hacía interminable. Tocar el hero despliega sus entradas; con UN solo evento próximo se
+// abre solo.
+const expandedIds = ref<Set<number>>(new Set());
+
+function toggleEvent(eventId: number): void {
+    const next = new Set(expandedIds.value);
+    if (next.has(eventId)) {
+        next.delete(eventId);
+    }
+    else {
+        next.add(eventId);
+    }
+    expandedIds.value = next;
+}
+
+function isExpanded(g: EventGroup): boolean {
+    return expandedIds.value.has(g.eventId)
+        || (upcomingGroups.value.length === 1 && upcomingGroups.value[0].eventId === g.eventId);
+}
 
 // Visor fullscreen: la entrada seleccionada para enseñar el QR en la puerta.
 const shownTicket = ref<TicketBag | null>(null);

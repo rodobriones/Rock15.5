@@ -882,11 +882,11 @@ function scanLoop() {
             lastScanAt = now;
             try { navigator.vibrate?.(35); } catch { /* ignore */ }
 
-            scanning.value = false;
+            // No apagar `scanning` aqui: si el poll de slot corre durante esta
+            // pausa veria scanning=false y arrancaria un segundo scanLoop.
             await submitQr(raw);
             scanHoldUntil = Date.now() + postResultHoldMs;
             await sleep(postResultHoldMs);
-            scanning.value = true;
             if (scanning.value) scanLoop();
         })
         .catch(async (e: any) => {

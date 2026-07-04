@@ -479,6 +479,10 @@ namespace Rock.Model
                 }
             }, EventsRuntime.WorkLane.EmailPdf );
 
+            // ---------- Workflows de inscripción (configurables por evento y por tipo de boleto):
+            // se lanzan por ticket, en segundo plano, con el Ticket como entidad. Best-effort. ----------
+            EventWorkflowService.QueueRegistrationWorkflows( order.Id );
+
             return new ChargeResult { Success = true, Order = order };
         }
     }

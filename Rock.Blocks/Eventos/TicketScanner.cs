@@ -493,7 +493,7 @@ namespace Rock.Blocks.Eventos
 
             var query = new EventService( rockContext )
                 .Queryable()
-                .Where( e => e.Status != EventStatus.Draft && e.Status != EventStatus.Cancelled );
+                .Where( e => e.Status != EventStatus.Draft && e.Status != EventStatus.Cancelled && e.Status != EventStatus.Archived );
 
             // null = acceso total; con set, solo los eventos asignados a la persona.
             if ( allowedEventIds != null )

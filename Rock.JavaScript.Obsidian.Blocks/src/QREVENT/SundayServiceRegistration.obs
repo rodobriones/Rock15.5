@@ -324,7 +324,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel.obs";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import RockButton from "@Obsidian/Controls/rockButton.obs";
@@ -379,7 +379,7 @@ type HoldUpsertResponse = {
     resultCode: number;
     holdToken: string;
     availableAfter: number;
-    expiresDateTime: string;
+    holdSeconds: number;
 };
 
 type ConfirmResponse = {
@@ -416,7 +416,6 @@ const selectedOccurrenceDate = ref<string>("");
 const quantity = ref<number>(1);
 
 const holdToken = ref<string>("");
-const holdExpiresAt = ref<string>("");
 const holdError = ref<string>("");
 const holdTimeRemaining = ref<number>(0); // segundos restantes
 
@@ -607,7 +606,6 @@ function selectCampus(c: CampusOptionBag) {
 
 function resetHold() {
     holdToken.value = "";
-    holdExpiresAt.value = "";
     holdError.value = "";
     holdUpdating.value = false;
     holdTimeRemaining.value = 0;
@@ -618,19 +616,19 @@ function resetHold() {
     }
 }
 
-function startHoldCountdown(expiresIso: string) {
+function startHoldCountdown(seconds: number) {
     // Limpiar timer anterior si existe
     if (holdCountdownTimer != null) {
         window.clearInterval(holdCountdownTimer);
         holdCountdownTimer = null;
     }
 
-    const expiresDate = new Date(expiresIso);
+    // Contamos con el reloj local del dispositivo: el backend manda duración,
+    // no fecha, para no depender de la zona horaria del navegador.
+    const expiresMs = Date.now() + seconds * 1000;
 
     const updateRemaining = () => {
-        const now = new Date();
-        const diffMs = expiresDate.getTime() - now.getTime();
-        const diffSec = Math.floor(diffMs / 1000);
+        const diffSec = Math.floor((expiresMs - Date.now()) / 1000);
 
         if (diffSec <= 0) {
             holdTimeRemaining.value = 0;
@@ -811,7 +809,6 @@ async function doHoldUpsertLatest() {
         if (!res.isSuccess) {
             holdError.value = res.errorMessage || "No se pudo crear el hold.";
             holdToken.value = "";
-            holdExpiresAt.value = "";
             return;
         }
 
@@ -824,17 +821,15 @@ async function doHoldUpsertLatest() {
                     ? "El horario ya no existe o no está activo."
                     : "No se pudo apartar el cupo. Intenta de nuevo.";
             holdToken.value = "";
-            holdExpiresAt.value = "";
             void refreshWeekSilent();
             return;
         }
 
         holdToken.value = data.holdToken || "";
-        holdExpiresAt.value = data.expiresDateTime || "";
 
         // Iniciar el countdown
-        if (data.expiresDateTime) {
-            startHoldCountdown(data.expiresDateTime);
+        if (data.holdSeconds > 0) {
+            startHoldCountdown(data.holdSeconds);
         }
 
         void refreshWeekSilent();
@@ -842,7 +837,6 @@ async function doHoldUpsertLatest() {
         if (mySeq === holdInFlightSeq) {
             holdError.value = "Error creando el hold.";
             holdToken.value = "";
-            holdExpiresAt.value = "";
         }
     } finally {
         if (mySeq === holdInFlightSeq) {
@@ -946,8 +940,11 @@ async function confirm() {
     try {
         const res = await invokeBlockAction<any>("ConfirmReservation", {
             bag: {
-                holdToken: holdToken.value,
+                // Siempre true: las reservas de fechas pasadas quedan con Status=1
+                // en BD (el filtro de "activa" es solo de lectura), asi que sin
+                // force la confirmacion fallaria con -3 para esos usuarios.
                 forceReplaceExisting: true,
+                holdToken: holdToken.value,
                 esReemplazo: replacing.value
             }
         });
@@ -985,13 +982,6 @@ async function confirm() {
                 : data.resultCode === -2 || data.resultCode === -3
                     ? "Ya existe otra reserva activa para esta persona."
                     : "No se pudo confirmar. Intenta de nuevo.";
-            void refreshWeekSilent();
-            resetHold();
-            return;
-        }
-
-        if (data.resultCode !== 1) {
-            holdError.value = "No se pudo confirmar: ya no hay cupo o el hold venció.";
             void refreshWeekSilent();
             resetHold();
             return;
@@ -1113,6 +1103,22 @@ watch(replacing, (newVal) => {
     if (newVal && step.value === 1 && campusOptions.value.length === 1) {
         const singleCampus = campusOptions.value[0];
         selectCampus(singleCampus);
+    }
+});
+
+// Limpiar timers al desmontar el bloque
+onBeforeUnmount(() => {
+    if (holdCountdownTimer != null) {
+        window.clearInterval(holdCountdownTimer);
+        holdCountdownTimer = null;
+    }
+    if (holdDebounceTimer != null) {
+        window.clearTimeout(holdDebounceTimer);
+        holdDebounceTimer = null;
+    }
+    if (toastTimer != null) {
+        window.clearTimeout(toastTimer);
+        toastTimer = null;
     }
 });
 </script>

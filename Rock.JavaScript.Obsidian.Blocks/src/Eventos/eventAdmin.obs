@@ -10,8 +10,16 @@
             </NotificationBox>
 
             <div v-else>
-                <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
-                <NotificationBox v-if="ok" alertType="success" class="mb-3">{{ ok }}</NotificationBox>
+                <!-- Toasts flotantes: el aviso arriba del panel no se veía al estar scrolleado. -->
+                <div v-if="err" class="evAdToast evAdToast--err" role="alert">
+                    <i class="fa fa-exclamation-circle"></i>
+                    <span>{{ err }}</span>
+                    <button type="button" class="evAdToastX" aria-label="Cerrar" @click="err = ''">&times;</button>
+                </div>
+                <div v-if="ok" class="evAdToast evAdToast--ok" role="status">
+                    <i class="fa fa-check-circle"></i>
+                    <span>{{ ok }}</span>
+                </div>
 
                 <!-- LIST VIEW -->
                 <div v-if="view === 'list'">
@@ -313,9 +321,21 @@
                                     <DropDownList v-model="eventForm.financialAccountId" label="Cuenta" :items="accountOptions" :showBlankItem="true" />
                                 </div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <WorkflowTypePicker v-model="eventForm.registrationWorkflowType"
+                                                        label="Workflow al inscribirse"
+                                                        help="Se lanza por cada entrada del evento cuando la orden queda pagada. El workflow recibe el Ticket como entidad y, si define atributos con estas claves, se llenan solos: Person, Buyer, Event, EventName, Order, Ticket, TicketType, TicketTypeName, AttendeeName." />
+                                </div>
+                                <div class="col-md-6">
+                                    <WorkflowTypePicker v-model="eventForm.checkinWorkflowType"
+                                                        label="Workflow al hacer check-in"
+                                                        help="Se lanza cada vez que una entrada del evento hace check-in en la puerta. Mismas entidades y claves que el de inscripción." />
+                                </div>
+                            </div>
                             <div class="actions">
                                 <RockButton btnType="primary" :disabled="busy" @click="saveEvent">Guardar evento</RockButton>
-                                <RockButton v-if="eventForm.id" btnType="danger" :disabled="busy" @click="deleteEvent">Eliminar</RockButton>
+                                <RockButton v-if="eventForm.id" btnType="warning" :disabled="busy" @click="archiveEvent">Archivar</RockButton>
                             </div>
                         </div>
                     </div>
@@ -397,6 +417,18 @@
                                     </div>
                                 </div>
                                 <CheckBox v-model="ttForm.isActive" label="Activo" />
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <WorkflowTypePicker v-model="ttForm.registrationWorkflowType"
+                                                            label="Workflow al inscribirse (este boleto)"
+                                                            help="Se lanza por cada entrada de ESTE tipo al quedar pagada la orden, además del workflow del evento si lo hay. Mismas claves de atributos." />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <WorkflowTypePicker v-model="ttForm.checkinWorkflowType"
+                                                            label="Workflow al hacer check-in (este boleto)"
+                                                            help="Se lanza al hacer check-in de una entrada de ESTE tipo, además del workflow del evento si lo hay." />
+                                    </div>
+                                </div>
 
                                 <hr />
                                 <h5>Preguntas al asistente</h5>
@@ -534,6 +566,44 @@
     </Panel>
 </template>
 
+<style>
+.evAdToast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 10500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(420px, calc(100vw - 48px));
+    padding: 13px 18px;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .25);
+    animation: evAdToastIn .18s ease-out;
+}
+.evAdToast--ok { background: #15803d; }
+.evAdToast--err { background: #b91c1c; }
+.evAdToast .fa { font-size: 18px; flex: none; }
+.evAdToastX {
+    flex: none;
+    margin-left: 4px;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, .85);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+.evAdToastX:hover { color: #fff; }
+@keyframes evAdToastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+</style>
+
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel.obs";
@@ -548,8 +618,10 @@ import DatePicker from "@Obsidian/Controls/datePicker.obs";
 import DateTimePicker from "@Obsidian/Controls/dateTimePicker.obs";
 import ImageUploader from "@Obsidian/Controls/imageUploader.obs";
 import PersonPicker from "@Obsidian/Controls/personPicker.obs";
+import WorkflowTypePicker from "@Obsidian/Controls/workflowTypePicker.obs";
 import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+import { confirm } from "@Obsidian/Utility/dialogs";
 
 type OptionBag = { value: string; text: string };
 
@@ -600,6 +672,8 @@ type EventEditBag = {
     visibility: number;
     accessPassword: string | null;
     sessions: SessionRow[] | null;
+    registrationWorkflowType: ListItemBag | null;
+    checkinWorkflowType: ListItemBag | null;
 };
 
 type SessionRow = {
@@ -625,6 +699,8 @@ type TicketTypeEditBag = {
     isActive: boolean;
     sold: number;
     questionsJson: string | null;
+    registrationWorkflowType: ListItemBag | null;
+    checkinWorkflowType: ListItemBag | null;
 };
 
 type PromoCodeEditBag = {
@@ -657,7 +733,11 @@ const invokeBlockAction = useInvokeBlockAction();
 const campusOptions = ref<OptionBag[]>(config.campuses || []);
 const gatewayOptions = ref<OptionBag[]>(config.gateways || []);
 const accountOptions = ref<OptionBag[]>(config.accounts || []);
-const statusOptions = ref<OptionBag[]>(config.statusOptions || []);
+const statusEs: Record<number, string> = { 0: "Borrador", 1: "Publicado", 2: "Cerrado", 3: "Cancelado", 4: "Archivado" };
+
+// El dropdown de estado usa las etiquetas en español (el server manda los nombres del enum).
+const statusOptions = ref<OptionBag[]>((config.statusOptions || [])
+    .map(o => ({ value: o.value, text: statusEs[Number(o.value)] ?? o.text })));
 
 // Estilo del header del checkout (diseño 2026): hero completo vs barra fina sticky.
 const headerStyleOptions: OptionBag[] = [
@@ -691,16 +771,15 @@ const listStatusOptions: OptionBag[] = [
     { value: "0", text: "Borrador" },
     { value: "1", text: "Publicado" },
     { value: "2", text: "Cerrado" },
-    { value: "3", text: "Cancelado" }
+    { value: "3", text: "Cancelado" },
+    { value: "4", text: "Archivado" }
 ];
-
-const statusEs: Record<number, string> = { 0: "Borrador", 1: "Publicado", 2: "Cerrado", 3: "Cancelado" };
 
 function statusLabelEs(status: number): string {
     return statusEs[status] ?? String(status);
 }
 
-const statusBadge: Record<number, string> = { 0: "label-default", 1: "label-success", 2: "label-warning", 3: "label-danger" };
+const statusBadge: Record<number, string> = { 0: "label-default", 1: "label-success", 2: "label-warning", 3: "label-danger", 4: "label-default" };
 
 function statusBadgeClass(status: number): string {
     return statusBadge[status] ?? "label-default";
@@ -710,7 +789,10 @@ const filteredEvents = computed<EventListItemBag[]>(() => {
     const q = listSearch.value.trim().toLowerCase();
     const now = Date.now();
     return events.value.filter(e => {
-        if (!listShowPast.value && new Date(e.endDateTime).getTime() < now) return false;
+        // Los archivados solo se ven eligiendo explícitamente el estado "Archivado"
+        // (y en ese caso no aplica el filtro de pasados: casi todos lo son).
+        if (e.status === 4 && listStatus.value !== "4") return false;
+        if (!listShowPast.value && listStatus.value !== "4" && new Date(e.endDateTime).getTime() < now) return false;
         if (listStatus.value !== "all" && String(e.status) !== listStatus.value) return false;
         if (q && !(`${e.name} ${e.venueName ?? ""} ${e.slug ?? ""}`.toLowerCase().includes(q))) return false;
         return true;
@@ -759,6 +841,8 @@ type EventForm = {
     visibility: string;
     accessPassword: string;
     sessions: SessionRow[];
+    registrationWorkflowType: ListItemBag | null;
+    checkinWorkflowType: ListItemBag | null;
 };
 
 const eventForm = ref<EventForm>(blankEventForm());
@@ -848,7 +932,9 @@ function blankEventForm(): EventForm {
         category: "",
         visibility: "0",
         accessPassword: "",
-        sessions: []
+        sessions: [],
+        registrationWorkflowType: null,
+        checkinWorkflowType: null
     };
 }
 
@@ -947,7 +1033,9 @@ function applyDetail(d: EventDetailBag): void {
         category: e.category || "",
         visibility: String(e.visibility ?? 0),
         accessPassword: e.accessPassword || "",
-        sessions: (e.sessions || []).map(s => ({ date: s.date || "", start: s.start || "", end: s.end || "", label: s.label || "" }))
+        sessions: (e.sessions || []).map(s => ({ date: s.date || "", start: s.start || "", end: s.end || "", label: s.label || "" })),
+        registrationWorkflowType: e.registrationWorkflowType ?? null,
+        checkinWorkflowType: e.checkinWorkflowType ?? null
     };
     ticketTypes.value = d.ticketTypes || [];
     promoCodes.value = d.promoCodes || [];
@@ -996,7 +1084,9 @@ async function saveEvent(): Promise<void> {
             category: f.category || null,
             visibility: Number(f.visibility) || 0,
             accessPassword: f.accessPassword || null,
-            sessions: f.sessions
+            sessions: f.sessions,
+            registrationWorkflowType: f.registrationWorkflowType,
+            checkinWorkflowType: f.checkinWorkflowType
         };
         const res = await invokeBlockAction<{ eventId: number; saved: boolean }>("SaveEvent", { bag });
         if (!res.isSuccess || !res.data?.saved) {
@@ -1013,20 +1103,20 @@ async function saveEvent(): Promise<void> {
     }
 }
 
-async function deleteEvent(): Promise<void> {
+async function archiveEvent(): Promise<void> {
     if (!eventForm.value.id) return;
-    if (!window.confirm("¿Eliminar este evento? Esta acción no se puede deshacer.")) return;
+    if (!(await confirm("¿Archivar este evento? Sale de las listas y del escáner, pero conserva sus órdenes y entradas. Para restaurarlo: filtra por estado \"Archivado\", ábrelo y cámbiale el estado."))) return;
     busy.value = true;
     err.value = "";
     try {
-        const res = await invokeBlockAction<{ saved: boolean }>("DeleteEvent", { bag: { id: eventForm.value.id } });
+        const res = await invokeBlockAction<{ saved: boolean }>("ArchiveEvent", { bag: { id: eventForm.value.id } });
         if (!res.isSuccess || !res.data?.saved) {
-            err.value = res.errorMessage || "No se pudo eliminar el evento.";
+            err.value = res.errorMessage || "No se pudo archivar el evento.";
             return;
         }
         backToList();
     } catch {
-        err.value = "Error eliminando el evento.";
+        err.value = "Error archivando el evento.";
     } finally {
         busy.value = false;
     }
@@ -1167,7 +1257,9 @@ function newTicketType(): void {
         sortOrder: ticketTypes.value.length,
         isActive: true,
         sold: 0,
-        questionsJson: null
+        questionsJson: null,
+        registrationWorkflowType: null,
+        checkinWorkflowType: null
     };
     loadTtQuestions(null);
     ensureCatalog();
@@ -1206,7 +1298,7 @@ async function saveTicketType(): Promise<void> {
 
 async function deleteTicketType(): Promise<void> {
     if (!ttForm.value?.id) return;
-    if (!window.confirm("¿Eliminar este tipo de ticket?")) return;
+    if (!(await confirm("¿Eliminar este tipo de ticket?"))) return;
     busy.value = true;
     err.value = "";
     try {
@@ -1288,7 +1380,7 @@ async function savePromoCode(): Promise<void> {
 
 async function deletePromoCode(): Promise<void> {
     if (!pcForm.value?.id) return;
-    if (!window.confirm("¿Eliminar este código?")) return;
+    if (!(await confirm("¿Eliminar este código?"))) return;
     busy.value = true;
     err.value = "";
     try {
@@ -1308,7 +1400,7 @@ async function deletePromoCode(): Promise<void> {
 }
 
 async function duplicateEvent(e: EventListItemBag): Promise<void> {
-    if (!window.confirm(`¿Duplicar "${e.name}"? La copia queda en Borrador con sus tipos de ticket y códigos.`)) return;
+    if (!(await confirm(`¿Duplicar "${e.name}"? La copia queda en Borrador con sus tipos de ticket y códigos.`))) return;
     busy.value = true;
     err.value = "";
     try {
@@ -1417,7 +1509,7 @@ async function toggleStaffFlag(r: EventStaffRowBag, flag: "canScan" | "canViewRe
 }
 
 async function deleteStaff(r: EventStaffRowBag, skipConfirm = false): Promise<void> {
-    if (!skipConfirm && !window.confirm(`¿Quitar el acceso de ${r.personName} a "${r.eventName}"?`)) return;
+    if (!skipConfirm && !(await confirm(`¿Quitar el acceso de ${r.personName} a "${r.eventName}"?`))) return;
     busy.value = true;
     err.value = "";
     try {

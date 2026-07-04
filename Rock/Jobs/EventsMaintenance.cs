@@ -353,6 +353,9 @@ namespace Rock.Jobs
                         ExceptionLogService.LogException( ex );
                     }
 
+                    // La ruta normal del checkout nunca los lanzó (el finalize había fallado).
+                    EventWorkflowService.QueueRegistrationWorkflows( orderId );
+
                     return ReconcileOutcome.Reconciled;
                 }
             }

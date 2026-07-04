@@ -276,7 +276,7 @@ EXEC dbo.sp_SundayServiceHoldUpsert
                         resultCode = -99,
                         holdToken = "",
                         availableAfter = 0,
-                        expiresDateTime = RockDateTime.Now.AddMinutes( holdMinutes ).ToString( "o" )
+                        holdSeconds = holdMinutes * 60
                     } );
                 }
 
@@ -285,7 +285,7 @@ EXEC dbo.sp_SundayServiceHoldUpsert
                     resultCode = row.ResultCode,
                     holdToken = row.HoldToken.HasValue ? row.HoldToken.Value.ToString() : "",
                     availableAfter = row.AvailableAfter,
-                    expiresDateTime = RockDateTime.Now.AddMinutes( holdMinutes ).ToString( "o" )
+                    holdSeconds = holdMinutes * 60
                 } );
             }
         }
@@ -982,9 +982,10 @@ ORDER BY
             public int availableAfter { get; set; }
 
             /// <summary>
-            /// Fecha/hora de expiración del hold en formato ISO.
+            /// Duración del hold en segundos. El cliente cuenta desde su propio reloj
+            /// para evitar problemas de zona horaria entre servidor y dispositivo.
             /// </summary>
-            public string expiresDateTime { get; set; }
+            public int holdSeconds { get; set; }
         }
 
         /// <summary>

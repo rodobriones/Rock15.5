@@ -152,6 +152,7 @@ namespace Rock.Blocks.Eventos
                         checkedIn = t.Status == TicketStatus.CheckedIn,
                         checkedInDateTime = t.CheckedInDateTime,
                         buyerName = t.Order.BuyerPersonAlias.Person.NickName + " " + t.Order.BuyerPersonAlias.Person.LastName,
+                        deliveryEmail = t.Order.DeliveryEmail ?? t.Order.BuyerPersonAlias.Person.Email,
                         orderId = t.OrderId,
                         pricePaid = t.PricePaid,
                         purchasedDateTime = t.Order.CreatedDateTime,
@@ -175,6 +176,9 @@ namespace Rock.Blocks.Eventos
                     foreach ( var row in rows )
                     {
                         row.uniqueCode = null;
+                        // El correo de envío (y su corrección/reenvío) es del mismo nivel de
+                        // confianza que el código: solo para quien puede escanear.
+                        row.deliveryEmail = null;
                     }
                 }
 
@@ -229,8 +233,92 @@ namespace Rock.Blocks.Eventos
                     paidOrderCount = paidOrders.Count(),
                     byType = byType,
                     rows = rows,
-                    questionColumns = questionColumns
+                    questionColumns = questionColumns,
+                    canResend = canScan
                 } );
+            }
+        }
+
+        /// <summary>
+        /// Corrige (opcionalmente) el correo de envío de una orden pagada y reenvía TODAS sus
+        /// entradas. Caso de uso: "no me llegó el correo" porque el comprador lo tecleó mal.
+        /// Requiere el mismo nivel de confianza que escanear (acceso total o CanScan del evento).
+        /// </summary>
+        [BlockAction( "UpdateEmailAndResend" )]
+        public BlockActionResult UpdateEmailAndResend( UpdateEmailRequestBag bag )
+        {
+            var currentPerson = RequestContext?.CurrentPerson;
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "No autenticado." );
+            }
+
+            if ( bag == null || bag.eventId <= 0 || bag.orderId <= 0 )
+            {
+                return ActionBadRequest( "Solicitud inválida." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var canScan = HasFullAccess( currentPerson )
+                    || new EventStaffService( rockContext ).GetAssignedEventIds( currentPerson.Id, forScan: true ).Any( id => id == bag.eventId );
+                if ( !canScan )
+                {
+                    return ActionForbidden( "No tienes permiso para reenviar entradas de este evento." );
+                }
+
+                var order = new OrderService( rockContext ).Get( bag.orderId );
+                if ( order == null || order.EventId != bag.eventId || order.Status != OrderStatus.Paid )
+                {
+                    return ActionBadRequest( "La orden no existe o no está pagada." );
+                }
+
+                // Si viene un correo distinto al DeliveryEmail actual, se corrige la orden: los
+                // reintentos del job (EventsMaintenance) y reenvíos futuros usan este mismo campo.
+                var newEmail = ( bag.newEmail ?? string.Empty ).Trim();
+                var emailChanged = false;
+                if ( newEmail.Length > 0 && !string.Equals( newEmail, order.DeliveryEmail, StringComparison.OrdinalIgnoreCase ) )
+                {
+                    if ( newEmail.Length > 254 || !Rock.Communication.EmailAddressFieldValidator.IsValid( newEmail ) )
+                    {
+                        return ActionBadRequest( "El correo no es válido." );
+                    }
+
+                    order.DeliveryEmail = newEmail;
+                    rockContext.SaveChanges();
+                    emailChanged = true;
+                }
+
+                // Cooldown 2 min por orden (mismo criterio que MyTickets), pero solo cuando NO se
+                // corrigió el correo: un destino nuevo nunca ha recibido nada que "duplicar".
+                if ( !emailChanged )
+                {
+                    var lastSent = new TicketService( rockContext ).Queryable()
+                        .AsNoTracking()
+                        .Where( t => t.OrderId == order.Id && t.EmailSentDateTime.HasValue )
+                        .Max( t => ( DateTime? ) t.EmailSentDateTime );
+                    if ( lastSent.HasValue && lastSent.Value.AddMinutes( 2 ) > RockDateTime.Now )
+                    {
+                        return ActionBadRequest( "Las entradas de esta orden se enviaron hace poco. Corrige el correo o espera un par de minutos." );
+                    }
+                }
+
+                // Síncrono a propósito: el admin quiere confirmación inmediata de que salió.
+                var sent = new TicketEmailService().Send( order.Id, rockContext );
+                if ( !sent )
+                {
+                    return ActionBadRequest( "No se pudo enviar: la orden no tiene entradas vigentes o no hay correo destino." );
+                }
+
+                var effectiveEmail = !string.IsNullOrWhiteSpace( order.DeliveryEmail )
+                    ? order.DeliveryEmail
+                    : new PersonAliasService( rockContext ).Queryable()
+                        .AsNoTracking()
+                        .Where( pa => pa.Id == order.BuyerPersonAliasId )
+                        .Select( pa => pa.Person.Email )
+                        .FirstOrDefault();
+
+                return ActionOk( new UpdateEmailResponseBag { sent = true, deliveryEmail = effectiveEmail } );
             }
         }
 
@@ -382,6 +470,23 @@ namespace Rock.Blocks.Eventos
             public List<AttendeeRowBag> rows { get; set; }
             /// <summary>Unión ordenada de labels de preguntas del evento (columnas del CSV).</summary>
             public List<string> questionColumns { get; set; }
+            /// <summary>El usuario puede corregir el correo de envío y reenviar entradas (= CanScan).</summary>
+            public bool canResend { get; set; }
+        }
+
+        public class UpdateEmailRequestBag
+        {
+            public int eventId { get; set; }
+            public int orderId { get; set; }
+            /// <summary>Correo de envío corregido; vacío/igual = solo reenviar al actual.</summary>
+            public string newEmail { get; set; }
+        }
+
+        public class UpdateEmailResponseBag
+        {
+            public bool sent { get; set; }
+            /// <summary>Correo de envío efectivo de la orden tras la operación.</summary>
+            public string deliveryEmail { get; set; }
         }
 
         public class TypeStatBag
@@ -403,6 +508,8 @@ namespace Rock.Blocks.Eventos
             public bool checkedIn { get; set; }
             public DateTime? checkedInDateTime { get; set; }
             public string buyerName { get; set; }
+            /// <summary>Correo de envío efectivo de la orden (DeliveryEmail ?? perfil del comprador). Solo con CanScan.</summary>
+            public string deliveryEmail { get; set; }
             public int orderId { get; set; }
             public decimal pricePaid { get; set; }
             /// <summary>Fecha/hora de la compra (CreatedDateTime de la orden).</summary>

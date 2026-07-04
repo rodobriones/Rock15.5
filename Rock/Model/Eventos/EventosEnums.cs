@@ -39,7 +39,13 @@ namespace Rock.Enums.Eventos
         /// <summary>
         /// The event has been cancelled.
         /// </summary>
-        Cancelled = 3
+        Cancelled = 3,
+
+        /// <summary>
+        /// The event is archived: hidden from admin/scanner lists by default (report keeps it for
+        /// history). Replaces hard-deleting events; restore by editing the event's status.
+        /// </summary>
+        Archived = 4
     }
 
     /// <summary>

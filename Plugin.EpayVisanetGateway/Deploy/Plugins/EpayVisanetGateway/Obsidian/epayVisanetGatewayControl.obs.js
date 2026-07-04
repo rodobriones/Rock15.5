@@ -23,7 +23,7 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
           var fontLink = document.createElement('link');
           fontLink.id = fontsId;
           fontLink.rel = 'stylesheet';
-          fontLink.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
+          fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@500;600;700&display=swap';
           document.head.appendChild(fontLink);
         }
 
@@ -35,22 +35,26 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
         style.id = styleId;
         style.type = 'text/css';
         style.textContent = [
-          ".epayWrap { --epay-bg:#fff; --epay-border:#d7d7d7; --epay-text:#1f2933; --epay-muted:#6b7280; --epay-danger:#c22016; --epay-radius-xl:22px; --epay-radius-lg:14px; --epay-radius-md:10px; --epay-radius-pill:999px; background:var(--epay-bg); border:1px solid var(--epay-border); border-radius:var(--epay-radius-lg); color:var(--epay-text); font-family:'Plus Jakarta Sans','Segoe UI',sans-serif; padding:14px; position:relative; }",
-          ".epayHeader { margin-bottom:10px; }",
-          ".epayTitle { margin:0; font-family:Manrope,sans-serif; font-size:18px; font-weight:800; color:#222; text-transform:none; }",
-          ".epaySubtitle { margin:4px 0 0; font-size:13px; color:#666; }",
-          ".epayCardPreview { margin:12px 0; border-radius:12px; border:1px solid #cecece; background:#fff; padding:12px 14px; display:grid; gap:4px; transition:all .2s ease; }",
-          ".epayCardPreview.brand-visa { border-color:#bcd2ff; background:linear-gradient(135deg,#eaf1ff,#f4f8ff); }",
-          ".epayCardPreview.brand-mastercard { border-color:#ffd7c2; background:linear-gradient(135deg,#fff1e8,#fff8f3); }",
-          ".epayCardPreview.brand-amex { border-color:#b7effa; background:linear-gradient(135deg,#e8fbff,#f3fdff); }",
-          ".epayCardPreview.brand-discover { border-color:#fed7aa; background:linear-gradient(135deg,#fff4ec,#fff9f4); }",
-          ".epayPreviewBrand { font-family:Manrope,sans-serif; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#505050; }",
-          ".epayPreviewNumber { font-family:Manrope,sans-serif; font-size:18px; font-weight:800; letter-spacing:.04em; color:#1d1d1d; }",
-          ".epayPreviewMeta { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#555; }",
-          ".epayFields { display:grid; gap:10px; }",
-          ".epayRow { display:grid; grid-template-columns:1fr; gap:10px; }",
-          ".epayField { display:grid; gap:6px; }",
-          ".epayField > span { font-family:Manrope,sans-serif; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#4a4a4a; }",
+          /* Paleta slate / Roboto (mismo lenguaje del checkout de eventos). */
+          ".epayWrap { background:#fff; border:1px solid #e2e8f0; border-radius:16px; color:#334155; font-family:'Roboto',Arial,sans-serif; padding:18px; position:relative; -webkit-font-smoothing:antialiased; }",
+          ".epayWrap *, .epayWrap *::before, .epayWrap *::after { box-sizing:border-box; }",
+          ".epayHeader { margin-bottom:14px; }",
+          ".epayTitle { margin:0; font-size:16px; font-weight:700; letter-spacing:-0.01em; color:#0f172a; }",
+          ".epaySubtitle { margin:3px 0 0; font-size:13px; color:#64748b; }",
+          /* Preview = tarjeta oscura (gradiente slate del hero) con chip y numero mono. */
+          ".epayCardPreview { margin:0 0 16px; border-radius:16px; background:linear-gradient(160deg,#334155 0%,#0f172a 100%); padding:18px; display:grid; gap:14px; color:#fff; box-shadow:0 10px 30px rgba(15,23,42,.18); }",
+          ".epayPreviewTop { display:flex; align-items:center; justify-content:space-between; gap:10px; }",
+          ".epayChip { width:38px; height:28px; flex:none; border-radius:6px; background:linear-gradient(135deg,#e2c76f,#c9a24b); position:relative; opacity:.92; }",
+          ".epayChip::after { content:''; position:absolute; top:7px; bottom:7px; left:5px; right:5px; border:1px solid rgba(15,23,42,.35); border-radius:3px; }",
+          ".epayPreviewBrand { font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.75); }",
+          ".epayPreviewNumber { font-family:'Roboto Mono',monospace; font-size:clamp(15px,4.5vw,19px); font-weight:600; letter-spacing:.08em; color:#fff; white-space:nowrap; }",
+          ".epayPreviewMeta { display:flex; justify-content:space-between; gap:8px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.65); }",
+          ".epayPreviewMeta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }",
+          ".epayFields { display:grid; gap:14px; }",
+          /* Vencimiento/CVV lado a lado SIEMPRE (caben en movil y acorta el form). */
+          ".epayRow { display:grid; grid-template-columns:1fr 1fr; gap:12px; }",
+          ".epayField { display:grid; gap:6px; margin:0; }",
+          ".epayField > span, .epayFieldHead > span { font-size:11px; font-weight:500; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; }",
           ".epayFieldHead { display:flex; align-items:center; justify-content:space-between; gap:10px; }",
           ".epayFieldHead > span { margin:0; }",
           ".epayCardBrands { display:inline-flex; align-items:center; gap:5px; }",
@@ -58,34 +62,34 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
           ".epayBrandIcon svg { width:100%; height:100%; display:block; }",
           ".epayBrandIcon.isDimmed { opacity:.32; filter:grayscale(1); }",
           ".epayBrandIcon.isActive { transform:scale(1.08); box-shadow:0 2px 6px rgba(15,23,42,.18); }",
-          ".epayInputWrap { border:1px solid #bfbfbf; border-radius:var(--epay-radius-md); background:#fff; display:flex; align-items:center; gap:8px; padding:0 10px; transition:border-color .2s ease, box-shadow .2s ease; }",
-          ".epayInputWrap:focus-within { border-color:#7b7b7b; box-shadow:0 0 0 3px rgba(51,51,51,.12); }",
-          ".epayInputWrap.isInvalid { border-color:#dc6e66; }",
-          ".epayInput { width:100%; min-height:44px; border:0; background:transparent; padding:0; font-size:14px; color:#1e1e1e; box-shadow:none; outline:none; }",
-          ".epayBrandTag { flex:0 0 auto; border-radius:var(--epay-radius-pill); border:1px solid #bfc6cf; background:#edf1f7; color:#405061; font-family:Manrope,sans-serif; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:4px 7px; }",
+          ".epayInputWrap { border:1px solid #cbd5e1; border-radius:12px; background:#fff; display:flex; align-items:center; gap:8px; padding:0 12px; transition:border-color .2s ease, box-shadow .2s ease; }",
+          ".epayInputWrap:focus-within { border-color:#475569; box-shadow:0 0 0 3px rgba(30,41,59,.08); }",
+          ".epayInputWrap.isInvalid { border-color:#dc2626; }",
+          /* 16px = no auto-zoom en iOS al enfocar. */
+          ".epayInput { width:100%; min-height:48px; border:0; background:transparent; padding:0; font-size:16px; color:#334155; box-shadow:none; outline:none; font-family:inherit; }",
+          ".epayInput::placeholder { color:#94a3b8; }",
+          ".epayBrandTag { flex:0 0 auto; border-radius:999px; border:1px solid #cbd5e1; background:#f1f5f9; color:#475569; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 8px; }",
           ".epayBrandTag.brand-visa { background:#eaf1ff; border-color:#bcd2ff; color:#1e44a8; }",
           ".epayBrandTag.brand-mastercard { background:#fff1e8; border-color:#ffd7c2; color:#9a3412; }",
           ".epayBrandTag.brand-amex { background:#e8fbff; border-color:#b7effa; color:#0f6f88; }",
           ".epayBrandTag.brand-discover { background:#fff4ec; border-color:#fed7aa; color:#c2410c; }",
-          ".epayHint { color:#727272; font-size:12px; }",
-          ".epayError { color:var(--epay-danger); font-size:12px; font-weight:600; min-height:14px; }",
-          ".epayInstallments { border-top:1px solid var(--epay-border); padding-top:12px; margin-top:4px; display:grid; gap:10px; }",
-          ".epayCheckboxLabel { display:flex; align-items:center; gap:8px; font-family:Manrope,sans-serif; font-size:14px; font-weight:700; cursor:pointer; color:#1e1e1e; }",
-          ".epayCheckboxLabel input[type='checkbox'] { width:18px; height:18px; accent-color:#000; cursor:pointer; }",
-          ".epayInstallmentSelect { display:grid; gap:10px; }",
+          ".epayHint { color:#94a3b8; font-size:12px; }",
+          ".epayError { color:#dc2626; font-size:12px; font-weight:500; min-height:14px; }",
+          ".epayInstallments { border-top:1px dashed #cbd5e1; padding-top:14px; margin-top:2px; display:grid; gap:12px; }",
+          /* Toggle de cuotas: fila tipo ecToggleRow con switch (checkbox appearance:none). */
+          ".epayCheckboxLabel { display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; gap:12px; background:#f8fafc; border:1px solid #f1f5f9; border-radius:14px; padding:14px 16px; font-size:14px; font-weight:700; color:#1e293b; cursor:pointer; margin:0; }",
+          ".epayCheckboxLabel input[type='checkbox'] { appearance:none; -webkit-appearance:none; width:46px; height:26px; flex:none; margin:0; border:none; outline:none; border-radius:999px; background:#cbd5e1; position:relative; cursor:pointer; transition:background .2s ease; }",
+          ".epayCheckboxLabel input[type='checkbox']::before { content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.2); transition:transform .2s ease; }",
+          ".epayCheckboxLabel input[type='checkbox']:checked { background:#16a34a; }",
+          ".epayCheckboxLabel input[type='checkbox']:checked::before { transform:translateX(20px); }",
+          ".epayInstallmentSelect { display:grid; gap:12px; }",
+          ".epayWrap [data-el='installmentSelectWrap'] { gap:12px; }",
           ".epayInputWrap select.epayInput { appearance:auto; cursor:pointer; }",
-          ".epaySurchargeInfo { display:flex; justify-content:space-between; align-items:center; background:#fff8e1; border:1px solid #ffe082; border-radius:var(--epay-radius-md); padding:10px 12px; }",
-          ".epaySurchargeLabel { font-size:13px; color:#6d5c00; }",
-          ".epaySurchargeAmount { font-family:Manrope,sans-serif; font-size:14px; font-weight:800; color:#b8860b; }",
-          ".epayStateOverlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; animation:epayFadeIn .3s ease; }",
-          ".epayStateModal { background:#fff; border-radius:var(--epay-radius-xl); padding:34px 24px; width:min(100%,380px); text-align:center; box-shadow:0 24px 48px rgba(0,0,0,.25); animation:epayScaleUp .3s cubic-bezier(.175,.885,.32,1.275); }",
-          ".epayStateTitle { margin:20px 0 8px; font-family:Manrope,sans-serif; font-size:22px; font-weight:800; color:#111; }",
-          ".epayStateText { margin:0; color:#555; font-size:14px; line-height:1.5; }",
-          ".epaySpinner { width:60px; height:60px; margin:0 auto; border:5px solid #eaeaea; border-top-color:#000; border-radius:50%; animation:epaySpin .9s linear infinite; }",
-          "@keyframes epayFadeIn { from { opacity:0; } to { opacity:1; } }",
-          "@keyframes epayScaleUp { from { opacity:0; transform:translateY(16px) scale(.95); } to { opacity:1; transform:translateY(0) scale(1); } }",
-          "@keyframes epaySpin { to { transform:rotate(360deg); } }",
-          "@media (min-width: 600px) { .epayRow { grid-template-columns:1fr 1fr; } }"
+          /* Recargo: colores warning del checkout (ecHoldTimer). */
+          ".epaySurchargeInfo { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px 14px; }",
+          ".epaySurchargeLabel { font-size:13px; color:#92400e; }",
+          ".epaySurchargeAmount { font-family:'Roboto Mono',monospace; font-size:13.5px; font-weight:700; color:#92400e; }",
+          "@media (max-width: 360px) { .epayRow { grid-template-columns:1fr; } }"
         ].join('\n');
 
         document.head.appendChild(style);
@@ -216,7 +220,7 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             "<p class='epaySubtitle'>Complete la informacion de pago segura.</p>" +
           "</div>" +
           "<div class='epayCardPreview brand-unknown' data-el='preview'>" +
-            "<span class='epayPreviewBrand' data-el='previewBrand'>Tarjeta</span>" +
+            "<div class='epayPreviewTop'><span class='epayChip'></span><span class='epayPreviewBrand' data-el='previewBrand'>Tarjeta</span></div>" +
             "<strong class='epayPreviewNumber' data-el='previewNumber'>#### #### #### ####</strong>" +
             "<div class='epayPreviewMeta'><span data-el='previewName'>NOMBRE TITULAR</span><span data-el='previewExp'>MM/YY</span></div>" +
           "</div>" +

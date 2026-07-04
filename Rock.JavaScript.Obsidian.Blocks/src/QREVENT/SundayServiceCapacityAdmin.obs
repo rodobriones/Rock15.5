@@ -1,0 +1,785 @@
+<template>
+    <Panel type="block" title="Cupos Servicios Dominicales" :hasNoBodyPadding="true">
+        <template #default>
+            <div class="caPage">
+                <div class="caTopBar">
+                    <div class="caBrand">Disponibilidad · Servicios Dominicales</div>
+                </div>
+
+                <div class="caContainer">
+                    <NotificationBox v-if="config.notAuthorized" alertType="warning">
+                        No tienes permiso para administrar la disponibilidad.
+                    </NotificationBox>
+
+                    <NotificationBox v-else-if="config.configError" alertType="warning">
+                        {{ config.configError }}
+                    </NotificationBox>
+
+                    <div v-else>
+                        <!-- ===== Zona 1: Contexto ===== -->
+                        <div class="caCard caContext">
+                            <div class="caField">
+                                <label class="caLabel">Sede</label>
+                                <select v-model.number="campusId" class="caSelect">
+                                    <option :value="0" disabled>Selecciona sede…</option>
+                                    <option v-for="c in config.campuses" :key="c.value" :value="c.value">{{ c.text }}</option>
+                                </select>
+                            </div>
+
+                            <div class="caField">
+                                <label class="caLabel">Desde</label>
+                                <input type="date" v-model="startDate" class="caInput" />
+                            </div>
+
+                            <div class="caField">
+                                <label class="caLabel">Hasta</label>
+                                <input type="date" v-model="endDate" class="caInput" />
+                            </div>
+
+                            <div class="caPresets">
+                                <button type="button" class="caChip" @click="applyPreset(28)">4 semanas</button>
+                                <button type="button" class="caChip" @click="applyPreset(91)">3 meses</button>
+                                <button type="button" class="caChip" @click="applyPreset(182)">6 meses</button>
+                            </div>
+                        </div>
+
+                        <div v-if="!campusId" class="caEmpty">
+                            Selecciona una sede para ver y administrar su disponibilidad.
+                        </div>
+
+                        <template v-else>
+                            <!-- ===== Zona 2: Plantilla ===== -->
+                            <div class="caCard">
+                                <div class="caCardTitle">Plantilla de horarios</div>
+                                <div class="caCardSub">
+                                    Define la capacidad de cada horario y aplícala a todas las fechas del rango de arriba.
+                                </div>
+
+                                <div class="caTplRows">
+                                    <div v-for="row in templateRows" :key="row.scheduleId" class="caTplRow" :class="{ isOff: !row.include }">
+                                        <label class="caTplToggle">
+                                            <input type="checkbox" v-model="row.include" />
+                                            <span class="caTplName">{{ row.name }}</span>
+                                            <span class="caTplMeta">{{ row.dayText }}<template v-if="row.timeText"> · {{ row.timeText }}</template></span>
+                                        </label>
+
+                                        <div class="caTplCap">
+                                            <span class="caTplCapLabel">Capacidad</span>
+                                            <input type="number" min="0" step="1" v-model.number="row.capacity" class="caInput caCapInput" :disabled="!row.include" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <label class="caOption">
+                                    <input type="checkbox" v-model="overwriteCapacity" />
+                                    <span>Sobrescribir la capacidad de las fechas que ya existen <span class="caMuted">(nunca por debajo de los lugares ya tomados)</span></span>
+                                </label>
+
+                                <label class="caOption">
+                                    <input type="checkbox" v-model="deactivateOthers" />
+                                    <span>Desactivar horarios del rango que NO estén en esta plantilla <span class="caMuted">(solo si no tienen reservas ni holds)</span></span>
+                                </label>
+
+                                <div class="caPreviewBar">
+                                    <div class="caPreviewText">{{ previewText }}</div>
+                                    <RockButton btnType="primary" @click="generate" :disabled="genBusy || previewTotal === 0">
+                                        {{ genBusy ? "Aplicando…" : "Aplicar plantilla" }}
+                                    </RockButton>
+                                </div>
+
+                                <NotificationBox v-if="genResult" :alertType="genResult.kind" class="caGenResult">
+                                    <div>{{ genResult.summary }}</div>
+                                    <ul v-if="genResult.warnings.length" class="caWarnList">
+                                        <li v-for="(w, i) in genResult.warnings.slice(0, 8)" :key="i">{{ w }}</li>
+                                        <li v-if="genResult.warnings.length > 8">… y {{ genResult.warnings.length - 8 }} advertencias más.</li>
+                                    </ul>
+                                </NotificationBox>
+                            </div>
+
+                            <!-- ===== Zona 3: Disponibilidad actual ===== -->
+                            <div class="caCard">
+                                <div class="caCardTitle">Disponibilidad del rango</div>
+
+                                <div v-if="slotsBusy" class="caMuted caSmall">Cargando…</div>
+                                <div v-else-if="slotsError" class="caGenResult">
+                                    <NotificationBox alertType="danger">{{ slotsError }}</NotificationBox>
+                                </div>
+                                <div v-else-if="days.length === 0" class="caEmpty">
+                                    No hay disponibilidad creada en este rango. Usa la plantilla de arriba para generarla.
+                                </div>
+
+                                <div v-for="d in days" :key="d.occurrenceDate" class="caDay">
+                                    <div class="caDayTitle">{{ d.occurrenceDateText }}</div>
+
+                                    <div v-for="s in d.slots" :key="s.slotId" class="caSlot" :class="{ isInactive: !s.isActive }">
+                                        <div class="caSlotMain">
+                                            <div class="caSlotName">
+                                                {{ s.scheduleName }}
+                                                <span v-if="!s.isActive" class="caBadge caBadgeOff">Inactivo</span>
+                                            </div>
+                                            <div class="caOccBar">
+                                                <div class="caOccFill" :style="{ width: occupancyPercent(s) + '%' }" :class="{ isFull: s.available === 0 }"></div>
+                                            </div>
+                                            <div class="caSlotStats">
+                                                <span>Reservados <b>{{ s.reservedCount }}</b></span>
+                                                <span>Holds <b>{{ s.holdCount }}</b></span>
+                                                <span :class="s.available === 0 ? 'caStatDanger' : 'caStatOk'">Disponibles <b>{{ s.available }}</b></span>
+                                            </div>
+                                        </div>
+
+                                        <div class="caSlotActions">
+                                            <div class="caTplCap">
+                                                <span class="caTplCapLabel">Capacidad</span>
+                                                <input type="number" min="0" step="1" v-model.number="s.draftCapacity" class="caInput caCapInput" :disabled="rowBusy === s.slotId" />
+                                                <button
+                                                    v-if="s.draftCapacity !== s.capacity"
+                                                    type="button"
+                                                    class="caMiniBtn caMiniBtnSave"
+                                                    :disabled="rowBusy === s.slotId"
+                                                    @click="saveCapacity(s)">
+                                                    Guardar
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                class="caMiniBtn"
+                                                :disabled="rowBusy === s.slotId"
+                                                @click="toggleActive(s)">
+                                                {{ s.isActive ? "Desactivar" : "Reactivar" }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Toast -->
+                    <div v-if="toast.show" class="caToast" :class="toast.kind">
+                        {{ toast.message }}
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type OptionBag = { value: number; text: string };
+
+type ScheduleBag = {
+    id: number;
+    name: string;
+    dayOfWeek: number;
+    dayText: string;
+    timeText: string;
+};
+
+type InitBag = {
+    notAuthorized: boolean;
+    configError: string | null;
+    campuses: OptionBag[];
+    schedules: ScheduleBag[];
+    defaultCampusId: number;
+    startDate: string;
+    endDate: string;
+};
+
+type SlotBag = {
+    slotId: number;
+    scheduleId: number;
+    scheduleName: string;
+    capacity: number;
+    reservedCount: number;
+    holdCount: number;
+    available: number;
+    isActive: boolean;
+    draftCapacity: number;
+};
+
+type DaySlotsBag = {
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    slots: SlotBag[];
+};
+
+type TemplateRow = {
+    scheduleId: number;
+    name: string;
+    dayOfWeek: number;
+    dayText: string;
+    timeText: string;
+    include: boolean;
+    capacity: number;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const campusId = ref<number>(config.defaultCampusId || 0);
+const startDate = ref<string>(config.startDate || "");
+const endDate = ref<string>(config.endDate || "");
+
+const templateRows = ref<TemplateRow[]>((config.schedules || []).map(s => ({
+    scheduleId: s.id,
+    name: s.name,
+    dayOfWeek: s.dayOfWeek,
+    dayText: s.dayText,
+    timeText: s.timeText,
+    include: true,
+    capacity: 0
+})));
+
+const overwriteCapacity = ref<boolean>(true);
+const deactivateOthers = ref<boolean>(false);
+
+const days = ref<DaySlotsBag[]>([]);
+const slotsBusy = ref<boolean>(false);
+const slotsError = ref<string>("");
+const genBusy = ref<boolean>(false);
+const rowBusy = ref<number>(0);
+
+const genResult = ref<{ kind: "success" | "warning"; summary: string; warnings: string[] } | null>(null);
+
+const toast = ref<{ show: boolean; kind: "success" | "danger"; message: string }>({ show: false, kind: "success", message: "" });
+let toastTimer: number | null = null;
+
+function showToast(kind: "success" | "danger", message: string): void {
+    toast.value = { show: true, kind, message };
+    if (toastTimer != null) {
+        window.clearTimeout(toastTimer);
+    }
+    toastTimer = window.setTimeout(() => {
+        toast.value.show = false;
+        toastTimer = null;
+    }, 2800);
+}
+
+// ---- Fechas (parseo local, sin sorpresas de zona horaria) ----
+
+function parseIso(d: string): Date | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || "");
+    if (!m) {
+        return null;
+    }
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function toIso(d: Date): string {
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function applyPreset(daysCount: number): void {
+    const start = parseIso(startDate.value) || new Date();
+    startDate.value = toIso(start);
+    const end = new Date(start.getTime());
+    end.setDate(end.getDate() + daysCount);
+    endDate.value = toIso(end);
+}
+
+function countDatesForDow(dow: number, startIso: string, endIso: string): number {
+    if (dow < 0) {
+        return 0;
+    }
+    const start = parseIso(startIso);
+    const end = parseIso(endIso);
+    if (!start || !end || start > end) {
+        return 0;
+    }
+    const offset = (dow - start.getDay() + 7) % 7;
+    const first = new Date(start.getTime());
+    first.setDate(first.getDate() + offset);
+    if (first > end) {
+        return 0;
+    }
+    return 1 + Math.floor((end.getTime() - first.getTime()) / (7 * 86400000));
+}
+
+// ---- Vista previa en vivo ----
+
+const previewTotal = computed<number>(() => {
+    return templateRows.value
+        .filter(r => r.include)
+        .reduce((sum, r) => sum + countDatesForDow(r.dayOfWeek, startDate.value, endDate.value), 0);
+});
+
+const previewText = computed<string>(() => {
+    const included = templateRows.value.filter(r => r.include);
+    if (included.length === 0) {
+        return "Selecciona al menos un horario.";
+    }
+    if (previewTotal.value === 0) {
+        return "El rango de fechas no contiene días de los horarios seleccionados.";
+    }
+    return `Se aplicará a ${previewTotal.value} slots (${included.length} horario${included.length === 1 ? "" : "s"} en el rango).`;
+});
+
+// ---- Carga de slots ----
+
+async function loadSlots(fillTemplate: boolean): Promise<void> {
+    if (!campusId.value || !parseIso(startDate.value) || !parseIso(endDate.value)) {
+        return;
+    }
+
+    slotsBusy.value = true;
+    slotsError.value = "";
+
+    try {
+        const res = await invokeBlockAction<{ days: DaySlotsBag[]; templateCapacities: Record<number, number> }>("GetSlots", {
+            bag: { campusId: campusId.value, startDate: startDate.value, endDate: endDate.value }
+        });
+
+        if (!res.isSuccess || !res.data) {
+            slotsError.value = res.errorMessage || "No se pudo cargar la disponibilidad.";
+            days.value = [];
+            return;
+        }
+
+        days.value = (res.data.days || []).map(d => ({
+            ...d,
+            slots: (d.slots || []).map(s => ({ ...s, draftCapacity: s.capacity }))
+        }));
+
+        if (fillTemplate) {
+            const caps = res.data.templateCapacities || {};
+            for (const row of templateRows.value) {
+                const cap = caps[row.scheduleId];
+                if (typeof cap === "number") {
+                    row.capacity = cap;
+                }
+            }
+        }
+    }
+    catch {
+        slotsError.value = "Error cargando la disponibilidad.";
+        days.value = [];
+    }
+    finally {
+        slotsBusy.value = false;
+    }
+}
+
+watch(campusId, () => {
+    genResult.value = null;
+    void loadSlots(true);
+});
+
+watch([startDate, endDate], () => {
+    void loadSlots(false);
+});
+
+if (campusId.value) {
+    void loadSlots(true);
+}
+
+// ---- Aplicar plantilla ----
+
+async function generate(): Promise<void> {
+    if (genBusy.value || !campusId.value) {
+        return;
+    }
+
+    genResult.value = null;
+    genBusy.value = true;
+
+    try {
+        const res = await invokeBlockAction<{ inserted: number; updated: number; reactivated: number; deactivated: number; skippedLowCapacity: number; warnings: string[] }>("Generate", {
+            bag: {
+                campusId: campusId.value,
+                startDate: startDate.value,
+                endDate: endDate.value,
+                items: templateRows.value.filter(r => r.include).map(r => ({ scheduleId: r.scheduleId, capacity: r.capacity || 0 })),
+                overwriteCapacity: overwriteCapacity.value,
+                deactivateOthers: deactivateOthers.value
+            }
+        });
+
+        if (!res.isSuccess || !res.data) {
+            genResult.value = { kind: "warning", summary: res.errorMessage || "No se pudo aplicar la plantilla.", warnings: [] };
+            return;
+        }
+
+        const d = res.data;
+        const parts: string[] = [];
+        if (d.inserted) parts.push(`${d.inserted} creados`);
+        if (d.updated) parts.push(`${d.updated} actualizados`);
+        if (d.reactivated) parts.push(`${d.reactivated} reactivados`);
+        if (d.deactivated) parts.push(`${d.deactivated} desactivados`);
+        if (d.skippedLowCapacity) parts.push(`${d.skippedLowCapacity} omitidos por lugares ya tomados`);
+
+        const warnings = d.warnings || [];
+        genResult.value = {
+            kind: warnings.length ? "warning" : "success",
+            summary: parts.length ? `Listo: ${parts.join(", ")}.` : "Listo: no había nada que cambiar.",
+            warnings
+        };
+
+        await loadSlots(false);
+    }
+    catch {
+        genResult.value = { kind: "warning", summary: "Error aplicando la plantilla.", warnings: [] };
+    }
+    finally {
+        genBusy.value = false;
+    }
+}
+
+// ---- Edición individual ----
+
+async function saveCapacity(slot: SlotBag): Promise<void> {
+    if (rowBusy.value) {
+        return;
+    }
+
+    const capacity = Number(slot.draftCapacity);
+    if (!Number.isFinite(capacity) || capacity < 0) {
+        showToast("danger", "Capacidad inválida.");
+        slot.draftCapacity = slot.capacity;
+        return;
+    }
+
+    rowBusy.value = slot.slotId;
+    try {
+        const res = await invokeBlockAction<{ resultCode: number; message: string }>("UpdateSlot", {
+            bag: { slotId: slot.slotId, capacity }
+        });
+
+        if (res.isSuccess && res.data?.resultCode === 1) {
+            slot.capacity = capacity;
+            slot.available = Math.max(0, capacity - slot.reservedCount - slot.holdCount);
+            showToast("success", "Capacidad guardada.");
+        }
+        else {
+            slot.draftCapacity = slot.capacity;
+            showToast("danger", res.data?.message || res.errorMessage || "No se pudo guardar.");
+        }
+    }
+    catch {
+        slot.draftCapacity = slot.capacity;
+        showToast("danger", "Error guardando la capacidad.");
+    }
+    finally {
+        rowBusy.value = 0;
+    }
+}
+
+async function toggleActive(slot: SlotBag): Promise<void> {
+    if (rowBusy.value) {
+        return;
+    }
+
+    rowBusy.value = slot.slotId;
+    try {
+        const res = await invokeBlockAction<{ resultCode: number; message: string }>("UpdateSlot", {
+            bag: { slotId: slot.slotId, isActive: !slot.isActive }
+        });
+
+        if (res.isSuccess && res.data?.resultCode === 1) {
+            slot.isActive = !slot.isActive;
+            showToast("success", slot.isActive ? "Horario reactivado." : "Horario desactivado.");
+        }
+        else {
+            showToast("danger", res.data?.message || res.errorMessage || "No se pudo cambiar el estado.");
+        }
+    }
+    catch {
+        showToast("danger", "Error cambiando el estado.");
+    }
+    finally {
+        rowBusy.value = 0;
+    }
+}
+
+function occupancyPercent(slot: SlotBag): number {
+    if (slot.capacity <= 0) {
+        return 0;
+    }
+    return Math.min(100, Math.round(((slot.reservedCount + slot.holdCount) / slot.capacity) * 100));
+}
+
+onBeforeUnmount(() => {
+    if (toastTimer != null) {
+        window.clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+});
+</script>
+
+<style>
+:root {
+    --ca-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    --ca-bg: #F4F6FB;
+    --ca-surface: #FFFFFF;
+    --ca-text: #111827;
+    --ca-muted: #6B7280;
+    --ca-border: rgba(17,24,39,.10);
+    --ca-radius: 14px;
+    --ca-accent: #2563EB;
+    --ca-ok: #10B981;
+    --ca-danger: #EF4444;
+}
+
+.panel-block .panel-heading,
+.panel-block .panel-header { display: none !important; }
+.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; }
+
+.caPage {
+    font-family: var(--ca-font);
+    background: var(--ca-bg);
+    min-height: 100vh;
+    color: var(--ca-text);
+    padding-bottom: 24px;
+}
+
+.caTopBar {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+}
+
+.caBrand { font-weight: 800; font-size: 17px; }
+
+.caContainer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 12px 10px 24px;
+}
+
+.caCard {
+    background: var(--ca-surface);
+    border: 1px solid var(--ca-border);
+    border-radius: var(--ca-radius);
+    box-shadow: 0 6px 18px rgba(17,24,39,.06);
+    padding: 16px;
+    margin-bottom: 14px;
+}
+
+.caCardTitle { font-weight: 900; font-size: 15px; margin-bottom: 2px; }
+.caCardSub { font-size: 12px; color: var(--ca-muted); margin-bottom: 12px; }
+
+/* Contexto */
+.caContext {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+@media (max-width: 720px) {
+    .caContext { grid-template-columns: 1fr 1fr; position: static; }
+}
+
+.caField { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.caLabel { font-size: 11px; font-weight: 800; color: var(--ca-muted); text-transform: uppercase; letter-spacing: .4px; }
+
+.caSelect, .caInput {
+    height: 40px;
+    border: 1px solid var(--ca-border);
+    border-radius: 10px;
+    padding: 0 10px;
+    font-family: var(--ca-font);
+    font-size: 14px;
+    background: var(--ca-surface);
+    color: var(--ca-text);
+    width: 100%;
+}
+
+.caPresets { display: flex; gap: 6px; align-items: center; padding-bottom: 4px; }
+
+.caChip {
+    border: 1px solid var(--ca-border);
+    background: var(--ca-surface);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.caChip:hover { border-color: rgba(37,99,235,.45); color: var(--ca-accent); }
+
+.caEmpty {
+    text-align: center;
+    color: var(--ca-muted);
+    font-size: 13px;
+    padding: 28px 12px;
+}
+
+/* Plantilla */
+.caTplRows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+
+.caTplRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--ca-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+.caTplRow.isOff { opacity: .55; }
+
+.caTplToggle { display: flex; align-items: center; gap: 10px; margin: 0; cursor: pointer; min-width: 0; }
+.caTplToggle input { width: 18px; height: 18px; margin: 0; }
+.caTplName { font-weight: 700; font-size: 14px; }
+.caTplMeta { font-size: 12px; color: var(--ca-muted); white-space: nowrap; }
+
+.caTplCap { display: flex; align-items: center; gap: 8px; }
+.caTplCapLabel { font-size: 11px; font-weight: 800; color: var(--ca-muted); }
+.caCapInput { width: 90px; text-align: center; }
+
+.caOption {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 8px 0 0;
+    cursor: pointer;
+}
+.caOption input { width: 17px; height: 17px; margin-top: 1px; flex-shrink: 0; }
+.caMuted { color: var(--ca-muted); font-weight: 400; }
+.caSmall { font-size: 12px; }
+
+.caPreviewBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 12px;
+    background: rgba(37,99,235,.06);
+    border: 1px solid rgba(37,99,235,.18);
+    border-radius: 10px;
+}
+
+@media (max-width: 576px) {
+    .caPreviewBar { flex-direction: column; align-items: stretch; text-align: center; }
+    .caTplRow { flex-direction: column; align-items: stretch; }
+    .caTplCap { justify-content: space-between; }
+}
+
+.caPreviewText { font-size: 13px; font-weight: 700; }
+
+.caGenResult { margin-top: 12px; }
+.caWarnList { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
+
+/* Disponibilidad */
+.caDay { margin-top: 14px; }
+.caDayTitle {
+    font-weight: 900;
+    font-size: 13px;
+    color: var(--ca-muted);
+    margin-bottom: 8px;
+    text-transform: capitalize;
+    border-bottom: 1px solid rgba(17,24,39,.06);
+    padding-bottom: 6px;
+}
+
+.caSlot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid var(--ca-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.caSlot.isInactive { background: rgba(17,24,39,.03); opacity: .75; }
+
+@media (max-width: 720px) {
+    .caSlot { flex-direction: column; align-items: stretch; }
+    .caSlotActions { justify-content: space-between; }
+}
+
+.caSlotMain { flex: 1; min-width: 0; }
+.caSlotName { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+.caBadge {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.caBadgeOff { background: rgba(239,68,68,.10); color: #B91C1C; border: 1px solid rgba(239,68,68,.25); }
+
+.caOccBar {
+    height: 6px;
+    background: rgba(17,24,39,.08);
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 8px 0 6px;
+    max-width: 340px;
+}
+.caOccFill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--ca-ok), var(--ca-accent));
+    border-radius: 999px;
+    transition: width .3s ease;
+}
+.caOccFill.isFull { background: var(--ca-danger); }
+
+.caSlotStats { display: flex; gap: 14px; font-size: 12px; color: var(--ca-muted); flex-wrap: wrap; }
+.caSlotStats b { color: var(--ca-text); }
+.caStatOk b { color: #047857; }
+.caStatDanger b { color: #B91C1C; }
+
+.caSlotActions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+.caMiniBtn {
+    border: 1px solid var(--ca-border);
+    background: #F3F4F6;
+    color: #374151;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.caMiniBtn:hover:not(:disabled) { background: #E5E7EB; }
+.caMiniBtn:disabled { opacity: .5; cursor: default; }
+.caMiniBtnSave { background: #272B32; border-color: #272B32; color: #fff; }
+.caMiniBtnSave:hover:not(:disabled) { background: #1a1d22; }
+
+/* Botón primario estilo VidaReal */
+.caPage .btn-primary { background-color: #272B32 !important; border-color: #272B32 !important; font-weight: 700; }
+.caPage .btn-primary:hover { background-color: #1a1d22 !important; border-color: #1a1d22 !important; }
+
+/* Toast */
+.caToast {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    max-width: 420px;
+    width: calc(100% - 24px);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 800;
+    background: var(--ca-surface);
+    border: 1px solid var(--ca-border);
+    box-shadow: 0 18px 40px rgba(17,24,39,.18);
+}
+.caToast.success { border-left: 6px solid rgba(16,185,129,.65); }
+.caToast.danger { border-left: 6px solid rgba(239,68,68,.65); }
+</style>

@@ -114,22 +114,58 @@
                                 <th>Compra</th>
                                 <th class="text-right">Orden</th>
                                 <th class="text-right">Precio</th>
+                                <th v-if="report.canResend"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="r in filteredRows" :key="r.ticketId">
-                                <td>{{ r.attendeeName || "— (sin asignar)" }}</td>
-                                <td>{{ r.ticketTypeName }}</td>
-                                <td class="notranslate" style="font-family: monospace;">{{ r.uniqueCode }}</td>
-                                <td>
-                                    <span v-if="r.checkedIn" class="label label-success">✓ {{ fmtDateTime(r.checkedInDateTime) }}</span>
-                                    <span v-else class="label label-default">Pendiente</span>
-                                </td>
-                                <td>{{ r.buyerName }}</td>
-                                <td style="white-space:nowrap;">{{ r.purchasedDateTime ? fmtDateTime(r.purchasedDateTime) : "—" }}</td>
-                                <td class="text-right">#{{ r.orderId }}</td>
-                                <td class="text-right">{{ fmtCurrency(r.pricePaid) }}</td>
-                            </tr>
+                            <template v-for="r in filteredRows" :key="r.ticketId">
+                                <tr>
+                                    <td>{{ r.attendeeName || "— (sin asignar)" }}</td>
+                                    <td>{{ r.ticketTypeName }}</td>
+                                    <td class="notranslate" style="font-family: monospace;">{{ r.uniqueCode }}</td>
+                                    <td>
+                                        <span v-if="r.checkedIn" class="label label-success">✓ {{ fmtDateTime(r.checkedInDateTime) }}</span>
+                                        <span v-else class="label label-default">Pendiente</span>
+                                    </td>
+                                    <td>
+                                        {{ r.buyerName }}
+                                        <div v-if="report.canResend && r.deliveryEmail" class="text-muted" style="font-size:11px;">{{ r.deliveryEmail }}</div>
+                                    </td>
+                                    <td style="white-space:nowrap;">{{ r.purchasedDateTime ? fmtDateTime(r.purchasedDateTime) : "—" }}</td>
+                                    <td class="text-right">#{{ r.orderId }}</td>
+                                    <td class="text-right">{{ fmtCurrency(r.pricePaid) }}</td>
+                                    <td v-if="report.canResend" class="text-center" style="white-space:nowrap;">
+                                        <button type="button" class="btn btn-xs btn-default" title="Corregir correo y reenviar entradas"
+                                                @click="openEmailEdit(r)">
+                                            <i class="fa fa-envelope"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr v-if="emailEdit && emailEdit.ticketId === r.ticketId">
+                                    <td colspan="9" style="background:#f8fafc;">
+                                        <div class="d-flex align-items-end" style="gap:8px; flex-wrap:wrap;">
+                                            <div style="width:320px;">
+                                                <TextBox v-model="emailEdit.email" label="Correo de envío" type="email" />
+                                            </div>
+                                            <div style="padding-bottom:15px;">
+                                                <RockButton btnType="primary" btnSize="sm" :disabled="emailEdit.busy || !emailEdit.email.trim()" @click="resendOrderEmail">
+                                                    {{ emailEdit.busy ? "Enviando..." : "Guardar y reenviar" }}
+                                                </RockButton>
+                                                <RockButton btnType="default" btnSize="sm" :disabled="emailEdit.busy" @click="emailEdit = null">
+                                                    Cerrar
+                                                </RockButton>
+                                            </div>
+                                        </div>
+                                        <div class="text-muted" style="font-size:12px;">
+                                            Se reenviarán <strong>todas</strong> las entradas de la orden #{{ emailEdit.orderId }} a este correo.
+                                            Si lo corriges, los reintentos automáticos también usarán el correo nuevo.
+                                        </div>
+                                        <div v-if="emailEdit.msg" :class="emailEdit.ok ? 'text-success' : 'text-danger'" style="font-size:12px; margin-top:4px;">
+                                            {{ emailEdit.msg }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                 </div>
@@ -164,6 +200,7 @@ type AttendeeRowBag = {
     ticketId: number; attendeeName: string | null; ticketTypeId: number; ticketTypeName: string; uniqueCode: string;
     checkedIn: boolean; checkedInDateTime: string | null; buyerName: string; orderId: number; pricePaid: number;
     purchasedDateTime?: string | null;
+    deliveryEmail?: string | null;
     answers?: Record<string, string> | null;
 };
 type ReportBag = {
@@ -171,6 +208,7 @@ type ReportBag = {
     soldCount: number; checkedInCount: number; attendancePct: number; revenue: number; paidOrderCount: number;
     byType: TypeStatBag[]; rows: AttendeeRowBag[];
     questionColumns?: string[] | null;
+    canResend?: boolean;
 };
 type InitBag = { notLogged: boolean; canView: boolean; events: EventOptionBag[] };
 
@@ -189,7 +227,7 @@ const checkinFilterOptions: ListItemBag[] = [
     { value: "pending", text: "Pendientes" }
 ];
 
-const statusEs: Record<string, string> = { Draft: "Borrador", Published: "Publicado", Closed: "Cerrado", Cancelled: "Cancelado" };
+const statusEs: Record<string, string> = { Draft: "Borrador", Published: "Publicado", Closed: "Cerrado", Cancelled: "Cancelado", Archived: "Archivado" };
 
 // Selector agrupado: "Próximos" arriba, luego los pasados por año (con 200+ eventos al año
 // el dropdown plano era inmanejable; enhanceForLongLists agrega el buscador).
@@ -231,12 +269,53 @@ const filteredRows = computed<AttendeeRowBag[]>(() => {
     });
 });
 
+// Editor inline "corregir correo y reenviar": anclado al ticket clickeado, opera sobre la ORDEN.
+const emailEdit = ref<{ orderId: number; ticketId: number; email: string; busy: boolean; msg: string; ok: boolean } | null>(null);
+
+function openEmailEdit(r: AttendeeRowBag): void {
+    emailEdit.value = { orderId: r.orderId, ticketId: r.ticketId, email: r.deliveryEmail ?? "", busy: false, msg: "", ok: false };
+}
+
+async function resendOrderEmail(): Promise<void> {
+    const e = emailEdit.value;
+    if (!e || !report.value) {
+        return;
+    }
+    e.busy = true;
+    e.msg = "";
+    try {
+        const res = await invokeBlockAction<{ sent: boolean; deliveryEmail: string | null }>("UpdateEmailAndResend",
+            { bag: { eventId: Number(selectedEventId.value), orderId: e.orderId, newEmail: e.email.trim() } });
+        if (res.isSuccess && res.data?.sent) {
+            for (const r of report.value.rows) {
+                if (r.orderId === e.orderId) {
+                    r.deliveryEmail = res.data.deliveryEmail;
+                }
+            }
+            e.ok = true;
+            e.msg = "Entradas reenviadas.";
+        }
+        else {
+            e.ok = false;
+            e.msg = res.errorMessage || "No se pudo reenviar.";
+        }
+    }
+    catch {
+        e.ok = false;
+        e.msg = "Error reenviando las entradas.";
+    }
+    finally {
+        e.busy = false;
+    }
+}
+
 async function loadReport(): Promise<void> {
     if (!selectedEventId.value) {
         return;
     }
     busy.value = true;
     err.value = "";
+    emailEdit.value = null;
     try {
         const res = await invokeBlockAction<ReportBag>("GetReport", { bag: { eventId: Number(selectedEventId.value) } });
         if (res.isSuccess && res.data) {

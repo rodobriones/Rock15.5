@@ -99,6 +99,10 @@ namespace Rock.Blocks.Eventos
             public int visibility { get; set; }
             public string accessPassword { get; set; }
             public List<SessionRowBag> sessions { get; set; }
+            /// <summary>Workflow lanzado por cada ticket al quedar pagada la orden (value = Guid del WorkflowType).</summary>
+            public ListItemBag registrationWorkflowType { get; set; }
+            /// <summary>Workflow lanzado al hacer check-in de un ticket del evento.</summary>
+            public ListItemBag checkinWorkflowType { get; set; }
         }
 
         /// <summary>
@@ -136,6 +140,10 @@ namespace Rock.Blocks.Eventos
             public bool isActive { get; set; }
             public int sold { get; set; }
             public string questionsJson { get; set; }
+            /// <summary>Workflow lanzado por cada ticket de este tipo al quedar pagada la orden.</summary>
+            public ListItemBag registrationWorkflowType { get; set; }
+            /// <summary>Workflow lanzado al hacer check-in de un ticket de este tipo.</summary>
+            public ListItemBag checkinWorkflowType { get; set; }
         }
 
         public class QuestionCatalogItemBag

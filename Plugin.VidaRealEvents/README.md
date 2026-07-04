@@ -58,7 +58,8 @@ SELECT MigrationNumber, MigrationName FROM [PluginMigration] WHERE PluginAssembl
 |---|---------|----------|
 | 018 | `018_EventSessions.cs` | Columna `Event.SessionsJson`: agenda de sesiones para eventos de varios días/horarios (JSON `[{Date,Start,End,Label}]`). Null = evento de un solo bloque. |
 | 019 | `019_OrderDeliveryEmail.cs` | Columna `Order.DeliveryEmail`: correo al que se envían las entradas (elegido en el paso de pago; null = perfil del comprador). |
-| 020 | `020_EventVisibilityAndCalendar.cs` | Columnas `Event.Visibility` (0=Público/1=Privado/2=Con contraseña) + `Event.AccessPassword`; BlockType **Event Calendar** + página pública `eventos/calendario`; cablea "Checkout Page" del calendario y "Calendar Page" del checkout (botón "Volver al inicio"). La próxima migración debe ser la 21+. |
+| 020 | `020_EventVisibilityAndCalendar.cs` | Columnas `Event.Visibility` (0=Público/1=Privado/2=Con contraseña) + `Event.AccessPassword`; BlockType **Event Calendar** + página pública `eventos/calendario`; cablea "Checkout Page" del calendario y "Calendar Page" del checkout (botón "Volver al inicio"). |
+| 021 | `021_EventWorkflows.cs` | Workflow launcher: columnas `RegistrationWorkflowTypeId` + `CheckinWorkflowTypeId` en `Event` Y `TicketType` (INT **sin FK** a propósito: un WorkflowType borrado solo deja de lanzarse). Inscripción = orden pagada (se lanza por ticket); check-in = ingreso Ok. El estado "Archivado" del evento es solo enum (sin SQL). **La próxima migración debe ser la 22+.** |
 
 ## Modelo de permisos (desde 011–013)
 

@@ -283,6 +283,10 @@ namespace Rock.Blocks.Eventos
                 ev.Visibility = visibility;
                 ev.AccessPassword = visibility == EventVisibility.Password ? bag.accessPassword.Trim() : null;
 
+                // Workflows configurables (el picker manda el Guid del WorkflowType; se guarda el Id).
+                ev.RegistrationWorkflowTypeId = GetWorkflowTypeId( bag.registrationWorkflowType );
+                ev.CheckinWorkflowTypeId = GetWorkflowTypeId( bag.checkinWorkflowType );
+
                 // Imagen del evento (BinaryFile). El uploader manda un ListItemBag con el Guid del archivo.
                 var imageGuid = bag.image?.Value.AsGuidOrNull();
                 if ( imageGuid.HasValue )
@@ -317,10 +321,12 @@ namespace Rock.Blocks.Eventos
         }
 
         /// <summary>
-        /// Deletes an event (only if it has no orders/tickets sold).
+        /// Archives an event (replaces hard-delete: history, orders and tickets stay intact).
+        /// Archived events disappear from the admin list and the scanner by default; restore
+        /// by editing the event and changing its status.
         /// </summary>
-        [BlockAction( "DeleteEvent" )]
-        public BlockActionResult DeleteEvent( IdRequestBag bag )
+        [BlockAction( "ArchiveEvent" )]
+        public BlockActionResult ArchiveEvent( IdRequestBag bag )
         {
             if ( !CanEdit() )
             {
@@ -334,35 +340,13 @@ namespace Rock.Blocks.Eventos
 
             using ( var rockContext = new RockContext() )
             {
-                var service = new EventService( rockContext );
-                var ev = service.Get( bag.id );
+                var ev = new EventService( rockContext ).Get( bag.id );
                 if ( ev == null )
                 {
                     return ActionNotFound( "Evento no encontrado." );
                 }
 
-                var hasOrders = new OrderService( rockContext ).Queryable().Any( o => o.EventId == ev.Id );
-                if ( hasOrders )
-                {
-                    return ActionBadRequest( "No se puede eliminar un evento que ya tiene órdenes. Cámbialo a Cancelado." );
-                }
-
-                // Remove dependent ticket types and promo codes first (no cascade configured).
-                var ticketTypeService = new TicketTypeService( rockContext );
-                var ticketTypes = ticketTypeService.Queryable().Where( t => t.EventId == ev.Id ).ToList();
-                ticketTypeService.DeleteRange( ticketTypes );
-
-                var promoCodeService = new PromoCodeService( rockContext );
-                var promoCodes = promoCodeService.Queryable().Where( p => p.EventId == ev.Id ).ToList();
-                promoCodeService.DeleteRange( promoCodes );
-
-                // EventStaff también es hijo sin cascade (FK ON DELETE NO ACTION): sin esto, borrar un
-                // evento con staff asignado revienta el SaveChanges por violación de FK.
-                var eventStaffService = new EventStaffService( rockContext );
-                var eventStaff = eventStaffService.Queryable().Where( s => s.EventId == ev.Id ).ToList();
-                eventStaffService.DeleteRange( eventStaff );
-
-                service.Delete( ev );
+                ev.Status = EventStatus.Archived;
                 rockContext.SaveChanges();
 
                 return ActionOk( new SavedResponseBag { saved = true } );
@@ -431,6 +415,8 @@ namespace Rock.Blocks.Eventos
                 tt.MaxPerOrder = bag.maxPerOrder;
                 tt.SortOrder = bag.sortOrder;
                 tt.IsActive = bag.isActive;
+                tt.RegistrationWorkflowTypeId = GetWorkflowTypeId( bag.registrationWorkflowType );
+                tt.CheckinWorkflowTypeId = GetWorkflowTypeId( bag.checkinWorkflowType );
 
                 // Config de preguntas: se normaliza server-side (solo básicos conocidos y
                 // atributos que existan en el catálogo; lo demás se descarta).
@@ -685,7 +671,9 @@ namespace Rock.Blocks.Eventos
                     Category = source.Category,
                     SessionsJson = source.SessionsJson,
                     Visibility = source.Visibility,
-                    AccessPassword = source.AccessPassword
+                    AccessPassword = source.AccessPassword,
+                    RegistrationWorkflowTypeId = source.RegistrationWorkflowTypeId,
+                    CheckinWorkflowTypeId = source.CheckinWorkflowTypeId
                 };
                 new EventService( rockContext ).Add( copy );
                 rockContext.SaveChanges();
@@ -708,7 +696,9 @@ namespace Rock.Blocks.Eventos
                         MaxPerOrder = t.MaxPerOrder,
                         SortOrder = t.SortOrder,
                         IsActive = t.IsActive,
-                        QuestionsJson = t.QuestionsJson
+                        QuestionsJson = t.QuestionsJson,
+                        RegistrationWorkflowTypeId = t.RegistrationWorkflowTypeId,
+                        CheckinWorkflowTypeId = t.CheckinWorkflowTypeId
                     } );
                 }
 
@@ -953,7 +943,9 @@ namespace Rock.Blocks.Eventos
                 sortOrder = t.SortOrder,
                 isActive = t.IsActive,
                 sold = soldByType.ContainsKey( t.Id ) ? soldByType[t.Id] : 0,
-                questionsJson = t.QuestionsJson
+                questionsJson = t.QuestionsJson,
+                registrationWorkflowType = BuildWorkflowTypeItem( t.RegistrationWorkflowTypeId ),
+                checkinWorkflowType = BuildWorkflowTypeItem( t.CheckinWorkflowTypeId )
             } ).ToList();
 
             var promoCodes = new PromoCodeService( rockContext )
@@ -1004,7 +996,9 @@ namespace Rock.Blocks.Eventos
                     accessPassword = ev.AccessPassword,
                     sessions = EventSessionService.Parse( ev.SessionsJson )
                         .Select( s => new SessionRowBag { date = s.Date, start = s.Start, end = s.End, label = s.Label } )
-                        .ToList()
+                        .ToList(),
+                    registrationWorkflowType = BuildWorkflowTypeItem( ev.RegistrationWorkflowTypeId ),
+                    checkinWorkflowType = BuildWorkflowTypeItem( ev.CheckinWorkflowTypeId )
                 },
                 ticketTypes = ticketTypeBags,
                 promoCodes = promoCodes,
@@ -1025,6 +1019,27 @@ namespace Rock.Blocks.Eventos
                 new OptionBag { value = "1", text = "Privado (solo con enlace)" },
                 new OptionBag { value = "2", text = "Con contraseña (enlace + contraseña)" }
             };
+        }
+
+        /// <summary>
+        /// Resuelve el ListItemBag del WorkflowTypePicker (Guid) al Id persistido. Null si no hay
+        /// selección o el WorkflowType ya no existe.
+        /// </summary>
+        private static int? GetWorkflowTypeId( Rock.ViewModels.Utility.ListItemBag bag )
+        {
+            var guid = bag?.Value.AsGuidOrNull();
+            return guid.HasValue ? Rock.Web.Cache.WorkflowTypeCache.Get( guid.Value )?.Id : null;
+        }
+
+        /// <summary>
+        /// Arma el ListItemBag (value = Guid, text = nombre) para precargar el WorkflowTypePicker.
+        /// </summary>
+        private static Rock.ViewModels.Utility.ListItemBag BuildWorkflowTypeItem( int? workflowTypeId )
+        {
+            var workflowType = workflowTypeId.HasValue ? Rock.Web.Cache.WorkflowTypeCache.Get( workflowTypeId.Value ) : null;
+            return workflowType == null
+                ? null
+                : new Rock.ViewModels.Utility.ListItemBag { Value = workflowType.Guid.ToString(), Text = workflowType.Name };
         }
 
         private static List<OptionBag> GetEnumOptions<TEnum>() where TEnum : struct, Enum

@@ -7,7 +7,7 @@ Este repositorio es un **fork de [SparkDevNetwork/Rock](https://github.com/Spark
 - **Upstream original:** https://github.com/SparkDevNetwork/Rock/tree/hotfix-18.1
 - **Rama de trabajo:** `hotfix-18.1`
 - **Inicio de personalizaciones:** commit `ca2ca0ec94` — "Bloques nuevos" (10 de febrero de 2026)
-- **Ultimo commit de VidaReal:** `7fc618ef10` — "Up to Date, translate, eventos, odoo" (22 de junio de 2026); el módulo Eventos/Boletería (2026-06-29 → 07-02) está en working tree, pendiente de commit
+- **Ultimo commit de VidaReal:** `7602e9bbef` — "Update Eventos" (3 de julio de 2026); los cambios del módulo Eventos/Boletería del 2026-07-03/04 (multi-sesión, calendario público, visibilidad, workflow launcher, archivado, reenvío admin) están en working tree, pendientes de commit
 - **Desarrolladores:** Equipo IT VidaReal (rodobriones)
 
 ---
@@ -23,7 +23,7 @@ Este repositorio es un **fork de [SparkDevNetwork/Rock](https://github.com/Spark
 | **Seguridad / Autenticacion** | Flujos de login, AccountEntry, ConfirmAccount, ForgotUserName — todos traducidos al español y con UI adaptada a VidaReal.tv. Bloque nuevo: VRSimpleRegistration (registro simplificado post-passwordless) |
 | **WhatsApp Transport** | Transporte de comunicacion nuevo via WhatsApp Business Cloud API (Meta) |
 | **Plugins de pasarela** | `Plugin.CybersourceInlineRestGateway` — gateway Cybersource como plugin Rock independiente; `Plugin.EpayVisanetGateway` — gateway ePay Visanet Guatemala via SOAP |
-| **Eventos/Boletería custom** | Producto propio de boletería end-to-end (NO reusa `Registration*`): esquema `_com_vidareal_Events_*`, 6 bloques Obsidian (admin, checkout con pago/FEL, mis entradas, scanner, reportería, catálogo de preguntas), permisos por-usuario, migraciones en `Plugin.VidaRealEvents`. Arquitectura hexagonal: lógica en `Rock/Model/Eventos/Services/`. Ver `Rock/Model/Eventos/ARCHITECTURE.md` |
+| **Eventos/Boletería custom** | Producto propio de boletería end-to-end (NO reusa `Registration*`): esquema `_com_vidareal_Events_*`, 7 bloques Obsidian (admin, checkout con pago/FEL, mis entradas, scanner, reportería, catálogo de preguntas, calendario público), permisos por-usuario, multi-sesión, visibilidad (público/privado/contraseña), workflow launcher por evento/boleto, archivado, migraciones 001–021 en `Plugin.VidaRealEvents`. Arquitectura hexagonal: lógica en `Rock/Model/Eventos/Services/`. Ver `Rock/Model/Eventos/ARCHITECTURE.md` |
 | **Temas / UI** | Tema `VidAventuracheckin` para check-in infantil con animaciones (balloons.js, confetti, sonidos) |
 | **Internacionalización (i18n)** | Textos en español en bloques de Security, Event/RegistrationEntry, Crm/FamilyPreRegistration |
 | **CheckIn Core** | Modificaciones menores a bloques CheckIn de Rock (Admin.ascx, ActionSelect, MultiPersonSelect, etc.) |
@@ -100,14 +100,14 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 - `Plugin.EpayVisanetGateway/` — Gateway ePay Visanet (Guatemala) via SOAP
 - `Plugin.OdooEventSale/` — **NUEVO (sin commit)**. Workflow action `PostEventSaleToOdoo` que factura inscripciones pagadas en Odoo (orden + factura FEL certificada en SAT + pago) via `POST /api/event/sell`. Lee `Nit`/`WantsInvoice` de atributos del workflow (pre-poblados por `RegistrationEntry`). Incluye `CONTEXT.md` y `README.md`.
 
-### Modulo Eventos/Boletería custom (2026-06-29 → 07-02, sin commit)
+### Modulo Eventos/Boletería custom (2026-06-29 → 07-04; commit `7602e9bbef` + working tree)
 - `Rock/Model/Eventos/` — 7 entidades (`Event`, `TicketType`, `Order`, `Ticket`, `PromoCode`, `CheckinLog`, `EventStaff`) + `ARCHITECTURE.md` (mapa de capas — leer primero)
-- `Rock/Model/Eventos/Services/` — núcleo de aplicación y adaptadores: `CheckoutService`, `HoldService`, `PricingService`, `CheckoutAttendeeService`, `AttendeeQuestionService`, `CheckinService`, `PaymentService`, `FelService`, `NitLookupService`, `QrService`, `TicketEmailService`, `TicketPdfService`
-- `Rock/Jobs/EventsMaintenance.cs` — job de conciliación (holds expirados + órdenes Charging recuperables)
-- `Rock.Blocks/Eventos/` — 6 bloques adaptadores: `EventAdmin` (+`EventAdminBags`), `EventCheckout`, `MyTickets`, `TicketScanner`, `EventReport`, `QuestionCatalog`
+- `Rock/Model/Eventos/Services/` — núcleo de aplicación y adaptadores: `CheckoutService`, `HoldService`, `PricingService`, `CheckoutAttendeeService`, `AttendeeQuestionService`, `CheckinService`, `EventAccessService`, `EventSessionService`, `EventWorkflowService`, `EventsRuntime`, `PaymentService`, `FelService`, `NitLookupService`, `QrService`, `TicketEmailService`, `TicketPdfService`
+- `Rock/Jobs/EventsMaintenance.cs` — job de conciliación (holds expirados + órdenes Charging recuperables + reintento FEL/correo)
+- `Rock.Blocks/Eventos/` — 7 bloques adaptadores: `EventAdmin` (+`EventAdminBags`), `EventCheckout`, `MyTickets`, `TicketScanner`, `EventReport`, `QuestionCatalog`, `EventCalendar`
 - `Rock.ViewModels/Blocks/Eventos/` — bags del checkout
-- `Rock.JavaScript.Obsidian.Blocks/src/Eventos/` — 6 `.obs` + `EventCheckout/*.partial.*` (shell + estado compartido + 5 pasos; ver su `README.md`)
-- `Plugin.VidaRealEvents/` — proyecto de solo migraciones (`com.vidareal.Events`, 001–017; ver su `README.md`)
+- `Rock.JavaScript.Obsidian.Blocks/src/Eventos/` — 7 `.obs` + `EventCheckout/*.partial.*` (shell + estado compartido + 5 pasos; ver su `README.md`)
+- `Plugin.VidaRealEvents/` — proyecto de solo migraciones (`com.vidareal.Events`, 001–021; ver su `README.md`)
 - `docs/eventos-custom/RESEARCH_Y_PLAN.md` — doc maestro (historial §9.x) · `docs/eventos-custom/SMOKE_TESTS.md` — runbook de pruebas runtime
 
 ### Modulo WhatsApp

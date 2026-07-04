@@ -158,6 +158,21 @@ namespace Rock.Model
         [DataMember]
         public string SessionsJson { get; set; }
 
+        /// <summary>
+        /// Gets or sets the identifier of the <see cref="Rock.Model.WorkflowType"/> launched for
+        /// every ticket of this event when its order is paid (registration confirmed).
+        /// Plain id on purpose (no FK/navigation): a deleted workflow type simply stops launching.
+        /// </summary>
+        [DataMember]
+        public int? RegistrationWorkflowTypeId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the identifier of the <see cref="Rock.Model.WorkflowType"/> launched when
+        /// a ticket of this event is checked in at the door.
+        /// </summary>
+        [DataMember]
+        public int? CheckinWorkflowTypeId { get; set; }
+
         #endregion
 
         #region Navigation Properties

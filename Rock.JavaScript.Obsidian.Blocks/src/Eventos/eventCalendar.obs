@@ -1,54 +1,97 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
-<!-- Calendario público de eventos: lista agrupada por mes, tarjetas con enlace al checkout.
-     Solo lectura: todo viene en el init bag (los eventos privados/con contraseña ya vienen
-     filtrados por EventAccessService en el servidor). -->
+<!-- Calendario público de eventos: hero + navegación por mes (chips ‹ ›) + grid de tarjetas
+     con enlace al checkout. Solo lectura: todo viene en el init bag (los eventos privados/con
+     contraseña ya vienen filtrados por EventAccessService en el servidor). Un mes visible a la
+     vez; la navegación salta solo entre meses que tienen eventos. -->
 <template>
     <Panel type="block" title="Eventos • Calendario">
         <template #default>
             <div class="evcWrap">
-                <header class="evcHead">
-                    <h1 class="evcTitle">Calendario de Eventos</h1>
-                    <p class="evcSub">Próximos eventos con venta de entradas.</p>
-                </header>
+                <div class="evcPage">
 
-                <div v-if="!months.length" class="evcEmpty">
-                    <div class="evcEmptyIcon">📅</div>
-                    <h3>No hay eventos próximos</h3>
-                    <p>Cuando se publique un evento con venta de entradas, aparecerá aquí.</p>
-                </div>
+                    <!-- Hero (banda slate, mismo lenguaje del checkout) -->
+                    <header class="evcHero">
+                        <div class="evcHeroInner">
+                            <h1 class="evcTitle">Calendario de Eventos</h1>
+                            <p class="evcSub">Próximos eventos con venta de entradas.</p>
+                        </div>
+                    </header>
 
-                <section v-for="m in months" :key="m.key" class="evcMonth">
-                    <h2 class="evcMonthName">{{ m.label }}</h2>
-                    <div class="evcGrid">
-                        <a v-for="e in m.events" :key="e.eventId" class="evcCard" :href="eventUrl(e)">
-                            <div class="evcHero" :class="{ 'evcHero--noimg': !e.imageUrl }"
-                                 :style="e.imageUrl ? { backgroundImage: `url('${e.imageUrl}')` } : {}">
-                                <div class="evcHeroShade"></div>
-                                <span v-if="e.category" class="evcBadge" :class="'evcBadge--' + e.category.toLowerCase()">{{ e.category }}</span>
-                                <div class="evcHeroInner">
-                                    <span class="evcDate evcCap">{{ fmtDate(e.startDateTime) }}</span>
-                                    <h3 class="evcName">{{ e.name }}</h3>
-                                    <span v-if="e.venueName || e.campusName" class="evcVenue">{{ [e.venueName, e.campusName].filter(Boolean).join(" · ") }}</span>
+                    <div class="evcContainer">
+
+                        <!-- Sin eventos futuros -->
+                        <div v-if="!months.length" class="evcEmpty">
+                            <div class="evcEmptyIcon">📅</div>
+                            <h3>No hay eventos próximos</h3>
+                            <p>Cuando se publique un evento con venta de entradas, aparecerá aquí.</p>
+                        </div>
+
+                        <template v-else>
+                            <!-- Barra de meses flotante (card sobre el hero) -->
+                            <nav class="evcMonthBar" aria-label="Meses con eventos">
+                                <button type="button" class="evcNavBtn"
+                                        :disabled="selectedIndex === 0"
+                                        aria-label="Mes anterior"
+                                        @click="selectedIndex--">‹</button>
+                                <div class="evcChips" ref="chipsEl">
+                                    <button v-for="(m, i) in months" :key="m.key"
+                                            type="button"
+                                            class="evcChip"
+                                            :class="{ isActive: i === selectedIndex }"
+                                            @click="selectedIndex = i">
+                                        <span class="evcCap">{{ m.label }}</span>
+                                        <span class="evcChipCount">{{ m.events.length }}</span>
+                                    </button>
                                 </div>
-                            </div>
-                            <div class="evcBody">
-                                <ul v-if="e.sessions?.length" class="evcSessions">
-                                    <li v-for="s in e.sessions.slice(0, 3)" :key="s">{{ s }}</li>
-                                    <li v-if="e.sessions.length > 3" class="evcSessionsMore">+{{ e.sessions.length - 3 }} sesiones más</li>
-                                </ul>
-                                <p v-if="e.description" class="evcDesc">{{ e.description }}</p>
-                                <span class="evcCta">Ver entradas →</span>
-                            </div>
-                        </a>
+                                <button type="button" class="evcNavBtn"
+                                        :disabled="selectedIndex === months.length - 1"
+                                        aria-label="Mes siguiente"
+                                        @click="selectedIndex++">›</button>
+                            </nav>
+
+                            <!-- Mes seleccionado -->
+                            <section v-if="current" class="evcMonth">
+                                <h2 class="evcMonthName">
+                                    <span class="evcCap">{{ current.label }}</span>
+                                    <span class="evcMonthCount">{{ current.events.length }} {{ current.events.length === 1 ? "evento" : "eventos" }}</span>
+                                </h2>
+                                <div class="evcGrid">
+                                    <a v-for="e in current.events" :key="e.eventId" class="evcCard" :href="eventUrl(e)">
+                                        <div class="evcCardHero" :class="{ 'evcCardHero--noimg': !e.imageUrl }"
+                                             :style="e.imageUrl ? { backgroundImage: `url('${e.imageUrl}')` } : {}">
+                                            <div class="evcHeroShade"></div>
+                                            <span v-if="e.category" class="evcBadge" :class="'evcBadge--' + e.category.toLowerCase()">{{ e.category }}</span>
+                                            <div class="evcDay">
+                                                <span class="evcDayNum">{{ dayNum(e.startDateTime) }}</span>
+                                                <span class="evcDayMon">{{ monAbbr(e.startDateTime) }}</span>
+                                            </div>
+                                            <div class="evcCardHeroInner">
+                                                <span class="evcDate evcCap">{{ fmtDate(e.startDateTime) }}</span>
+                                                <h3 class="evcName">{{ e.name }}</h3>
+                                                <span v-if="e.venueName || e.campusName" class="evcVenue">{{ [e.venueName, e.campusName].filter(Boolean).join(" · ") }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="evcBody">
+                                            <ul v-if="e.sessions?.length" class="evcSessions">
+                                                <li v-for="s in e.sessions.slice(0, 3)" :key="s">{{ s }}</li>
+                                                <li v-if="e.sessions.length > 3" class="evcSessionsMore">+{{ e.sessions.length - 3 }} sesiones más</li>
+                                            </ul>
+                                            <p v-if="e.description" class="evcDesc">{{ e.description }}</p>
+                                            <span class="evcCta">Ver entradas <span class="evcCtaArrow">→</span></span>
+                                        </div>
+                                    </a>
+                                </div>
+                            </section>
+                        </template>
                     </div>
-                </section>
+                </div>
             </div>
         </template>
     </Panel>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel.obs";
 import { useConfigurationValues } from "@Obsidian/Utility/block";
 
@@ -83,13 +126,23 @@ const months = computed<MonthGroup[]>(() => {
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         let g = groups.get(key);
         if (!g) {
-            const label = d.toLocaleDateString("es-GT", { month: "long", year: "numeric" });
-            g = { key, label: label.charAt(0).toUpperCase() + label.slice(1), events: [] };
+            g = { key, label: d.toLocaleDateString("es-GT", { month: "long", year: "numeric" }), events: [] };
             groups.set(key, g);
         }
         g.events.push(e);
     }
     return Array.from(groups.values());
+});
+
+// Navegación: solo entre meses con eventos (el ‹ › salta meses vacíos a propósito).
+const selectedIndex = ref(0);
+const current = computed<MonthGroup | undefined>(() => months.value[selectedIndex.value]);
+const chipsEl = ref<HTMLElement | null>(null);
+
+// Mantiene el chip activo a la vista cuando hay muchos meses (fila con scroll).
+watch(selectedIndex, async () => {
+    await nextTick();
+    chipsEl.value?.querySelector(".isActive")?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 });
 
 function fmtDate(iso: string): string {
@@ -98,6 +151,16 @@ function fmtDate(iso: string): string {
     return d.toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long" })
         + " · "
         + d.toLocaleTimeString("es-GT", { hour: "numeric", minute: "2-digit" });
+}
+
+function dayNum(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : String(d.getDate());
+}
+
+function monAbbr(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-GT", { month: "short" }).replace(".", "");
 }
 
 // URL al checkout: por slug si el evento tiene (URL bonita), si no por EventId.
@@ -127,30 +190,109 @@ function eventUrl(e: CalendarEventBag): string {
 .panel-block:has(.evcWrap) > .panel-body { padding: 0 !important; }
 
 .evcWrap {
-    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
-    color: #1e293b;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 28px 16px 60px;
+    --bg-main: #f5f7fa;
+    --surface-card: #ffffff;
+    --surface-mid: #f8fafc;
+    --surface-alt: #f1f5f9;
+    --primary-900: #1e293b;
+    --primary-800: #334155;
+    --primary-700: #475569;
+    --primary-500: #64748b;
+    --primary-300: #94a3b8;
+    --primary-200: #cbd5e1;
+
+    font-family: "Roboto", Arial, sans-serif;
+    color: var(--primary-800);
+    -webkit-font-smoothing: antialiased;
 }
+.evcWrap *,
+.evcWrap *::before,
+.evcWrap *::after { box-sizing: border-box; }
 .evcCap::first-letter { text-transform: uppercase; }
 
-.evcHead { margin-bottom: 24px; }
-.evcTitle { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; }
-.evcSub { margin: 4px 0 0; color: #64748b; font-size: 15px; }
-
-.evcEmpty {
-    text-align: center; padding: 60px 20px; background: #f8fafc;
-    border: 1px dashed #cbd5e1; border-radius: 18px; color: #64748b;
+/* ---------- Página full-bleed sobre fondo slate (como ecPage) ---------- */
+.evcPage {
+    background: var(--bg-main);
+    margin: 0 -15px;
+    padding-bottom: 64px;
+    min-height: 70vh;
 }
-.evcEmptyIcon { font-size: 40px; margin-bottom: 8px; }
-.evcEmpty h3 { margin: 0 0 4px; color: #334155; }
-.evcEmpty p { margin: 0; font-size: 14px; }
 
-.evcMonth { margin-bottom: 34px; }
+/* ---------- Hero ---------- */
+.evcHero {
+    background: linear-gradient(160deg, var(--primary-800) 0%, #0f172a 100%);
+    padding: clamp(36px, 6vh, 64px) 0 72px;
+}
+.evcHeroInner {
+    max-width: 1160px; margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 24px);
+}
+.evcTitle {
+    margin: 0;
+    font-size: clamp(28px, 4.4vw, 44px);
+    font-weight: 700; letter-spacing: -0.02em; line-height: 1.05;
+    color: #fff;
+}
+.evcSub { margin: 8px 0 0; color: rgba(255,255,255,0.72); font-size: 15px; }
+
+.evcContainer {
+    max-width: 1160px; margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 24px);
+}
+
+/* ---------- Barra de meses (card flotante sobre el hero, como ecCard) ---------- */
+.evcMonthBar {
+    position: relative; margin-top: -36px;
+    background: var(--surface-card);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px;
+}
+.evcNavBtn {
+    width: 36px; height: 36px; flex: none;
+    border-radius: 10px; border: 1px solid var(--primary-200); background: #fff;
+    color: var(--primary-700); font-size: 18px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s ease, border-color .15s ease;
+}
+.evcNavBtn:hover:not(:disabled) { background: var(--surface-mid); border-color: var(--primary-300); }
+.evcNavBtn:disabled { opacity: .4; cursor: default; }
+
+.evcChips {
+    display: flex; gap: 8px; flex: 1; min-width: 0;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    padding: 2px;
+}
+.evcChips::-webkit-scrollbar { display: none; }
+.evcChip {
+    flex: none; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
+    padding: 8px 14px; border-radius: 999px;
+    font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+    white-space: nowrap;
+}
+.evcChip:hover:not(.isActive) { background: var(--surface-mid); border-color: var(--primary-300); }
+.evcChip.isActive { background: var(--primary-900); border-color: var(--primary-900); color: #fff; }
+.evcChipCount {
+    font-family: "Roboto Mono", monospace; font-size: 11px; font-weight: 700;
+    background: var(--surface-alt); color: var(--primary-500);
+    padding: 2px 7px; border-radius: 999px;
+}
+.evcChip.isActive .evcChipCount { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* ---------- Mes seleccionado ---------- */
+.evcMonth { margin-top: 28px; }
 .evcMonthName {
+    display: flex; align-items: baseline; gap: 10px;
     font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-    color: #94a3b8; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+    color: var(--primary-300); margin: 0 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.evcMonthCount {
+    font-family: "Roboto Mono", monospace; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.06em; color: var(--primary-300);
 }
 
 .evcGrid {
@@ -158,19 +300,20 @@ function eventUrl(e: CalendarEventBag): string {
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
+/* ---------- Tarjeta de evento ---------- */
 .evcCard {
     display: flex; flex-direction: column;
-    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px;
+    background: var(--surface-card); border: 1px solid #e2e8f0; border-radius: 18px;
     overflow: hidden; text-decoration: none !important; color: inherit;
     transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 .evcCard:hover { box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12); transform: translateY(-2px); }
 
-.evcHero {
+.evcCardHero {
     position: relative; height: 160px;
     background-size: cover; background-position: center;
 }
-.evcHero--noimg { background: linear-gradient(160deg, #334155 0%, #0f172a 100%); }
+.evcCardHero--noimg { background: linear-gradient(160deg, var(--primary-800) 0%, #0f172a 100%); }
 .evcHeroShade {
     position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(15,23,42,0.08) 0%, rgba(15,23,42,0.45) 55%, rgba(15,23,42,0.85) 100%);
@@ -179,26 +322,57 @@ function eventUrl(e: CalendarEventBag): string {
     position: absolute; top: 12px; left: 12px;
     color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; padding: 5px 11px; border-radius: 999px;
-    background: #475569;
+    background: var(--primary-700);
 }
 .evcBadge--conferencia { background: oklch(58% 0.10 255); }
 .evcBadge--concierto   { background: oklch(58% 0.13 350); }
 .evcBadge--deportivo   { background: oklch(58% 0.11 155); }
 .evcBadge--familiar    { background: oklch(62% 0.12 60); }
 
-.evcHeroInner { position: absolute; left: 14px; right: 14px; bottom: 12px; color: #fff; }
+/* Cubo de fecha (día grande + mes) arriba a la derecha del hero */
+.evcDay {
+    position: absolute; top: 12px; right: 12px;
+    width: 46px; padding: 6px 0 5px;
+    background: rgba(255,255,255,0.95); border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; line-height: 1.1;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.18);
+}
+.evcDayNum { font-family: "Roboto Mono", monospace; font-size: 17px; font-weight: 700; color: var(--primary-900); }
+.evcDayMon { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-500); }
+
+.evcCardHeroInner { position: absolute; left: 14px; right: 14px; bottom: 12px; color: #fff; }
 .evcDate { display: block; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.92); }
 .evcName { margin: 2px 0 0; font-size: 19px; font-weight: 800; line-height: 1.15; color: #fff; }
 .evcVenue { display: block; font-size: 12px; color: rgba(255,255,255,0.78); margin-top: 2px; }
 
 .evcBody { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 16px; flex: 1; }
-.evcSessions { list-style: none; margin: 0; padding: 0; font-size: 12.5px; color: #475569; }
-.evcSessions li::before { content: "•"; margin-right: 6px; color: #94a3b8; }
-.evcSessions .evcSessionsMore { color: #94a3b8; }
+.evcSessions { list-style: none; margin: 0; padding: 0; font-size: 12.5px; color: var(--primary-700); }
+.evcSessions li::before { content: "•"; margin-right: 6px; color: var(--primary-300); }
+.evcSessions .evcSessionsMore { color: var(--primary-300); }
 .evcDesc {
-    margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;
+    margin: 0; font-size: 13px; color: var(--primary-500); line-height: 1.5;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.evcCta { margin-top: auto; font-size: 13.5px; font-weight: 700; color: #0f172a; }
+.evcCta { margin-top: auto; font-size: 13.5px; font-weight: 700; color: var(--primary-900); }
+.evcCtaArrow { display: inline-block; transition: transform .15s ease; }
 .evcCard:hover .evcCta { text-decoration: underline; }
+.evcCard:hover .evcCtaArrow { transform: translateX(3px); }
+
+/* ---------- Vacío ---------- */
+.evcEmpty {
+    position: relative; margin-top: -36px;
+    text-align: center; padding: 60px 20px;
+    background: var(--surface-card); border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+    color: var(--primary-500);
+}
+.evcEmptyIcon { font-size: 40px; margin-bottom: 8px; }
+.evcEmpty h3 { margin: 0 0 4px; color: var(--primary-800); }
+.evcEmpty p { margin: 0; font-size: 14px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 720px) {
+    .evcPage { margin: 0; }
+    .evcGrid { grid-template-columns: 1fr; }
+}
 </style>

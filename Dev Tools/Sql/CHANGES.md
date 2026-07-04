@@ -7,10 +7,19 @@ Los scripts con prefijo `QREVENT_` o `SundayService_` son especificos de VidaRea
 
 ## QREVENT_SundayService_Hardening.sql
 
+> **v2 — APLICADO a `Rock_Nueva` el 2026-07-04.** Fuente canonica de los 5 SPs.
+> Cambios v2: data fix de contadores antes de validar; se agregan
+> `sp_SundayServiceReservationConfirm` y `sp_SundayServiceCleanupExpiredHolds`;
+> orden de locks unificado Slot-primero en todos los SPs (evita deadlocks ABBA);
+> Cancel recalcula ReservedCount en vez de decrementar con piso en 0;
+> Cleanup reporta el rowcount real del DELETE. Smoke test completo (hold,
+> confirm, reemplazo, doble-activa bloqueada, CK bloqueando drift, sin cupo,
+> cleanup, cancel) ejecutado OK el 2026-07-04.
+
 ### Descripcion
 
 Script de endurecimiento (hardening) de la base de datos para el modulo de **Registro de Servicio Dominical** (`SundayServiceRegistration`).
-Agrega restricciones de integridad (CHECK constraints) e indices unicos a las tablas `SundayServiceSlot`, `SundayServiceHold` y `SundayServiceReservation`, y crea o reemplaza tres procedimientos almacenados que manejan el flujo de reservaciones.
+Agrega restricciones de integridad (CHECK constraints) e indices unicos a las tablas `SundayServiceSlot`, `SundayServiceHold` y `SundayServiceReservation`, y crea o reemplaza los cinco procedimientos almacenados que manejan el flujo de reservaciones.
 
 ---
 
@@ -99,3 +108,25 @@ Antes de ejecutar el script, verificar que:
 El bloque que llama a estos procedures es:
 - Backend: `Rock.Blocks/QREVENT/SundayServiceRegistration.cs`
 - Frontend: `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceRegistration.obs`
+
+---
+
+## QREVENT_SundayService_StoredProcedures_DB.sql
+
+### Descripcion
+
+**Snapshot verbatim (2026-07-04) de los stored procedures tal como existen en la BD real** (`Rock_Nueva`), extraidos con `OBJECT_DEFINITION()`. Este archivo es la fuente de verdad de lo que corre en la base de datos; el unico cambio aplicado fue `CREATE PROCEDURE` -> `CREATE OR ALTER PROCEDURE`.
+
+Incluye los 5 SPs: `sp_SundayServiceHoldUpsert`, `sp_SundayServiceReservationConfirm` (el SP de confirmacion real, que NO estaba versionado en el repo), `sp_SundayServiceReservationCancel`, `sp_SundayServiceCleanupExpiredHolds` y `sp_SundayService_ConfirmFromHold` (legacy).
+
+### Limpieza de holds expirados
+
+La ejecuta el **ServiceJob de Rock Id=122 "Limpiar Hold reservas"** (`Rock.Jobs.RunSQL`, cron `0 */5 * * * ?`), que corre `EXEC dbo.sp_SundayServiceCleanupExpiredHolds` cada 5 minutos. El job fue creado manualmente en la BD (no hay migracion).
+
+### Advertencia: divergencia con el Hardening script (RESUELTA)
+
+Al momento del snapshot (2026-07-04, antes del hardening v2), `QREVENT_SundayService_Hardening.sql` NO estaba aplicado en la BD: faltaban las CHECK constraints y el indice unico filtrado `UX_SundayServiceReservation_ActivePerson`, y las versiones en BD de `HoldUpsert`, `Cancel` y `ConfirmFromHold` diferian de las versionadas.
+
+**El mismo dia se aplico el hardening v2**, que reemplazo estos SPs. Este snapshot queda solo como registro historico de lo que corria antes. La fuente canonica actual es `QREVENT_SundayService_Hardening.sql`.
+
+Indices unicos que ya existian en la BD (ademas de los del hardening): `UX_SundayServiceHold_SlotPerson (SlotId, PersonId)` y `UX_SundayServiceReservation_Code (ReservationCode)`.
