@@ -36,13 +36,13 @@
                             <div class="cyGrid">
                                 <label class="cyField">
                                     <span>• Nombre</span>
-                                    <input class="cyInput" type="text" required
+                                    <input class="cyInput" type="text" required maxlength="50"
                                            v-model.trim="firstName" :disabled="isSubmitting" autocomplete="given-name" />
                                 </label>
 
                                 <label class="cyField">
                                     <span>• Apellido</span>
-                                    <input class="cyInput" type="text" required
+                                    <input class="cyInput" type="text" required maxlength="50"
                                            v-model.trim="lastName" :disabled="isSubmitting" autocomplete="family-name" />
                                 </label>
 
@@ -156,6 +156,7 @@
 
     interface VRRegisterResponseBag {
         isSuccess: boolean;
+        isExistingAccount?: boolean;
         redirectUrl?: string | null;
         errorMessage?: string | null;
     }
@@ -204,6 +205,16 @@
 
             if (!result?.isSuccess || !result.data) {
                 errorMessage.value = result?.errorMessage ?? "Ocurrió un error inesperado.";
+                return;
+            }
+
+            if (result.data.isExistingAccount) {
+                currentStep.value = "conflict";
+                return;
+            }
+
+            if (!result.data.isSuccess) {
+                errorMessage.value = result.data.errorMessage ?? "Ocurrió un error inesperado.";
                 return;
             }
 

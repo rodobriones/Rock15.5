@@ -31,6 +31,18 @@
 ## Notes
 - Existing build warnings remain non-blocking (Browserslist + sourcemap warnings from `@zxing/browser`).
 
+## 2026-07-06 — Filtro de programas/steps por seguridad (fix)
+
+El bloque filtra qué Step Programs y Step Types puede ver/marcar el usuario, vía `PersonInAllowedRoles` en `CelebremosQrCheckIn.cs`. Historia del bug: filtraba por acción `View` + solo `GroupId`, pero en producción las reglas reales de la tabla `Auth` son acción `ManageSteps` con **personas individuales** (PersonAliasId) y roles en `View` — encontraba 0 reglas y todos veían todo (el "All Users" del candado View es el default heredado, no una fila explícita).
+
+Lógica final:
+1. **Bypass total** para miembros de `RSR_Rock_Administration` (`SystemGuid.Group.GROUP_ADMINISTRATORS`): ven todos los programas/steps.
+2. Si no: se leen las reglas **explícitas Allow** de las acciones **`ManageSteps` ∪ `View`** del entity — matchean reglas por persona (`AuthRule.PersonId`) o por Security Role (`RoleCache`); las reglas especiales (`SpecialRole ≠ 0`, p. ej. All Users) se ignoran siempre.
+3. `Authorization.AuthRules` **no hereda**: si el StepType no tiene reglas propias se cae a las del StepProgram.
+4. Sin reglas explícitas en toda la cadena → **NO visible** (default deny): los programas core de Rock sin configurar no se cuelan; solo los ve RSR_Rock_Administration.
+
+Gotchas de Rock: `RoleCache.Get(groupId)` devuelve `null` si el grupo no es Security Role (y solo cuenta miembros **activos**). Para diagnosticar, consultar `Auth` filtrando `EntityType` = `Rock.Model.StepProgram`/`Rock.Model.StepType` — no fiarse del candado de la UI, que mezcla reglas heredadas.
+
 ## Prompt for Claude
 "Audit the Rock18 migration of `QREVENT/CelebremosQrCheckIn` and confirm:
 1) backend type migration (`RockBlockType`) is correct,

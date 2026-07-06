@@ -484,7 +484,13 @@ async function backToList() {
 }
 
 
+let cameraStarting = false;
+
 async function startScan() {
+    // Guard de re-entrada: dos startScan solapados (prompt de permisos abierto +
+    // tap en el botón) obtienen dos streams y fugan el primero.
+    if (cameraStarting) return;
+
     err.value = "";
 
     if (!videoRef.value) {
@@ -497,17 +503,38 @@ async function startScan() {
         return;
     }
 
+    cameraStarting = true;
+
     try {
         await stopScanInternal(true);
 
         const constraints: MediaStreamConstraints = {
-            video: { facingMode: { ideal: "environment" } },
+            // 720p basta para QR: sin cap los teléfonos entregan FHD/4K y ZXing
+            // decodifica cada frame completo — lentísimo en móvil.
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         };
 
         stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // El <video> pudo desmontarse con el prompt de permisos abierto: apagar el
+        // stream o la cámara queda encendida sin referencia.
+        if (!videoRef.value) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+            return;
+        }
+
         videoRef.value.srcObject = stream;
         await videoRef.value.play();
+
+        // iOS mata el track al cambiar de app; el watchdog no lo ve (frame congelado
+        // sigue dando NotFound). Apagar limpio para que el operador reinicie.
+        stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+            if (!scanning.value) return;
+            err.value = "La cámara se detuvo. Vuelve a iniciarla.";
+            void stopScan();
+        });
 
         scanning.value = true;
         setBanner("", "Escaneando…", "", "");
@@ -515,8 +542,12 @@ async function startScan() {
         const mod = await getZxingModule();
         zxingReader = new mod.BrowserQRCodeReader();
 
-        scanLoopZXing();
+        void startDecodeSession();
+        startDecodeWatchdog();
     } catch (e: any) {
+        // Liberar el stream ya asignado (falla en play()/carga de zxing dejaba la
+        // cámara encendida bajo el overlay "Cámara apagada").
+        await stopScanInternal(true);
         const msg = String(e?.name || e?.message || "");
         if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
             err.value = "Permiso de cámara denegado. Actívalo en el navegador y vuelve a intentar.";
@@ -527,61 +558,87 @@ async function startScan() {
         }
         scanning.value = false;
     }
+    finally {
+        cameraStarting = false;
+    }
 }
 
-function scanLoopZXing() {
-    if (!scanning.value || !videoRef.value || !zxingReader) return;
+// Sesión de escaneo CONTINUA (patrón §9.38 de Eventos): UNA llamada a
+// decodeFromVideoElement — el vendor reusa un solo canvas y mete 500 ms entre
+// intentos/éxitos. El ciclo viejo de decodeOnce hot-loopeaba en los descartes y
+// cualquier rechazo raro lo mataba para siempre. El hold del modal se respeta
+// vía scanHoldUntil (ya no se apaga/enciende `scanning`).
+let scanControls: any = null;
+let lastDecodeTickAt = 0;
+let decodeWatchdog: number | null = null;
+let startingSession = false;
 
-    zxingReader.decodeOnceFromVideoElement(videoRef.value)
-        .then(async (result: any) => {
+async function startDecodeSession(): Promise<void> {
+    if (!scanning.value || !videoRef.value || !zxingReader || startingSession) return;
+
+    startingSession = true;
+    try { scanControls?.stop(); } catch { }
+    scanControls = null;
+    lastDecodeTickAt = Date.now();
+
+    try {
+        const controlsPromise = zxingReader.decodeFromVideoElement(videoRef.value, (result: any) => {
+            lastDecodeTickAt = Date.now(); // latido: también en NotFound/errores
+
+            if (!scanning.value || !result) return;
+
             const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
-
-            if (!raw) {
-                if (scanning.value) scanLoopZXing();
-                return;
-            }
-
             const now = Date.now();
 
-// si hay hold activo (ej: modal visible), ignorar lectura
-if (now < scanHoldUntil) {
-    if (scanning.value) scanLoopZXing();
-    return;
-}
+            if (!raw || now < scanHoldUntil || now - lastScanAt < scanCooldownMs || busy.value) return;
 
-if (now - lastScanAt < scanCooldownMs) {
-    if (scanning.value) scanLoopZXing();
-    return;
-}
-
-lastScanAt = now;
-
-
+            lastScanAt = now;
             try { navigator.vibrate?.(35); } catch { }
 
-            scanning.value = false;
-await submitQrCode(raw);
-
-// Activa hold por el mismo tiempo del modal
-scanHoldUntil = Date.now() + postResultHoldMs;
-
-// Espera ese tiempo antes de reanudar
-await sleep(postResultHoldMs);
-
-scanning.value = true;
-if (scanning.value) scanLoopZXing();
-
-        })
-        .catch((e: any) => {
-            const msg = String(e?.name || e?.message || e || "");
-            if (msg.toLowerCase().includes("notfound")) {
-                if (scanning.value) scanLoopZXing();
-                return;
-            }
-
-            err.value = "Error leyendo QR. Intenta reiniciar la cámara.";
-            scanning.value = false;
+            // Fire-and-forget: la red nunca detiene la cámara; el hold del modal
+            // se fija al terminar el submit (misma semántica que antes).
+            void submitQrCode(raw).then(() => {
+                scanHoldUntil = Date.now() + postResultHoldMs;
+            });
         });
+
+        // El gate interno del vendor tiene una rama que nunca resuelve ni rechaza:
+        // no esperarlo para siempre; si no arranca en 7 s el watchdog reintenta.
+        const controls = await Promise.race([
+            controlsPromise,
+            new Promise<null>(resolve => window.setTimeout(() => resolve(null), 7000))
+        ]);
+
+        if (controls) {
+            scanControls = controls;
+        }
+        else {
+            controlsPromise.then((c: any) => { try { c?.stop(); } catch { } }).catch(() => { });
+        }
+    } catch { /* el watchdog reintenta */ }
+    finally {
+        startingSession = false;
+    }
+}
+
+// Watchdog de latido: sin tick >4 s (error fatal, gate colgado, track suspendido
+// al bloquear pantalla) → play() + reinicio de sesión.
+function startDecodeWatchdog(): void {
+    stopDecodeWatchdog();
+    decodeWatchdog = window.setInterval(() => {
+        if (!scanning.value || startingSession) return;
+        if (Date.now() - lastDecodeTickAt > 4000) {
+            try { videoRef.value?.play?.(); } catch { }
+            void startDecodeSession();
+        }
+    }, 2000);
+}
+
+function stopDecodeWatchdog(): void {
+    if (decodeWatchdog) {
+        window.clearInterval(decodeWatchdog);
+        decodeWatchdog = null;
+    }
 }
 
 async function stopScan() {
@@ -590,6 +647,13 @@ async function stopScan() {
 
 async function stopScanInternal(keepState: boolean) {
     zxingReader = null;
+    stopDecodeWatchdog();
+    try { scanControls?.stop(); } catch { }
+    scanControls = null;
+
+    // Detener también desde la variable `stream`: si el <video> se desmontó, los
+    // tracks vía srcObject son inalcanzables y la cámara quedaría encendida.
+    try { stream?.getTracks?.().forEach((t: any) => t.stop()); } catch { }
 
     try {
         if (videoRef.value) {
@@ -625,7 +689,11 @@ async function submitQrCode(code: string) {
 
     try {
         const bag = { eventId: Number(selectedEventId.value), code: c };
-        const res = await invokeBlockAction<any>("ProcessQr", { bag });
+        // Timeout propio: un POST estancado dejaría busy=true para siempre.
+        const res = await Promise.race([
+            invokeBlockAction<any>("ProcessQr", { bag }),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15000))
+        ]);
 
         if (!res.isSuccess || !res.data) {
             setBanner("error", res.errorMessage || "Error al validar", "", c);

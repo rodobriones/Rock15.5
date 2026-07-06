@@ -22,6 +22,7 @@ using System.Linq;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Security;
 using Rock.Security.Authentication;
 using Rock.Security.Authentication.Passwordless;
 using Rock.Utility;
@@ -110,6 +111,7 @@ namespace Rock.Blocks.Security
         public class VRRegisterResponseBag
         {
             public bool IsSuccess { get; set; }
+            public bool IsExistingAccount { get; set; }
             public string RedirectUrl { get; set; }
             public string ErrorMessage { get; set; }
         }
@@ -149,11 +151,15 @@ namespace Rock.Blocks.Security
                 var countryCodes = new List<string> { "+502", "+503", "+1" };
                 var defaultCode = "+502";
 
+                // El state trae el teléfono en E.164 ("+50255551234"); separarlo
+                // para mostrar el código de país real y solo el número local.
+                var statePhone = SplitPhone( state.PhoneNumber, defaultCode.Replace( "+", "" ) );
+
                 var box = new VRSimpleRegistrationInitBox
                 {
                     Email = state.Email,
-                    PhoneNumber = state.PhoneNumber,
-                    PhoneCountryCode = state.PhoneNumber.IsNotNullOrWhiteSpace() ? defaultCode : null,
+                    PhoneNumber = state.PhoneNumber.IsNotNullOrWhiteSpace() ? statePhone.Number : null,
+                    PhoneCountryCode = state.PhoneNumber.IsNotNullOrWhiteSpace() ? "+" + statePhone.CountryCode : null,
                     CountryCodes = countryCodes,
                     DefaultCountryCode = defaultCode,
                     State = stateString,
@@ -181,6 +187,17 @@ namespace Rock.Blocks.Security
                 return ActionBadRequest( "Solicitud invalida." );
             }
 
+            if ( bag.FirstName.IsNullOrWhiteSpace() || bag.LastName.IsNullOrWhiteSpace() )
+            {
+                return ActionBadRequest( "Nombre y apellido son requeridos." );
+            }
+
+            // Person.FirstName/LastName son nvarchar(50); sin este guard EF lanza excepción (500).
+            if ( bag.FirstName.Trim().Length > 50 || bag.LastName.Trim().Length > 50 )
+            {
+                return ActionBadRequest( "Nombre o apellido demasiado largo (máximo 50 caracteres)." );
+            }
+
             using ( var rockContext = new RockContext() )
             {
                 var state = PasswordlessAuthentication.GetDecryptedAuthenticationState( bag.State ?? "" );
@@ -197,9 +214,40 @@ namespace Rock.Blocks.Security
                     return ActionBadRequest( "La sesion de autenticacion ya no es valida." );
                 }
 
-                var email = state.Email.IsNotNullOrWhiteSpace() ? state.Email : ( bag.Email ?? "" ).Trim();
-                var phone = state.PhoneNumber.IsNotNullOrWhiteSpace() ? state.PhoneNumber : ( bag.PhoneNumber ?? "" ).Trim();
+                var isEmailVerified = state.Email.IsNotNullOrWhiteSpace();
+                var isPhoneVerified = state.PhoneNumber.IsNotNullOrWhiteSpace();
+                var email = isEmailVerified ? state.Email : ( bag.Email ?? "" ).Trim();
+                var phone = isPhoneVerified ? state.PhoneNumber : ( bag.PhoneNumber ?? "" ).Trim();
                 var cCode = ( bag.PhoneCountryCode ?? "502" ).Replace( "+", "" );
+
+                // Validar server-side lo que vino del formulario (lo del state ya fue verificado por OTP).
+                if ( !isEmailVerified && email.IsNotNullOrWhiteSpace() && !email.IsValidEmail() )
+                {
+                    return ActionBadRequest( "Correo electrónico inválido." );
+                }
+
+                if ( !isPhoneVerified && phone.IsNotNullOrWhiteSpace() )
+                {
+                    var phoneDigits = new string( phone.Where( char.IsDigit ).ToArray() );
+                    if ( phoneDigits.Length < 7 || phoneDigits.Length > 15 )
+                    {
+                        return ActionBadRequest( "Número de teléfono inválido." );
+                    }
+                }
+
+                // Si el UserLogin passwordless ya existe (doble submit o cuenta previa),
+                // no crear una persona huérfana: UserLoginService.Create lanzaría excepción.
+                var uniqueIdentifier = state.UniqueIdentifier.IsNotNullOrWhiteSpace() ? state.UniqueIdentifier : email;
+                var username = PasswordlessAuthentication.GetUsername( uniqueIdentifier );
+                if ( new UserLoginService( rockContext ).GetByUserName( username ) != null )
+                {
+                    return ActionOk( new VRRegisterResponseBag
+                    {
+                        IsSuccess = false,
+                        IsExistingAccount = true,
+                        ErrorMessage = "Ya existe una cuenta con esta información. Por favor inicia sesión."
+                    } );
+                }
 
                 var person = new Person
                 {
@@ -208,7 +256,7 @@ namespace Rock.Blocks.Security
                     Email = email,
                     IsEmailActive = email.IsNotNullOrWhiteSpace(),
                     EmailPreference = EmailPreference.EmailAllowed,
-                    Gender = (Gender) bag.Gender,
+                    Gender = bag.Gender == 1 || bag.Gender == 2 ? ( Gender ) bag.Gender : Gender.Unknown,
                     RecordTypeValueId = DefinedValueCache.GetId(
                         Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ),
                     ConnectionStatusValueId = DefinedValueCache.GetId(
@@ -230,17 +278,19 @@ namespace Rock.Blocks.Security
                     var mobileType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE.AsGuid() );
                     if ( mobileType != null )
                     {
-                        person.UpdatePhoneNumber( mobileType.Id, cCode, phone, true, false, rockContext );
+                        // El teléfono del state llega en E.164 ("+50255551234"); quitar el
+                        // prefijo para no guardar el código de país duplicado en Number.
+                        var split = SplitPhone( phone, cCode );
+                        person.UpdatePhoneNumber( mobileType.Id, split.CountryCode, split.Number, true, false, rockContext );
                     }
                 }
 
-                var uniqueIdentifier = state.UniqueIdentifier.IsNotNullOrWhiteSpace() ? state.UniqueIdentifier : email;
                 UserLoginService.Create(
                     rockContext,
                     person,
                     AuthenticationServiceType.External,
                     EntityTypeCache.Get( typeof( PasswordlessAuthentication ) ).Id,
-                    PasswordlessAuthentication.GetUsername( uniqueIdentifier ),
+                    username,
                     null,
                     isConfirmed: true );
 
@@ -251,6 +301,17 @@ namespace Rock.Blocks.Security
                     remoteAuthService.CompleteRemoteAuthenticationSession( remoteSession, person.PrimaryAliasId.Value );
                     rockContext.SaveChanges();
                 }
+
+                // Autenticar al usuario recién registrado (igual que AccountEntry.AuthenticateUser);
+                // sin esto el usuario completa su perfil pero queda anónimo al redirigir.
+                UserLoginService.UpdateLastLogin( new UpdateLastLoginArgs { UserName = username } );
+                var securitySettings = new SecuritySettingsService().SecuritySettings;
+                Authorization.SetAuthCookie(
+                    username,
+                    isPersisted: true,
+                    isImpersonated: false,
+                    isTwoFactorAuthenticated: true,
+                    TimeSpan.FromMinutes( securitySettings.PasswordlessSignInSessionDuration ) );
 
                 var returnUrl = GetSafeDecodedUrl( bag.ReturnUrl );
                 if ( returnUrl.IsNullOrWhiteSpace() )
@@ -272,6 +333,29 @@ namespace Rock.Blocks.Security
                     RedirectUrl = returnUrl
                 } );
             }
+        }
+
+        /// <summary>
+        /// Separa un teléfono en código de país y número local. Si viene en E.164
+        /// ("+50255551234") extrae el código conocido; si no, usa el código por defecto.
+        /// </summary>
+        private static ( string CountryCode, string Number ) SplitPhone( string phone, string defaultCountryCode )
+        {
+            var digits = new string( ( phone ?? string.Empty ).Where( char.IsDigit ).ToArray() );
+
+            if ( ( phone ?? string.Empty ).StartsWith( "+" ) )
+            {
+                // Orden importa: probar códigos largos antes que "+1".
+                foreach ( var code in new[] { "502", "503", "1" } )
+                {
+                    if ( digits.StartsWith( code ) && digits.Length > code.Length )
+                    {
+                        return ( code, digits.Substring( code.Length ) );
+                    }
+                }
+            }
+
+            return ( defaultCountryCode, digits );
         }
 
         private string GetSafeDecodedUrl( string url )

@@ -2059,7 +2059,9 @@ namespace Rock.Blocks.Security
                 var matchingPeople = passwordlessAuthenticationResult.MatchingPeopleResults?.Select( p => new ListItemBag
                 {
                     Value = p.State,
-                    Text = p.FullName,
+                    // VR: ListItemBag no tiene campo libre; la edad viaja anexada al
+                    // nombre como "Nombre|34" y el frontend la separa para mostrarla.
+                    Text = p.Age.HasValue ? p.FullName + "|" + p.Age.Value : p.FullName,
                     Category = p.PhotoUrl
                 } ).ToList();
                 return Response(

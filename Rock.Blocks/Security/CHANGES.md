@@ -15,9 +15,11 @@ Lineas modificadas: 3 (adicion de una propiedad en un selector LINQ)
 
 ```diff
 -                    Text = p.FullName
-+                    Text = p.FullName,
++                    Text = p.Age.HasValue ? p.FullName + "|" + p.Age.Value : p.FullName,
 +                    Category = p.PhotoUrl
 ```
+
+**Actualizacion 2026-07-04:** ademas de la foto (`Category`), ahora la edad viaja anexada al nombre en `Text` con formato `"Nombre|34"` porque `ListItemBag` no tiene mas campos libres. El frontend (`passwordlessLoginVerifyStep.partial.obs`, funciones `personName`/`personAge`) separa el texto por `|` y muestra la edad como chip al lado derecho de cada tarjeta de persona.
 
 ### Contexto del cambio
 

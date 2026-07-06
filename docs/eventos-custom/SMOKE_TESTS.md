@@ -105,6 +105,17 @@ En `eventos` (interno) > Administrar Eventos:
 
 ## 10. Concurrencia (avanzado, staging)
 
+> ✅ **AUTOMATIZADO Y PASADO (2026-07-04)** con el harness `Dev Tools/EventsLoadTest` (exe se
+> llama `ef6.exe` a propósito: dispara el auto-bootstrap de RockApp en consola). Corre los
+> mismos servicios del checkout contra la BD dev con evento sintético gratis/privado y limpia al
+> terminar: `ef6.exe --yes --workers 150 --capacity 50`.
+> Resultados: sobreventa 0 (50/50 exacto con 150 compradores paralelos, p95 ~300 ms por reserva,
+> rechazos limpios incl. "Solo quedan N"), holds expirados no consumen cupo, SP de limpieza no
+> toca holds vigentes, mutex de cobro: 12 confirmaciones paralelas → 1 finalize, 2/2 tickets,
+> 0 órdenes Charging. **Hallazgo colateral**: la BD dev tenía la versión VIEJA del SP de
+> limpieza (sin `@Now`) — el job fallaba silencioso en dev; re-aplicado el `CREATE OR ALTER`
+> del paso 004 (producción recibe el correcto vía 017).
+
 - Dos `ProcessCheckout` simultáneos con el mismo `PaymentReference` (dos pestañas, doble submit):
   un solo cobro; el perdedor recibe "pago en proceso" o la confirmación.
 - N compras simultáneas del último cupo: no hay sobreventa. Desde 2026-07-02 la reserva serializa

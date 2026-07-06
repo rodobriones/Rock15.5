@@ -714,6 +714,10 @@ async function getZxingModule(): Promise<any> {
 }
 
 async function startScan() {
+    // Guard de re-entrada: dos startScan solapados (poll de slot + countdown, o
+    // "Verificar de nuevo") obtienen dos streams y fugan el primero.
+    if (cameraStarting.value) return;
+
     err.value = "";
     cameraStarting.value = true;
 
@@ -754,12 +758,17 @@ async function startScan() {
         const savedDeviceId = await resolveCameraDeviceIdFromSettings();
         currentDeviceId = savedDeviceId;
 
+        // 720p basta de sobra para QR: sin este cap los teléfonos entregan FHD/4K
+        // y ZXing decodifica cada frame completo en el hilo principal — el escaneo
+        // se vuelve lentísimo en móvil (mismo fix que ticketScanner de Eventos).
+        const qrResolution = { width: { ideal: 1280 }, height: { ideal: 720 } };
+
         let stream: MediaStream | null = null;
         if (savedDeviceId) {
             try {
                 // Use the camera selected in Rock's check-in app
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { deviceId: { exact: savedDeviceId } },
+                    video: { deviceId: { exact: savedDeviceId }, ...qrResolution },
                     audio: false
                 });
             } catch (e: any) {
@@ -783,12 +792,12 @@ async function startScan() {
             const mode = usingRearCamera.value ? "environment" : "user";
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: mode } },
+                    video: { facingMode: { exact: mode }, ...qrResolution },
                     audio: false
                 });
             } catch {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: mode } },
+                    video: { facingMode: { ideal: mode }, ...qrResolution },
                     audio: false
                 });
             }
@@ -798,10 +807,26 @@ async function startScan() {
             throw new Error("No se pudo obtener stream de cámara.");
         }
 
+        // El <video> pudo desmontarse mientras el prompt de permisos estaba abierto:
+        // sin él hay que apagar el stream o la cámara queda encendida sin referencia.
+        if (!videoRef.value) {
+            stream.getTracks().forEach(t => t.stop());
+            cameraStarting.value = false;
+            return;
+        }
+
         videoRef.value.srcObject = stream;
         mirrorPreview.value = shouldMirrorPreview(stream);
         await videoRef.value.play();
         setCameraPermissionCookie("granted");
+
+        // iOS mata el track al cambiar de app: el watchdog no lo ve (frame congelado
+        // sigue dando NotFound). Apagar limpio para que el operador reinicie.
+        stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+            if (!scanning.value) return;
+            err.value = "La cámara se detuvo. Vuelve a iniciarla.";
+            void stopScan();
+        });
 
         // Optimize camera
         try {
@@ -809,9 +834,12 @@ async function startScan() {
             if (track && typeof (track as any).getCapabilities === "function") {
                 const caps = (track as any).getCapabilities();
                 const adv: any = {};
-                if (caps.focusMode?.indexOf("continuous") !== -1) adv.focusMode = "continuous";
-                if (caps.exposureMode?.indexOf("continuous") !== -1) adv.exposureMode = "continuous";
-                if (caps.whiteBalanceMode?.indexOf("continuous") !== -1) adv.whiteBalanceMode = "continuous";
+                // ?.includes: con ?.indexOf(...) !== -1, una capability AUSENTE daba
+                // true (undefined !== -1) y el constraint no soportado invalidaba el
+                // set advanced ENTERO — el enfoque continuo que sí existía se perdía.
+                if (caps.focusMode?.includes?.("continuous")) adv.focusMode = "continuous";
+                if (caps.exposureMode?.includes?.("continuous")) adv.exposureMode = "continuous";
+                if (caps.whiteBalanceMode?.includes?.("continuous")) adv.whiteBalanceMode = "continuous";
                 if (Object.keys(adv).length > 0) {
                     await track.applyConstraints({ advanced: [adv] } as any).catch(() => {});
                 }
@@ -824,9 +852,13 @@ async function startScan() {
         cameraStarting.value = false;
         setBanner("", "Escaneando...", "");
 
-        scanLoop();
+        void startDecodeSession();
+        startDecodeWatchdog();
     } catch (e: any) {
         cameraStarting.value = false;
+        // Liberar el stream ya asignado (falla en play()/carga de zxing dejaba la
+        // cámara encendida con el mensaje de error en pantalla).
+        await stopScanInternal(true);
         const msg = String(e?.name || e?.message || "");
         if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
             setCameraPermissionCookie("denied");
@@ -844,6 +876,9 @@ async function stopScan() {
 
 async function stopScanInternal(keepState: boolean) {
     zxingReader = null;
+    stopDecodeWatchdog();
+    try { scanControls?.stop(); } catch { /* ignore */ }
+    scanControls = null;
     stopRockCheckinNativeCamera();
     mirrorPreview.value = false;
 
@@ -862,43 +897,82 @@ async function stopScanInternal(keepState: boolean) {
     }
 }
 
-function scanLoop() {
-    if (!scanning.value || !videoRef.value || !zxingReader) return;
+// Sesión de escaneo CONTINUA (mismo patrón que ticketScanner de Eventos, §9.38):
+// UNA llamada a decodeFromVideoElement — el vendor reusa un solo canvas y mete
+// 500 ms entre intentos/éxitos. El viejo ciclo de decodeOnce recursaba sin delay
+// en la rama de descarte (hot-loop con el QR aún en cuadro) y re-cruzaba el gate
+// de video del vendor en cada lectura (una rama del gate nunca resuelve = freeze).
+let scanControls: any = null;
+let lastDecodeTickAt = 0;
+let decodeWatchdog: number | null = null;
+let startingSession = false;
 
-    zxingReader.decodeOnceFromVideoElement(videoRef.value)
-        .then(async (result: any) => {
+async function startDecodeSession(): Promise<void> {
+    if (!scanning.value || !videoRef.value || !zxingReader || startingSession) return;
+
+    startingSession = true;
+    try { scanControls?.stop(); } catch { /* ignore */ }
+    scanControls = null;
+    lastDecodeTickAt = Date.now();
+
+    try {
+        const controlsPromise = zxingReader.decodeFromVideoElement(videoRef.value, (result: any) => {
+            lastDecodeTickAt = Date.now(); // latido: también en NotFound/errores
+
+            if (!scanning.value || !result) return;
+
             const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
-            if (!raw) {
-                if (scanning.value) scanLoop();
-                return;
-            }
-
             const now = Date.now();
-            if (now < scanHoldUntil || now - lastScanAt < scanCooldownMs) {
-                if (scanning.value) scanLoop();
-                return;
-            }
+
+            if (!raw || now < scanHoldUntil || now - lastScanAt < scanCooldownMs || busy.value) return;
 
             lastScanAt = now;
             try { navigator.vibrate?.(35); } catch { /* ignore */ }
 
-            // No apagar `scanning` aqui: si el poll de slot corre durante esta
-            // pausa veria scanning=false y arrancaria un segundo scanLoop.
-            await submitQr(raw);
-            scanHoldUntil = Date.now() + postResultHoldMs;
-            await sleep(postResultHoldMs);
-            if (scanning.value) scanLoop();
-        })
-        .catch(async (e: any) => {
-            const msg = String(e?.name || e?.message || e || "");
-            if (msg.toLowerCase().includes("notfound")) {
-                if (scanning.value) scanLoop();
-                return;
-            }
-            // Auto-retry on transient error
-            await sleep(1000);
-            if (scanning.value) scanLoop();
+            // Fire-and-forget: la red nunca detiene la cámara; el hold post-resultado
+            // se fija al terminar el submit (misma semántica que el ciclo anterior).
+            void submitQr(raw).then(() => {
+                scanHoldUntil = Date.now() + postResultHoldMs;
+            });
         });
+
+        // El gate interno del vendor tiene una rama que nunca resuelve ni rechaza:
+        // no esperarlo para siempre; si no arranca en 7 s el watchdog reintenta.
+        const controls = await Promise.race([
+            controlsPromise,
+            new Promise<null>(resolve => window.setTimeout(() => resolve(null), 7000))
+        ]);
+
+        if (controls) {
+            scanControls = controls;
+        }
+        else {
+            controlsPromise.then((c: any) => { try { c?.stop(); } catch { /* ignore */ } }).catch(() => { /* ignore */ });
+        }
+    } catch { /* el watchdog reintenta */ }
+    finally {
+        startingSession = false;
+    }
+}
+
+// Watchdog de latido: si el callback no late >4 s (error fatal del vendor, gate
+// colgado, track suspendido al bloquear pantalla/cambiar de app), revive la sesión.
+function startDecodeWatchdog(): void {
+    stopDecodeWatchdog();
+    decodeWatchdog = window.setInterval(() => {
+        if (!scanning.value || startingSession) return;
+        if (Date.now() - lastDecodeTickAt > 4000) {
+            try { videoRef.value?.play?.(); } catch { /* ignore */ }
+            void startDecodeSession();
+        }
+    }, 2000);
+}
+
+function stopDecodeWatchdog(): void {
+    if (decodeWatchdog) {
+        window.clearInterval(decodeWatchdog);
+        decodeWatchdog = null;
+    }
 }
 
 async function submitQr(code: string) {
@@ -909,7 +983,12 @@ async function submitQr(code: string) {
 
     try {
         const bag = { reservationCode: code };
-        const res = await invokeBlockAction<ScanResult>("ProcessScan", { bag });
+        // Timeout propio: axios va sin timeout y un POST estancado dejaría
+        // busy=true para siempre (el escáner no volvería a enviar nada).
+        const res = await Promise.race([
+            invokeBlockAction<ScanResult>("ProcessScan", { bag }),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15000))
+        ]);
 
         if (!res.isSuccess || !res.data) {
             setBanner("error", res.errorMessage || "Error al validar", "");

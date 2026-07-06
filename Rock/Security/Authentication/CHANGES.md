@@ -138,6 +138,8 @@ var matchingPersonResults = matchingPeople
 
 Se introduce un tipo anonimo intermedio que preserva `PhotoUrl` del objeto `Person` antes de construir `PasswordlessMatchingPersonState`. Luego `MatchingPersonResult` recibe el valor. Este cambio requirio agregar la propiedad `PhotoUrl` a `MatchingPersonResult` (ver seccion 3).
 
+**Actualizacion 2026-07-04:** el mismo tipo anonimo ahora tambien captura `p.Age` (edad de la persona, `int?` calculada del BirthDate) y la propaga a `MatchingPersonResult.Age`, para que la pantalla de seleccion de persona muestre la edad junto al nombre y sea mas facil distinguir entre personas con el mismo nombre.
+
 ---
 
 ## 2. OneTimePasscode/MatchingPersonResult.cs
@@ -148,13 +150,18 @@ Se introduce un tipo anonimo intermedio que preserva `PhotoUrl` del objeto `Pers
 
 ### Cambio
 
-Se agrega la propiedad `PhotoUrl` a la clase `MatchingPersonResult`:
+Se agregan las propiedades `PhotoUrl` y `Age` (esta ultima el 2026-07-04) a la clase `MatchingPersonResult`:
 
 ```csharp
 /// <summary>
 /// The photo URL of the matching person.
 /// </summary>
 public string PhotoUrl { get; set; }
+
+/// <summary>
+/// The age of the matching person, if birth date is known. (VidaReal)
+/// </summary>
+public int? Age { get; set; }
 ```
 
 ### Por que

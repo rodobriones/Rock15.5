@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ponytail: el assembly se llama "ef6" A PROPÓSITO — RockApp tiene un caso especial
+       (static ctor, hook de EF design-time) que auto-inicializa RockApp.Current desde el
+       .config cuando el proceso se llama ef6. Eso nos da Rock.dll funcionando en consola
+       (RockDateTime, caches, RockContext) sin bootstrap manual del service provider. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>ef6</AssemblyName>
+    <RootNamespace>VidaReal.EventsLoadTest</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Configuration" />
+    <!-- Private=false: en runtime TODO se resuelve desde RockWeb\Bin vía AssemblyResolve
+         (Program.cs), así el grafo completo de dependencias de Rock.dll está disponible. -->
+    <Reference Include="Rock">
+      <HintPath>..\..\RockWeb\Bin\Rock.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rock.Enums">
+      <HintPath>..\..\RockWeb\Bin\Rock.Enums.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rock.ViewModels">
+      <HintPath>..\..\RockWeb\Bin\Rock.ViewModels.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="EntityFramework">
+      <HintPath>..\..\RockWeb\Bin\EntityFramework.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="EntityFramework.SqlServer">
+      <HintPath>..\..\RockWeb\Bin\EntityFramework.SqlServer.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Mismo connection string que el sitio dev (configSource exige el archivo junto al exe). -->
+    <None Include="..\..\RockWeb\web.ConnectionStrings.config" Link="web.ConnectionStrings.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

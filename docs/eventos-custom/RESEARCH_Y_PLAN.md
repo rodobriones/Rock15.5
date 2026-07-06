@@ -893,3 +893,71 @@ adaptadores delgados.
   se ocultaba si era el usuario logueado; fallback "Sin nombre asignado").
 - ⚠️ Deploy: las DLLs nuevas mapean 4 columnas de la 021 — **reciclar apenas se despliegue**
   (queries de Event/TicketType fallan hasta que corra, mismo caso que la migración 002).
+
+### §9.37 — Scanner lento en teléfono: cap de resolución de cámara (2026-07-06)
+
+Reporte en producción: el escaneo "jala bien" en computadora pero es lentísimo en teléfono
+(sin banner de resultado visible + sensación de que no hay debounce). Dos causas:
+
+1. **Bundle viejo en prod**: el servidor servía un `ticketScanner.obs.js` anterior al rediseño
+   de §9.23 (sin banner ni dedupe). Verificación al desplegar: abrir
+   `https://<prod>/Obsidian/Blocks/Eventos/ticketScanner.obs.js` y buscar `COOLDOWN_MS` —
+   si no aparece, el bundle es viejo; el navegador además lo cachea (hard-refresh o borrar
+   caché del sitio en el teléfono).
+2. **⚠️ LECCIÓN — resolución de cámara sin límite**: `getUserMedia` pedía solo
+   `facingMode: environment`; la cámara trasera de un teléfono entrega FHD/4K y ZXing dibuja
+   el video en un `captureCanvas` de `videoWidth × videoHeight` — **el costo de cada intento de
+   decodificación escala con los píxeles del stream** (webcam de PC ≈ 480–720p, por eso en
+   desktop nunca se notó). Con intentos cada `delayBetweenScanAttempts: 500 ms`, un frame 4K
+   satura el hilo principal de un CPU móvil. Fix: constraint
+   `width/height ideal 1280×720` (`ticketScanner.obs`, `startScan`) — de sobra para QR.
+   **Regla: todo `getUserMedia` para escaneo debe pedir resolución acotada.**
+
+Permiso de cámara que se pide cada vez: no es código — el navegador solo persiste el permiso
+en orígenes seguros con certificado válido (HTTPS confiado). iOS Safari además re-pregunta por
+sesión salvo ajuste por-sitio (aA → Configuración del sitio web → Cámara → Permitir).
+
+### §9.38 — Scanner: sesión de escaneo continua + watchdog (2026-07-06 b, debate adversarial)
+
+Tras el cap de resolución el scan procesaba rápido pero "se quedaba en el aviso" sin leer el
+siguiente boleto. Workflow de 4 agentes (3 refutadores + contrarian) sobre `ticketScanner.obs`
+y el vendor `zxing.lib.js`; veredicto:
+
+- **CONFIRMADO — hot-loop**: el ciclo recursivo de `decodeOnceFromVideoElement` recursaba SIN
+  delay; con el QR aún en cuadro cada iteración creaba un canvas full-res + decode a máxima
+  velocidad (el `delayBetweenScanSuccess=500ms` del vendor solo aplica al modo continuo).
+- **CONFIRMADO — muerte silenciosa**: el vendor reintenta NotFound/Checksum/Format
+  internamente, así que la rama `includes("notfound")` del catch era **código muerto** y
+  cualquier rechazo real (gate `playVideoOnLoadAsync` → `reject(false)`, excepciones raras de
+  zxing) ponía `scanning=false` para siempre con el banner congelado.
+- **REFUTADO — cooldown como causa raíz**: la app React de referencia usa los mismos 2500ms y
+  es fluida. Aun así se bajó a **1200ms** entre boletos distintos (throughput de puerta;
+  `SAME_CODE_HOLD_MS=7000` sigue vetando el re-check-in del mismo boleto).
+- **Contrarian**: POST sin timeout de axios congelaba `busy` para siempre; una rama del gate
+  del vendor NUNCA resuelve ni rechaza; track suspendido (bloqueo de pantalla) sin listener;
+  boleto vetado 7 s sin enviarse si `busy` estaba ocupado al registrarlo.
+
+Fix (patrón de la app de referencia): **UNA sesión continua `decodeFromVideoElement`** con
+dedupe/cooldown dentro del callback y **submit fire-and-forget** (la red nunca detiene la
+cámara) + **watchdog de latido** (callback marca `lastDecodeTickAt` en cada intento; sin latido
+>4 s → `video.play()` + reinicio de sesión — cubre error fatal, gate colgado y track
+suspendido) + `Promise.race` 7 s al arrancar (gate que no asienta) + timeout 15 s en `ProcessQr`
++ `busy` se checa ANTES de registrar en `lastSubmitted`. **Regla: nunca ciclar `decodeOnce*`
+de ZXing — usar el modo continuo con callback, y todo loop de escaneo lleva watchdog.**
+
+**Adenda (mismo día): patrón portado a los 3 escáneres QREVENT + modal + revisión adversarial.**
+Los 4 escáneres del fork (ticketScanner, ReservationScanner, QRScanner, CelebremosQrCheckIn)
+usan la sesión continua + watchdog + timeout 15 s. ticketScanner ganó **modal de resultado**
+(`.tsModal*`, auto-cierre 2.2 s, backdrop con `pointer-events:none` — el fondo NO come taps,
+solo el card es tocable). Revisión adversarial del refactor (24 agentes, 13 confirmados):
+se corrigió en LOS 4 → fuga de cámara (catch/stop no apagaba el stream si el `<video>` se
+desmontó con el prompt de permisos abierto o falló play()/zxing → stop desde la variable
+`stream` + guard post-getUserMedia + catch libera), guard de re-entrada `cameraStarting` en
+startScan (doble tap = dos streams, uno fugado), y listener `ended` del track (iOS mata la
+cámara al cambiar de app y el watchdog no lo ve: el frame congelado sigue latiendo con
+NotFound). En ticketScanner+ReservationScanner: **⚠️ bug `caps.X?.indexOf(...) !== -1`** — una
+capability AUSENTE daba true (undefined !== -1) y el constraint no soportado invalidaba el set
+`advanced` entero (el enfoque continuo que sí existía se perdía); usar `?.includes?.()`. En
+ticketScanner: el veto de dedupe se libera en fallas rápidas del server (se conserva solo en
+timeout, donde el POST pudo llegar). Aceptado sin fix: respuesta tardía post-timeout descartada
+(server idempotente; re-scan informa "ya usado").

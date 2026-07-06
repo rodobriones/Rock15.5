@@ -139,6 +139,21 @@
                             </div>
                         </div>
 
+                        <!-- Modal de resultado: salta en pantalla con cada scan y se cierra solo.
+                             La cámara sigue escaneando detrás (el dedupe evita re-envíos). -->
+                        <div v-if="resultModalOpen" class="tsModalBack">
+                            <div class="tsModal" :class="resultModalClass" @click="closeResultModal">
+                                <div class="tsModalStrip"></div>
+                                <div class="tsModalBody">
+                                    <div class="tsModalIcon">{{ resultModalIcon }}</div>
+                                    <div class="tsModalTitle">{{ resultModalTitle }}</div>
+                                    <div v-if="resultModalName" class="tsModalName">{{ resultModalName }}</div>
+                                    <div v-if="resultModalType" class="tsModalType">{{ resultModalType }}</div>
+                                    <div class="tsModalFoot">Se cierra automáticamente…</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Buscar por nombre / email -->
                         <div class="tsCard">
                             <span class="tsCardLabel">Buscar asistente</span>
@@ -448,6 +463,44 @@
 
 .tsTip { margin: 16px 0 0; font-size: 12px; color: var(--primary-300); text-align: center; }
 
+/* ---------- Modal de resultado (salta con cada scan, cierre automático) ---------- */
+.tsModalBack {
+    position: fixed; inset: 0; z-index: 90;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: rgba(15, 23, 42, .45);
+    /* El backdrop NO come taps: en fila continua el modal está abierto casi todo
+       el tiempo y taparía la barra sticky, inputs y botones (doble tap en todo).
+       Solo el card es interactivo (tocarlo lo cierra). */
+    pointer-events: none;
+}
+.tsModal {
+    width: 100%; max-width: 340px; background: #fff; border-radius: 20px; overflow: hidden;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, .35); text-align: center;
+    animation: tsModalPop .18s ease-out;
+    pointer-events: auto; cursor: pointer;
+}
+@keyframes tsModalPop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.tsModalStrip { height: 6px; }
+.tsModalBody { padding: 22px 20px 18px; }
+.tsModalIcon {
+    width: 64px; height: 64px; border-radius: 999px; margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 800; border: 2px solid transparent;
+}
+.tsModalTitle { font-size: 20px; font-weight: 800; }
+.tsModalName { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--primary-900); }
+.tsModalType { margin-top: 2px; font-size: 13px; color: var(--primary-500); }
+.tsModalFoot { margin-top: 14px; font-size: 11px; color: var(--primary-300); }
+.tsModal--ok .tsModalStrip { background: var(--ok-border); }
+.tsModal--ok .tsModalIcon { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-text); }
+.tsModal--ok .tsModalTitle { color: var(--ok-text); }
+.tsModal--warn .tsModalStrip { background: var(--warn-border); }
+.tsModal--warn .tsModalIcon { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+.tsModal--warn .tsModalTitle { color: var(--warn-text); }
+.tsModal--bad .tsModalStrip { background: var(--bad-border); }
+.tsModal--bad .tsModalIcon { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad-text); }
+.tsModal--bad .tsModalTitle { color: var(--bad-text); }
+
 /* ---------- Barra sticky de acciones (patrón de la app de check-in) ---------- */
 .tsBar {
     position: sticky; bottom: 0; z-index: 20;
@@ -554,7 +607,9 @@ async function getZxingModule(): Promise<any> {
 // Escaneo continuo (patrón de la app de check-in): la cámara nunca se pausa.
 // - cooldown general entre envíos (evita ráfagas)
 // - el MISMO código se ignora por un rato (evita re-check-in del QR que sigue frente a la cámara)
-const COOLDOWN_MS = 2500;
+// 1200 ms entre boletos DISTINTOS (una familia de 4 pasa en ~4 s); el mismo
+// boleto sigue vetado 7 s por SAME_CODE_HOLD_MS.
+const COOLDOWN_MS = 1200;
 const SAME_CODE_HOLD_MS = 7000;
 let lastScanAt = 0;
 let lastSubmitted = { code: "", at: 0 };
@@ -655,6 +710,49 @@ const bannerIcon = computed(() => {
     if (bannerStatus.value === "wrong_event") return "!";
     return "✕";
 });
+
+// ---- Modal de resultado (salta con cada scan; auto-cierra; la cámara no se pausa) ----
+const RESULT_MODAL_MS = 2200;
+const resultModalOpen = ref<boolean>(false);
+const resultModalStatus = ref<string>("");
+const resultModalTitle = ref<string>("");
+const resultModalName = ref<string>("");
+const resultModalType = ref<string>("");
+let resultModalTimer: number | null = null;
+
+const resultModalClass = computed(() => {
+    if (resultModalStatus.value === "checked_in") return "tsModal--ok";
+    if (resultModalStatus.value === "already_used" || resultModalStatus.value === "wrong_event") return "tsModal--warn";
+    return "tsModal--bad";
+});
+
+const resultModalIcon = computed(() => {
+    if (resultModalStatus.value === "checked_in") return "✓";
+    if (resultModalStatus.value === "already_used" || resultModalStatus.value === "wrong_event") return "!";
+    return "✕";
+});
+
+function showResultModal(status: string, title: string, name: string, ticketType: string): void {
+    resultModalStatus.value = status;
+    resultModalTitle.value = title;
+    resultModalName.value = name;
+    resultModalType.value = ticketType;
+    resultModalOpen.value = true;
+
+    if (resultModalTimer) window.clearTimeout(resultModalTimer);
+    resultModalTimer = window.setTimeout(() => {
+        resultModalOpen.value = false;
+        resultModalTimer = null;
+    }, RESULT_MODAL_MS);
+}
+
+function closeResultModal(): void {
+    resultModalOpen.value = false;
+    if (resultModalTimer) {
+        window.clearTimeout(resultModalTimer);
+        resultModalTimer = null;
+    }
+}
 
 const frameClass = computed(() => {
     if (frameFlash.value === "checked_in") return "tsFrame--ok";
@@ -764,7 +862,13 @@ async function backToList(): Promise<void> {
     lastPickedTicketId.value = null;
 }
 
+let cameraStarting = false;
+
 async function startScan(): Promise<void> {
+    // Guard de re-entrada: sin él, dos startScan solapados (prompt de permisos
+    // abierto + tap en "Iniciar cámara") obtienen dos streams y fugan el primero.
+    if (cameraStarting) return;
+
     err.value = "";
 
     if (!videoRef.value) {
@@ -777,17 +881,59 @@ async function startScan(): Promise<void> {
         return;
     }
 
+    cameraStarting = true;
+
     try {
         await stopScanInternal(true);
 
         const constraints: MediaStreamConstraints = {
-            video: { facingMode: { ideal: "environment" } },
+            // 720p basta de sobra para QR: en teléfonos la trasera entrega FHD/4K
+            // y ZXing decodifica cada frame en el hilo principal — a resolución
+            // completa el escaneo se vuelve lentísimo en móvil.
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         };
 
         stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // El usuario pudo salir de esta vista mientras el prompt de permisos estaba
+        // abierto: sin <video> hay que apagar el stream o la cámara queda encendida.
+        if (!videoRef.value) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+            return;
+        }
+
         videoRef.value.srcObject = stream;
         await videoRef.value.play();
+
+        // iOS/Android matan el track al cambiar de app o si otra app toma la cámara;
+        // el watchdog no lo ve (el frame congelado sigue dando NotFound). Apagar limpio.
+        stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+            if (!scanning.value) return;
+            err.value = "La cámara se detuvo (el sistema quitó el acceso). Vuelve a iniciarla.";
+            void stopScan();
+        });
+
+        // Enfoque/exposición continuos (patrón ReservationScanner): sin esto muchas
+        // cámaras Android no re-enfocan y el QR queda borroso — ZXing nunca decodifica
+        // un QR desenfocado, a cualquier resolución. Best-effort: iOS lo ignora.
+        try {
+            const track = stream.getVideoTracks()[0];
+            if (track && typeof (track as any).getCapabilities === "function") {
+                const caps = (track as any).getCapabilities();
+                const adv: any = {};
+                // ?.includes: con ?.indexOf(...) !== -1, una capability AUSENTE daba
+                // true (undefined !== -1) y el constraint no soportado invalidaba el
+                // set advanced ENTERO — el enfoque continuo que sí existía se perdía.
+                if (caps.focusMode?.includes?.("continuous")) adv.focusMode = "continuous";
+                if (caps.exposureMode?.includes?.("continuous")) adv.exposureMode = "continuous";
+                if (caps.whiteBalanceMode?.includes?.("continuous")) adv.whiteBalanceMode = "continuous";
+                if (Object.keys(adv).length > 0) {
+                    await track.applyConstraints({ advanced: [adv] } as any).catch(() => { /* noop */ });
+                }
+            }
+        } catch { /* noop */ }
 
         scanning.value = true;
         setBanner("", "Escaneando…", "", "", "");
@@ -795,7 +941,8 @@ async function startScan(): Promise<void> {
         const mod = await getZxingModule();
         zxingReader = new mod.BrowserQRCodeReader();
 
-        scanLoopZXing();
+        void startDecodeSession();
+        startDecodeWatchdog();
     } catch (e: any) {
         await stopScanInternal(true);
         const msg = String(e?.name || e?.message || "");
@@ -810,16 +957,35 @@ async function startScan(): Promise<void> {
         }
         scanning.value = false;
     }
+    finally {
+        cameraStarting = false;
+    }
 }
 
-// Bucle continuo: decodifica, valida dedupe/cooldown, envía y SIGUE escaneando
-// sin pausar la cámara (el resultado se ve en el banner y el flash del marco).
-function scanLoopZXing(): void {
-    if (!scanning.value || !videoRef.value || !zxingReader) return;
+// Sesión de escaneo CONTINUA (veredicto del debate adversarial 2026-07-06, patrón
+// de la app de check-in): UNA llamada a decodeFromVideoElement — el vendor reusa un
+// solo canvas y mete 500 ms entre intentos/éxitos (el viejo ciclo de decodeOnce
+// recursaba sin delay = hot-loop, y cualquier rechazo raro mataba el loop para
+// siempre con el banner congelado). El dedupe vive en el callback y el POST no se
+// espera: la red jamás detiene la cámara.
+let scanControls: any = null;
+let lastDecodeTickAt = 0;
+let decodeWatchdog: number | null = null;
+let startingSession = false;
 
-    zxingReader.decodeOnceFromVideoElement(videoRef.value)
-        .then(async (result: any) => {
-            if (!scanning.value) return;
+async function startDecodeSession(): Promise<void> {
+    if (!scanning.value || !videoRef.value || !zxingReader || startingSession) return;
+
+    startingSession = true;
+    try { scanControls?.stop(); } catch { /* noop */ }
+    scanControls = null;
+    lastDecodeTickAt = Date.now();
+
+    try {
+        const controlsPromise = zxingReader.decodeFromVideoElement(videoRef.value, (result: any) => {
+            lastDecodeTickAt = Date.now(); // latido: también en NotFound/errores
+
+            if (!scanning.value || !result) return;
 
             const raw = String(result?.getText?.() ? result.getText() : result?.text || "").trim();
             const now = Date.now();
@@ -827,30 +993,57 @@ function scanLoopZXing(): void {
             const isDuplicate = raw && raw === lastSubmitted.code && (now - lastSubmitted.at) < SAME_CODE_HOLD_MS;
             const inCooldown = now - lastScanAt < COOLDOWN_MS;
 
-            if (raw && !isDuplicate && !inCooldown) {
-                lastScanAt = now;
-                lastSubmitted = { code: raw, at: now };
+            // busy se checa ANTES de registrar: si se registrara y descartara, el
+            // boleto quedaría vetado 7 s sin haberse enviado nunca.
+            if (!raw || isDuplicate || inCooldown || busy.value) return;
 
-                try { navigator.vibrate?.(35); } catch { /* noop */ }
+            lastScanAt = now;
+            lastSubmitted = { code: raw, at: now };
 
-                await submitQrCode(raw);
-            }
+            try { navigator.vibrate?.(35); } catch { /* noop */ }
 
-            if (scanning.value) scanLoopZXing();
-        })
-        .catch((e: any) => {
-            // Detención deliberada: el stream cortado hace rechazar la promesa pendiente;
-            // no es un error del lector.
-            if (!scanning.value) return;
-
-            const msg = String(e?.name || e?.message || e || "");
-            if (msg.toLowerCase().includes("notfound")) {
-                if (scanning.value) scanLoopZXing();
-                return;
-            }
-            err.value = "Error leyendo QR. Intenta reiniciar la cámara.";
-            scanning.value = false;
+            // Fire-and-forget: submitQrCode maneja sus errores; el escaneo sigue.
+            void submitQrCode(raw);
         });
+
+        // El gate interno de video del vendor tiene una rama que nunca resuelve ni
+        // rechaza — no esperarlo para siempre: si no arranca en 7 s, el watchdog
+        // reintenta. Si el original resuelve tarde, se detiene el loop huérfano.
+        const controls = await Promise.race([
+            controlsPromise,
+            new Promise<null>(resolve => window.setTimeout(() => resolve(null), 7000))
+        ]);
+
+        if (controls) {
+            scanControls = controls;
+        }
+        else {
+            controlsPromise.then((c: any) => { try { c?.stop(); } catch { /* noop */ } }).catch(() => { /* noop */ });
+        }
+    } catch { /* el watchdog reintenta */ }
+    finally {
+        startingSession = false;
+    }
+}
+
+// Watchdog de latido: si el callback no late >4 s (error fatal del vendor, gate
+// colgado, track suspendido al bloquear pantalla/cambiar de app), revive la sesión.
+function startDecodeWatchdog(): void {
+    stopDecodeWatchdog();
+    decodeWatchdog = window.setInterval(() => {
+        if (!scanning.value || startingSession) return;
+        if (Date.now() - lastDecodeTickAt > 4000) {
+            try { videoRef.value?.play?.(); } catch { /* noop */ }
+            void startDecodeSession();
+        }
+    }, 2000);
+}
+
+function stopDecodeWatchdog(): void {
+    if (decodeWatchdog) {
+        window.clearInterval(decodeWatchdog);
+        decodeWatchdog = null;
+    }
 }
 
 async function stopScan(): Promise<void> {
@@ -859,6 +1052,14 @@ async function stopScan(): Promise<void> {
 
 async function stopScanInternal(keepState: boolean): Promise<void> {
     zxingReader = null;
+    stopDecodeWatchdog();
+    try { scanControls?.stop(); } catch { /* noop */ }
+    scanControls = null;
+
+    // Detener también desde la variable `stream`: si el <video> se desmontó (o el
+    // stream nunca llegó a asignarse), los tracks vía srcObject son inalcanzables
+    // y la cámara quedaría encendida para siempre.
+    try { stream?.getTracks?.().forEach((t: any) => t.stop()); } catch { /* noop */ }
 
     try {
         if (videoRef.value) {
@@ -893,6 +1094,7 @@ function applyScanResult(data: ScanResponse, code: string): void {
 
     setBanner(status || "not_found", message || title, name, ticketType, code);
     bannerTitle.value = title;
+    showResultModal(status || "not_found", title, name, ticketType);
     buzz(status);
     flashFrame(status || "not_found");
 
@@ -918,20 +1120,35 @@ async function submitQrCode(code: string): Promise<void> {
 
     try {
         const bag = { eventId: Number(selectedEventId.value), code: c };
-        const res = await invokeBlockAction<ScanResponse>("ProcessQr", { bag });
+        // Timeout propio: axios va sin timeout (infinito) y un POST estancado en la
+        // red del venue dejaría busy=true para siempre (banner clavado en Procesando).
+        const res = await Promise.race([
+            invokeBlockAction<ScanResponse>("ProcessQr", { bag }),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15000))
+        ]);
 
         if (!res.isSuccess || !res.data) {
             setBanner("error", res.errorMessage || "Error al validar el ticket.", "", "", c);
+            showResultModal("error", res.errorMessage || "Error al validar el ticket.", "", "");
             buzz("error");
             flashFrame("error");
+            // Falla rápida del servidor: liberar el veto de dedupe para que el
+            // operador pueda reintentar el mismo QR de inmediato.
+            if (lastSubmitted.code === c) lastSubmitted = { code: "", at: 0 };
             return;
         }
 
         applyScanResult(res.data, c);
-    } catch {
+    } catch (e: any) {
         setBanner("error", "Error al validar el ticket.", "", "", c);
+        showResultModal("error", "Error al validar el ticket.", "", "");
         buzz("error");
         flashFrame("error");
+        // En timeout el POST pudo llegar al servidor — se conserva el veto (un
+        // re-scan diría "Ya ingresó"); otras fallas rápidas sí liberan el veto.
+        if (String(e?.message) !== "timeout" && lastSubmitted.code === c) {
+            lastSubmitted = { code: "", at: 0 };
+        }
     } finally {
         busy.value = false;
     }
@@ -993,7 +1210,11 @@ async function checkInFromList(r: TicketResult): Promise<void> {
 
     try {
         const bag = { eventId: evId, ticketId: r.ticketId };
-        const res = await invokeBlockAction<ScanResponse>("CheckInTicket", { bag });
+        // Mismo timeout que ProcessQr: sin él, un POST estancado deja busy clavado.
+        const res = await Promise.race([
+            invokeBlockAction<ScanResponse>("CheckInTicket", { bag }),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15000))
+        ]);
 
         if (!res.isSuccess || !res.data) {
             setBanner("error", res.errorMessage || "No se pudo registrar el ingreso.", "", "", "");
@@ -1014,5 +1235,6 @@ async function checkInFromList(r: TicketResult): Promise<void> {
 onBeforeUnmount(() => {
     stopScan();
     if (frameFlashTimer) window.clearTimeout(frameFlashTimer);
+    if (resultModalTimer) window.clearTimeout(resultModalTimer);
 });
 </script>

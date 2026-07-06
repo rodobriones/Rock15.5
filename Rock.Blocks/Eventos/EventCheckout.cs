@@ -1088,12 +1088,36 @@ namespace Rock.Blocks.Eventos
                 } )
                 .ToList();
 
+            // Desglose del cobro: Order.Total es "al contado" — si pagó en cuotas, el gateway agrega
+            // el recargo a la transacción (FeeCoverageAmount) y lo cobrado real es la suma de sus
+            // TransactionDetails (mismo criterio que FelService).
+            decimal surcharge = 0m;
+            decimal amountCharged = order.Total;
+            if ( order.FinancialTransactionId.HasValue )
+            {
+                var amounts = new FinancialTransactionDetailService( rockContext ).Queryable()
+                    .AsNoTracking()
+                    .Where( d => d.TransactionId == order.FinancialTransactionId.Value )
+                    .GroupBy( d => d.TransactionId )
+                    .Select( g => new { Charged = g.Sum( d => ( decimal? ) d.Amount ) ?? 0m, Fee = g.Sum( d => d.FeeCoverageAmount ) ?? 0m } )
+                    .FirstOrDefault();
+                if ( amounts != null && amounts.Charged > 0m )
+                {
+                    amountCharged = Math.Round( amounts.Charged, 2 );
+                    surcharge = Math.Round( amounts.Fee, 2 );
+                }
+            }
+
             return new ProcessCheckoutResponseBag
             {
                 Success = order.Status == OrderStatus.Paid,
                 OrderId = order.Id,
                 Status = order.Status.ToString(),
                 Total = order.Total,
+                Subtotal = order.Subtotal,
+                DiscountTotal = order.DiscountTotal,
+                Surcharge = surcharge,
+                AmountCharged = amountCharged,
                 PaymentReference = order.PaymentReference,
                 Tickets = tickets
             };

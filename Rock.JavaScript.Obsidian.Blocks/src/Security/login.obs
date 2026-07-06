@@ -356,6 +356,9 @@
                 passwordlessLoginOptions.value = {
                     ...passwordlessLoginOptions.value,
                     state: response.data.state || "",
+                    code: "",
+                    isPersonSelectionRequired: false,
+                    matchingPeople: null,
                     step: PasswordlessLoginStep.Verify
                 };
                 loginMethod.value = LoginMethod.Passwordless;

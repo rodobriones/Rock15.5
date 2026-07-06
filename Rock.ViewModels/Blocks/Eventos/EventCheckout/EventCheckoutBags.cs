@@ -332,6 +332,18 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         public decimal Total { get; set; }
 
+        /// <summary>Suma de precios de las entradas (antes de descuento).</summary>
+        public decimal Subtotal { get; set; }
+
+        /// <summary>Descuento aplicado por código promocional.</summary>
+        public decimal DiscountTotal { get; set; }
+
+        /// <summary>Recargo por pago en cuotas (FeeCoverage de la transacción). 0 al contado o gratis.</summary>
+        public decimal Surcharge { get; set; }
+
+        /// <summary>Monto realmente cobrado a la tarjeta (suma de la transacción, incluye recargo). = Total si no hubo recargo.</summary>
+        public decimal AmountCharged { get; set; }
+
         public Guid PaymentReference { get; set; }
 
         public List<ConfirmationTicketBag> Tickets { get; set; }

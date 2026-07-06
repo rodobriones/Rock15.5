@@ -563,6 +563,19 @@
 .ecDoneMeta { color: var(--primary-800); font-weight: 600; }
 .ecDoneCode { color: var(--primary-500); font-size: 13px; letter-spacing: 1px; }
 .ecDoneFooter { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+/* Con desglose (descuento/recargo) el footer se apila: filas arriba, total abajo. */
+.ecDoneFooter--detail { flex-direction: column; align-items: stretch; }
+.ecDoneBreak { display: flex; flex-direction: column; gap: 6px; }
+.ecDoneBreakRow {
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 13px; color: var(--primary-500);
+}
+.ecDoneBreakRow .ecMono { color: var(--primary-800); font-weight: 500; }
+.ecDoneBreakRow--disc, .ecDoneBreakRow--disc .ecMono { color: var(--success-text, #166534); }
+.ecDoneFooter--detail .ecDoneTotalBox {
+    flex-direction: row; justify-content: space-between; align-items: baseline;
+    border-top: 1px dashed var(--primary-200); padding-top: 10px; margin-top: 4px;
+}
 .ecDoneTotalBox { display: flex; flex-direction: column; gap: 2px; }
 .ecDoneTotalLabel { font-size: 12px; color: var(--primary-300); }
 .ecDoneTotalVal { font-size: 18px; font-weight: 700; color: var(--primary-900); }

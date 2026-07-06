@@ -65,7 +65,7 @@ Sistema de check-in y registro para eventos especiales.
 
 **Bloques:**
 - `QRScanner.cs` / `qrScanner.obs` — Lista de eventos + escaneo de QR para registrar asistencia
-- `CelebremosQrCheckIn.cs` / `CelebremosQrCheckIn.obs` — Check-in especifico para grupo "Celebremos" con Steps de Rock
+- `CelebremosQrCheckIn.cs` / `CelebremosQrCheckIn.obs` — Check-in especifico para grupo "Celebremos" con Steps de Rock. Filtra programas/steps por seguridad: bypass RSR_Rock_Administration; si no, reglas Auth explicitas View∪ManageSteps (personas o Security Roles, ignora All Users), fallback StepType→StepProgram (ver `QREVENT_CelebremosQrCheckIn_Migration_Context.md` §2026-07-06)
 - `ReservationScanner.cs` / `ReservationScanner.obs` — Scanner para reservaciones pre-hechas
 - `SundayServiceRegistration.cs` / `SundayServiceRegistration.obs` — Registro para servicio dominical
 

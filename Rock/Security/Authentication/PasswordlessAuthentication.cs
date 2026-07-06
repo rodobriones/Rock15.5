@@ -477,13 +477,15 @@ namespace Rock.Security.Authentication
                             PersonId = p.Id,
                             FullName = p.FullName
                         },
-                        p.PhotoUrl
+                        p.PhotoUrl,
+                        p.Age
                     } )
                     .Select( x => new MatchingPersonResult
                     {
                         State = GetEncryptedMatchingPersonState( x.State ),
                         FullName = x.State.FullName,
-                        PhotoUrl = x.PhotoUrl
+                        PhotoUrl = x.PhotoUrl,
+                        Age = x.Age
                     } )
                     .ToList();
 

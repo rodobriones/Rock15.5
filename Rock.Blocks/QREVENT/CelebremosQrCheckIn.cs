@@ -16,7 +16,7 @@ namespace Rock.Blocks.QREVENT
 {
     [DisplayName("Celebremos QR Check-in")]
     [Category("Custom")]
-    [Description("Check-in por QR (PersonId): el usuario elige programa y step (filtrados por seguridad VIEW) y se marca el step en su estatus 'complete'.")]
+    [Description("Check-in por QR (PersonId): el usuario elige programa y step (filtrados por seguridad ManageSteps: roles o personas) y se marca el step en su estatus 'complete'.")]
     public class CelebremosQrCheckIn : RockBlockType
     {
         public override object GetObsidianBlockInitialization()
@@ -89,15 +89,16 @@ namespace Rock.Blocks.QREVENT
             using (var rockContext = new RockContext())
             {
                 var entityTypeId = EntityTypeCache.Get(typeof(StepType)).Id;
+                var programEntityTypeId = EntityTypeCache.Get(typeof(StepProgram)).Id;
 
-                // Filtrado por rol en memoria: se leen las reglas Allow del step.
+                // Filtrado por rol en memoria: reglas Allow del step, con fallback a las del programa (AuthRules no hereda).
                 var steps = new StepTypeService(rockContext)
                     .Queryable()
                     .Where(st => st.IsActive && st.StepProgramId == bag.stepProgramId)
                     .OrderBy(st => st.Order)
                     .ThenBy(st => st.Name)
                     .ToList()
-                    .Where(st => PersonInAllowedRoles(entityTypeId, st.Id, currentPerson))
+                    .Where(st => PersonInAllowedRoles(entityTypeId, st.Id, currentPerson, programEntityTypeId, bag.stepProgramId))
                     .Select(st => new StepOptionBag
                     {
                         stepTypeId = st.Id,
@@ -168,7 +169,8 @@ namespace Rock.Blocks.QREVENT
                 }
 
                 var stepTypeEntityTypeId = EntityTypeCache.Get(typeof(StepType)).Id;
-                if (!PersonInAllowedRoles(stepTypeEntityTypeId, stepType.Id, currentPerson))
+                var stepProgramEntityTypeId = EntityTypeCache.Get(typeof(StepProgram)).Id;
+                if (!PersonInAllowedRoles(stepTypeEntityTypeId, stepType.Id, currentPerson, stepProgramEntityTypeId, stepType.StepProgramId))
                 {
                     return ActionOk(BuildResult("not_found", "", "No tienes acceso a este step."));
                 }
@@ -221,26 +223,52 @@ namespace Rock.Blocks.QREVENT
         }
 
         /// <summary>
-        /// Lee las reglas Allow (View) del entity y devuelve true si la persona pertenece a alguno de esos roles.
-        /// Si el entity no tiene rol asignado, es visible para todos. No usa IsAuthorized (que cae en el Allow por defecto).
+        /// RSR_Rock_Administration ve todo. El resto solo ve entidades donde matchea una regla Allow explícita
+        /// (ManageSteps ∪ View, por rol o persona; "All Users" y demás especiales se ignoran). AuthRules NO
+        /// hereda: si el entity no tiene reglas propias se cae al fallback (StepType → StepProgram). Sin reglas
+        /// explícitas en toda la cadena → NO visible (así los programas core sin configurar no se cuelan).
+        /// No usa IsAuthorized (que cae en el Allow por defecto).
         /// </summary>
-        private static bool PersonInAllowedRoles(int entityTypeId, int entityId, Person person)
+        private static bool PersonInAllowedRoles(int entityTypeId, int entityId, Person person, int? fallbackEntityTypeId = null, int? fallbackEntityId = null)
         {
-            var allowRoleIds = Authorization.AuthRules(entityTypeId, entityId, Authorization.VIEW)
-                .Where(r => r.AllowOrDeny == 'A' && r.GroupId.HasValue)
-                .Select(r => r.GroupId.Value)
-                .ToList();
-
-            if (allowRoleIds.Count == 0)
+            // RSR_Rock_Administration ve todo, sin importar las reglas del step.
+            var adminRole = RoleCache.Get(SystemGuid.Group.GROUP_ADMINISTRATORS.AsGuid());
+            if (adminRole != null && adminRole.IsPersonInRole(person.Guid))
             {
                 return true;
             }
 
-            return allowRoleIds.Any(id =>
+            var allowRules = GetExplicitAllowRules(entityTypeId, entityId);
+
+            if (allowRules.Count == 0 && fallbackEntityTypeId.HasValue && fallbackEntityId.HasValue)
             {
-                var role = RoleCache.Get(id);
+                allowRules = GetExplicitAllowRules(fallbackEntityTypeId.Value, fallbackEntityId.Value);
+            }
+
+            if (allowRules.Count == 0)
+            {
+                return false;
+            }
+
+            return allowRules.Any(r =>
+            {
+                if (r.PersonId.HasValue)
+                {
+                    return r.PersonId.Value == person.Id;
+                }
+
+                var role = RoleCache.Get(r.GroupId.Value);
                 return role != null && role.IsPersonInRole(person.Guid);
             });
+        }
+
+        private static List<AuthRule> GetExplicitAllowRules(int entityTypeId, int entityId)
+        {
+            // Cuentan las reglas explícitas de ManageSteps y de View (roles o personas); All Users/etc. se ignoran.
+            return Authorization.AuthRules(entityTypeId, entityId, Authorization.MANAGE_STEPS)
+                .Concat(Authorization.AuthRules(entityTypeId, entityId, Authorization.VIEW))
+                .Where(r => r.AllowOrDeny == 'A' && (r.PersonId.HasValue || r.GroupId.HasValue))
+                .ToList();
         }
 
         private static string BuildPersonName(string nickName, string lastName)

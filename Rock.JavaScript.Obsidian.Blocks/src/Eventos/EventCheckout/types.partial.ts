@@ -88,6 +88,12 @@ export type ProcessCheckoutResponseBag = {
     orderId: number;
     status: string;
     total: number;
+    subtotal: number;
+    discountTotal: number;
+    /** Recargo por pago en cuotas (FeeCoverage de la transacción). */
+    surcharge: number;
+    /** Monto realmente cobrado (incluye recargo); = total si pagó al contado. */
+    amountCharged: number;
     paymentReference: string;
     tickets: ConfirmationTicketBag[];
 };

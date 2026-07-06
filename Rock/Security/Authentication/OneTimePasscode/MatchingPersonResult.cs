@@ -46,5 +46,10 @@ namespace Rock.Security.Authentication.OneTimePasscode
         /// The photo URL of the matching person.
         /// </summary>
         public string PhotoUrl { get; set; }
+
+        /// <summary>
+        /// The age of the matching person, if birth date is known. (VidaReal)
+        /// </summary>
+        public int? Age { get; set; }
     }
 }

@@ -27,10 +27,25 @@
                 </div>
             </div>
             <div class="ecDoneDivider"></div>
-            <div class="ecDoneFooter">
+            <div class="ecDoneFooter" :class="{ 'ecDoneFooter--detail': hasBreakdown }">
+                <!-- Con descuento o recargo, el desglose explica por qué lo cobrado difiere del precio de lista. -->
+                <div v-if="hasBreakdown" class="ecDoneBreak">
+                    <div class="ecDoneBreakRow">
+                        <span>Subtotal</span>
+                        <span class="ecMono">{{ formatCurrency(confirmation.subtotal) }}</span>
+                    </div>
+                    <div v-if="confirmation.discountTotal > 0" class="ecDoneBreakRow ecDoneBreakRow--disc">
+                        <span>Descuento</span>
+                        <span class="ecMono">−{{ formatCurrency(confirmation.discountTotal) }}</span>
+                    </div>
+                    <div v-if="confirmation.surcharge > 0" class="ecDoneBreakRow">
+                        <span>Recargo por pago en cuotas</span>
+                        <span class="ecMono">+{{ formatCurrency(confirmation.surcharge) }}</span>
+                    </div>
+                </div>
                 <div class="ecDoneTotalBox">
-                    <span class="ecDoneTotalLabel">Total</span>
-                    <span class="ecDoneTotalVal ecMono">{{ formatCurrency(confirmation.total) }}</span>
+                    <span class="ecDoneTotalLabel">{{ hasBreakdown ? "Total cobrado" : "Total" }}</span>
+                    <span class="ecDoneTotalVal ecMono">{{ formatCurrency(chargedTotal) }}</span>
                 </div>
             </div>
         </div>
@@ -44,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useCheckoutState } from "./checkoutState.partial";
 
 const {
@@ -56,4 +72,12 @@ const {
     downloadPdf,
     goHome
 } = useCheckoutState();
+
+// Solo hay desglose cuando lo cobrado difiere del precio de lista (descuento o recargo).
+const hasBreakdown = computed<boolean>(() =>
+    (confirmation.value?.discountTotal ?? 0) > 0 || (confirmation.value?.surcharge ?? 0) > 0);
+
+// Órdenes viejas (bag sin amountCharged) caen al total de la orden.
+const chargedTotal = computed<number>(() =>
+    confirmation.value?.amountCharged || confirmation.value?.total || 0);
 </script>
