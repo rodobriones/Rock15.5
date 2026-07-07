@@ -1,0 +1,569 @@
+<template>
+    <Panel type="block">
+        <template #default>
+            <div class="wtWrap">
+                <!-- Toasts -->
+                <div v-if="err" class="wtToast wtToast--err" role="alert">
+                    <i class="fa fa-exclamation-circle"></i>
+                    <span>{{ err }}</span>
+                    <button type="button" class="wtToastX" aria-label="Cerrar" @click="err = ''">&times;</button>
+                </div>
+                <div v-if="ok" class="wtToast wtToast--ok" role="status">
+                    <i class="fa fa-check-circle"></i>
+                    <span>{{ ok }}</span>
+                </div>
+
+                <!-- ===== LISTA ===== -->
+                <div v-if="view === 'list'">
+                    <div class="wtBar">
+                        <div>
+                            <h1 class="wtTitle">Plantillas de Wallet</h1>
+                            <p class="wtSub">Diseña los pases de Apple Wallet y Google Wallet que se emiten desde los módulos de Rock.</p>
+                        </div>
+                        <RockButton v-if="canEdit" btnType="primary" class="wtX" @click="newTemplate">
+                            <i class="fa fa-plus"></i> Nueva plantilla
+                        </RockButton>
+                    </div>
+
+                    <NotificationBox v-if="!appleConfigured" alertType="warning">
+                        Apple Wallet no está configurado (Global Attributes <code>AppleWalletPassP12</code> / <code>AppleWalletPassP12Password</code>). Los pases de Apple no se podrán emitir.
+                    </NotificationBox>
+                    <NotificationBox v-if="!googleConfigured" alertType="info">
+                        Google Wallet no está configurado (Global Attributes <code>GoogleWalletIssuerId</code> / <code>GoogleWalletServiceAccountJson</code>).
+                    </NotificationBox>
+
+                    <div v-if="!templates.length" class="wtEmpty">
+                        <i class="fa fa-wallet"></i>
+                        <p>No hay plantillas todavía.</p>
+                    </div>
+
+                    <div class="wtGrid">
+                        <button v-for="t in templates" :key="t.id" type="button" class="wtCard" @click="editTemplate(t)">
+                            <div class="wtCardPass" :style="{ background: t.apple?.backgroundColor || '#0f172a' }">
+                                <span class="wtCardOrg" :style="{ color: t.apple?.labelColor || '#94a3b8' }">{{ t.apple?.organizationName || "Vida Real" }}</span>
+                                <span class="wtCardName" :style="{ color: t.apple?.foregroundColor || '#f8fafc' }">{{ t.name }}</span>
+                                <span class="wtCardQr"><i class="fa fa-qrcode"></i></span>
+                            </div>
+                            <div class="wtCardMeta">
+                                <span class="wtPill">{{ styleLabel(t.passStyle) }}</span>
+                                <span v-if="!t.isActive" class="wtPill wtPill--off">Inactiva</span>
+                                <span class="wtCardCount">{{ t.passCount }} {{ t.passCount === 1 ? "pase emitido" : "pases emitidos" }}</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ===== EDITOR ===== -->
+                <div v-else-if="form" class="wtEditor">
+                    <div class="wtBar">
+                        <div>
+                            <button type="button" class="wtBack" @click="view = 'list'"><i class="fa fa-arrow-left"></i> Plantillas</button>
+                            <h1 class="wtTitle">{{ form.id > 0 ? form.name : "Nueva plantilla" }}</h1>
+                        </div>
+                        <div class="wtBarBtns">
+                            <RockButton v-if="form.id > 0 && canEdit" btnType="link" class="wtDanger" :disabled="busy" @click="removeTemplate">Eliminar</RockButton>
+                            <RockButton v-if="canEdit" btnType="primary" class="wtX" :disabled="busy" @click="save">
+                                {{ busy ? "Guardando…" : "Guardar" }}
+                            </RockButton>
+                        </div>
+                    </div>
+
+                    <NotificationBox v-if="form.passCount > 0" alertType="info">
+                        Hay {{ form.passCount }} pases emitidos con esta plantilla: al guardar, el nuevo diseño se envía automáticamente a los teléfonos.
+                    </NotificationBox>
+
+                    <div class="wtCols">
+                        <div class="wtForm">
+                            <section class="wtSec">
+                                <h2 class="wtSecTitle">General</h2>
+                                <TextBox v-model="form.name" label="Nombre" rules="required" />
+                                <TextBox v-model="form.description" label="Descripción" textMode="multiline" :rows="2" />
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <DropDownList v-model="passStyleStr" label="Estilo del pase" :items="styleItems" :showBlankItem="false" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <CheckBox v-model="form.isActive" label="Activa" />
+                                    </div>
+                                </div>
+                                <NotificationBox alertType="info" class="wtHint">
+                                    En los campos puedes usar <b>Lava</b> con los datos del pase: <code v-pre>{{ Data.EventName }}</code>, <code v-pre>{{ Data.Code }}</code>, etc. Las claves disponibles dependen del módulo que emite el pase. Campos cuyo valor quede vacío no se muestran.
+                                </NotificationBox>
+                            </section>
+
+                            <section class="wtSec">
+                                <h2 class="wtSecTitle"><i class="fa fa-apple"></i> Diseño Apple</h2>
+                                <div class="row">
+                                    <div class="col-md-6"><TextBox v-model="apple.organizationName" label="Organización" /></div>
+                                    <div class="col-md-6"><TextBox v-model="apple.logoText" label="Texto junto al logo" /></div>
+                                </div>
+                                <TextBox v-model="apple.description" label="Descripción del pase (accesibilidad)" />
+                                <div class="wtColors">
+                                    <label class="wtColor">
+                                        <input type="color" :value="rgbToHex(apple.backgroundColor, '#0f172a')" @input="apple.backgroundColor = hexToRgb(($event.target as HTMLInputElement).value)" />
+                                        <span>Fondo</span>
+                                    </label>
+                                    <label class="wtColor">
+                                        <input type="color" :value="rgbToHex(apple.foregroundColor, '#f8fafc')" @input="apple.foregroundColor = hexToRgb(($event.target as HTMLInputElement).value)" />
+                                        <span>Texto</span>
+                                    </label>
+                                    <label class="wtColor">
+                                        <input type="color" :value="rgbToHex(apple.labelColor, '#94a3b8')" @input="apple.labelColor = hexToRgb(($event.target as HTMLInputElement).value)" />
+                                        <span>Etiquetas</span>
+                                    </label>
+                                </div>
+
+                                <div v-for="sec in fieldSections" :key="sec.key" class="wtFields">
+                                    <div class="wtFieldsHead">
+                                        <span class="wtFieldsTitle">{{ sec.label }}</span>
+                                        <button type="button" class="wtAdd" @click="addField(sec.key)"><i class="fa fa-plus"></i> Campo</button>
+                                    </div>
+                                    <div v-for="(f, i) in apple[sec.key]" :key="i" class="wtFieldRow">
+                                        <input v-model="f.key" class="form-control wtIn wtIn--key" placeholder="clave" />
+                                        <input v-model="f.label" class="form-control wtIn" placeholder="Etiqueta" />
+                                        <input v-model="f.value" class="form-control wtIn wtIn--val" placeholder="Valor (Lava)" />
+                                        <button type="button" class="wtDel" aria-label="Quitar" @click="apple[sec.key].splice(i, 1)"><i class="fa fa-times"></i></button>
+                                    </div>
+                                </div>
+
+                                <div class="wtFields">
+                                    <div class="wtFieldsHead"><span class="wtFieldsTitle">Código de barras</span></div>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <DropDownList v-model="apple.barcode.format" label="Formato" :items="barcodeItems" :showBlankItem="false" />
+                                        </div>
+                                        <div class="col-md-4"><TextBox v-model="apple.barcode.message" label="Contenido (Lava)" /></div>
+                                        <div class="col-md-4"><TextBox v-model="apple.barcode.altText" label="Texto alterno" /></div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6"><TextBox v-model="apple.relevantDate" label="Fecha de relevancia (Lava)" help="El pase aparece en pantalla bloqueada cerca de esta fecha." /></div>
+                                    <div class="col-md-6"><TextBox v-model="apple.expirationDate" label="Fecha de expiración (Lava)" /></div>
+                                </div>
+                                <TextBox v-model="apple.stripImageGuid" label="Imagen strip dinámica (Lava → guid)" help="Guid de un archivo por pase, ej. {{ Data.EventImageGuid }} = la foto del evento. La imagen fija de abajo tiene precedencia." />
+                            </section>
+
+                            <section class="wtSec">
+                                <h2 class="wtSecTitle"><i class="fa fa-image"></i> Imágenes</h2>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <ImageUploader v-model="form.icon" label="Ícono" help="Cuadrado. Sin imagen se usa el ícono VR." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <ImageUploader v-model="form.logo" label="Logo" help="Encabezado del pase. Sin imagen se usa el logo Vida Real." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <ImageUploader v-model="form.strip" label="Strip" help="Franja bajo el encabezado (opcional)." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="wtSec">
+                                <h2 class="wtSecTitle"><i class="fa fa-google"></i> Diseño Google</h2>
+                                <div class="row">
+                                    <div class="col-md-6"><TextBox v-model="google.cardTitle" label="Título de la tarjeta" /></div>
+                                    <div class="col-md-6"><TextBox v-model="google.header" label="Encabezado (Lava)" /></div>
+                                </div>
+                                <TextBox v-model="google.heroImageUrl" label="Imagen hero (Lava → URL https)" help="URL pública de la imagen, ej. {{ Data.EventImageUrl }}." />
+                                <div class="wtColors">
+                                    <label class="wtColor">
+                                        <input type="color" v-model="google.hexBackgroundColor" />
+                                        <span>Fondo</span>
+                                    </label>
+                                </div>
+                                <div class="wtFields">
+                                    <div class="wtFieldsHead">
+                                        <span class="wtFieldsTitle">Filas de texto</span>
+                                        <button type="button" class="wtAdd" @click="google.rows.push({ key: '', label: '', value: '' })"><i class="fa fa-plus"></i> Fila</button>
+                                    </div>
+                                    <div v-for="(f, i) in google.rows" :key="i" class="wtFieldRow">
+                                        <input v-model="f.key" class="form-control wtIn wtIn--key" placeholder="clave" />
+                                        <input v-model="f.label" class="form-control wtIn" placeholder="Etiqueta" />
+                                        <input v-model="f.value" class="form-control wtIn wtIn--val" placeholder="Valor (Lava)" />
+                                        <button type="button" class="wtDel" aria-label="Quitar" @click="google.rows.splice(i, 1)"><i class="fa fa-times"></i></button>
+                                    </div>
+                                </div>
+                                <div class="wtFields">
+                                    <div class="wtFieldsHead"><span class="wtFieldsTitle">Código de barras</span></div>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <DropDownList v-model="google.barcode.format" label="Formato" :items="barcodeItems" :showBlankItem="false" />
+                                        </div>
+                                        <div class="col-md-4"><TextBox v-model="google.barcode.message" label="Contenido (Lava)" /></div>
+                                        <div class="col-md-4"><TextBox v-model="google.barcode.altText" label="Texto alterno" /></div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <!-- Preview del pase Apple -->
+                        <div class="wtPreviewCol">
+                            <div class="wtPreview" :style="{ background: apple.backgroundColor || '#0f172a' }">
+                                <div class="wtPvHead">
+                                    <span class="wtPvLogo" :style="{ color: apple.foregroundColor }">{{ apple.logoText || apple.organizationName || "Vida Real" }}</span>
+                                </div>
+                                <div v-if="apple.headerFields.length" class="wtPvRow wtPvRow--right">
+                                    <div v-for="(f, i) in apple.headerFields" :key="i" class="wtPvField">
+                                        <span class="wtPvLabel" :style="{ color: apple.labelColor }">{{ f.label }}</span>
+                                        <span class="wtPvValue" :style="{ color: apple.foregroundColor }">{{ f.value }}</span>
+                                    </div>
+                                </div>
+                                <div v-for="(f, i) in apple.primaryFields" :key="'p' + i" class="wtPvPrimary">
+                                    <span class="wtPvLabel" :style="{ color: apple.labelColor }">{{ f.label }}</span>
+                                    <span class="wtPvBig" :style="{ color: apple.foregroundColor }">{{ f.value }}</span>
+                                </div>
+                                <div v-if="apple.secondaryFields.length" class="wtPvRow">
+                                    <div v-for="(f, i) in apple.secondaryFields" :key="i" class="wtPvField">
+                                        <span class="wtPvLabel" :style="{ color: apple.labelColor }">{{ f.label }}</span>
+                                        <span class="wtPvValue" :style="{ color: apple.foregroundColor }">{{ f.value }}</span>
+                                    </div>
+                                </div>
+                                <div v-if="apple.auxiliaryFields.length" class="wtPvRow">
+                                    <div v-for="(f, i) in apple.auxiliaryFields" :key="i" class="wtPvField">
+                                        <span class="wtPvLabel" :style="{ color: apple.labelColor }">{{ f.label }}</span>
+                                        <span class="wtPvValue" :style="{ color: apple.foregroundColor }">{{ f.value }}</span>
+                                    </div>
+                                </div>
+                                <div class="wtPvQr"><i class="fa fa-qrcode"></i></div>
+                            </div>
+                            <p class="wtPvNote">Vista previa aproximada del pase de Apple. Los <code v-pre>{{ Data.* }}</code> se sustituyen al emitir cada pase.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* Wallet Template Admin — paleta slate, patrón admin de Eventos. NO-scoped (chrome del panel). */
+.panel-block:has(.wtWrap) > .panel-heading,
+.panel-block:has(.wtWrap) > .panel-header { display: none !important; }
+.panel-block:has(.wtWrap) { background: transparent !important; border: none !important; box-shadow: none !important; }
+
+.wtWrap { --p900: #0f172a; --p700: #334155; --p500: #64748b; --p300: #cbd5e1; --p100: #f1f5f9; font-family: Roboto, sans-serif; }
+.wtBar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.wtTitle { font-size: 24px; font-weight: 800; color: var(--p900); margin: 0; }
+.wtSub { color: var(--p500); font-size: 14px; margin: 4px 0 0; }
+.wtBack { background: none; border: none; padding: 0; color: var(--p500); font-size: 13px; cursor: pointer; margin-bottom: 6px; }
+.wtBack:hover { color: var(--p900); }
+.wtBarBtns { display: flex; gap: 8px; align-items: center; }
+.wtX.btn-primary { background: var(--p900); border-color: var(--p900); border-radius: 10px; font-weight: 600; }
+.wtX.btn-primary:hover { background: var(--p700); border-color: var(--p700); }
+.wtDanger { color: #b91c1c !important; }
+
+.wtEmpty { text-align: center; color: var(--p300); padding: 48px 0; }
+.wtEmpty .fa { font-size: 42px; margin-bottom: 8px; }
+
+.wtGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.wtCard { text-align: left; background: #fff; border: 1px solid var(--p100); border-radius: 14px; padding: 0; overflow: hidden; cursor: pointer; transition: box-shadow .15s; }
+.wtCard:hover { box-shadow: 0 6px 18px rgba(15,23,42,.12); }
+.wtCardPass { padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; min-height: 96px; position: relative; }
+.wtCardOrg { font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
+.wtCardName { font-size: 17px; font-weight: 700; }
+.wtCardQr { position: absolute; right: 14px; bottom: 10px; color: rgba(255,255,255,.85); background: #fff2; border-radius: 6px; padding: 4px 6px; }
+.wtCardMeta { display: flex; gap: 6px; align-items: center; padding: 10px 14px; flex-wrap: wrap; }
+.wtPill { font-size: 11px; font-weight: 700; background: var(--p100); color: var(--p700); border-radius: 999px; padding: 2px 10px; }
+.wtPill--off { background: #fee2e2; color: #b91c1c; }
+.wtCardCount { font-size: 12px; color: var(--p500); margin-left: auto; }
+
+.wtCols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+.wtForm { min-width: 0; }
+.wtSec { background: #fff; border: 1px solid var(--p100); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+.wtSecTitle { font-size: 15px; font-weight: 800; color: var(--p900); margin: 0 0 14px; }
+.wtHint { margin-bottom: 0; }
+
+.wtColors { display: flex; gap: 18px; margin-bottom: 14px; }
+.wtColor { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--p500); cursor: pointer; }
+.wtColor input[type="color"] { width: 44px; height: 34px; border: 1px solid var(--p300); border-radius: 8px; padding: 2px; background: #fff; cursor: pointer; }
+
+.wtFields { border-top: 1px dashed var(--p100); padding-top: 12px; margin-top: 12px; }
+.wtFieldsHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.wtFieldsTitle { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--p500); }
+.wtAdd { background: none; border: 1px dashed var(--p300); border-radius: 8px; color: var(--p500); font-size: 12px; padding: 3px 10px; cursor: pointer; }
+.wtAdd:hover { color: var(--p900); border-color: var(--p500); }
+.wtFieldRow { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.wtIn { flex: 1; }
+.wtIn--key { max-width: 110px; font-family: "Roboto Mono", monospace; font-size: 12px; }
+.wtIn--val { flex: 1.4; }
+.wtDel { background: none; border: none; color: var(--p300); cursor: pointer; padding: 4px 6px; }
+.wtDel:hover { color: #b91c1c; }
+
+.wtPreviewCol { position: sticky; top: 16px; }
+.wtPreview { border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); min-height: 340px; }
+.wtPvHead { display: flex; align-items: center; gap: 8px; }
+.wtPvLogo { font-weight: 700; font-size: 14px; }
+.wtPvRow { display: flex; gap: 14px; flex-wrap: wrap; }
+.wtPvRow--right { justify-content: flex-end; }
+.wtPvField { display: flex; flex-direction: column; min-width: 0; }
+.wtPvLabel { font-size: 9px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+.wtPvValue { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.wtPvPrimary { display: flex; flex-direction: column; }
+.wtPvBig { font-size: 19px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.wtPvQr { margin-top: auto; align-self: center; background: #fff; color: #0f172a; border-radius: 10px; font-size: 58px; line-height: 1; padding: 12px 14px; }
+.wtPvNote { font-size: 11px; color: var(--p500); margin-top: 8px; text-align: center; }
+
+.wtToast { position: fixed; right: 18px; bottom: 18px; z-index: 1060; display: flex; align-items: center; gap: 10px; color: #fff; padding: 12px 16px; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.35); font-size: 14px; animation: wtToastIn .18s ease-out; }
+.wtToast--ok { background: #15803d; }
+.wtToast--err { background: #b91c1c; }
+.wtToastX { background: none; border: none; color: #fff9; font-size: 18px; cursor: pointer; padding: 0 2px; }
+.wtToastX:hover { color: #fff; }
+@keyframes wtToastIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+@media (max-width: 900px) {
+    .wtCols { grid-template-columns: 1fr; }
+    .wtPreviewCol { position: static; max-width: 340px; margin: 0 auto; }
+}
+</style>
+
+<script setup lang="ts">
+import { computed, reactive, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import CheckBox from "@Obsidian/Controls/checkBox.obs";
+import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+import ImageUploader from "@Obsidian/Controls/imageUploader.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+import { confirm } from "@Obsidian/Utility/dialogs";
+import type { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
+type PassField = { key: string | null; label: string | null; value: string | null };
+type BarcodeDesign = { format: string | null; message: string | null; altText: string | null };
+type AppleDesign = {
+    organizationName: string | null; description: string | null; logoText: string | null;
+    foregroundColor: string | null; backgroundColor: string | null; labelColor: string | null;
+    headerFields: PassField[] | null; primaryFields: PassField[] | null; secondaryFields: PassField[] | null;
+    auxiliaryFields: PassField[] | null; backFields: PassField[] | null;
+    barcode: BarcodeDesign | null; relevantDate: string | null; expirationDate: string | null;
+    stripImageGuid: string | null;
+};
+type GoogleDesign = {
+    hexBackgroundColor: string | null; cardTitle: string | null; header: string | null;
+    rows: PassField[] | null; barcode: BarcodeDesign | null; heroImageUrl: string | null;
+};
+type TemplateBag = {
+    id: number; guid: string | null; name: string | null; description: string | null;
+    isActive: boolean; passStyle: number;
+    apple: AppleDesign | null; google: GoogleDesign | null;
+    icon: ListItemBag | null; logo: ListItemBag | null; strip: ListItemBag | null;
+    passCount: number;
+};
+type InitBag = { canEdit: boolean; appleConfigured: boolean; googleConfigured: boolean; templates: TemplateBag[] };
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const canEdit = config.canEdit;
+const appleConfigured = config.appleConfigured;
+const googleConfigured = config.googleConfigured;
+const templates = ref<TemplateBag[]>(config.templates || []);
+
+const view = ref<"list" | "edit">("list");
+const busy = ref(false);
+const err = ref("");
+const ok = ref("");
+
+function flash(msg: string): void {
+    ok.value = msg;
+    window.setTimeout(() => { if (ok.value === msg) ok.value = ""; }, 3000);
+}
+
+// ---- form ----
+type EditForm = {
+    id: number; name: string; description: string; isActive: boolean; passStyle: number;
+    icon: ListItemBag | null; logo: ListItemBag | null; strip: ListItemBag | null; passCount: number;
+};
+const form = ref<EditForm | null>(null);
+
+type AppleForm = {
+    organizationName: string; description: string; logoText: string;
+    foregroundColor: string; backgroundColor: string; labelColor: string;
+    headerFields: PassField[]; primaryFields: PassField[]; secondaryFields: PassField[];
+    auxiliaryFields: PassField[]; backFields: PassField[];
+    barcode: { format: string; message: string; altText: string };
+    relevantDate: string; expirationDate: string; stripImageGuid: string;
+};
+const apple = reactive<AppleForm>(emptyApple());
+const google = reactive({
+    hexBackgroundColor: "#0f172a", cardTitle: "", header: "",
+    rows: [] as PassField[],
+    barcode: { format: "QR", message: "", altText: "" },
+    heroImageUrl: ""
+});
+
+function emptyApple(): AppleForm {
+    return {
+        organizationName: "Iglesia Cristiana Vida Real", description: "", logoText: "",
+        foregroundColor: "rgb(248,250,252)", backgroundColor: "rgb(15,23,42)", labelColor: "rgb(148,163,184)",
+        headerFields: [], primaryFields: [], secondaryFields: [], auxiliaryFields: [], backFields: [],
+        barcode: { format: "QR", message: "", altText: "" },
+        relevantDate: "", expirationDate: "", stripImageGuid: ""
+    };
+}
+
+const passStyleStr = computed({
+    get: () => String(form.value?.passStyle ?? 0),
+    set: v => { if (form.value) form.value.passStyle = Number(v) || 0; }
+});
+
+const styleItems = [
+    { value: "0", text: "Genérico" },
+    { value: "1", text: "Entrada de evento" },
+    { value: "2", text: "Cupón" },
+    { value: "3", text: "Tarjeta" }
+];
+const barcodeItems = [
+    { value: "QR", text: "QR" },
+    { value: "PDF417", text: "PDF417" },
+    { value: "AZTEC", text: "Aztec" },
+    { value: "CODE128", text: "Code 128" }
+];
+const fieldSections: { key: "headerFields" | "primaryFields" | "secondaryFields" | "auxiliaryFields" | "backFields"; label: string }[] = [
+    { key: "headerFields", label: "Encabezado" },
+    { key: "primaryFields", label: "Campos principales" },
+    { key: "secondaryFields", label: "Campos secundarios" },
+    { key: "auxiliaryFields", label: "Campos auxiliares" },
+    { key: "backFields", label: "Reverso del pase" }
+];
+
+function styleLabel(style: number): string {
+    return styleItems.find(s => s.value === String(style))?.text ?? "Genérico";
+}
+
+function addField(section: typeof fieldSections[number]["key"]): void {
+    apple[section].push({ key: "", label: "", value: "" });
+}
+
+// ---- color helpers: Apple usa "rgb(r,g,b)", el input nativo usa hex ----
+function rgbToHex(rgb: string | null, fallback: string): string {
+    const m = /rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i.exec(rgb ?? "");
+    if (!m) {
+        return (rgb ?? "").startsWith("#") ? rgb as string : fallback;
+    }
+    const toHex = (n: string): string => Number(n).toString(16).padStart(2, "0");
+    return `#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`;
+}
+function hexToRgb(hex: string): string {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgb(${r},${g},${b})`;
+}
+
+// ---- navegación ----
+function newTemplate(): void {
+    form.value = { id: 0, name: "", description: "", isActive: true, passStyle: 0, icon: null, logo: null, strip: null, passCount: 0 };
+    Object.assign(apple, emptyApple());
+    Object.assign(google, { hexBackgroundColor: "#0f172a", cardTitle: "", header: "", rows: [], barcode: { format: "QR", message: "", altText: "" }, heroImageUrl: "" });
+    view.value = "edit";
+}
+
+function editTemplate(t: TemplateBag): void {
+    form.value = {
+        id: t.id, name: t.name ?? "", description: t.description ?? "", isActive: t.isActive,
+        passStyle: t.passStyle, icon: t.icon, logo: t.logo, strip: t.strip, passCount: t.passCount
+    };
+    const a = t.apple;
+    Object.assign(apple, emptyApple(), {
+        organizationName: a?.organizationName ?? "",
+        description: a?.description ?? "",
+        logoText: a?.logoText ?? "",
+        foregroundColor: a?.foregroundColor ?? "rgb(248,250,252)",
+        backgroundColor: a?.backgroundColor ?? "rgb(15,23,42)",
+        labelColor: a?.labelColor ?? "rgb(148,163,184)",
+        headerFields: (a?.headerFields ?? []).map(f => ({ ...f })),
+        primaryFields: (a?.primaryFields ?? []).map(f => ({ ...f })),
+        secondaryFields: (a?.secondaryFields ?? []).map(f => ({ ...f })),
+        auxiliaryFields: (a?.auxiliaryFields ?? []).map(f => ({ ...f })),
+        backFields: (a?.backFields ?? []).map(f => ({ ...f })),
+        barcode: { format: a?.barcode?.format ?? "QR", message: a?.barcode?.message ?? "", altText: a?.barcode?.altText ?? "" },
+        relevantDate: a?.relevantDate ?? "",
+        expirationDate: a?.expirationDate ?? "",
+        stripImageGuid: a?.stripImageGuid ?? ""
+    });
+    const g = t.google;
+    Object.assign(google, {
+        hexBackgroundColor: g?.hexBackgroundColor ?? "#0f172a",
+        cardTitle: g?.cardTitle ?? "",
+        header: g?.header ?? "",
+        rows: (g?.rows ?? []).map(f => ({ ...f })),
+        barcode: { format: g?.barcode?.format ?? "QR", message: g?.barcode?.message ?? "", altText: g?.barcode?.altText ?? "" },
+        heroImageUrl: g?.heroImageUrl ?? ""
+    });
+    view.value = "edit";
+}
+
+// ---- acciones ----
+async function save(): Promise<void> {
+    if (!form.value || busy.value) {
+        return;
+    }
+    if (!form.value.name.trim()) {
+        err.value = "El nombre es obligatorio.";
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const template: TemplateBag = {
+            id: form.value.id,
+            guid: null,
+            name: form.value.name,
+            description: form.value.description,
+            isActive: form.value.isActive,
+            passStyle: form.value.passStyle,
+            apple: JSON.parse(JSON.stringify(apple)),
+            google: JSON.parse(JSON.stringify(google)),
+            icon: form.value.icon,
+            logo: form.value.logo,
+            strip: form.value.strip,
+            passCount: form.value.passCount
+        };
+        const res = await invokeBlockAction<{ templates: TemplateBag[]; savedId: number | null }>("SaveTemplate", { bag: { template } });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo guardar.";
+            return;
+        }
+        templates.value = res.data.templates || [];
+        flash("Plantilla guardada.");
+        view.value = "list";
+    }
+    catch {
+        err.value = "Error de red. Intenta de nuevo.";
+    }
+    finally {
+        busy.value = false;
+    }
+}
+
+async function removeTemplate(): Promise<void> {
+    if (!form.value || form.value.id <= 0 || busy.value) {
+        return;
+    }
+    if (!await confirm("¿Eliminar esta plantilla? Solo es posible si no tiene pases emitidos.")) {
+        return;
+    }
+    busy.value = true;
+    err.value = "";
+    try {
+        const res = await invokeBlockAction<{ templates: TemplateBag[] }>("DeleteTemplate", { bag: { templateId: form.value.id } });
+        if (!res.isSuccess || !res.data) {
+            err.value = res.errorMessage || "No se pudo eliminar.";
+            return;
+        }
+        templates.value = res.data.templates || [];
+        flash("Plantilla eliminada.");
+        view.value = "list";
+    }
+    catch {
+        err.value = "Error de red. Intenta de nuevo.";
+    }
+    finally {
+        busy.value = false;
+    }
+}
+</script>

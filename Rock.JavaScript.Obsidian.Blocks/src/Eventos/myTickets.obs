@@ -130,6 +130,23 @@
                             {{ shownTicket.ticketTypeName }}<template v-if="shownTicket.attendeeName"> · {{ shownTicket.attendeeName }}</template>
                         </span>
                         <span class="mtViewerNote">Muestra este código en el ingreso del evento</span>
+                        <button v-if="appleWalletEnabled"
+                                type="button"
+                                class="mtWalletBtn"
+                                :disabled="walletBusyId !== null"
+                                @click="addToAppleWallet(shownTicket)">
+                            <svg viewBox="0 0 384 512" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+                            {{ walletBusyId !== null ? "Generando pase…" : "Agregar a Apple Wallet" }}
+                        </button>
+                        <button v-if="googleWalletEnabled"
+                                type="button"
+                                class="mtWalletBtn"
+                                :disabled="walletBusyId !== null"
+                                @click="addToGoogleWallet(shownTicket)">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v2.4h5.6c-.2 1.4-1.7 4.2-5.6 4.2-3.4 0-6.1-2.8-6.1-6.3S8.6 5 12 5c1.9 0 3.2.8 3.9 1.5l2.7-2.6C16.9 2.3 14.7 1.3 12 1.3 6.9 1.3 2.7 5.5 2.7 10.6S6.9 20 12 20c5.4 0 8.9-3.8 8.9-9.1 0-.6-.1-1.1-.2-1.6H12z"/></svg>
+                            {{ walletBusyId !== null ? "Generando pase…" : "Guardar en Google Wallet" }}
+                        </button>
+                        <span v-if="walletErr" class="mtWalletErr">{{ walletErr }}</span>
                     </div>
                 </div>
             </div>
@@ -299,6 +316,17 @@
 .mtViewerCode { font-size: 19px; font-weight: 700; letter-spacing: 3px; color: var(--primary-900); }
 .mtViewerMeta { font-size: 13px; color: var(--primary-500); }
 .mtViewerNote { font-size: 11px; color: var(--primary-300); margin-top: 4px; }
+.mtWalletBtn {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 10px; padding: 10px 18px;
+    background: #000; color: #fff; border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+}
+.mtWalletBtn:hover { background: #1c1c1e; color: #fff; }
+.mtWalletBtn:disabled { opacity: .6; cursor: default; }
+.mtWalletBtn svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
+.mtWalletErr { font-size: 12px; color: #dc2626; margin-top: 6px; }
 
 @media (max-width: 560px) {
     .mtTicket { flex-direction: column; align-items: flex-start; }
@@ -330,7 +358,7 @@ type TicketBag = {
     emailSentCount: number;
     emailSentDateTime: string | null;
 };
-type InitBag = { notLogged: boolean; tickets: TicketBag[] };
+type InitBag = { notLogged: boolean; appleWalletEnabled?: boolean; googleWalletEnabled?: boolean; tickets: TicketBag[] };
 
 type EventGroup = {
     eventId: number;
@@ -384,7 +412,44 @@ function showTicket(t: TicketBag, g: EventGroup): void {
     }
     shownTicket.value = t;
     shownEventName.value = g.name;
+    walletErr.value = "";
 }
+
+// Wallet: cada botón aparece si su plataforma está configurada (init bag) y el dispositivo
+// corresponde — Apple en iPhone/iPad/Mac, Google en el resto (Android). El .pkpass no abre
+// nada útil en Android y viceversa.
+const isApplePlatform = /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent);
+const appleWalletEnabled = (config.appleWalletEnabled ?? false) && isApplePlatform;
+const googleWalletEnabled = (config.googleWalletEnabled ?? false) && !isApplePlatform;
+const walletBusyId = ref<number | null>(null);
+const walletErr = ref<string>("");
+
+async function addToWallet(t: TicketBag | null, action: "GetApplePass" | "GetGoogleWalletUrl"): Promise<void> {
+    if (!t || walletBusyId.value !== null) {
+        return;
+    }
+    walletBusyId.value = t.ticketId;
+    walletErr.value = "";
+    try {
+        const res = await invokeBlockAction<{ url: string }>(action, { bag: { ticketId: t.ticketId } });
+        if (!res.isSuccess || !res.data?.url) {
+            walletErr.value = res.errorMessage || "No se pudo generar el pase.";
+            return;
+        }
+        // Navegación real (no fetch): Safari detecta el MIME application/vnd.apple.pkpass y abre
+        // la hoja nativa "Agregar a Apple Wallet"; el link de Google abre la página de guardado.
+        window.location.href = res.data.url;
+    }
+    catch {
+        walletErr.value = "Error de red. Intenta de nuevo.";
+    }
+    finally {
+        walletBusyId.value = null;
+    }
+}
+
+const addToAppleWallet = (t: TicketBag | null): Promise<void> => addToWallet(t, "GetApplePass");
+const addToGoogleWallet = (t: TicketBag | null): Promise<void> => addToWallet(t, "GetGoogleWalletUrl");
 
 // Agrupa los tickets por evento conservando el orden (ya viene por fecha desc del servidor).
 function groupByEvent(list: TicketBag[]): EventGroup[] {

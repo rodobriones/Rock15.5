@@ -40,6 +40,17 @@
 
 ---
 
+### Modulo Wallet (Apple/Google Wallet passes — producto propio, 2026-07-06 →)
+
+| Archivo | Proposito | Cuando leerlo |
+|---|---|---|
+| `C:\Repos\Rock18.1\docs\wallet-module\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo Wallet**: arquitectura (dominio `_com_vidareal_Wallet_*`, servicios, PassKit Web Service, APNs, Google), esquema, flujo de actualizaciones push, config, fases y estado | Al retomar CUALQUIER trabajo del módulo Wallet. Leer primero. |
+| `C:\Repos\Rock18.1\Plugin.VidaRealWallet\README.md` | Tabla de migraciones (001–008), deploy del plugin, ⚠️ numeración | Al agregar una migración o desplegar. |
+
+**Código:** entidades+servicios en `Rock/Model/Wallet/` (`WalletService` API pública, `ApplePassBuilder`, `ApplePushService`, `GoogleWalletService`, `PassTemplateResolver` con Lava), controller PassKit anónimo en `Rock.Rest/VidaReal/WalletPassKitController.cs` (`api/vidareal/wallet/v1`), bloque diseñador en `Rock.Blocks/Wallet/` + `src/Wallet/walletTemplateAdmin.obs` (página `wallet/plantillas`, menú Eventos→Boletería). **Módulo independiente y reutilizable**: Eventos es su primer consumidor vía `Rock/Model/Eventos/Services/TicketWalletService.cs` (botones en Mis Entradas, refresh+push al editar evento). Config: Global Attributes `AppleWalletPassP12(Password)` + `GoogleWalletIssuerId`/`GoogleWalletServiceAccountJson` (Google pendiente de cuenta emisor). Cert Apple vence 2027-08-05 (assets en `Documents\AppleWalletCert`).
+
+---
+
 ### Modulo OdooEventSale (Facturación FEL de eventos via Odoo)
 
 | Archivo | Proposito | Cuando leerlo |
@@ -163,11 +174,10 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 
 ---
 
-## Estado del repositorio (2026-07-02)
+## Estado del repositorio (2026-07-07)
 
 - **Branch activo:** `hotfix-18.1`
-- **Ultimo commit:** `7fc618ef10` — "Up to Date, translate, eventos, odoo"
-- **Archivos sin commit (nuevos, sin seguimiento):**
-  - `Plugin.VidaRealEvents/`, `Rock/Model/Eventos/`, `Rock.Blocks/Eventos/`, `Rock.JavaScript.Obsidian.Blocks/src/Eventos/`, `Rock.ViewModels/Blocks/Eventos/`, `docs/` — módulo Eventos/Boletería custom completo
-- **Último trabajo (2026-07-02):** módulo Eventos/Boletería — **auditoría adversarial de seguridad + integridad financiera** (workflow 52 agentes; 9 hallazgos confirmados, todos corregidos). CRÍTICO: el pago con tarjeta reventaba en `SaveChanges` (FK `AccountId`/`TransactionTypeValueId` sin fijar) → toda orden pagada quedaba en `Charging`; fijado + valida `Event.FinancialAccountId` antes de cobrar. Además: SSTI Lava en correo, TOCTOU de sobreventa en el mutex, fuga de `UniqueCode`, `DeleteEvent`/`EventStaff`, write-back de homónimos. Diferidos también resueltos: **ServiceJob `Rock.Jobs.EventsMaintenance`** (limpia holds + reconcilia `Charging`, cron 5 min) e **índice UNIQUE `(EventId,Code)` en PromoCode** (migración 017). Detalle en `docs/eventos-custom/RESEARCH_Y_PLAN.md` §9.28. **Pendiente: reciclar app pool → migración 017; smoke test de pago con tarjeta real (requiere `FinancialAccountId` en el evento).**
+- **Ultimo commit:** `3de2f27f59` — "Eventos y Sunday Reservation" (producción desplegada 2026-07-06 con lo commiteado hasta ahí + working tree de ese día)
+- **Archivos sin commit:** módulo **Wallet completo** (`Rock/Model/Wallet/`, `Rock.Rest/VidaReal/`, `Rock.Blocks/Wallet/`, `src/Wallet/`, `Plugin.VidaRealWallet/`, `docs/wallet-module/`), integración Eventos↔Wallet (`TicketWalletService`, MyTickets, EventAdmin hook), fixes de scanner/login. ⚠️ Commitear ANTES del próximo deploy.
+- **Último trabajo (2026-07-07):** **módulo Wallet** — Apple/Google Wallet self-hosted (emisión, diseño de plantillas con Lava, actualizaciones push vía PassKit Web Service + APNs), revisado adversarialmente (15 hallazgos corregidos), diseño del pase iterado contra el mockup del usuario (card blanca, lockup VidaReal.tv, foto del evento como strip, acento por categoría, reverso con política/soporte). Migraciones `com.vidareal.Wallet` 001–008 corridas en dev (001-004 verificado; 005-008 al reciclar). **Pendiente: deploy a prod (runbook en la conversación / RESEARCH_Y_PLAN §8), smoke de updates push EN prod (imposible en dev), decisión del usuario sobre rediseñar el visor de Mis Entradas con el mockup pixel-perfect, Google Wallet espera cuenta emisor, chequeo GetFile.ashx QR anónimo.**
 - **Archivos con cambios sin commitear (modified):** Ver `git status` para lista actual.

@@ -39,6 +39,8 @@ namespace Rock.Blocks.Eventos
                 return new InitBag
                 {
                     notLogged = false,
+                    appleWalletEnabled = Rock.Model.WalletService.IsAppleConfigured(),
+                    googleWalletEnabled = Rock.Model.WalletService.IsGoogleConfigured(),
                     tickets = GetTicketsForCurrentPerson( rockContext )
                 };
             }
@@ -135,6 +137,159 @@ namespace Rock.Blocks.Eventos
 
                 return ActionOk( new ResendTicketEmailResponseBag { sent = true, ticket = updated } );
             }
+        }
+
+        /// <summary>
+        /// Genera el pase de Apple Wallet (.pkpass) de un ticket propio y devuelve la URL temporal
+        /// para descargarlo (Safari abre la hoja "Agregar a Wallet" al navegar a ella).
+        /// </summary>
+        [BlockAction( "GetApplePass" )]
+        public BlockActionResult GetApplePass( GetApplePassRequestBag bag )
+        {
+            if ( !Rock.Model.WalletService.IsAppleConfigured() )
+            {
+                return ActionBadRequest( "Apple Wallet no está habilitado." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var ticket = GetOwnedActiveTicket( rockContext, bag?.ticketId ?? 0, out var guardError );
+                if ( ticket == null )
+                {
+                    return ActionBadRequest( guardError );
+                }
+
+                byte[] pkpass;
+                try
+                {
+                    var pass = GetOrIssueTicketPass( rockContext, ticket );
+                    pkpass = Rock.Model.WalletService.GetPkpass( rockContext, pass );
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                    return ActionBadRequest( "No se pudo generar el pase. Intenta de nuevo." );
+                }
+
+                // ponytail: un BinaryFile temporal por descarga (RockCleanup los purga); cachear
+                // por ticket solo si algún día el volumen lo amerita. Mismo tipo seguro de los QR.
+                var binaryFileType = Web.Cache.BinaryFileTypeCache.Get( QrService.TicketQrBinaryFileTypeGuid.AsGuid() )
+                    ?? Web.Cache.BinaryFileTypeCache.Get( Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid() );
+
+                var binaryFile = new BinaryFile
+                {
+                    IsTemporary = true,
+                    BinaryFileTypeId = binaryFileType?.Id,
+                    MimeType = "application/vnd.apple.pkpass",
+                    FileName = $"entrada-{ticket.UniqueCode}.pkpass",
+                    FileSize = pkpass.Length,
+                    ContentStream = new System.IO.MemoryStream( pkpass )
+                };
+
+                new BinaryFileService( rockContext ).Add( binaryFile );
+                rockContext.SaveChanges();
+
+                return ActionOk( new GetApplePassResponseBag { url = $"/GetFile.ashx?guid={binaryFile.Guid}" } );
+            }
+        }
+
+        /// <summary>
+        /// Devuelve el link "Guardar en Google Wallet" del ticket (mismo guard que Apple).
+        /// </summary>
+        [BlockAction( "GetGoogleWalletUrl" )]
+        public BlockActionResult GetGoogleWalletUrl( GetApplePassRequestBag bag )
+        {
+            if ( !Rock.Model.WalletService.IsGoogleConfigured() )
+            {
+                return ActionBadRequest( "Google Wallet no está habilitado." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var ticket = GetOwnedActiveTicket( rockContext, bag?.ticketId ?? 0, out var guardError );
+                if ( ticket == null )
+                {
+                    return ActionBadRequest( guardError );
+                }
+
+                try
+                {
+                    var pass = GetOrIssueTicketPass( rockContext, ticket );
+                    var url = Rock.Model.WalletService.GetGoogleSaveUrl( rockContext, pass );
+                    if ( url == null )
+                    {
+                        return ActionBadRequest( "Google Wallet no está disponible para esta entrada." );
+                    }
+
+                    return ActionOk( new GetApplePassResponseBag { url = url } );
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                    return ActionBadRequest( "No se pudo generar el pase. Intenta de nuevo." );
+                }
+            }
+        }
+
+        /// <summary>
+        /// Guard compartido de los pases: el ticket debe ser del comprador o del asistente,
+        /// de una orden pagada y vigente (Valid/CheckedIn), con código+QR asegurados.
+        /// </summary>
+        private Ticket GetOwnedActiveTicket( RockContext rockContext, int ticketId, out string error )
+        {
+            error = null;
+            var currentPerson = RequestContext?.CurrentPerson;
+            if ( currentPerson == null )
+            {
+                error = "No autenticado.";
+                return null;
+            }
+
+            if ( ticketId <= 0 )
+            {
+                error = "Ticket inválido.";
+                return null;
+            }
+
+            var aliasIds = GetPersonAliasIds( rockContext, currentPerson.Id );
+
+            var ticket = new TicketService( rockContext ).Queryable()
+                .Include( t => t.Order.Event )
+                .Include( t => t.TicketType )
+                .Include( t => t.AttendeePersonAlias.Person )
+                .FirstOrDefault( t => t.Id == ticketId &&
+                    ( ( t.AttendeePersonAliasId.HasValue && aliasIds.Contains( t.AttendeePersonAliasId.Value ) )
+                      || aliasIds.Contains( t.Order.BuyerPersonAliasId ) ) );
+
+            if ( ticket == null )
+            {
+                error = "El ticket no existe o no te pertenece.";
+                return null;
+            }
+
+            if ( ticket.Order?.Status != Rock.Enums.Eventos.OrderStatus.Paid
+                || ( ticket.Status != Rock.Enums.Eventos.TicketStatus.Valid
+                    && ticket.Status != Rock.Enums.Eventos.TicketStatus.CheckedIn ) )
+            {
+                error = "Esta entrada no está disponible.";
+                return null;
+            }
+
+            if ( new QrService().EnsureTicketCodeAndQr( ticket, rockContext ) )
+            {
+                rockContext.SaveChanges();
+            }
+
+            return ticket;
+        }
+
+        /// <summary>
+        /// Emite (o reusa) el WalletPass del ticket con la plantilla "Entrada de evento" del
+        /// módulo Wallet, alimentándola con los datos frescos del boleto.
+        /// </summary>
+        private static WalletPass GetOrIssueTicketPass( RockContext rockContext, Ticket ticket )
+        {
+            return TicketWalletService.GetOrIssuePass( rockContext, ticket );
         }
 
         /// <summary>
@@ -248,7 +403,19 @@ namespace Rock.Blocks.Eventos
         public class InitBag
         {
             public bool notLogged { get; set; }
+            public bool appleWalletEnabled { get; set; }
+            public bool googleWalletEnabled { get; set; }
             public List<TicketBag> tickets { get; set; }
+        }
+
+        public class GetApplePassRequestBag
+        {
+            public int ticketId { get; set; }
+        }
+
+        public class GetApplePassResponseBag
+        {
+            public string url { get; set; }
         }
 
         public class TicketBag

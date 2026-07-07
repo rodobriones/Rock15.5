@@ -316,6 +316,10 @@ namespace Rock.Blocks.Eventos
 
                 rockContext.SaveChanges();
 
+                // Wallet: si el evento ya tiene pases emitidos (fecha/lugar/nombre pudieron
+                // cambiar), se refrescan en background y los teléfonos reciben el update.
+                TicketWalletService.QueueRefreshForEvent( ev.Id );
+
                 return ActionOk( new SaveEventResponseBag { eventId = ev.Id, saved = true } );
             }
         }

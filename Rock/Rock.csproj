@@ -91,6 +91,7 @@
     <PackageReference Include="System.IO.Pipelines" Version="9.0.6" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.6" />
     <PackageReference Include="System.Memory.Data" Version="8.0.1" />
+    <PackageReference Include="System.Net.Http.WinHttpHandler" Version="8.0.0" />
     <PackageReference Include="System.Reflection.Emit" Version="4.7.0" />
     <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
     <PackageReference Include="System.Text.Json" Version="9.0.6" />
@@ -159,6 +160,7 @@
     <Reference Include="System.DirectoryServices.AccountManagement" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.IdentityModel" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Management" />
     <Reference Include="System.Net.Http.WebRequest" />

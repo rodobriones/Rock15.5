@@ -157,6 +157,16 @@ Producto propio de boletería end-to-end. **NO reusa `Registration*`**; esquema 
 - **Front del checkout** en partials (patrón RegistrationEntry): `eventCheckout.obs` = shell + CSS global; estado en `src/Eventos/EventCheckout/checkoutState.partial.ts` (+ `attendeeState.partial.ts`) por provide/inject; 5 `*Step.partial.obs`.
 - **Doc de arquitectura (leer primero):** `Rock/Model/Eventos/ARCHITECTURE.md`. **Doc maestro:** `docs/eventos-custom/RESEARCH_Y_PLAN.md` (§9.x = historial de sesiones). **Pruebas runtime:** `docs/eventos-custom/SMOKE_TESTS.md`.
 
+### 8. Wallet (Apple/Google Wallet passes) — `Rock/Model/Wallet/` (2026-07-06 →)
+Módulo INDEPENDIENTE y reutilizable de pases de wallet, self-hosted (sin SaaS): emisión desde plantillas diseñables (Lava en campos/colores), pkpass firmado (cert Pass Type ID `pass.tv.vidareal.eventos`, vence 2027-08-05), **actualizaciones push** (PassKit Web Service en `Rock.Rest/VidaReal/WalletPassKitController.cs` — anónimo por contrato de Apple, auth `ApplePass <token>` — + APNs HTTP/2 vía `System.Net.Http.WinHttpHandler`) y Google Wallet (JWT RS256 + REST; espera cuenta emisor).
+
+- Esquema `_com_vidareal_Wallet_*` (WalletTemplate / WalletPass / WalletDeviceRegistration); migraciones en `Plugin.VidaRealWallet/` (assembly `com.vidareal.Wallet`, 001–008, numeración PROPIA).
+- **API pública = `Rock.Model.WalletService`** (GetOrIssuePass / RefreshPass / VoidPass / GetPkpass / GetGoogleSaveUrl). Consumidor: Eventos vía `Rock/Model/Eventos/Services/TicketWalletService.cs` (botones en Mis Entradas; editar evento → refresh+push de sus pases).
+- Diseñador de plantillas: `Rock.Blocks/Wallet/WalletTemplateAdmin.cs` + `src/Wallet/walletTemplateAdmin.obs`, página `wallet/plantillas` (menú Eventos → Boletería, solo Rock Administration). Guardar plantilla re-empuja el diseño a los pases emitidos.
+- Config: Global Attributes `AppleWalletPassP12`/`AppleWalletPassP12Password` (+ Google pendiente); `PublicApplicationRoot` HTTPS obligatorio para updates.
+- ⚠️ PassKit NO renderiza HTML: layout fijo de Apple (sin pills/acentos custom). El QR del pase = `Ticket.UniqueCode` (mismo del PDF y el escáner).
+- **Doc maestro (leer primero):** `docs/wallet-module/RESEARCH_Y_PLAN.md`. Migraciones: `Plugin.VidaRealWallet/README.md`.
+
 ---
 
 ## Areas que NO deben tocarse sin extremo cuidado
@@ -274,6 +284,8 @@ Estos archivos `.md` en la raiz del repositorio documentan sesiones de trabajo a
 |---|---|---|
 | `docs/eventos-custom/RESEARCH_Y_PLAN.md` | Eventos/Boletería Custom | Doc maestro del módulo propio de boletería: modelo de datos, arquitectura, decisiones y todas las sesiones (§9.x) |
 | `Plugin.VidaRealEvents/README.md` | Eventos/Boletería Custom | Migraciones 001–017, modelo de permisos, build/deploy del DLL |
+| `docs/wallet-module/RESEARCH_Y_PLAN.md` | Wallet | Doc maestro del módulo Wallet: arquitectura, PassKit/APNs/Google, runbook de deploy, historial y pendientes |
+| `Plugin.VidaRealWallet/README.md` | Wallet | Migraciones 001–008 del assembly com.vidareal.Wallet, build/deploy |
 | `AI_HANDOFF_ROCK18_EVENT_CRM.md` | Eventos / CRM | i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration, reglas ES/EN, DatePicker, pitfalls Vue, template Lava recomendado, + Facturación FEL/NIT en pantalla de pago (2026-06-15) |
 | `Plugin.OdooEventSale/CONTEXT.md` + `README.md` | OdooEventSale | Integración Rock eventos → Odoo FEL: workflow action, NIT/SAT, Global Attributes, configuración staging, checklist |
 | `EPAY_FLOW_SUMMARY.md` | DAR / ePay | Flujo completo de cobro con cuotas ePay Visanet: SOAP, FeeCoverageAmount, calculo de balance, checklist de despliegue |
