@@ -244,12 +244,21 @@ namespace Rock.Model
 
         #region Internals
 
+        // ponytail: caché de PNGs ya procesados (leer BinaryFile + ImageSharp cuesta ~50-100ms
+        // y las imágenes son LAS MISMAS para todos los pases de una plantilla — 1000 descargas
+        // simultáneas no deben repetirlo 1000×). Key = fileId+ancho; subir imagen nueva crea
+        // otro BinaryFile (Id nuevo) así que el key se invalida solo. Cap crudo: al llegar al
+        // tope se vacía entero (las entradas vivas se recalientan en una descarga).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _pngCache
+            = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>();
+        private const int PngCacheMaxEntries = 300;
+
         private static void AddImages( Dictionary<string, byte[]> files, WalletTemplate template,
             PassTemplateResolver.AppleDesign design, RockContext rockContext )
         {
             var fileService = new BinaryFileService( rockContext );
 
-            byte[] Load( int? binaryFileId )
+            byte[] LoadRaw( int? binaryFileId )
             {
                 if ( !binaryFileId.HasValue )
                 {
@@ -269,10 +278,42 @@ namespace Rock.Model
                 }
             }
 
+            byte[] LoadPng( int? binaryFileId, int maxWidth )
+            {
+                if ( !binaryFileId.HasValue )
+                {
+                    return null;
+                }
+
+                var key = $"{binaryFileId.Value}:{maxWidth}";
+                if ( _pngCache.TryGetValue( key, out var cached ) )
+                {
+                    return cached;
+                }
+
+                var png = ToPng( LoadRaw( binaryFileId ), maxWidth );
+                if ( png != null )
+                {
+                    if ( _pngCache.Count >= PngCacheMaxEntries )
+                    {
+                        _pngCache.Clear();
+                    }
+
+                    _pngCache[key] = png;
+                }
+
+                return png;
+            }
+
+            int? IdByGuid( string guidText )
+            {
+                return guidText.AsGuidOrNull() is Guid guid ? fileService.Get( guid )?.Id : ( int? ) null;
+            }
+
             // Las imágenes del pkpass DEBEN ser PNG: lo que suba el admin (JPG o lo que sea) se
             // convierte y redimensiona aquí. iOS reescala; con imagen propia se usa la misma
             // en todas las densidades.
-            var customIcon = ToPng( Load( template?.IconBinaryFileId ), 174 );
+            var customIcon = LoadPng( template?.IconBinaryFileId, 174 );
             if ( customIcon != null )
             {
                 files["icon.png"] = customIcon;
@@ -286,7 +327,7 @@ namespace Rock.Model
                 files["icon@3x.png"] = Convert.FromBase64String( Icon3xPngBase64 );
             }
 
-            var customLogo = ToPng( Load( template?.LogoBinaryFileId ), 320 );
+            var customLogo = LoadPng( template?.LogoBinaryFileId, 320 );
             if ( customLogo != null )
             {
                 files["logo.png"] = customLogo;
@@ -298,22 +339,17 @@ namespace Rock.Model
                 files["logo@2x.png"] = Convert.FromBase64String( Logo2xPngBase64 );
             }
 
-            byte[] LoadByGuid( string guidText )
-            {
-                return guidText.AsGuidOrNull() is Guid guid ? Load( fileService.Get( guid )?.Id ) : null;
-            }
-
             // Fondo completo (PassKit solo lo pinta en eventTicket) + thumbnail: replican pases
             // tipo MinistryPass. Fondo y strip son EXCLUYENTES según la spec — el fondo gana.
             // El fijo de la plantilla (uploader del admin) precede al guid Lava del diseño.
-            var background = ToPng( Load( template?.BackgroundBinaryFileId ) ?? LoadByGuid( design?.BackgroundImageGuid ), 360 );
+            var background = LoadPng( template?.BackgroundBinaryFileId, 360 ) ?? LoadPng( IdByGuid( design?.BackgroundImageGuid ), 360 );
             if ( background != null )
             {
                 files["background.png"] = background;
                 files["background@2x.png"] = background;
             }
 
-            var thumbnail = ToPng( Load( template?.ThumbnailBinaryFileId ) ?? LoadByGuid( design?.ThumbnailImageGuid ), 180 );
+            var thumbnail = LoadPng( template?.ThumbnailBinaryFileId, 180 ) ?? LoadPng( IdByGuid( design?.ThumbnailImageGuid ), 180 );
             if ( thumbnail != null )
             {
                 files["thumbnail.png"] = thumbnail;
@@ -325,13 +361,7 @@ namespace Rock.Model
             // el hero del PDF de boletos).
             if ( background == null )
             {
-                var strip = Load( template?.StripBinaryFileId );
-                if ( strip == null && design?.StripImageGuid.AsGuidOrNull() is Guid stripGuid )
-                {
-                    strip = Load( fileService.Get( stripGuid )?.Id );
-                }
-
-                strip = ToPng( strip, 750 );
+                var strip = LoadPng( template?.StripBinaryFileId, 750 ) ?? LoadPng( IdByGuid( design?.StripImageGuid ), 750 );
                 if ( strip != null )
                 {
                     files["strip.png"] = strip;

@@ -962,7 +962,7 @@ namespace Rock.Blocks.Dar
                 SavePersonEmail( rockContext, person, bag.donorEmail );
             }
 
-            var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, currency );
+            var workflowAttributes = BuildReceiptWorkflowAttributes( person, bag, transaction, chargeResult, mode, currency, account );
 
             EnqueueFinancialTransactionWorkflow( AttributeKey.DonationWorkflow, personAliasId, transaction.Id, workflowAttributes );
 
@@ -1014,15 +1014,21 @@ namespace Rock.Blocks.Dar
             FinancialTransaction transaction,
             CybersourceChargeResult chargeResult,
             string mode,
-            string currency )
+            string currency,
+            FinancialAccount account )
         {
             var donorName = bag.nitName.IsNotNullOrWhiteSpace()
                 ? bag.nitName.Trim()
                 : ( person?.FullName ?? string.Empty );
 
+            var donationType = account?.PublicName.IsNotNullOrWhiteSpace() == true
+                ? account.PublicName
+                : ( account?.Name ?? string.Empty );
+
             return new Dictionary<string, string>
             {
                 ["DonorName"] = donorName,
+                ["DonationType"] = donationType,
                 ["Amount"] = bag.amount.ToString( "0.00", CultureInfo.InvariantCulture ),
                 ["Currency"] = NormalizeCurrency( currency ),
                 ["Nit"] = ( bag.nit ?? string.Empty ).Trim(),

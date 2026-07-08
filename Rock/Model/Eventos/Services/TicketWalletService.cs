@@ -136,9 +136,7 @@ namespace Rock.Model
                 ["AccentColor"] = accent,
                 ["EventDate"] = when,
                 ["Venue"] = ev?.VenueName,
-                ["AttendeeName"] = !string.IsNullOrWhiteSpace( ticket.AttendeeName )
-                    ? ticket.AttendeeName
-                    : ticket.AttendeePersonAlias?.Person?.FullName,
+                ["AttendeeName"] = ShortAttendeeName( ticket ),
                 ["TicketTypeName"] = ticket.TicketType?.Name,
                 ["Code"] = ticket.UniqueCode,
                 ["Sessions"] = sessions != null && sessions.Count > 0 ? string.Join( "\n", sessions ) : null,
@@ -147,6 +145,30 @@ namespace Rock.Model
                 ["EventImageGuid"] = imageGuid,
                 ["EventImageUrl"] = imageUrl
             };
+        }
+
+        /// <summary>
+        /// Nombre CORTO para el pase (pedido del usuario: primer nombre + primer apellido —
+        /// "Rodolfo Rodriguez", no el nombre completo de 4 palabras que se trunca en Wallet).
+        /// Con persona amarrada se parte NickName/LastName; sin persona, el texto tecleado
+        /// tal cual (no se puede saber dónde empieza el apellido).
+        /// </summary>
+        private static string ShortAttendeeName( Ticket ticket )
+        {
+            var person = ticket.AttendeePersonAlias?.Person;
+            if ( person != null )
+            {
+                string FirstWord( string s ) => ( s ?? string.Empty ).Trim().Split( ' ' )[0];
+                var shortName = $"{FirstWord( person.NickName ?? person.FirstName )} {FirstWord( person.LastName )}".Trim();
+                if ( !string.IsNullOrWhiteSpace( shortName ) )
+                {
+                    return shortName;
+                }
+            }
+
+            return !string.IsNullOrWhiteSpace( ticket.AttendeeName )
+                ? ticket.AttendeeName
+                : person?.FullName;
         }
 
         /// <summary>

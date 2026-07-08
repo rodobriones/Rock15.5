@@ -6,7 +6,7 @@ Wallet passes). El código vive en core (decisión del fork): entidades/servicio
 `Rock.Blocks/Wallet/`. Documento maestro: `docs/wallet-module/RESEARCH_Y_PLAN.md`.
 
 > ⚠️ **Numeración**: independiente del plugin de Eventos (`com.vidareal.Events`). Rock
-> registra por-assembly en `[PluginMigration]`. **Próxima migración = 13+.** Cambios al seed
+> registra por-assembly en `[PluginMigration]`. **Próxima migración = 14+.** Cambios al seed
 > de plantilla = SIEMPRE migración nueva (la 001 ya corrió en dev; nunca editarla).
 
 ## Migraciones
@@ -25,6 +25,7 @@ Wallet passes). El código vive en core (decisión del fork): entidades/servicio
 | 010 | `010_EventTicketTemplateExpiration.cs` | Seed "Entrada de evento" gana `ExpirationDate = {{ Data.ExpiresOn }}` (Apple + Google, vía `JSON_MODIFY` para no pisar retoques del admin). El pase expira al terminar el evento. |
 | 011 | `011_VidaAventuraBackgroundDesign.cs` | VidaAventura → estilo **eventTicket con FONDO completo** (BACK2.png, réplica del pase real de MinistryPass) + thumbnail LOGO_VA.png (BinaryFile nuevo guid `…960000000001`, contenido embebido en hex); strip fuera (excluyente con fondo). |
 | 012 | `012_TemplateBackgroundThumbnailColumns.cs` | Columnas `BackgroundBinaryFileId`/`ThumbnailBinaryFileId` en WalletTemplate (+ FKs) → fondo/thumbnail editables con uploader en el admin (guardar = push a pases emitidos); seed VidaAventura pasa a las columnas y limpia los guids Lava del diseño. |
+| 013 | `013_VidaAventuraShortName.cs` | Nombre CORTO en el pase VidaAventura: `{{ Person.NickName \| Split:' ' \| First }} {{ Person.LastName \| Split:' ' \| First }}` (Apple PrimaryFields[0] + Google Header). Eventos hace lo mismo server-side (`TicketWalletService.ShortAttendeeName`). |
 
 ## Build y deploy
 

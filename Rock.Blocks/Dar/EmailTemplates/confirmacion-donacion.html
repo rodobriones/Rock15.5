@@ -1,20 +1,22 @@
-{% assign currency   = Workflow | Attribute:'Currency'    | StripHtml | Truncate:8 | Escape %}
-{% assign amount     = Workflow | Attribute:'Amount'      | StripHtml | Truncate:20 | Escape %}
-{% assign symbol     = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
-{% assign nit        = Workflow | Attribute:'Nit'         | StripHtml | Truncate:32 | Escape %}
-{% assign nitName    = Workflow | Attribute:'NitName'     | StripHtml | Truncate:120 | Escape %}
-{% assign nitAddr    = Workflow | Attribute:'NitAddress'  | StripHtml | Truncate:200 | Escape %}
-{% assign mode       = Workflow | Attribute:'Mode'        | StripHtml | Truncate:10 | Escape %}
-{% assign donorName  = Workflow | Attribute:'DonorName'   | StripHtml | Truncate:80 | Escape %}
-{% assign donorEmail = Workflow | Attribute:'DonorEmail'  | StripHtml | Truncate:120 | Escape %}
+{% assign currency     = Workflow | Attribute:'Currency'     | StripHtml | Truncate:8 | Escape %}
+{% assign amount       = Workflow | Attribute:'Amount'       | StripHtml | Truncate:20 | Escape %}
+{% assign symbol       = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
+{% assign nit          = Workflow | Attribute:'Nit'          | StripHtml | Truncate:32 | Escape %}
+{% assign nitName      = Workflow | Attribute:'NitName'      | StripHtml | Truncate:120 | Escape %}
+{% assign nitAddr      = Workflow | Attribute:'NitAddress'   | StripHtml | Truncate:200 | Escape %}
+{% assign mode         = Workflow | Attribute:'Mode'         | StripHtml | Truncate:10 | Escape %}
+{% assign donorName    = Workflow | Attribute:'DonorName'    | StripHtml | Truncate:80 | Escape %}
+{% assign donorEmail   = Workflow | Attribute:'DonorEmail'   | StripHtml | Truncate:120 | Escape %}
+{% assign donationType = Workflow | Attribute:'DonationType' | StripHtml | Truncate:80 | Escape %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet" />
   <title>Confirmación de donación – DAR</title>
 </head>
-<body style="margin:0;padding:0;background:#ececec;font-family:'Segoe UI',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:#ececec;font-family:'Montserrat','Roboto',Arial,sans-serif;">
 
   <!-- Wrapper -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ececec;padding:32px 16px;">
@@ -27,7 +29,7 @@
                HEADER NEGRO
           ══════════════════════════════════ -->
           <tr>
-            <td style="background:#000000;border-radius:22px 22px 0 0;padding:20px 24px 0;">
+            <td style="background:#272b31;border-radius:22px 22px 0 0;padding:20px 24px 0;">
 
               <!-- Top bar: badge -->
               {% if mode != 'live' %}
@@ -40,6 +42,19 @@
               </table>
               {% endif %}
 
+              <!-- Logo -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding:20px 0 0;">
+                    <a href="https://www.vidareal.tv/" target="_blank">
+                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'logoblancopq' }}"
+                           alt="VidaReal" width="70"
+                           style="display:block;margin:0 auto 15px;border:0;">
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
               <!-- Ícono de éxito + monto -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
@@ -48,21 +63,22 @@
                     <!-- Círculo verde con check -->
                     <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;">
                       <tr>
-                        <td width="72" height="72" align="center" valign="middle" style="width:72px;height:72px;background:#ecfdf3;border-radius:50%;font-size:34px;line-height:72px;color:#067647;font-weight:700;">
+                        <td width="42" height="42" align="center" valign="middle" style="width:42px;height:42px;background:#ecfdf3;border-radius:50%;font-size:34px;line-height:42px;color:#067647;font-weight:700;">
                           &#10003;
                         </td>
                       </tr>
                     </table>
 
                     <!-- Título -->
-                    <p style="margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.01em;">¡Gracias por tu donación!</p>
-                    <p style="margin:0 0 20px;font-size:13px;color:#b0b0b0;letter-spacing:0.01em;">Tu generosidad hace la diferencia.</p>
+                    <p style="margin:0 0 10px;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.01em;">¡Tu donación ha sido recibida!</p>
 
                     <!-- Monto destacado -->
-                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:54px;font-weight:700;color:#ffffff;line-height:1;letter-spacing:-0.01em;">
+                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:54px;font-weight:700;color:#ffffff;line-height:1;letter-spacing:-0.01em;">
                       <span style="font-size:28px;font-weight:500;color:#d9d9d9;vertical-align:top;line-height:1.6;">{{ symbol }}</span>{{ amount }}
                     </p>
                     <p style="margin:8px 0 0;font-size:13px;color:#888888;text-transform:uppercase;letter-spacing:0.1em;">{{ currency }}</p>
+
+                    <p style="margin:8px 0 20px;font-size:13px;color:#b0b0b0;letter-spacing:0.01em;">Tu generosidad hace la diferencia.</p>
 
                   </td>
                 </tr>
@@ -84,7 +100,7 @@
                 <!-- Section head -->
                 <tr>
                   <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
-                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:#222222;">Detalles de la transacción</p>
+                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#222222;">Detalles de la transacción</p>
                   </td>
                 </tr>
 
@@ -99,6 +115,20 @@
                     </table>
                   </td>
                 </tr>
+
+                <!-- Fila: Tipo de donación (solo si viene el fondo) -->
+                {% if donationType != '' and donationType != null %}
+                <tr>
+                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Tipo de donación</td>
+                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donationType }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {% endif %}
 
                 <!-- Fila: Correo -->
                 <tr>
@@ -118,7 +148,7 @@
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Monto</td>
-                        <td align="right" style="font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;color:#0f0f0f;">{{ symbol }}{{ amount }} <span style="font-size:12px;font-weight:500;color:#6b7280;">{{ currency }}</span></td>
+                        <td align="right" style="font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:18px;font-weight:700;color:#0f0f0f;">{{ symbol }}{{ amount }} <span style="font-size:12px;font-weight:500;color:#6b7280;">{{ currency }}</span></td>
                       </tr>
                     </table>
                   </td>
@@ -133,7 +163,7 @@
 
                 <tr>
                   <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
-                    <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:700;color:#222222;">Datos de facturación</p>
+                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#222222;">Datos de facturación</p>
                   </td>
                 </tr>
 
@@ -181,20 +211,11 @@
               {% endif %}
 
 
-              <!-- ── Nota ── -->
+              <!-- ── Notas ── -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 16px;">
                 <tr>
-                  <td style="background:#f0fdf4;border:1px solid #abe7c0;border-radius:10px;padding:12px 16px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="vertical-align:top;width:20px;padding-right:8px;font-size:14px;color:#067647;font-weight:700;line-height:1.5;">
-                          &#10003;
-                        </td>
-                        <td style="font-size:13px;color:#065f46;line-height:1.5;">
-                          Tu donación fue recibida con éxito.{% if nit != '' and nit != null %} Tu recibo llegará en breve.{% endif %}
-                        </td>
-                      </tr>
-                    </table>
+                  <td style="background:#DEDEDE;border:1px solid #abe7c0;border-radius:10px;padding:12px 16px;">
+                    <p style="margin:0;font-size:13px;color:#5c5c5c;letter-spacing:0.01em;"><i>NOTAS:</i> Agradecemos tu donación.{% if nit != '' and nit != null %} Tu recibo llegará en breve.{% endif %}</p>
                   </td>
                 </tr>
               </table>
@@ -207,10 +228,35 @@
                FOOTER NEGRO
           ══════════════════════════════════ -->
           <tr>
-            <td style="background:#000000;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
-              <p style="margin:0 0 6px;font-size:12px;color:#888888;">Este correo fue enviado a <span style="color:#cccccc;">{{ donorEmail }}</span></p>
-              <p style="margin:0;font-size:11px;color:#555555;">No respondas a este mensaje porque es automático.</p>
-              <p style="margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.05em;">Vidareal.tv</p>
+            <td align="center" style="background:#272b31;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:11px;color:#b7b7b7;">Este correo fue enviado a <span style="color:#b7b7b7;">{{ donorEmail }}</span></p>
+              <p style="margin:0;font-size:11px;color:#b7b7b7;">Este correo fue generado automáticamente, por favor no responder.</p>
+
+              <!-- Logo -->
+              <br>
+              <a href="https://www.vidareal.tv/" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'nombrevrblanco' }}"
+                     alt="VidaReal" width="100"
+                     style="display:block;margin:0 auto 15px;border:0;">
+              </a>
+
+              <!-- SOCIAL ICONS -->
+              <br>
+              <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" style="font-size:0;line-height:0;">
+                    <a href="https://www.instagram.com/vidaventura.tv/" target="_blank">
+                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoInstagramBlanco' }}" width="25" style="margin:0 6px;border:0;">
+                    </a>
+                    <a href="https://www.facebook.com/vidaventura.tv" target="_blank">
+                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoFacebookBlanco' }}" width="25" style="margin:0 6px;border:0;">
+                    </a>
+                    <a href="https://www.youtube.com/@vidaventuratv4487" target="_blank">
+                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoYoutubeBlanco' }}" width="25" style="margin:0 6px;border:0;">
+                    </a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 

@@ -229,6 +229,17 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
     de plantilla > guid Lava del diseño (variante dinámica por-pase). Seed VidaAventura
     migrado a las columnas; guids Lava del diseño limpiados. VidaAventura confirmado SIN
     expiración (ambos diseños NULL).
+  - **Nombre corto + carga (misma sesión)**: **migración 013** = nombre en el pase
+    VidaAventura vía Lava `Split:' ' | First` sobre NickName/LastName (primer nombre +
+    primer apellido); Eventos igual pero server-side (`ShortAttendeeName` en
+    TicketWalletService: persona amarrada → corto; texto libre → tal cual). **Caché de PNGs
+    procesados** en ApplePassBuilder (`_pngCache` ConcurrentDictionary, key fileId+ancho,
+    cap 300 con clear total; subir imagen nueva = Id nuevo = key nuevo): las imágenes son
+    idénticas entre pases de la plantilla y ya no se relee BinaryFile ni se redimensiona por
+    request. **Prueba de carga PASADA: 1000 descargas concurrentes del endpoint /apple
+    (pkpass firmado real) → 1000/1000 OK, 0 fallos, 5.5s wall (~183 pases/seg), 0
+    excepciones** (harness: 20 pases loadtest + HttpClient Task.WhenAll, script en
+    scratchpad de la sesión).
 
 ## 10. Pendientes
 
