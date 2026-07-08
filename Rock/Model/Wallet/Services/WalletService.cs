@@ -175,6 +175,24 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Bundle .pkpasses de varios pases (una sola hoja de Wallet que los agrega todos).
+        /// MIME: <c>application/vnd.apple.pkpasses</c>.
+        /// </summary>
+        public static byte[] GetPkpassBundle( RockContext rockContext, IEnumerable<WalletPass> passes )
+        {
+            return ApplePassBuilder.GeneratePkpassBundle( passes, rockContext );
+        }
+
+        /// <summary>
+        /// Link "Guardar en Google Wallet" con VARIOS pases en un solo JWT (Google los agrega
+        /// todos al guardar). Null si Google no está configurado o ninguno tiene diseño Google.
+        /// </summary>
+        public static string GetGoogleSaveUrl( RockContext rockContext, List<WalletPass> passes )
+        {
+            return GoogleWalletService.BuildSaveUrl( rockContext, passes );
+        }
+
+        /// <summary>
         /// Link "Guardar en Google Wallet" del pase (JWT firmado con el service account).
         /// Null si Google no está configurado o la plantilla no tiene diseño Google.
         /// </summary>

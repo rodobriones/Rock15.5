@@ -73,6 +73,8 @@ export type InitBag = {
     currentPersonEmail?: string | null;
     requiresPassword?: boolean;
     calendarUrl?: string | null;
+    appleWalletEnabled?: boolean;
+    googleWalletEnabled?: boolean;
 };
 
 export type ConfirmationTicketBag = {

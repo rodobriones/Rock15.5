@@ -142,6 +142,10 @@
                                     <div class="col-md-6"><TextBox v-model="apple.expirationDate" label="Fecha de expiración (Lava)" /></div>
                                 </div>
                                 <TextBox v-model="apple.stripImageGuid" label="Imagen strip dinámica (Lava → guid)" help="Guid de un archivo por pase, ej. {{ Data.EventImageGuid }} = la foto del evento. La imagen fija de abajo tiene precedencia." />
+                                <div class="row">
+                                    <div class="col-md-6"><TextBox v-model="apple.backgroundImageGuid" label="Imagen de fondo (Lava → guid)" help="Fondo completo del pase (360×440). Apple solo lo pinta en estilo Entrada de evento; si hay fondo, el strip se omite." /></div>
+                                    <div class="col-md-6"><TextBox v-model="apple.thumbnailImageGuid" label="Thumbnail (Lava → guid)" help="Logo pequeño a la derecha del encabezado (90×90)." /></div>
+                                </div>
                             </section>
 
                             <section class="wtSec">
@@ -157,6 +161,14 @@
                                         <ImageUploader v-model="form.strip" label="Strip" help="Franja bajo el encabezado (opcional)." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
                                     </div>
                                 </div>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <ImageUploader v-model="form.background" label="Fondo" help="Fondo completo del pase (360×440). Apple solo lo pinta en estilo Entrada de evento; con fondo, el strip se omite. Guardar la plantilla actualiza los pases ya emitidos." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <ImageUploader v-model="form.thumbnail" label="Thumbnail" help="Logo pequeño a la derecha del encabezado (90×90)." :uploadAsTemporary="true" uploadButtonText="Subir" :showDeleteButton="true" />
+                                    </div>
+                                </div>
                             </section>
 
                             <section class="wtSec">
@@ -166,6 +178,7 @@
                                     <div class="col-md-6"><TextBox v-model="google.header" label="Encabezado (Lava)" /></div>
                                 </div>
                                 <TextBox v-model="google.heroImageUrl" label="Imagen hero (Lava → URL https)" help="URL pública de la imagen, ej. {{ Data.EventImageUrl }}." />
+                                <TextBox v-model="google.expirationDate" label="Fecha de expiración (Lava)" help="Google vence el pase al llegar esta fecha. Vacío = nunca expira." />
                                 <div class="wtColors">
                                     <label class="wtColor">
                                         <input type="color" v-model="google.hexBackgroundColor" />
@@ -338,17 +351,19 @@ type AppleDesign = {
     headerFields: PassField[] | null; primaryFields: PassField[] | null; secondaryFields: PassField[] | null;
     auxiliaryFields: PassField[] | null; backFields: PassField[] | null;
     barcode: BarcodeDesign | null; relevantDate: string | null; expirationDate: string | null;
-    stripImageGuid: string | null;
+    stripImageGuid: string | null; backgroundImageGuid: string | null; thumbnailImageGuid: string | null;
 };
 type GoogleDesign = {
     hexBackgroundColor: string | null; cardTitle: string | null; header: string | null;
     rows: PassField[] | null; barcode: BarcodeDesign | null; heroImageUrl: string | null;
+    expirationDate: string | null;
 };
 type TemplateBag = {
     id: number; guid: string | null; name: string | null; description: string | null;
     isActive: boolean; passStyle: number;
     apple: AppleDesign | null; google: GoogleDesign | null;
     icon: ListItemBag | null; logo: ListItemBag | null; strip: ListItemBag | null;
+    background: ListItemBag | null; thumbnail: ListItemBag | null;
     passCount: number;
 };
 type InitBag = { canEdit: boolean; appleConfigured: boolean; googleConfigured: boolean; templates: TemplateBag[] };
@@ -374,7 +389,8 @@ function flash(msg: string): void {
 // ---- form ----
 type EditForm = {
     id: number; name: string; description: string; isActive: boolean; passStyle: number;
-    icon: ListItemBag | null; logo: ListItemBag | null; strip: ListItemBag | null; passCount: number;
+    icon: ListItemBag | null; logo: ListItemBag | null; strip: ListItemBag | null;
+    background: ListItemBag | null; thumbnail: ListItemBag | null; passCount: number;
 };
 const form = ref<EditForm | null>(null);
 
@@ -385,13 +401,15 @@ type AppleForm = {
     auxiliaryFields: PassField[]; backFields: PassField[];
     barcode: { format: string; message: string; altText: string };
     relevantDate: string; expirationDate: string; stripImageGuid: string;
+    backgroundImageGuid: string; thumbnailImageGuid: string;
 };
 const apple = reactive<AppleForm>(emptyApple());
 const google = reactive({
     hexBackgroundColor: "#0f172a", cardTitle: "", header: "",
     rows: [] as PassField[],
     barcode: { format: "QR", message: "", altText: "" },
-    heroImageUrl: ""
+    heroImageUrl: "",
+    expirationDate: ""
 });
 
 function emptyApple(): AppleForm {
@@ -400,7 +418,8 @@ function emptyApple(): AppleForm {
         foregroundColor: "rgb(248,250,252)", backgroundColor: "rgb(15,23,42)", labelColor: "rgb(148,163,184)",
         headerFields: [], primaryFields: [], secondaryFields: [], auxiliaryFields: [], backFields: [],
         barcode: { format: "QR", message: "", altText: "" },
-        relevantDate: "", expirationDate: "", stripImageGuid: ""
+        relevantDate: "", expirationDate: "", stripImageGuid: "",
+        backgroundImageGuid: "", thumbnailImageGuid: ""
     };
 }
 
@@ -456,16 +475,17 @@ function hexToRgb(hex: string): string {
 
 // ---- navegación ----
 function newTemplate(): void {
-    form.value = { id: 0, name: "", description: "", isActive: true, passStyle: 0, icon: null, logo: null, strip: null, passCount: 0 };
+    form.value = { id: 0, name: "", description: "", isActive: true, passStyle: 0, icon: null, logo: null, strip: null, background: null, thumbnail: null, passCount: 0 };
     Object.assign(apple, emptyApple());
-    Object.assign(google, { hexBackgroundColor: "#0f172a", cardTitle: "", header: "", rows: [], barcode: { format: "QR", message: "", altText: "" }, heroImageUrl: "" });
+    Object.assign(google, { hexBackgroundColor: "#0f172a", cardTitle: "", header: "", rows: [], barcode: { format: "QR", message: "", altText: "" }, heroImageUrl: "", expirationDate: "" });
     view.value = "edit";
 }
 
 function editTemplate(t: TemplateBag): void {
     form.value = {
         id: t.id, name: t.name ?? "", description: t.description ?? "", isActive: t.isActive,
-        passStyle: t.passStyle, icon: t.icon, logo: t.logo, strip: t.strip, passCount: t.passCount
+        passStyle: t.passStyle, icon: t.icon, logo: t.logo, strip: t.strip,
+        background: t.background, thumbnail: t.thumbnail, passCount: t.passCount
     };
     const a = t.apple;
     Object.assign(apple, emptyApple(), {
@@ -483,7 +503,9 @@ function editTemplate(t: TemplateBag): void {
         barcode: { format: a?.barcode?.format ?? "QR", message: a?.barcode?.message ?? "", altText: a?.barcode?.altText ?? "" },
         relevantDate: a?.relevantDate ?? "",
         expirationDate: a?.expirationDate ?? "",
-        stripImageGuid: a?.stripImageGuid ?? ""
+        stripImageGuid: a?.stripImageGuid ?? "",
+        backgroundImageGuid: a?.backgroundImageGuid ?? "",
+        thumbnailImageGuid: a?.thumbnailImageGuid ?? ""
     });
     const g = t.google;
     Object.assign(google, {
@@ -492,7 +514,8 @@ function editTemplate(t: TemplateBag): void {
         header: g?.header ?? "",
         rows: (g?.rows ?? []).map(f => ({ ...f })),
         barcode: { format: g?.barcode?.format ?? "QR", message: g?.barcode?.message ?? "", altText: g?.barcode?.altText ?? "" },
-        heroImageUrl: g?.heroImageUrl ?? ""
+        heroImageUrl: g?.heroImageUrl ?? "",
+        expirationDate: g?.expirationDate ?? ""
     });
     view.value = "edit";
 }
@@ -521,6 +544,8 @@ async function save(): Promise<void> {
             icon: form.value.icon,
             logo: form.value.logo,
             strip: form.value.strip,
+            background: form.value.background,
+            thumbnail: form.value.thumbnail,
             passCount: form.value.passCount
         };
         const res = await invokeBlockAction<{ templates: TemplateBag[]; savedId: number | null }>("SaveTemplate", { bag: { template } });

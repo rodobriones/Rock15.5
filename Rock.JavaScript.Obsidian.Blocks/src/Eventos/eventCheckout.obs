@@ -587,6 +587,7 @@
 }
 .ecDoneBtn:hover:not(:disabled) { background: var(--surface-mid); }
 .ecDoneBtn:disabled { opacity: .5; cursor: default; }
+.ecDoneWalletErr { display: block; margin-top: 8px; font-size: 12px; color: #dc2626; text-align: center; }
 .ecDoneRestart {
     border: none; background: transparent; color: var(--primary-500);
     font-size: 13px; font-weight: 500; text-decoration: underline; text-underline-offset: 4px; cursor: pointer;
@@ -644,7 +645,7 @@
     body * { visibility: hidden !important; }
     .ecDone, .ecDone * { visibility: visible !important; }
     .ecDone { position: absolute !important; left: 0; top: 0; width: 100%; padding: 0; }
-    .ecDoneActions, .ecDoneRestart, .ecDoneIcon { display: none !important; }
+    .ecDoneActions, .ecDoneRestart, .ecDoneIcon, .ecDoneWalletErr { display: none !important; }
     .ecDoneItemQr { border: 1px solid #ccc; }
 }
 </style>

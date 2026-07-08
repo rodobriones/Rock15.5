@@ -144,27 +144,58 @@ namespace Rock.Model
         /// </summary>
         public static string BuildSaveUrl( RockContext rockContext, WalletPass pass )
         {
-            if ( !IsConfigured() || pass == null )
-            {
-                return null;
-            }
+            return BuildSaveUrl( rockContext, new List<WalletPass> { pass } );
+        }
 
-            var template = pass.WalletTemplate ?? new WalletTemplateService( rockContext ).Get( pass.WalletTemplateId );
-            var design = PassTemplateResolver.ResolveGoogle( template, pass );
-            if ( design == null )
+        /// <summary>
+        /// Variante multi-pase: un solo JWT/link que agrega TODOS los pases al guardarse
+        /// (p. ej. las N entradas de una orden). Los pases sin diseño Google se omiten.
+        /// </summary>
+        public static string BuildSaveUrl( RockContext rockContext, List<WalletPass> passes )
+        {
+            if ( !IsConfigured() || passes == null )
             {
                 return null;
             }
 
             var issuerId = GetIssuerId();
-            var classId = BuildClassId( issuerId, template );
-            var objectId = BuildObjectId( issuerId, pass );
-            var account = GetServiceAccount( out var rsa );
+            var templateService = new WalletTemplateService( rockContext );
+            var classIds = new HashSet<string>();
+            var objects = new JArray();
+            var dirty = false;
 
+            foreach ( var pass in passes.Where( p => p != null ) )
+            {
+                var template = pass.WalletTemplate ?? templateService.Get( pass.WalletTemplateId );
+                pass.WalletTemplate = template;
+                var design = PassTemplateResolver.ResolveGoogle( template, pass );
+                if ( design == null )
+                {
+                    continue;
+                }
+
+                var classId = BuildClassId( issuerId, template );
+                var objectId = BuildObjectId( issuerId, pass );
+                classIds.Add( classId );
+                objects.Add( BuildGenericObject( design, pass, classId, objectId ) );
+
+                if ( pass.GoogleObjectId != objectId )
+                {
+                    pass.GoogleObjectId = objectId;
+                    dirty = true;
+                }
+            }
+
+            if ( objects.Count == 0 )
+            {
+                return null;
+            }
+
+            var account = GetServiceAccount( out var rsa );
             var payload = new JObject
             {
-                ["genericClasses"] = new JArray { new JObject { ["id"] = classId } },
-                ["genericObjects"] = new JArray { BuildGenericObject( design, pass, classId, objectId ) }
+                ["genericClasses"] = new JArray( classIds.Select( id => new JObject { ["id"] = id } ) ),
+                ["genericObjects"] = objects
             };
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -181,9 +212,8 @@ namespace Rock.Model
             var token = new JwtSecurityToken( new JwtHeader( credentials ), jwtPayload );
             var jwt = new JwtSecurityTokenHandler().WriteToken( token );
 
-            if ( pass.GoogleObjectId != objectId )
+            if ( dirty )
             {
-                pass.GoogleObjectId = objectId;
                 rockContext.SaveChanges();
             }
 
@@ -350,6 +380,16 @@ namespace Rock.Model
             if ( design.HexBackgroundColor.IsNotNullOrWhiteSpace() )
             {
                 obj["hexBackgroundColor"] = design.HexBackgroundColor;
+            }
+
+            // Expiración: Google vence el pase solo al llegar validTimeInterval.end (paridad
+            // con expirationDate de Apple; mismo formato ISO con offset de la organización).
+            if ( ApplePassBuilder.TryFormatIsoDate( design.ExpirationDate, out var expiration ) )
+            {
+                obj["validTimeInterval"] = new JObject
+                {
+                    ["end"] = new JObject { ["date"] = expiration }
+                };
             }
 
             // Hero: Google descarga la imagen de una URL pública (https).

@@ -219,6 +219,29 @@ namespace Rock.Model
             }
         }
 
+        /// <summary>
+        /// Genera un bundle <c>.pkpasses</c> (ZIP de pkpasses, MIME
+        /// <c>application/vnd.apple.pkpasses</c>): iOS abre UNA hoja que agrega todos los pases
+        /// juntos. Para 1 solo pase usar <see cref="GeneratePkpass"/> directo.
+        /// </summary>
+        public static byte[] GeneratePkpassBundle( IEnumerable<WalletPass> passes, RockContext rockContext )
+        {
+            using ( var ms = new MemoryStream() )
+            {
+                using ( var zip = new ZipArchive( ms, ZipArchiveMode.Create, leaveOpen: true ) )
+                {
+                    var index = 1;
+                    foreach ( var pass in passes )
+                    {
+                        WriteZipEntry( zip, $"pase{index}.pkpass", GeneratePkpass( pass, rockContext ) );
+                        index++;
+                    }
+                }
+
+                return ms.ToArray();
+            }
+        }
+
         #region Internals
 
         private static void AddImages( Dictionary<string, byte[]> files, WalletTemplate template,
@@ -275,20 +298,45 @@ namespace Rock.Model
                 files["logo@2x.png"] = Convert.FromBase64String( Logo2xPngBase64 );
             }
 
+            byte[] LoadByGuid( string guidText )
+            {
+                return guidText.AsGuidOrNull() is Guid guid ? Load( fileService.Get( guid )?.Id ) : null;
+            }
+
+            // Fondo completo (PassKit solo lo pinta en eventTicket) + thumbnail: replican pases
+            // tipo MinistryPass. Fondo y strip son EXCLUYENTES según la spec — el fondo gana.
+            // El fijo de la plantilla (uploader del admin) precede al guid Lava del diseño.
+            var background = ToPng( Load( template?.BackgroundBinaryFileId ) ?? LoadByGuid( design?.BackgroundImageGuid ), 360 );
+            if ( background != null )
+            {
+                files["background.png"] = background;
+                files["background@2x.png"] = background;
+            }
+
+            var thumbnail = ToPng( Load( template?.ThumbnailBinaryFileId ) ?? LoadByGuid( design?.ThumbnailImageGuid ), 180 );
+            if ( thumbnail != null )
+            {
+                files["thumbnail.png"] = thumbnail;
+                files["thumbnail@2x.png"] = thumbnail;
+            }
+
             // Strip: el fijo de la plantilla manda; si no hay, el dinámico por-pase del diseño
             // (StripImageGuid resuelto con Lava — p. ej. la imagen del evento, mismo look que
             // el hero del PDF de boletos).
-            var strip = Load( template?.StripBinaryFileId );
-            if ( strip == null && design?.StripImageGuid.AsGuidOrNull() is Guid stripGuid )
+            if ( background == null )
             {
-                strip = Load( fileService.Get( stripGuid )?.Id );
-            }
+                var strip = Load( template?.StripBinaryFileId );
+                if ( strip == null && design?.StripImageGuid.AsGuidOrNull() is Guid stripGuid )
+                {
+                    strip = Load( fileService.Get( stripGuid )?.Id );
+                }
 
-            strip = ToPng( strip, 750 );
-            if ( strip != null )
-            {
-                files["strip.png"] = strip;
-                files["strip@2x.png"] = strip;
+                strip = ToPng( strip, 750 );
+                if ( strip != null )
+                {
+                    files["strip.png"] = strip;
+                    files["strip@2x.png"] = strip;
+                }
             }
         }
 
@@ -474,7 +522,7 @@ namespace Rock.Model
         /// Convierte el valor resuelto (fecha local Rock o ISO) al ISO-8601 con el offset real de
         /// la zona de la organización. Falso si no hay valor o no parsea.
         /// </summary>
-        private static bool TryFormatIsoDate( string value, out string iso )
+        internal static bool TryFormatIsoDate( string value, out string iso )
         {
             iso = null;
             if ( value.IsNullOrWhiteSpace() )

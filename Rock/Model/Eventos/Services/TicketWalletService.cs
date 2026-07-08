@@ -81,6 +81,7 @@ namespace Rock.Model
 
             string when = null;
             string relevant = null;
+            string expires = null;
             if ( ev?.StartDateTime != null )
             {
                 // Formato CORTO para el pase ("Mié 22 jul, 3:00 p. m.", como el mockup del
@@ -92,6 +93,12 @@ namespace Rock.Model
                 when = char.ToUpper( when[0], esGt ) + when.Substring( 1 );
                 var offset = RockDateTime.OrgTimeZoneInfo.GetUtcOffset( start );
                 relevant = new DateTimeOffset( start, offset ).ToString( "yyyy-MM-dd'T'HH:mm:sszzz" );
+
+                // El pase expira al terminar el evento (Apple lo archiva solo; Google lo marca
+                // vencido vía validTimeInterval). Sin fin coherente: duración implícita de 12 h
+                // (mismo criterio que Mis Entradas).
+                var end = ev.EndDateTime > start ? ev.EndDateTime : start.AddHours( 12 );
+                expires = new DateTimeOffset( end, RockDateTime.OrgTimeZoneInfo.GetUtcOffset( end ) ).ToString( "yyyy-MM-dd'T'HH:mm:sszzz" );
             }
 
             var sessions = EventSessionService.Format( ev?.SessionsJson );
@@ -136,6 +143,7 @@ namespace Rock.Model
                 ["Code"] = ticket.UniqueCode,
                 ["Sessions"] = sessions != null && sessions.Count > 0 ? string.Join( "\n", sessions ) : null,
                 ["RelevantDate"] = relevant,
+                ["ExpiresOn"] = expires,
                 ["EventImageGuid"] = imageGuid,
                 ["EventImageUrl"] = imageUrl
             };

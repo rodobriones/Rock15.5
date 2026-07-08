@@ -58,6 +58,12 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
 
         /// <summary>URL of the public events calendar page ("Volver al inicio" target), or null.</summary>
         public string CalendarUrl { get; set; }
+
+        /// <summary>Whether Apple Wallet is configured (shows the wallet button on Apple devices at the Done step).</summary>
+        public bool AppleWalletEnabled { get; set; }
+
+        /// <summary>Whether Google Wallet is configured (shows the wallet button on non-Apple devices at the Done step).</summary>
+        public bool GoogleWalletEnabled { get; set; }
     }
 
     /// <summary>Request payload carrying the access password of a password-protected event.</summary>

@@ -139,7 +139,9 @@ namespace Rock.Blocks.Eventos
                     HasGateway = ev.FinancialGatewayId.HasValue,
                     RelationRoles = GetRelationRoleOptions(),
                     CurrentPersonEmail = currentPerson.Email,
-                    CalendarUrl = this.GetLinkedPageUrl( AttributeKey.CalendarPage )
+                    CalendarUrl = this.GetLinkedPageUrl( AttributeKey.CalendarPage ),
+                    AppleWalletEnabled = Rock.Model.WalletService.IsAppleConfigured(),
+                    GoogleWalletEnabled = Rock.Model.WalletService.IsGoogleConfigured()
                 };
             }
         }
@@ -707,6 +709,159 @@ namespace Rock.Blocks.Eventos
                     return ActionInternalServerError( "No se pudo generar el PDF. Intenta de nuevo en unos minutos." );
                 }
             }
+        }
+
+        /// <summary>
+        /// Pase(s) de Apple Wallet de la orden recién pagada (pantalla Listo): 1 entrada →
+        /// .pkpass, varias → bundle .pkpasses (una sola hoja agrega todas). Mismo guard que el
+        /// PDF: solo el comprador de una orden PAGADA. Devuelve URL temporal (GetFile.ashx) a la
+        /// que el front NAVEGA — Safari abre la hoja de Wallet por MIME.
+        /// </summary>
+        [BlockAction( "GetApplePasses" )]
+        public BlockActionResult GetApplePasses( ReleaseHoldRequestBag bag )
+        {
+            if ( !Rock.Model.WalletService.IsAppleConfigured() )
+            {
+                return ActionBadRequest( "Apple Wallet no está habilitado." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var tickets = GetPaidOrderTickets( rockContext, bag, out var order, out var guardError );
+                if ( tickets == null )
+                {
+                    return ActionBadRequest( guardError );
+                }
+
+                byte[] content;
+                string fileName;
+                try
+                {
+                    var passes = tickets.Select( t => TicketWalletService.GetOrIssuePass( rockContext, t ) ).ToList();
+                    if ( passes.Count == 1 )
+                    {
+                        content = Rock.Model.WalletService.GetPkpass( rockContext, passes[0] );
+                        fileName = $"entrada-{tickets[0].UniqueCode}.pkpass";
+                    }
+                    else
+                    {
+                        content = Rock.Model.WalletService.GetPkpassBundle( rockContext, passes );
+                        fileName = $"entradas-orden-{order.Id}.pkpasses";
+                    }
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                    return ActionBadRequest( "No se pudo generar el pase. Intenta de nuevo." );
+                }
+
+                // BinaryFile temporal bajo el tipo seguro de QRs (RockCleanup lo purga) — mismo
+                // patrón que MyTickets; el MIME .pkpasses abre la hoja multi-pase en iOS.
+                var binaryFileType = BinaryFileTypeCache.Get( QrService.TicketQrBinaryFileTypeGuid.AsGuid() )
+                    ?? BinaryFileTypeCache.Get( Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid() );
+
+                var binaryFile = new BinaryFile
+                {
+                    IsTemporary = true,
+                    BinaryFileTypeId = binaryFileType?.Id,
+                    MimeType = fileName.EndsWith( ".pkpasses" ) ? "application/vnd.apple.pkpasses" : "application/vnd.apple.pkpass",
+                    FileName = fileName,
+                    FileSize = content.Length,
+                    ContentStream = new System.IO.MemoryStream( content )
+                };
+
+                new BinaryFileService( rockContext ).Add( binaryFile );
+                rockContext.SaveChanges();
+
+                return ActionOk( new { url = $"/GetFile.ashx?guid={binaryFile.Guid}" } );
+            }
+        }
+
+        /// <summary>
+        /// Link "Guardar en Google Wallet" con TODAS las entradas de la orden pagada en un solo
+        /// JWT. Mismo guard que Apple/PDF.
+        /// </summary>
+        [BlockAction( "GetGoogleWalletUrl" )]
+        public BlockActionResult GetGoogleWalletUrl( ReleaseHoldRequestBag bag )
+        {
+            if ( !Rock.Model.WalletService.IsGoogleConfigured() )
+            {
+                return ActionBadRequest( "Google Wallet no está habilitado." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                var tickets = GetPaidOrderTickets( rockContext, bag, out _, out var guardError );
+                if ( tickets == null )
+                {
+                    return ActionBadRequest( guardError );
+                }
+
+                try
+                {
+                    var passes = tickets.Select( t => TicketWalletService.GetOrIssuePass( rockContext, t ) ).ToList();
+                    var url = Rock.Model.WalletService.GetGoogleSaveUrl( rockContext, passes );
+                    if ( url == null )
+                    {
+                        return ActionBadRequest( "Google Wallet no está disponible para estas entradas." );
+                    }
+
+                    return ActionOk( new { url } );
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                    return ActionBadRequest( "No se pudo generar el pase. Intenta de nuevo." );
+                }
+            }
+        }
+
+        /// <summary>
+        /// Guard compartido de wallet: tickets vigentes (Valid/CheckedIn, con navegaciones que
+        /// necesita TicketWalletService) de una orden PAGADA del comprador actual. Null + error
+        /// si el guard falla o la orden no tiene entradas.
+        /// </summary>
+        private List<Ticket> GetPaidOrderTickets( RockContext rockContext, ReleaseHoldRequestBag bag,
+            out Order order, out string error )
+        {
+            order = null;
+            error = null;
+
+            var buyerPersonAliasId = GetCurrentPerson()?.PrimaryAliasId;
+            if ( bag == null || !bag.PaymentReference.HasValue || !buyerPersonAliasId.HasValue )
+            {
+                error = "Orden inválida.";
+                return null;
+            }
+
+            var reference = bag.PaymentReference.Value;
+            order = new OrderService( rockContext ).Queryable()
+                .FirstOrDefault( o => o.PaymentReference == reference
+                    && o.BuyerPersonAliasId == buyerPersonAliasId.Value
+                    && o.Status == OrderStatus.Paid );
+            if ( order == null )
+            {
+                error = "Orden no encontrada.";
+                return null;
+            }
+
+            var orderId = order.Id;
+            var tickets = new TicketService( rockContext ).Queryable()
+                .Include( t => t.Order.Event )
+                .Include( t => t.TicketType )
+                .Include( t => t.AttendeePersonAlias.Person )
+                .Where( t => t.OrderId == orderId
+                    && ( t.Status == TicketStatus.Valid || t.Status == TicketStatus.CheckedIn ) )
+                .OrderBy( t => t.Id )
+                .ToList();
+
+            if ( !tickets.Any() )
+            {
+                error = "La orden no tiene entradas vigentes.";
+                return null;
+            }
+
+            return tickets;
         }
 
         /// <summary>

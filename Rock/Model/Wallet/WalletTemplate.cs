@@ -97,6 +97,20 @@ namespace Rock.Model
         [DataMember]
         public int? StripBinaryFileId { get; set; }
 
+        /// <summary>
+        /// Imagen de fondo completa (360×440; Apple solo la pinta en eventTicket y excluye el
+        /// strip). Precede al BackgroundImageGuid Lava del diseño.
+        /// </summary>
+        [DataMember]
+        public int? BackgroundBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Thumbnail (logo pequeño a la derecha del encabezado, 90×90). Precede al
+        /// ThumbnailImageGuid Lava del diseño.
+        /// </summary>
+        [DataMember]
+        public int? ThumbnailBinaryFileId { get; set; }
+
         #endregion
 
         #region Navigation Properties
@@ -119,6 +133,18 @@ namespace Rock.Model
         [DataMember]
         public virtual BinaryFile StripBinaryFile { get; set; }
 
+        /// <summary>
+        /// Gets or sets the background <see cref="Rock.Model.BinaryFile"/>.
+        /// </summary>
+        [DataMember]
+        public virtual BinaryFile BackgroundBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the thumbnail <see cref="Rock.Model.BinaryFile"/>.
+        /// </summary>
+        [DataMember]
+        public virtual BinaryFile ThumbnailBinaryFile { get; set; }
+
         #endregion
     }
 
@@ -137,6 +163,8 @@ namespace Rock.Model
             this.HasOptional( t => t.IconBinaryFile ).WithMany().HasForeignKey( t => t.IconBinaryFileId ).WillCascadeOnDelete( false );
             this.HasOptional( t => t.LogoBinaryFile ).WithMany().HasForeignKey( t => t.LogoBinaryFileId ).WillCascadeOnDelete( false );
             this.HasOptional( t => t.StripBinaryFile ).WithMany().HasForeignKey( t => t.StripBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( t => t.BackgroundBinaryFile ).WithMany().HasForeignKey( t => t.BackgroundBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( t => t.ThumbnailBinaryFile ).WithMany().HasForeignKey( t => t.ThumbnailBinaryFileId ).WillCascadeOnDelete( false );
         }
     }
 

@@ -356,6 +356,46 @@ function createCheckoutState() {
         }
     }
 
+    // "Agregar a Wallet" (Listo): Apple en iPhone/iPad/Mac, Google en el resto — el botón solo
+    // aparece si la plataforma del dispositivo está configurada (un .pkpass no sirve en Android
+    // y viceversa). El server empaqueta TODAS las entradas de la orden en una sola hoja.
+    const isApplePlatform = /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent);
+    const walletKind = computed<"apple" | "google" | null>(() => {
+        if (isApplePlatform && config.appleWalletEnabled) {
+            return "apple";
+        }
+        if (!isApplePlatform && config.googleWalletEnabled) {
+            return "google";
+        }
+        return null;
+    });
+    const walletBusy = ref(false);
+    const walletError = ref("");
+    async function addToWallet(): Promise<void> {
+        if (walletBusy.value || !walletKind.value) {
+            return;
+        }
+        walletBusy.value = true;
+        walletError.value = "";
+        try {
+            const action = walletKind.value === "apple" ? "GetApplePasses" : "GetGoogleWalletUrl";
+            const res = await invokeBlockAction<{ url: string }>(action, { bag: { paymentReference } });
+            if (!res.isSuccess || !res.data?.url) {
+                walletError.value = res.errorMessage || "No se pudo generar el pase.";
+                return;
+            }
+            // Navegación real (no fetch): Safari abre la hoja de Wallet por el MIME pkpass(es);
+            // el link de Google abre su página de guardado.
+            window.location.href = res.data.url;
+        }
+        catch {
+            walletError.value = "Error de red. Intenta de nuevo.";
+        }
+        finally {
+            walletBusy.value = false;
+        }
+    }
+
     // "Volver al inicio": vuelve a la portada del sitio.
     function goHome(): void {
         // "Volver al inicio" lleva al calendario público de eventos (LinkedPage "Calendar Page").
@@ -841,6 +881,10 @@ function createCheckoutState() {
         // Paso 5: confirmación
         pdfBusy,
         downloadPdf,
+        walletKind,
+        walletBusy,
+        walletError,
+        addToWallet,
         goHome,
 
         // Shell (hero, progreso, evento finalizado)

@@ -52,8 +52,11 @@
 
         <div class="ecDoneActions">
             <button type="button" class="ecDoneBtn" :disabled="pdfBusy" @click="downloadPdf">{{ pdfBusy ? "Generando PDF…" : "Descargar PDF" }}</button>
-            <button type="button" class="ecDoneBtn" disabled title="Muy pronto">Agregar a Wallet</button>
+            <button v-if="walletKind" type="button" class="ecDoneBtn" :disabled="walletBusy" @click="addToWallet">
+                {{ walletBusy ? "Generando pase…" : (walletKind === "apple" ? "Agregar a Apple Wallet" : "Guardar en Google Wallet") }}
+            </button>
         </div>
+        <span v-if="walletError" class="ecDoneWalletErr">{{ walletError }}</span>
         <button type="button" class="ecDoneRestart" @click="goHome">Volver al inicio</button>
     </div>
 </template>
@@ -70,6 +73,10 @@ const {
     formatCurrency,
     pdfBusy,
     downloadPdf,
+    walletKind,
+    walletBusy,
+    walletError,
+    addToWallet,
     goHome
 } = useCheckoutState();
 

@@ -99,6 +99,8 @@ namespace Rock.Blocks.Wallet
                 entity.IconBinaryFileId = ResolveImage( rockContext, template.icon );
                 entity.LogoBinaryFileId = ResolveImage( rockContext, template.logo );
                 entity.StripBinaryFileId = ResolveImage( rockContext, template.strip );
+                entity.BackgroundBinaryFileId = ResolveImage( rockContext, template.background );
+                entity.ThumbnailBinaryFileId = ResolveImage( rockContext, template.thumbnail );
 
                 rockContext.SaveChanges();
 
@@ -244,6 +246,8 @@ namespace Rock.Blocks.Wallet
                     icon = ToImageBag( rockContext, t.IconBinaryFileId ),
                     logo = ToImageBag( rockContext, t.LogoBinaryFileId ),
                     strip = ToImageBag( rockContext, t.StripBinaryFileId ),
+                    background = ToImageBag( rockContext, t.BackgroundBinaryFileId ),
+                    thumbnail = ToImageBag( rockContext, t.ThumbnailBinaryFileId ),
                     passCount = passCounts.TryGetValue( t.Id, out var count ) ? count : 0
                 } )
                 .ToList();
@@ -307,6 +311,8 @@ namespace Rock.Blocks.Wallet
             public ListItemBag icon { get; set; }
             public ListItemBag logo { get; set; }
             public ListItemBag strip { get; set; }
+            public ListItemBag background { get; set; }
+            public ListItemBag thumbnail { get; set; }
             public int passCount { get; set; }
         }
 

@@ -56,6 +56,19 @@ namespace Rock.Model
             /// plantilla (StripBinaryFileId) tiene precedencia si existe.
             /// </summary>
             public string StripImageGuid { get; set; }
+
+            /// <summary>
+            /// Guid (Lava) de un BinaryFile como imagen de FONDO completa (360×440). Apple solo
+            /// la pinta en el estilo eventTicket; si hay fondo, el strip se omite (excluyentes
+            /// según PassKit). Permite replicar pases tipo MinistryPass.
+            /// </summary>
+            public string BackgroundImageGuid { get; set; }
+
+            /// <summary>
+            /// Guid (Lava) de un BinaryFile como thumbnail (logo pequeño a la derecha del
+            /// encabezado; eventTicket con fondo y generic).
+            /// </summary>
+            public string ThumbnailImageGuid { get; set; }
         }
 
         /// <summary>Diseño Google deserializado de <see cref="WalletTemplate.GoogleDesignJson"/>.</summary>
@@ -66,6 +79,12 @@ namespace Rock.Model
             public string Header { get; set; }
             public List<PassField> Rows { get; set; }
             public BarcodeDesign Barcode { get; set; }
+
+            /// <summary>
+            /// Fecha de expiración (Lava) → <c>validTimeInterval.end</c> del objeto Google.
+            /// Vacío = el pase nunca expira.
+            /// </summary>
+            public string ExpirationDate { get; set; }
 
             /// <summary>
             /// URL pública (Lava) de la imagen hero del pase Google (p. ej.
@@ -117,6 +136,8 @@ namespace Rock.Model
             design.RelevantDate = Resolve( design.RelevantDate, mergeFields );
             design.ExpirationDate = Resolve( design.ExpirationDate, mergeFields );
             design.StripImageGuid = Resolve( design.StripImageGuid, mergeFields );
+            design.BackgroundImageGuid = Resolve( design.BackgroundImageGuid, mergeFields );
+            design.ThumbnailImageGuid = Resolve( design.ThumbnailImageGuid, mergeFields );
 
             design.HeaderFields = ResolveFields( design.HeaderFields, mergeFields );
             design.PrimaryFields = ResolveFields( design.PrimaryFields, mergeFields );
@@ -150,6 +171,7 @@ namespace Rock.Model
             design.CardTitle = Resolve( design.CardTitle, mergeFields );
             design.Header = Resolve( design.Header, mergeFields );
             design.HeroImageUrl = Resolve( design.HeroImageUrl, mergeFields );
+            design.ExpirationDate = Resolve( design.ExpirationDate, mergeFields );
             design.Rows = ResolveFields( design.Rows, mergeFields );
 
             if ( design.Barcode != null )

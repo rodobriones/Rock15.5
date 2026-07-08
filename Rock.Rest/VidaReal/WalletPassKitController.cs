@@ -19,6 +19,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Web.Http;
 
 using Rock.Data;
@@ -241,6 +242,75 @@ namespace Rock.Rest.VidaReal
         }
 
         /// <summary>
+        /// Descarga humana del pase (link en correos/workflows, generado por el filtro Lava
+        /// <c>WalletPassUrl</c>). Auth = <c>?token=</c> (el AuthenticationToken del pase, mismo
+        /// secreto del PassKit Web Service). Según el dispositivo: iPhone/iPad/Mac → pkpass
+        /// directo (abre la hoja de Wallet), Android → redirect a "Guardar en Google Wallet",
+        /// otro/ambiguo → mini landing con ambos botones.
+        /// </summary>
+        [HttpGet]
+        [System.Web.Http.Route( "download/{serialNumber}" )]
+        public HttpResponseMessage GetDownload( string serialNumber, string token = null )
+        {
+            using ( var rockContext = new RockContext() )
+            {
+                var pass = AuthenticateDownload( rockContext, serialNumber, token, out var errorResponse );
+                if ( pass == null )
+                {
+                    return errorResponse;
+                }
+
+                var template = pass.WalletTemplate ?? new WalletTemplateService( rockContext ).Get( pass.WalletTemplateId );
+                pass.WalletTemplate = template;
+
+                var appleAvailable = WalletService.IsAppleConfigured() && template?.AppleDesignJson.IsNotNullOrWhiteSpace() == true;
+                var googleAvailable = WalletService.IsGoogleConfigured() && template?.GoogleDesignJson.IsNotNullOrWhiteSpace() == true;
+
+                var userAgent = Request.Headers.UserAgent?.ToString() ?? string.Empty;
+                var isApple = userAgent.IndexOf( "iPhone", StringComparison.OrdinalIgnoreCase ) >= 0
+                    || userAgent.IndexOf( "iPad", StringComparison.OrdinalIgnoreCase ) >= 0
+                    || userAgent.IndexOf( "iPod", StringComparison.OrdinalIgnoreCase ) >= 0;
+                var isAndroid = userAgent.IndexOf( "Android", StringComparison.OrdinalIgnoreCase ) >= 0;
+
+                if ( isApple && appleAvailable )
+                {
+                    return BuildPkpassResponse( rockContext, pass );
+                }
+
+                if ( isAndroid && googleAvailable )
+                {
+                    return BuildGoogleRedirect( rockContext, pass );
+                }
+
+                return BuildLandingPage( pass, appleAvailable, googleAvailable );
+            }
+        }
+
+        /// <summary>Descarga explícita del pkpass de Apple (botón de la landing).</summary>
+        [HttpGet]
+        [System.Web.Http.Route( "download/{serialNumber}/apple" )]
+        public HttpResponseMessage GetDownloadApple( string serialNumber, string token = null )
+        {
+            using ( var rockContext = new RockContext() )
+            {
+                var pass = AuthenticateDownload( rockContext, serialNumber, token, out var errorResponse );
+                return pass == null ? errorResponse : BuildPkpassResponse( rockContext, pass );
+            }
+        }
+
+        /// <summary>Redirect explícito al link "Guardar en Google Wallet" (botón de la landing).</summary>
+        [HttpGet]
+        [System.Web.Http.Route( "download/{serialNumber}/google" )]
+        public HttpResponseMessage GetDownloadGoogle( string serialNumber, string token = null )
+        {
+            using ( var rockContext = new RockContext() )
+            {
+                var pass = AuthenticateDownload( rockContext, serialNumber, token, out var errorResponse );
+                return pass == null ? errorResponse : BuildGoogleRedirect( rockContext, pass );
+            }
+        }
+
+        /// <summary>
         /// Log de errores que reporta iOS cuando algo del web service le falla. Va al
         /// ExceptionLog de Rock para diagnóstico.
         /// </summary>
@@ -293,6 +363,138 @@ namespace Rock.Rest.VidaReal
             }
 
             return pass;
+        }
+
+        /// <summary>
+        /// Valida serial + <c>?token=</c> (AuthenticationToken del pase) para las rutas de
+        /// descarga humana. Devuelve el pase o null con la respuesta de error lista.
+        /// </summary>
+        private WalletPass AuthenticateDownload( RockContext rockContext, string serialNumber,
+            string token, out HttpResponseMessage errorResponse )
+        {
+            errorResponse = null;
+
+            var pass = new WalletPassService( rockContext ).GetBySerialNumber( serialNumber );
+            if ( pass == null )
+            {
+                errorResponse = PlainText( HttpStatusCode.NotFound, "Este pase no existe." );
+                return null;
+            }
+
+            if ( token.IsNullOrWhiteSpace() || !string.Equals( token, pass.AuthenticationToken, StringComparison.Ordinal ) )
+            {
+                errorResponse = PlainText( HttpStatusCode.Unauthorized, "El enlace del pase no es válido." );
+                return null;
+            }
+
+            return pass;
+        }
+
+        /// <summary>pkpass inline (MIME abre la hoja de Wallet; un blob/attachment NO en iOS).</summary>
+        private static HttpResponseMessage BuildPkpassResponse( RockContext rockContext, WalletPass pass )
+        {
+            byte[] pkpass;
+            try
+            {
+                pkpass = ApplePassBuilder.GeneratePkpass( pass, rockContext );
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+                return PlainText( HttpStatusCode.InternalServerError, "No se pudo generar el pase. Intenta de nuevo más tarde." );
+            }
+
+            var response = new HttpResponseMessage( HttpStatusCode.OK )
+            {
+                Content = new ByteArrayContent( pkpass )
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue( "application/vnd.apple.pkpass" );
+            response.Content.Headers.ContentDisposition = new ContentDispositionHeaderValue( "inline" )
+            {
+                FileName = "pase.pkpass"
+            };
+            return response;
+        }
+
+        private static HttpResponseMessage BuildGoogleRedirect( RockContext rockContext, WalletPass pass )
+        {
+            string saveUrl;
+            try
+            {
+                saveUrl = WalletService.GetGoogleSaveUrl( rockContext, pass );
+            }
+            catch ( Exception ex )
+            {
+                ExceptionLogService.LogException( ex );
+                saveUrl = null;
+            }
+
+            if ( saveUrl.IsNullOrWhiteSpace() )
+            {
+                return PlainText( HttpStatusCode.ServiceUnavailable, "Google Wallet no está disponible para este pase." );
+            }
+
+            var response = new HttpResponseMessage( HttpStatusCode.Redirect );
+            response.Headers.Location = new Uri( saveUrl );
+            return response;
+        }
+
+        /// <summary>
+        /// Mini landing (dispositivo ambiguo: PC, webview raro): botones Apple/Google según lo
+        /// configurado. Autocontenida, sin assets externos.
+        /// </summary>
+        private static HttpResponseMessage BuildLandingPage( WalletPass pass, bool appleAvailable, bool googleAvailable )
+        {
+            var serial = Uri.EscapeDataString( pass.SerialNumber );
+            var token = Uri.EscapeDataString( pass.AuthenticationToken );
+
+            string buttons;
+            if ( !appleAvailable && !googleAvailable )
+            {
+                buttons = "<p class='muted'>El pase digital no está disponible por el momento.</p>";
+            }
+            else
+            {
+                buttons = string.Empty;
+                if ( appleAvailable )
+                {
+                    buttons += $"<a class='btn' href='{serial}/apple?token={token}'>&#63743; Agregar a Apple Wallet</a>";
+                }
+
+                if ( googleAvailable )
+                {
+                    buttons += $"<a class='btn btn--g' href='{serial}/google?token={token}'>Guardar en Google Wallet</a>";
+                }
+
+                buttons += "<p class='muted'>Abre este enlace en tu teléfono para agregar el pase a tu wallet.</p>";
+            }
+
+            var html = $@"<!DOCTYPE html>
+<html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Tu pase digital</title>
+<style>
+body{{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center}}
+.card{{text-align:center;padding:40px 24px;max-width:360px}}
+h1{{font-size:22px;margin:0 0 8px}}
+.muted{{color:#94a3b8;font-size:14px;margin-top:20px}}
+.btn{{display:block;margin:12px auto;padding:14px 22px;border-radius:12px;background:#000;color:#fff;text-decoration:none;font-weight:600;border:1px solid #334155}}
+.btn--g{{background:#fff;color:#0f172a}}
+</style></head>
+<body><div class='card'><h1>Tu pase digital</h1><p class='muted'>Iglesia Vida Real</p>{buttons}</div></body></html>";
+
+            var response = new HttpResponseMessage( HttpStatusCode.OK )
+            {
+                Content = new StringContent( html, Encoding.UTF8, "text/html" )
+            };
+            return response;
+        }
+
+        private static HttpResponseMessage PlainText( HttpStatusCode code, string message )
+        {
+            return new HttpResponseMessage( code )
+            {
+                Content = new StringContent( message, Encoding.UTF8, "text/plain" )
+            };
         }
 
         /// <summary>Convierte el If-Modified-Since (UTC) a la hora local de la organización.</summary>

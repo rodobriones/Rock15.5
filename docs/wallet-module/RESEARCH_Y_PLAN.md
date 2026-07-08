@@ -143,10 +143,12 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
 ## 8b. Runbook de deploy a producción
 
 1. Commit + backup de BD prod.
-2. DLLs a `RockWeb\Bin`: Rock, Rock.Rest, Rock.Blocks, `com.vidareal.Wallet`,
+2. DLLs a `RockWeb\Bin`: Rock, Rock.Rest, Rock.Blocks, Rock.ViewModels (InitBag del
+   checkout ganó flags wallet), `com.vidareal.Wallet`,
    **`System.Net.Http.WinHttpHandler.dll` (nuevo en prod)**.
-3. Bundles: `Eventos\myTickets.obs.js` + `Wallet\walletTemplateAdmin.obs.js` (carpeta nueva).
-4. Reciclo → verificar `[PluginMigration]` 1–8 de `com.vidareal.Wallet` + página
+3. Bundles: `Eventos\myTickets.obs.js` + `Eventos\eventCheckout.obs.js` (botón Wallet del
+   paso Listo) + `Wallet\walletTemplateAdmin.obs.js` (carpeta nueva).
+4. Reciclo → verificar `[PluginMigration]` 1–11 de `com.vidareal.Wallet` + página
    Eventos → Boletería → Plantillas de Wallet.
 5. Global Attributes en prod: `AppleWalletPassP12` (Memo, base64 del txt en
    `Documents\AppleWalletCert`) + `AppleWalletPassP12Password` (Encrypted Text).
@@ -175,10 +177,65 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
   (cualquier imagen subida → PNG redimensionado). **Techo de PassKit explicado al usuario:
   sin barras de acento, pills, ni layout custom — la fidelidad total al mockup solo es
   posible en superficies nuestras (visor de Mis Entradas, PENDIENTE de decisión).**
+- **2026-07-07 b — envío por Lava + VidaAventura + expiración**: réplica del patrón
+  `GetMinistryPassUrl` de MinistryPass con piezas propias:
+  - **Filtro Lava `WalletPassUrl`** (`Rock/Lava/Filters/LavaFilters.VidaRealWallet.cs`,
+    partial de `LavaFilters` — se registra solo en el startup): recibe Person/PersonAlias/
+    guid de alias, emite o reusa el pase (`GetOrIssuePass`, contexto propio) con
+    `Data.AlternateId` = Alternate Id de la persona (search key core del check-in; se crea
+    si falta) y devuelve la URL de descarga. Uso:
+    `{{ Workflow | Attribute:'Person','Object' | WalletPassUrl:'<guid-plantilla>' | CreateShortLink }}`.
+  - **Endpoint de descarga humana** en `WalletPassKitController`:
+    `GET api/vidareal/wallet/v1/download/{serial}?token=<AuthenticationToken>` — iPhone →
+    pkpass directo (hoja de Wallet), Android → 302 al save de Google, otro → landing HTML
+    autocontenida con ambos botones; `/apple` y `/google` como rutas explícitas. Smoke en
+    dev PASÓ (landing 200, token malo 401, pkpass 77 KB con storeCard/QR/imágenes correctos).
+  - **Migración 009**: plantilla seed **"VidaAventura"** (guid `…940000000002`), portada de
+    la tabla de MinistryPass (`_tech_triumph_MinistryPass_Client_MinistryPassTemplate`,
+    plantilla "Checkin"): celeste `#00bfff`, logoText VidAventura, Nombre =
+    `{{ Person.FullName }}`, QR = `{{ Data.AlternateId }}`, MISMOS BinaryFiles por Guid
+    (logo VA_TICKET.png / icon / strip BACK6.png). PassStyle = StoreCard (Apple solo pinta
+    strip en storeCard/coupon; el Generic de MinistryPass no la renderiza). **Sin
+    expiración** (decisión del usuario) y actualizable por push (guardar plantilla →
+    refresh de pases).
+  - **Expiración**: `TicketWalletService` manda `Data.ExpiresOn` (= `EndDateTime`, o
+    `StartDateTime`+12h si no hay fin coherente); **migración 010** la cablea al seed de
+    Eventos vía `JSON_MODIFY` (no pisa retoques del admin); `GoogleDesign.ExpirationDate`
+    nuevo → `validTimeInterval.end` del objeto Google (`ApplePassBuilder.TryFormatIsoDate`
+    ahora internal); campo "Fecha de expiración" agregado a la sección Google del admin
+    (Apple ya lo tenía). Migraciones 1–10 corridas en dev.
+- **2026-07-08 — fondo/thumbnail (réplica exacta MinistryPass) + Wallet en el checkout**:
+  - El screenshot del pase REAL de MinistryPass (iPhone del usuario) mostró **eventTicket
+    con fondo completo** (BACK2.png 360×440, degradado azul/morado) + thumbnail script
+    "VidAventura" (LOGO_VA.png 90×90, vivía en `Content/`). Medición clave: BACK2/BACK6 son
+    360×440 = tamaño de `background.png` de Apple — el strip de la 009 era esa imagen
+    mutilada. **PassKit solo pinta background en eventTicket; fondo y strip son excluyentes.**
+  - `AppleDesign` gana `BackgroundImageGuid`/`ThumbnailImageGuid` (Lava; el fondo presente
+    omite el strip; ToPng 360/180) + 2 campos en el admin. **Migración 011**: LOGO_VA.png
+    como BinaryFile propio (guid `…960000000001`, hex embebido generado programáticamente)
+    + VidaAventura → PassStyle eventTicket, fondo BACK2, sin strip.
+  - **Botón "Agregar a Wallet" del checkout CABLEADO** (paso Listo): actions
+    `GetApplePasses`/`GetGoogleWalletUrl` en EventCheckout (guard = comprador + orden Paid
+    por PaymentReference, mismo del PDF); 1 entrada → `.pkpass`, varias → **bundle
+    `.pkpasses`** (`ApplePassBuilder.GeneratePkpassBundle`, una sola hoja iOS agrega todas);
+    Google = **un solo JWT multi-objeto** (`BuildSaveUrl(List<WalletPass>)`). Front: botón
+    por plataforma (UA sniff, patrón MyTickets) en `doneStep.partial.obs` vía
+    `checkoutState` (`walletKind/walletBusy/walletError/addToWallet`); InitBag +
+    `appleWalletEnabled/googleWalletEnabled`.
+  - **Fondo/thumbnail con uploader** (pedido del usuario, misma sesión): columnas
+    `BackgroundBinaryFileId`/`ThumbnailBinaryFileId` en WalletTemplate (**migración 012**,
+    ALTER + FKs) + ImageUploaders en el admin — cambiar el fondo y guardar dispara el push a
+    todos los pases emitidos (QueueRefreshForTemplate ya existía). Precedencia: columna fija
+    de plantilla > guid Lava del diseño (variante dinámica por-pase). Seed VidaAventura
+    migrado a las columnas; guids Lava del diseño limpiados. VidaAventura confirmado SIN
+    expiración (ambos diseños NULL).
 
 ## 10. Pendientes
 
 1. **Deploy a prod** (runbook §8b) + smoke del ciclo de updates (primera vez).
+1b. Smoke del filtro Lava en runtime: workflow/communication con
+   `{{ Person | WalletPassUrl:'f0a1b2c3-d4e5-4f60-8a01-940000000002' }}` → link →
+   pase VidaAventura en iPhone (el endpoint ya pasó smoke en dev; falta el render Lava real).
 2. Decisión del usuario: rediseñar el visor fullscreen de Mis Entradas con el mockup
    pixel-perfect (front + flip al reverso). Ofrecido, sin respuesta aún.
 3. Google Wallet: código listo; esperar cuenta emisor del usuario → Global Attributes
