@@ -1,7 +1,7 @@
 # Módulo DAR — Backend C# — Historial de cambios y documentación
 
 > **Rama:** `hotfix-18.1`
-> **Última actualización:** 2026-06-21
+> **Última actualización:** 2026-07-08
 >
 > Este documento cubre los dos bloques C# del módulo DAR, el flujo completo
 > de donación, la integración con Cybersource, las 4 features de anti-fraude,
@@ -624,6 +624,7 @@ atributos de workflow:
 | Atributo | Valor |
 |---|---|
 | `DonorName` | Nombre del donante (nitName si hay, sino FullName de la persona) |
+| `DonationType` | Nombre del fondo/cuenta (`account.PublicName` o `Name`) |
 | `Amount` | Monto formateado con 2 decimales |
 | `Currency` | GTQ o USD |
 | `Nit` | NIT (solo si wantsReceipt) |
@@ -661,16 +662,24 @@ envía al donante desde el workflow.
 | `{{ mode }}` | Atributo de workflow `Mode` (muestra badge "Test" si no es live) |
 | `{{ donorName }}` | Atributo de workflow `DonorName` |
 | `{{ donorEmail }}` | Atributo de workflow `DonorEmail` |
+| `{{ donationType }}` | Atributo de workflow `DonationType` (fila "Tipo de donación", condicional) |
 
 **Cuándo se envía:** el template en sí no se envía directamente; es el
 workflow el que lo usa como cuerpo de un paso `Send Email`. El workflow de
 donación lo envía siempre; el workflow de recibo lo envía solo si el donante
 solicitó recibo y tiene NIT validado.
 
-**Diseño:** header negro con check verde y monto grande, card blanca con
-detalles de transacción, sección de facturación condicional (solo si hay NIT),
-footer negro. Diseñado para ser compatible con clientes de email que no
-soportan CSS moderno (usa tablas HTML).
+**Diseño (rediseño 2026-07-08):** header `#272b31` con logo VidaReal, check
+verde y monto grande; card blanca con detalles de transacción (incluye la fila
+condicional "Tipo de donación"); sección de facturación condicional (solo si
+hay NIT); caja de notas; footer `#272b31` con logo e íconos sociales
+(Instagram/Facebook/YouTube vía Global Attributes). Fuente Montserrat.
+Diseñado para clientes de email sin CSS moderno (usa tablas HTML).
+
+> **Requiere config en el workflow:** para que aparezca la fila "Tipo de
+> donación" hay que agregar el atributo de workflow `DonationType` y pegar
+> este HTML en el paso `Send Email`. Si el atributo no existe, la fila
+> simplemente no se renderiza (es condicional).
 
 ---
 

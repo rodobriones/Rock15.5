@@ -1,11 +1,14 @@
 # Módulo Wallet VidaReal — Plan y arquitectura
 
-> **Estado (2026-07-07):** CONSTRUIDO y funcionando en dev (migraciones 001–008,
+> **Estado (2026-07-08):** CONSTRUIDO y funcionando en dev (migraciones 001–013,
 > `Plugin.VidaRealWallet/README.md` tiene la tabla). Módulo INDEPENDIENTE de Eventos:
 > emisión, diseño y **actualización push** de passes de Apple Wallet y Google Wallet,
-> consumible desde cualquier punto de Rock. Revisión adversarial completa (15 hallazgos
-> corregidos, ver §9 de historial abajo). **Pendiente: deploy a prod** (runbook §8.8) —
-> el ciclo de updates push SOLO puede probarse en prod (webServiceURL = HTTPS público).
+> consumible desde cualquier punto de Rock — incluye envío por Lava (`WalletPassUrl` +
+> endpoint de descarga), plantilla VidaAventura (réplica MinistryPass), Wallet en el
+> checkout de Eventos y **carga probada (1000 descargas concurrentes OK)**. Revisión
+> adversarial completa (15 hallazgos corregidos, ver §9). **Pendiente: deploy a prod**
+> (runbook §8b) — el ciclo de updates push SOLO puede probarse en prod (webServiceURL =
+> HTTPS público).
 
 ## 1. Por qué self-hosted
 
@@ -134,11 +137,13 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
 6. ✅ GoogleWalletService (código completo; config pendiente de cuenta emisor).
 7. ✅ Bloque admin WalletTemplateAdmin (migración 002: página wallet/plantillas, solo
    Rock Administration; guardar plantilla → refresh+push de sus pases emitidos).
-8. ⏳ Runtime: reciclar (migr. 001-002 de com.vidareal.Wallet) + Global Attributes Apple +
-   smoke iPhone real (agregar pase → registro → editar evento → push → pase actualizado).
-   PublicApplicationRoot debe ser HTTPS o los pases salen estáticos (sin webServiceURL).
-   Deploy prod: DLLs (Rock/Rock.Rest/Rock.Blocks/com.vidareal.Wallet + System.Net.Http.
-   WinHttpHandler.dll NUEVO) + bundles myTickets/walletTemplateAdmin.
+8. ✅ Runtime dev: migraciones 001–013 corridas, Global Attributes Apple creados, pases
+   reales generados (smokes por endpoint + carga 1000 concurrentes OK). ⏳ Falta el smoke
+   del ciclo de updates push (solo posible en prod: PublicApplicationRoot HTTPS público).
+9. ✅ Envío por Lava (filtro `WalletPassUrl` + endpoint download), plantilla VidaAventura
+   (eventTicket, fondo/thumbnail con uploader), Wallet en checkout de Eventos (bundle
+   .pkpasses multi-entrada), expiración (Eventos = fin del evento; VidaAventura = nunca),
+   nombre corto, caché de PNGs. Deploy prod: ver runbook §8b.
 
 ## 8b. Runbook de deploy a producción
 
@@ -148,7 +153,7 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
    **`System.Net.Http.WinHttpHandler.dll` (nuevo en prod)**.
 3. Bundles: `Eventos\myTickets.obs.js` + `Eventos\eventCheckout.obs.js` (botón Wallet del
    paso Listo) + `Wallet\walletTemplateAdmin.obs.js` (carpeta nueva).
-4. Reciclo → verificar `[PluginMigration]` 1–11 de `com.vidareal.Wallet` + página
+4. Reciclo → verificar `[PluginMigration]` 1–13 de `com.vidareal.Wallet` + página
    Eventos → Boletería → Plantillas de Wallet.
 5. Global Attributes en prod: `AppleWalletPassP12` (Memo, base64 del txt en
    `Documents\AppleWalletCert`) + `AppleWalletPassP12Password` (Encrypted Text).
@@ -254,6 +259,11 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
 4. Chequeo de seguridad (previo al módulo): `GetFile.ashx?guid=<QR>` en incógnito en prod —
    si sirve, migración con deny explícito al BinaryFileType de QRs.
 5. Renovación del cert Pass Type ID antes de 2027-08-05 (llave en `Documents\AppleWalletCert`).
+5b. Idea investigada (2026-07-08, sin construir): **relevancia por ubicación** (`locations`
+   en pass.json — el pase aparece en pantalla bloqueada al llegar a la sede, 100% on-device,
+   nadie ve la ubicación; opcional `beacons` BLE) y **`changeMessage` por campo** (el push
+   de actualización muestra notificación visible tipo "El lugar cambió a %@"). Ambas chicas;
+   Google deprecó la relevancia por ubicación (solo Apple).
 6. Pase Voided no "revive" (sin flujo de reactivación — coherente con "sin reembolsos");
    304 falso si 2 cambios el mismo segundo (borde teórico). Aceptados.
 

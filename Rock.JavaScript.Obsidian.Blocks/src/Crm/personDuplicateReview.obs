@@ -1,0 +1,317 @@
+<template>
+    <Panel type="block" title="Revisión de duplicados">
+        <template #default>
+            <div class="pdrWrap">
+                <div class="pdrBar">
+                    <TextBox v-model="search" placeholder="Buscar por nombre o apellido…" class="pdrSearch" />
+                    <NumberBox v-model="minScore" label="" class="pdrScore" />
+                    <RockButton btnType="default" :isLoading="loading" @click="load(true)">
+                        <i class="fa fa-search"></i> Filtrar
+                    </RockButton>
+                    <RockButton v-if="canEdit" btnType="primary" :isLoading="launching" :disabled="scanRunning" @click="runScan">
+                        <i class="fa fa-play"></i> {{ scanRunning ? "Escaneando…" : "Escanear ahora" }}
+                    </RockButton>
+                    <RockButton btnType="default" :isLoading="exporting" :disabled="totalCount === 0" @click="exportCsv">
+                        <i class="fa fa-download"></i> CSV
+                    </RockButton>
+                </div>
+
+                <div v-if="summary && summary.total > 0" class="pdrSummary">
+                    <strong>{{ summary.total }}</strong> pares —
+                    <span class="label label-danger">{{ summary.high }} altos</span>
+                    <span class="label label-warning">{{ summary.medium }} medios</span>
+                    <span class="label label-default">{{ summary.low }} bajos</span>
+                    · score promedio {{ summary.avgScore }}
+                </div>
+
+                <div v-if="lastRun" class="pdrLastRun text-muted">
+                    Última corrida: {{ lastRun.startedDateTime }} —
+                    <span :class="runStatusClass">{{ runStatusLabel }}</span>
+                    <template v-if="lastRun.status === 'completed'"> — {{ lastRun.matchCount }} pares guardados</template>
+                </div>
+
+                <NotificationBox v-if="error" alertType="danger">{{ error }}</NotificationBox>
+                <NotificationBox v-if="scanMessage" alertType="info">{{ scanMessage }}</NotificationBox>
+                <NotificationBox v-else-if="!loading && pairs.length === 0" alertType="info">
+                    No hay posibles duplicados pendientes con esos filtros.
+                </NotificationBox>
+
+                <table v-if="pairs.length > 0" class="pdrTable table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Persona A</th>
+                            <th>Persona B</th>
+                            <th class="text-right">Score</th>
+                            <th>IA</th>
+                            <th>Motivos</th>
+                            <th>Visto</th>
+                            <th class="text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="p in pairs" :key="p.personAId + '-' + p.personBId">
+                            <td><a :href="'/Person/' + p.personAId" target="_blank" rel="noopener">{{ p.nameA }}</a></td>
+                            <td><a :href="'/Person/' + p.personBId" target="_blank" rel="noopener">{{ p.nameB }}</a></td>
+                            <td class="text-right">
+                                <span class="label" :class="scoreClass(p)">{{ p.score.toFixed(0) }}</span>
+                            </td>
+                            <td>
+                                <span v-if="p.aiVerdict" :title="p.aiReason || ''">
+                                    {{ verdictLabel(p.aiVerdict) }}<template v-if="p.aiConfidence != null"> ({{ p.aiConfidence }}%)</template>
+                                </span>
+                                <span v-else class="text-muted">—</span>
+                            </td>
+                            <td class="pdrReasons">{{ p.reasons }}</td>
+                            <td class="text-muted">{{ p.lastSeen }}</td>
+                            <td class="text-right pdrActions">
+                                <a v-if="mergePageId > 0" class="btn btn-xs btn-primary" :href="mergeUrl(p)" target="_blank" rel="noopener">
+                                    <i class="fa fa-code-branch"></i> Fusionar
+                                </a>
+                                <RockButton v-if="canEdit" btnType="link" btnSize="xs" :disabled="busy" @click="dismiss(p)">
+                                    No es duplicado
+                                </RockButton>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div v-if="totalPages > 1" class="pdrPager">
+                    <RockButton btnType="default" btnSize="xs" :disabled="page <= 1 || loading" @click="goPage(page - 1)">
+                        « Anterior
+                    </RockButton>
+                    <span class="text-muted">página {{ page }} de {{ totalPages }} ({{ totalCount }} pares)</span>
+                    <RockButton btnType="default" btnSize="xs" :disabled="page >= totalPages || loading" @click="goPage(page + 1)">
+                        Siguiente »
+                    </RockButton>
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<script setup lang="ts">
+import { computed, onUnmounted, ref } from "vue";
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import TextBox from "@Obsidian/Controls/textBox.obs";
+import NumberBox from "@Obsidian/Controls/numberBox.obs";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type PairBag = {
+    personAId: number;
+    personBId: number;
+    nameA: string | null;
+    nameB: string | null;
+    score: number;
+    confidence: string | null;
+    reasons: string | null;
+    aiVerdict: string | null;
+    aiConfidence: number | null;
+    aiReason: string | null;
+    status: string | null;
+    lastSeen: string | null;
+};
+type RunBag = { startedDateTime: string; status: string; matchCount: number };
+type SummaryBag = { total: number; high: number; medium: number; low: number; avgScore: number };
+type InitBag = {
+    canEdit: boolean;
+    mergePageId: number;
+    pairs: PairBag[];
+    summary: SummaryBag | null;
+    totalCount: number;
+    pageSize: number;
+    lastRun: RunBag | null;
+};
+type PairsResponse = {
+    pairs: PairBag[];
+    summary: SummaryBag | null;
+    totalCount: number;
+    pageSize: number;
+    lastRun: RunBag | null;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const canEdit = config.canEdit;
+const mergePageId = config.mergePageId || 0;
+const pairs = ref<PairBag[]>(config.pairs || []);
+const lastRun = ref<RunBag | null>(config.lastRun);
+const summary = ref<SummaryBag | null>(config.summary);
+const totalCount = ref(config.totalCount || 0);
+const pageSize = config.pageSize || 100;
+const page = ref(1);
+const search = ref("");
+const minScore = ref(60);
+const loading = ref(false);
+const busy = ref(false);
+const launching = ref(false);
+const exporting = ref(false);
+const error = ref("");
+const scanMessage = ref("");
+let pollTimer: number | null = null;
+
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
+const scanRunning = computed(() => lastRun.value?.status === "running");
+const runStatusLabel = computed(() => {
+    switch (lastRun.value?.status) {
+        case "running": return "en curso";
+        case "completed": return "completada";
+        case "failed": return "falló";
+        default: return lastRun.value?.status ?? "";
+    }
+});
+const runStatusClass = computed(() => {
+    switch (lastRun.value?.status) {
+        case "running": return "text-warning";
+        case "failed": return "text-danger";
+        default: return "";
+    }
+});
+
+async function load(resetPage = false): Promise<void> {
+    if (resetPage) {
+        page.value = 1;
+    }
+    loading.value = true;
+    error.value = "";
+    const res = await invokeBlockAction<PairsResponse>("GetPairs", {
+        bag: { minScore: minScore.value, search: search.value, status: "New", page: page.value, pageSize: pageSize }
+    });
+    loading.value = false;
+    if (!res.isSuccess || !res.data) {
+        error.value = res.errorMessage || "No se pudieron cargar los pares.";
+        return;
+    }
+    pairs.value = res.data.pairs || [];
+    summary.value = res.data.summary;
+    totalCount.value = res.data.totalCount || 0;
+    lastRun.value = res.data.lastRun;
+
+    // Si el filtro dejó la página fuera de rango, regresa a la 1.
+    if (pairs.value.length === 0 && page.value > 1) {
+        page.value = 1;
+        await load();
+    }
+}
+
+function goPage(p: number): void {
+    page.value = Math.max(1, Math.min(p, totalPages.value));
+    load();
+}
+
+async function exportCsv(): Promise<void> {
+    exporting.value = true;
+    const res = await invokeBlockAction<PairsResponse>("GetPairs", {
+        bag: { minScore: minScore.value, search: search.value, status: "New", page: 1, pageSize: 0 }
+    });
+    exporting.value = false;
+    if (!res.isSuccess || !res.data) {
+        error.value = res.errorMessage || "No se pudo exportar.";
+        return;
+    }
+    const esc = (v: unknown): string => `"${String(v ?? "").replace(/"/g, "\"\"")}"`;
+    const lines = [
+        "personaA_id,personaA,personaB_id,personaB,score,confianza,ia_veredicto,ia_confianza,motivos,visto"
+    ];
+    for (const p of res.data.pairs || []) {
+        lines.push([
+            p.personAId, esc(p.nameA), p.personBId, esc(p.nameB), p.score, esc(p.confidence),
+            esc(p.aiVerdict), p.aiConfidence ?? "", esc(p.reasons), esc(p.lastSeen)
+        ].join(","));
+    }
+    // ﻿ = BOM para que Excel abra el UTF-8 con acentos bien.
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "duplicados.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+async function runScan(): Promise<void> {
+    launching.value = true;
+    error.value = "";
+    const res = await invokeBlockAction("RunScan", {});
+    launching.value = false;
+    if (!res.isSuccess) {
+        error.value = res.errorMessage || "No se pudo lanzar el escaneo.";
+        return;
+    }
+    scanMessage.value = "Escaneo lanzado. Los resultados aparecerán al terminar (esta lista se actualiza sola).";
+    startPolling();
+}
+
+// Refresca cada 15s mientras la corrida siga 'running' (máx ~20 min, por si algo queda colgado).
+function startPolling(): void {
+    stopPolling();
+    let ticks = 0;
+    pollTimer = window.setInterval(async () => {
+        ticks++;
+        await load();
+        if (!scanRunning.value && ticks > 1) {
+            scanMessage.value = "";
+            stopPolling();
+        }
+        if (ticks >= 80) {
+            stopPolling();
+        }
+    }, 15000);
+}
+
+function stopPolling(): void {
+    if (pollTimer != null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+onUnmounted(stopPolling);
+
+async function dismiss(p: PairBag): Promise<void> {
+    busy.value = true;
+    const res = await invokeBlockAction("MarkNotDuplicate", {
+        bag: { personAId: p.personAId, personBId: p.personBId }
+    });
+    busy.value = false;
+    if (!res.isSuccess) {
+        error.value = res.errorMessage || "No se pudo marcar.";
+        return;
+    }
+    pairs.value = pairs.value.filter(x => !(x.personAId === p.personAId && x.personBId === p.personBId));
+    totalCount.value = Math.max(0, totalCount.value - 1);
+}
+
+function mergeUrl(p: PairBag): string {
+    return `/page/${mergePageId}?PersonId=${p.personAId},${p.personBId}`;
+}
+
+function verdictLabel(v: string | null): string {
+    return v || "—";
+}
+
+function scoreClass(p: PairBag): string {
+    if (p.score >= 85) { return "label-danger"; }
+    if (p.score >= 70) { return "label-warning"; }
+    return "label-default";
+}
+</script>
+
+<style>
+.pdrWrap .pdrBar {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.pdrWrap .pdrSearch { flex: 1; }
+.pdrWrap .pdrLastRun { font-size: 12px; margin: -4px 0 10px; }
+.pdrWrap .pdrSummary { margin: 0 0 10px; font-size: 13px; }
+.pdrWrap .pdrSummary .label { margin: 0 2px; }
+.pdrWrap .pdrPager { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 10px 0; }
+.pdrWrap .pdrScore { width: 90px; }
+.pdrWrap .pdrReasons { font-size: 12px; color: #666; }
+.pdrWrap .pdrActions { white-space: nowrap; }
+.pdrWrap .pdrActions .btn { margin-left: 4px; }
+</style>
