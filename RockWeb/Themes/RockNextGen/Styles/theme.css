@@ -34064,7 +34064,7 @@ body.navbar-side-open {
 
 /* CSS Overrides Bottom Start */
 :root {
-    --base-primary: #FF791D;
+    --base-primary: #073642;
     --logo-image: url('/Assets/Images/rock-logo-circle-white.svg');
     --base-link: #006DCC;
     --base-secondary: #83758f;
@@ -34098,5 +34098,15 @@ body.navbar-side-open {
     --spacing-large: 24px;
     --spacing-xlarge: 48px;
     --spacing-huge: 80px;
+}
+
+.navbar-brand-corner.no-logo:after {
+    background-image: url('/Content/ExternalSite/Icons/icon-ipad-retina-vr.png') !important;
+    background-size: 42px 42px !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    width: 80px !important;
+    height: 80px !important;
+    content: "" !important;
 }
 /* CSS Overrides Bottom End */

@@ -2,10 +2,6 @@
     <Panel type="block" title="" :hasNoBodyPadding="true">
         <template #default>
             <div class="vrPage">
-                <div class="vrTopBar">
-                    <div class="vrBrand">VidaReal.tv</div>
-                </div>
-
                 <div class="vrContainer">
                     <div class="fhwrap">
                         <NotificationBox v-if="config.notLogged" alertType="warning">
@@ -833,39 +829,6 @@ function onPhotoModelValueUpdated(): void {
     -webkit-user-select: text;
     -moz-user-select: text;
     user-select: text;
-}
-
-.vrTopBar {
-    height: 54px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px;
-    background: var(--vr-bg);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    border-bottom: 1px solid rgba(17,24,39,.06);
-}
-
-.vrBrand {
-    font-weight: 800;
-    letter-spacing: .2px;
-    color: var(--vr-text);
-    font-size: 18px;
-}
-
-.vrTopActions {
-    display: flex;
-    gap: 10px;
-}
-
-.vrIconBtn {
-    width: 26px;
-    height: 26px;
-    border-radius: 999px;
-    background: rgba(17,24,39,.06);
-    border: 1px solid rgba(17,24,39,.06);
 }
 
 .vrContainer {

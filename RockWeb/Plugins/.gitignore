@@ -1,2 +1,4 @@
-# Ignore all subfolders, but include files in this folder (like readme)
-*/*
+# Las subcarpetas de Plugins se versionan a propósito (decisión 2026-07-15):
+# - com_vidareal contiene código fuente propio (.ascx/.js) cuya única copia vive aquí.
+# - Los plugins de terceros (com_bemaservices, etc.) no tienen fuente en este repo.
+# El repo público de Rock ignora todo con "*/*"; en este fork privado NO se ignora.

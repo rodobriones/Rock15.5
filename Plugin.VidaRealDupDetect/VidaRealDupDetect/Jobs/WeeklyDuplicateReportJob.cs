@@ -133,8 +133,10 @@ namespace com.vidareal.DupDetect.Jobs
         }
 
         // Email-safe: solo tablas anidadas + estilos inline (nada de flex/grid; Outlook manda).
-        private const string Font = "font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;";
-        private const string Ink = "#1f2328";
+        // OJO: sin comillas en los nombres de fuente — este valor va dentro de atributos style='...'
+        // con comillas simples, y una comilla interna corta el atributo y mata todos los estilos.
+        private const string Font = "font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;";
+        private const string Ink = "#1f2937";
         private const string Muted = "#6b7280";
         private const string Hairline = "#e5e7eb";
 
@@ -143,85 +145,192 @@ namespace com.vidareal.DupDetect.Jobs
             string Enc( string s ) => HttpUtility.HtmlEncode( s ?? string.Empty );
             string PersonLink( int id, string name )
                 => string.IsNullOrEmpty( urlBase )
-                    ? Enc( name )
-                    : $"<a href=\"{urlBase}/Person/{id}\" style=\"color:#1d4ed8;text-decoration:none\">{Enc( name )}</a>";
+                    ? $"<span style='color:{Ink};font-weight:600'>{Enc( name )}</span>"
+                    : $"<a href=\"{urlBase}/Person/{id}\" style=\"color:#1d4ed8;font-weight:600;text-decoration:underline\">{Enc( name )}</a>";
+            var reviewUrl = string.IsNullOrEmpty( urlBase ) ? null : urlBase + "/crm/duplicados";
 
             var sb = new StringBuilder();
-            sb.Append( $"<div style=\"background:#f4f5f7;padding:24px 8px;{Font}\">" );
-            sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' align='center' " +
-                       "style='width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid " + Hairline + ";border-radius:10px;border-collapse:separate;overflow:hidden'>" );
+            sb.Append( $"<div style=\"background:#eef1f6;padding:28px 12px;{Font}\">" );
 
-            // Header
-            sb.Append( "<tr><td style='background:#111827;padding:22px 28px'>" );
-            sb.Append( $"<div style='{Font}color:#9ca3af;font-size:11px;letter-spacing:2px;text-transform:uppercase'>Vida Real &middot; Rock RMS</div>" );
-            sb.Append( $"<div style='{Font}color:#ffffff;font-size:21px;font-weight:600;margin-top:4px'>Reporte semanal de duplicados</div>" );
-            sb.Append( $"<div style='{Font}color:#9ca3af;font-size:13px;margin-top:4px'>{from:dd/MM/yyyy} &mdash; {to:dd/MM/yyyy}</div>" );
+            // Preheader: texto de vista previa en la bandeja de entrada; invisible en el cuerpo.
+            sb.Append( "<div style='display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all'>" +
+                       $"{m.Merged} corregidos &middot; {m.MarkedNotDuplicate} descartados &middot; {m.NewPairs} nuevos por revisar</div>" );
+
+            sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' align='center' " +
+                       "style='width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid " + Hairline + ";border-radius:12px;border-collapse:separate;overflow:hidden'>" );
+
+            // ── Encabezado ──
+            sb.Append( "<tr><td bgcolor='#0f172a' style='background:#0f172a;padding:26px 32px'>" );
+            sb.Append( $"<div style='{Font}color:#94a3b8;font-size:11px;letter-spacing:2px;text-transform:uppercase'>Vida Real &middot; Rock RMS</div>" );
+            sb.Append( $"<div style='{Font}color:#ffffff;font-size:22px;font-weight:700;margin-top:6px'>Reporte semanal de duplicados</div>" );
+            sb.Append( $"<div style='{Font}color:#94a3b8;font-size:13px;margin-top:6px'>Semana del {from:dd/MM/yyyy} al {to:dd/MM/yyyy}</div>" );
             sb.Append( "</td></tr>" );
 
-            // KPIs: acento de color en la barra superior del tile; el numero va en tinta.
-            sb.Append( "<tr><td style='padding:24px 28px 8px'>" );
+            // ── KPIs: tarjetas tintadas segun el tipo de resultado ──
+            sb.Append( "<tr><td style='padding:26px 32px 6px'>" );
             sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' style='width:100%;border-collapse:separate'><tr>" );
-            sb.Append( Tile( "Corregidos (fusionados)", m.Merged, "#15803d" ) );
-            sb.Append( "<td style='width:12px'></td>" );
-            sb.Append( Tile( "Marcados no duplicado", m.MarkedNotDuplicate, "#6b7280" ) );
-            sb.Append( "<td style='width:12px'></td>" );
-            sb.Append( Tile( "Nuevos por revisar", m.NewPairs, "#b91c1c" ) );
+            sb.Append( Kpi( "Corregidos", m.Merged, "pares fusionados", "#ecfdf5", "#a7f3d0", "#047857" ) );
+            sb.Append( "<td style='width:10px;font-size:0;line-height:0'>&nbsp;</td>" );
+            sb.Append( Kpi( "No duplicado", m.MarkedNotDuplicate, "descartados tras revisar", "#f9fafb", Hairline, "#4b5563" ) );
+            sb.Append( "<td style='width:10px;font-size:0;line-height:0'>&nbsp;</td>" );
+            sb.Append( Kpi( "Nuevos", m.NewPairs, "pendientes de revisar", "#fef2f2", "#fecaca", "#b91c1c" ) );
             sb.Append( "</tr></table></td></tr>" );
 
-            if ( m.TopNewPairs.Count > 0 )
+            // ── Boton a la pagina de revision ──
+            if ( reviewUrl != null )
             {
-                sb.Append( "<tr><td style='padding:16px 28px 4px'>" );
-                sb.Append( $"<div style='{Font}color:{Ink};font-size:15px;font-weight:600'>Nuevos posibles duplicados <span style='color:{Muted};font-weight:400'>&middot; top {m.TopNewPairs.Count}</span></div>" );
-                sb.Append( "</td></tr><tr><td style='padding:8px 28px 4px'>" );
-                sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' style='width:100%;border-collapse:collapse'>" );
-                sb.Append( $"<tr>{Th( "Persona A" )}{Th( "Persona B" )}{Th( "Score", true )}{Th( "IA" )}</tr>" );
-
-                foreach ( var p in m.TopNewPairs )
-                {
-                    var ai = string.IsNullOrEmpty( p.AiVerdict )
-                        ? $"<span style='color:{Muted}'>&mdash;</span>"
-                        : $"{Enc( p.AiVerdict )} <span style='color:{Muted}'>({p.AiConfidence}%)</span>";
-
-                    sb.Append( $"<tr>" );
-                    sb.Append( Td( PersonLink( p.PersonAId, p.NameA ) ) );
-                    sb.Append( Td( PersonLink( p.PersonBId, p.NameB ) ) );
-                    sb.Append( Td( ScorePill( p.Score ), right: true ) );
-                    sb.Append( Td( ai ) );
-                    sb.Append( "</tr>" );
-                    // Motivos en una linea secundaria, colgando de la fila (no compite con los nombres).
-                    sb.Append( $"<tr><td colspan='4' style='{Font}padding:0 8px 10px;border-bottom:1px solid {Hairline};color:{Muted};font-size:12px'>{Enc( p.Reasons )}</td></tr>" );
-                }
-
-                sb.Append( "</table></td></tr>" );
+                sb.Append( "<tr><td align='center' style='padding:20px 32px 8px'>" );
+                sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' align='center'><tr>" );
+                sb.Append( $"<td bgcolor='#1d4ed8' style='border-radius:8px'><a href=\"{reviewUrl}\" " +
+                           $"style='{Font}display:inline-block;padding:12px 30px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none'>Revisar duplicados &rarr;</a></td>" );
+                sb.Append( "</tr></table></td></tr>" );
             }
 
-            // Footer
-            sb.Append( "<tr><td style='padding:18px 28px 24px'>" );
-            sb.Append( $"<div style='{Font}color:{Muted};font-size:12px;line-height:1.6'>Abre cada persona y usa la fusi&oacute;n nativa de Rock (<b>Merge</b>) para corregir, o rev&iacute;salos en <b>Personas &gt; Administrar &gt; Revisi&oacute;n de Duplicados</b>.</div>" );
-            sb.Append( "</td></tr></table>" );
-            sb.Append( $"<div style='{Font}color:#9ca3af;font-size:11px;text-align:center;margin-top:14px'>Generado autom&aacute;ticamente por el m&oacute;dulo DupDetect &middot; Vida Real</div>" );
+            // ── Nuevos posibles duplicados ──
+            if ( m.TopNewPairs.Count > 0 )
+            {
+                sb.Append( "<tr><td style='padding:22px 32px 2px'>" );
+                sb.Append( $"<div style='{Font}color:{Ink};font-size:16px;font-weight:700'>Nuevos posibles duplicados</div>" );
+                sb.Append( $"<div style='{Font}color:{Muted};font-size:12px;margin-top:3px'>Los {m.TopNewPairs.Count} pares con mayor similitud. Haz clic en un nombre para abrir su perfil.</div>" );
+                sb.Append( "</td></tr>" );
+
+                var i = 0;
+                foreach ( var p in m.TopNewPairs )
+                {
+                    i++;
+                    sb.Append( $"<tr><td style='padding:10px 32px 0'>{PairCard( i, p, PersonLink, Enc )}</td></tr>" );
+                }
+                sb.Append( "<tr><td style='padding:6px;font-size:0;line-height:0'>&nbsp;</td></tr>" );
+            }
+            else if ( m.NewPairs == 0 )
+            {
+                sb.Append( "<tr><td style='padding:22px 32px 4px'>" );
+                sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' style='width:100%;border-collapse:separate'><tr>" +
+                           "<td bgcolor='#ecfdf5' style='border:1px solid #a7f3d0;border-radius:8px;padding:16px 18px'>" +
+                           $"<div style='{Font}color:#047857;font-size:14px;font-weight:600'>Sin nuevos posibles duplicados esta semana</div>" +
+                           $"<div style='{Font}color:#065f46;font-size:12px;margin-top:4px'>No hay pares nuevos que revisar. La base de datos se mantiene limpia.</div>" +
+                           "</td></tr></table></td></tr>" );
+            }
+
+            // ── Guia rapida ──
+            sb.Append( "<tr><td style='padding:18px 32px 26px'>" );
+            sb.Append( $"<table role='presentation' cellpadding='0' cellspacing='0' style='width:100%'><tr><td style='border-top:1px solid {Hairline};padding-top:16px'>" );
+            sb.Append( $"<div style='{Font}color:{Ink};font-size:13px;font-weight:700'>&iquest;C&oacute;mo corregir un duplicado?</div>" );
+            sb.Append( $"<div style='{Font}color:{Muted};font-size:12px;line-height:1.8;margin-top:4px'>" +
+                       "1. Abre el perfil de la persona haciendo clic en su nombre.<br/>" +
+                       "2. Confirma que sea la misma persona (tel&eacute;fono, correo, familia).<br/>" +
+                       "3. Usa la fusi&oacute;n nativa de Rock (<b>Merge</b>), o resu&eacute;lvelos todos desde <b>Personas &gt; Administrar &gt; Revisi&oacute;n de Duplicados</b>.</div>" );
+            sb.Append( "</td></tr></table></td></tr>" );
+
+            sb.Append( "</table>" );
+            sb.Append( $"<div style='{Font}color:#9ca3af;font-size:11px;text-align:center;margin-top:16px'>Generado autom&aacute;ticamente por el m&oacute;dulo DupDetect &middot; Vida Real</div>" );
             sb.Append( "</div>" );
             return sb.ToString();
         }
 
-        private static string Tile( string label, int value, string accent )
-            => "<td style='width:33%;background:#fafafa;border:1px solid " + Hairline + ";border-top:3px solid " + accent + ";border-radius:6px;padding:14px 16px'>"
-             + $"<div style='{Font}color:{Muted};font-size:11px;letter-spacing:0.4px;text-transform:uppercase'>{label}</div>"
-             + $"<div style='{Font}color:{Ink};font-size:30px;font-weight:600;margin-top:6px'>{value:N0}</div></td>";
+        private static string Kpi( string label, int value, string caption, string bg, string border, string accent )
+            => $"<td width='33%' bgcolor='{bg}' style='width:33%;border:1px solid {border};border-radius:10px;padding:14px 16px;vertical-align:top'>"
+             + $"<div style='{Font}color:{accent};font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase'>{label}</div>"
+             + $"<div style='{Font}color:{accent};font-size:32px;font-weight:700;margin-top:4px'>{value:N0}</div>"
+             + $"<div style='{Font}color:{Muted};font-size:11px;margin-top:2px'>{caption}</div></td>";
 
-        private static string Th( string label, bool right = false )
-            => $"<th style='{Font}text-align:{( right ? "right" : "left" )};color:{Muted};font-size:11px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600;padding:8px;border-bottom:1px solid {Hairline}'>{label}</th>";
-
-        private static string Td( string html, bool right = false )
-            => $"<td style='{Font}text-align:{( right ? "right" : "left" )};color:{Ink};font-size:13px;padding:10px 8px 4px;vertical-align:top'>{html}</td>";
-
-        // Pill tintada: fondo suave + texto oscuro del mismo tono (legible en cualquier cliente).
-        private static string ScorePill( double score )
+        // Cada par como tarjeta: nombres arriba, insignias de similitud/IA, y los motivos como texto secundario.
+        private static string PairCard( int index, NewPairRow p, Func<int, string, string> personLink, Func<string, string> enc )
         {
-            var (bg, fg) = score >= 85 ? ("#fdecea", "#991b1b")
-                         : score >= 70 ? ("#fef3c7", "#92400e")
-                         : ("#f3f4f6", "#374151");
-            return $"<span style='{Font}display:inline-block;background:{bg};color:{fg};font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px'>{score:0.#}</span>";
+            var (scoreBg, scoreFg, scoreLabel) = p.Score >= 85 ? ("#fee2e2", "#991b1b", "Similitud alta")
+                                               : p.Score >= 70 ? ("#fef3c7", "#92400e", "Similitud media")
+                                               : ("#f3f4f6", "#374151", "Similitud baja");
+            var borderAccent = p.Score >= 85 ? "#dc2626" : p.Score >= 70 ? "#f59e0b" : "#9ca3af";
+
+            string aiBadge;
+            switch ( ( p.AiVerdict ?? string.Empty ).Trim().ToLowerInvariant() )
+            {
+                case "mismo":
+                    aiBadge = Badge( "#fee2e2", "#991b1b", "IA: misma persona" + Pct( p.AiConfidence ) );
+                    break;
+                case "duda":
+                    aiBadge = Badge( "#fef3c7", "#92400e", "IA: con duda" + Pct( p.AiConfidence ) );
+                    break;
+                case "distinto":
+                    aiBadge = Badge( "#ecfdf5", "#065f46", "IA: personas distintas" + Pct( p.AiConfidence ) );
+                    break;
+                case "":
+                    aiBadge = Badge( "#f3f4f6", Muted, "IA: sin evaluar" );
+                    break;
+                default:
+                    aiBadge = Badge( "#f3f4f6", "#374151", "IA: " + enc( p.AiVerdict ) + Pct( p.AiConfidence ) );
+                    break;
+            }
+
+            var sb = new StringBuilder();
+            sb.Append( "<table role='presentation' cellpadding='0' cellspacing='0' style='width:100%;border-collapse:separate'><tr>" );
+            sb.Append( $"<td bgcolor='#ffffff' style='border:1px solid {Hairline};border-left:4px solid {borderAccent};border-radius:8px;padding:14px 16px'>" );
+
+            sb.Append( $"<div style='{Font}color:{Ink};font-size:14px;line-height:1.5'>" +
+                       $"<span style='color:{Muted}'>{index}.</span> " +
+                       personLink( p.PersonAId, p.NameA ) +
+                       $" <span style='color:{Muted};font-size:12px'>&harr;</span> " +
+                       personLink( p.PersonBId, p.NameB ) + "</div>" );
+
+            sb.Append( $"<div style='margin-top:8px'>{Badge( scoreBg, scoreFg, $"{scoreLabel} &middot; {p.Score:0.#}" )}&nbsp;&nbsp;{aiBadge}</div>" );
+
+            if ( !string.IsNullOrWhiteSpace( p.Reasons ) )
+            {
+                sb.Append( $"<div style='{Font}color:{Muted};font-size:12px;line-height:1.6;margin-top:8px'><b style='color:{Ink}'>Coincidencias:</b> {ReasonsEs( p.Reasons )}</div>" );
+            }
+            if ( !string.IsNullOrWhiteSpace( p.AiReason ) )
+            {
+                sb.Append( $"<div style='{Font}color:{Muted};font-size:12px;line-height:1.6;margin-top:4px'><b style='color:{Ink}'>An&aacute;lisis IA:</b> {enc( Shorten( p.AiReason, 180 ) )}</div>" );
+            }
+
+            sb.Append( "</td></tr></table>" );
+            return sb.ToString();
         }
+
+        // Traduce los codigos internos del scoring (ej. "telefono_igual") a texto legible en espanol.
+        private static readonly Dictionary<string, string> ReasonLabels = new Dictionary<string, string>( StringComparer.OrdinalIgnoreCase )
+        {
+            { "nombre_tokens_coinciden", "nombre coincide" },
+            { "nombre_muy_parecido", "nombre muy parecido" },
+            { "nombre_parecido", "nombre parecido" },
+            { "apellido_tokens_coinciden", "apellido coincide" },
+            { "apellido_muy_parecido", "apellido muy parecido" },
+            { "apellido_parecido", "apellido parecido" },
+            { "fecha_nacimiento_igual", "misma fecha de nacimiento" },
+            { "fecha_nacimiento_cercana", "fecha de nacimiento cercana" },
+            { "telefono_igual", "mismo tel&eacute;fono" },
+            { "telefono_parcial", "tel&eacute;fono parcialmente igual" },
+            { "email_igual", "mismo correo" },
+            { "nombre_diferente", "nombre diferente" },
+            { "nombre_tokens_distintos", "nombres distintos" },
+            { "similitud_general", "similitud general" },
+        };
+
+        /// <summary>Devuelve los motivos ya en HTML seguro, separados por punto medio.</summary>
+        private static string ReasonsEs( string raw )
+        {
+            if ( string.IsNullOrWhiteSpace( raw ) )
+            {
+                return string.Empty;
+            }
+
+            var parts = raw
+                .Split( new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries )
+                .Select( r => r.Trim() )
+                .Where( r => r.Length > 0 )
+                .Select( r => ReasonLabels.TryGetValue( r, out var label )
+                    ? label
+                    : HttpUtility.HtmlEncode( r.Replace( '_', ' ' ) ) );
+
+            return string.Join( " &middot; ", parts );
+        }
+
+        private static string Pct( int? confidence ) => confidence.HasValue ? $" ({confidence}%)" : string.Empty;
+
+        private static string Badge( string bg, string fg, string html )
+            => $"<span style='{Font}display:inline-block;background:{bg};color:{fg};font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px'>{html}</span>";
+
+        private static string Shorten( string s, int max )
+            => s.Length <= max ? s : s.Substring( 0, max ).TrimEnd() + "...";
     }
 }

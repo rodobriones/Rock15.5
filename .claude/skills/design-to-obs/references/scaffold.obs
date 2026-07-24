@@ -1,0 +1,128 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    SCAFFOLD design-to-obs — reemplazar:
+      * "xx"  -> prefijo CSS único del bloque (2-3 letras, verificar que no exista en src/)
+      * TODO  -> contenido del diseño
+    Maqueta: datos MOCK abajo. Al conectar backend, sustituir por useConfigurationValues<InitBag>().
+    El <style> es NO-scoped a propósito: targetea .panel-block (chrome de Rock fuera del template)
+    y, si hay partials, también los estiliza.
+-->
+<template>
+    <Panel type="block" title="" class="xx-panel">
+        <template #default>
+            <div class="xxWrap">
+                <div class="xxPage">
+
+                    <div class="xxContainer">
+                        <div class="xxCard">
+                            <h2 class="xxTitle">{{ title }}</h2>
+                            <p class="xxText">TODO: contenido del diseño.</p>
+
+                            <div class="xxActions">
+                                <RockButton class="xxCta" btnType="primary" @click="onAction">
+                                    Continuar <span class="xxCtaArrow">→</span>
+                                </RockButton>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — TODO nombre del bloque
+   Paleta del diseño en variables de .xxWrap. Estilo aislado a este bloque.
+   ============================================================ */
+
+/* Chrome del panel: solo para este bloque (no afecta otros panel-block). */
+.panel-block:has(.xxWrap) > .panel-heading,
+.panel-block:has(.xxWrap) > .panel-header { display: none !important; }
+.panel-block:has(.xxWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.xxWrap) > .panel-body { padding: 0 !important; }
+
+.xxWrap {
+    /* TODO: traducir aquí la paleta del mockup */
+    --bg-main: #f5f7fa;
+    --surface-card: #ffffff;
+    --surface-mid: #f8fafc;
+    --surface-alt: #f1f5f9;
+    --primary-900: #1e293b;
+    --primary-800: #334155;
+    --primary-500: #64748b;
+    --primary-300: #94a3b8;
+    --primary-200: #cbd5e1;
+
+    font-family: "Roboto", Arial, sans-serif;
+    color: var(--primary-800);
+    -webkit-font-smoothing: antialiased;
+}
+.xxWrap *,
+.xxWrap *::before,
+.xxWrap *::after { box-sizing: border-box; }
+
+.xxMono { font-family: "Roboto Mono", monospace; }
+.xxCap { text-transform: capitalize; }
+
+/* ---------- Página (full-bleed dentro del ancho de página de Rock) ---------- */
+.xxPage {
+    position: relative;
+    background: var(--bg-main);
+    margin: 0 -15px;
+    padding: 32px 0 64px;
+    min-height: 50vh;
+}
+
+.xxContainer {
+    max-width: 1160px; margin: 0 auto;
+    padding: 0 clamp(16px, 4vw, 24px);
+}
+.xxCard {
+    background: var(--surface-card);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+    padding: clamp(24px, 4vw, 44px);
+}
+
+.xxTitle { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--primary-900); }
+.xxText { margin: 0 0 24px; font-size: 14px; color: var(--primary-500); }
+
+/* ---------- Botones (RockButton pone la clase en el mismo <button class="btn …">;
+   selector compuesto .xxCta.btn — NO :deep, inválido fuera de scoped) ---------- */
+.xxActions { display: flex; gap: 12px; margin-top: 24px; }
+.xxCta.btn {
+    background: var(--primary-900) !important; border-color: var(--primary-900) !important; color: #fff !important;
+    padding: 14px 26px !important; border-radius: 12px !important; font-size: 14px !important; font-weight: 500 !important;
+}
+.xxCta.btn:hover,
+.xxCta.btn:focus { background: #0f172a !important; border-color: #0f172a !important; color: #fff !important; }
+.xxCtaArrow { margin-left: 4px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 720px) {
+    .xxActions { flex-direction: column-reverse; }
+    .xxPage { margin: 0; }
+}
+</style>
+
+<script setup lang="ts">
+import Panel from "@Obsidian/Controls/panel.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { ref } from "vue";
+
+// MOCK: datos de maqueta — reemplazar por useConfigurationValues<InitBag>() al conectar backend.
+const title = ref("TODO: título del diseño");
+
+function onAction(): void {
+    // MOCK: sin acción todavía.
+}
+</script>

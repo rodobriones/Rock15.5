@@ -14,6 +14,7 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Data.Entity;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -110,6 +111,23 @@ namespace Rock.WhatsApp.Communication.Transport
             public const string TemplateName = "TemplateName";
             public const string TemplateLanguage = "TemplateLanguage";
             public const string MaxParallelization = "MaxParallelization";
+        }
+
+        #endregion
+
+        #region Merge Field Keys
+
+        /// <summary>
+        /// Well-known keys that programmatic senders (e.g. the "WhatsApp Send" workflow action)
+        /// can set in <see cref="RockMessage.AdditionalMergeFields"/> to override the transport's
+        /// default template on a per-message basis. Values in TemplateParameters are raw strings
+        /// (may contain Lava) resolved per recipient by the transport.
+        /// </summary>
+        public static class MergeFieldKey
+        {
+            public const string TemplateName = "WhatsAppTemplateName";
+            public const string TemplateLanguage = "WhatsAppTemplateLanguage";
+            public const string TemplateParameters = "WhatsAppTemplateParameters";
         }
 
         #endregion
@@ -371,12 +389,12 @@ namespace Rock.WhatsApp.Communication.Transport
                             // Fallback to template if WhatsApp says the window is actually closed (race condition / >24h since last inbound).
                             if ( !result.IsSuccess && LooksLikeReengagementError( result.ErrorMessage ) )
                             {
-                                result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, toNumber, message, templateName, templateLanguage ).ConfigureAwait( false );
+                                result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, toNumber, new List<string> { message }, templateName, templateLanguage ).ConfigureAwait( false );
                             }
                         }
                         else
                         {
-                            result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, toNumber, message, templateName, templateLanguage ).ConfigureAwait( false );
+                            result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, toNumber, new List<string> { message }, templateName, templateLanguage ).ConfigureAwait( false );
                         }
 
                         var now = RockDateTime.Now;
@@ -437,13 +455,43 @@ namespace Rock.WhatsApp.Communication.Transport
                     var message = ResolveText( smsMessage.Message, smsMessage.CurrentPerson, communicationRecipient, smsMessage.EnabledLavaCommands, recipient.MergeFields, smsMessage.AppRoot, smsMessage.ThemeRoot );
                     var recipientPerson = ( Person ) recipient.MergeFields.GetValueOrNull( "Person" );
 
+                    // Per-message template overrides, set by the "WhatsApp Send" workflow action
+                    // through RockMessage.AdditionalMergeFields (copied into recipient.MergeFields above).
+                    var overrideTemplateName = recipient.MergeFields.GetValueOrNull( MergeFieldKey.TemplateName ) as string;
+                    if ( overrideTemplateName.IsNotNullOrWhiteSpace() )
+                    {
+                        templateName = overrideTemplateName;
+                    }
+
+                    var overrideTemplateLanguage = recipient.MergeFields.GetValueOrNull( MergeFieldKey.TemplateLanguage ) as string;
+                    if ( overrideTemplateLanguage.IsNotNullOrWhiteSpace() )
+                    {
+                        templateLanguage = overrideTemplateLanguage;
+                    }
+
+                    // Template parameters arrive as raw (unresolved) strings so Lava like
+                    // {{ Person.NickName }} resolves per recipient on group sends. When none are
+                    // provided the message text is the single {{1}} parameter (legacy behavior).
+                    var parameterValues = new List<string>();
+                    if ( recipient.MergeFields.GetValueOrNull( MergeFieldKey.TemplateParameters ) is List<string> rawParameters && rawParameters.Any() )
+                    {
+                        foreach ( var rawParameter in rawParameters )
+                        {
+                            parameterValues.Add( ResolveText( rawParameter, smsMessage.CurrentPerson, communicationRecipient, smsMessage.EnabledLavaCommands, recipient.MergeFields, smsMessage.AppRoot, smsMessage.ThemeRoot ) );
+                        }
+                    }
+                    else
+                    {
+                        parameterValues.Add( message );
+                    }
+
                     // The RockMessage path is used by Workflow SMS Send actions and by other
                     // programmatic senders (e.g. Communication Wizard "Test Email", custom code).
                     // For all of these we treat the send as PROACTIVE — always use the approved
                     // template instead of free text, regardless of any active 24h conversation
                     // window. This matches the WhatsApp policy that business-initiated messages
                     // must use templates.
-                    var result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, recipient.To, message, templateName, templateLanguage ).ConfigureAwait( false );
+                    var result = await SendWhatsAppTemplateAsync( phoneNumberId, accessToken, apiVersion, recipient.To, parameterValues, templateName, templateLanguage ).ConfigureAwait( false );
 
                     if ( smsMessage.CreateCommunicationRecord && recipientPerson != null )
                     {
@@ -502,6 +550,11 @@ namespace Rock.WhatsApp.Communication.Transport
                     else
                     {
                         sendMessageResult.Errors.Add( result.ErrorMessage );
+
+                        // Callers of this path (e.g. the core "SMS Send" workflow action) often
+                        // discard the returned errors, so also log to the Exception Log to make
+                        // failed sends visible.
+                        ExceptionLogService.LogException( new Exception( $"WhatsApp send failed to '{recipient.To}' (template '{templateName}'): {result.ErrorMessage}" ) );
                     }
                 }
             }
@@ -645,15 +698,17 @@ namespace Rock.WhatsApp.Communication.Transport
         }
 
         /// <summary>
-        /// Sends a template-based WhatsApp message via the Graph API. The template must
-        /// have a single body parameter ({{1}}) that receives the Lava-resolved message text.
+        /// Sends a template-based WhatsApp message via the Graph API. Each value in
+        /// <paramref name="parameterValues"/> fills the corresponding body placeholder
+        /// ({{1}}, {{2}}, ...) of the template. If no non-empty parameter is provided the
+        /// components array is omitted (static template with no placeholders).
         /// </summary>
         private async Task<WhatsAppSendResult> SendWhatsAppTemplateAsync(
             string phoneNumberId,
             string accessToken,
             string apiVersion,
             string toNumber,
-            string messageText,
+            List<string> parameterValues,
             string templateName,
             string templateLanguage )
         {
@@ -661,28 +716,39 @@ namespace Rock.WhatsApp.Communication.Transport
             {
                 var cleanTo = FormatPhoneForWhatsApp( toNumber );
 
-                var payload = new
+                var sanitizedParameters = ( parameterValues ?? new List<string>() )
+                    .Select( SanitizeTemplateParameter )
+                    .ToList();
+
+                var template = new JObject
                 {
-                    messaging_product = "whatsapp",
-                    recipient_type = "individual",
-                    to = cleanTo,
-                    type = "template",
-                    template = new
+                    ["name"] = templateName,
+                    ["language"] = new JObject { ["code"] = templateLanguage }
+                };
+
+                if ( sanitizedParameters.Any( p => p.Length > 0 ) )
+                {
+                    template["components"] = new JArray
                     {
-                        name = templateName,
-                        language = new { code = templateLanguage },
-                        components = new[]
+                        new JObject
                         {
-                            new
+                            ["type"] = "body",
+                            ["parameters"] = new JArray( sanitizedParameters.Select( p => new JObject
                             {
-                                type = "body",
-                                parameters = new[]
-                                {
-                                    new { type = "text", text = messageText ?? string.Empty }
-                                }
-                            }
+                                ["type"] = "text",
+                                ["text"] = p
+                            } ) )
                         }
-                    }
+                    };
+                }
+
+                var payload = new JObject
+                {
+                    ["messaging_product"] = "whatsapp",
+                    ["recipient_type"] = "individual",
+                    ["to"] = cleanTo,
+                    ["type"] = "template",
+                    ["template"] = template
                 };
 
                 var url = $"{GraphApiBase}/{apiVersion}/{phoneNumberId}/messages";
@@ -690,7 +756,7 @@ namespace Rock.WhatsApp.Communication.Transport
                 var request = new RestRequest( Method.POST );
                 request.AddHeader( "Authorization", $"Bearer {accessToken}" );
                 request.AddHeader( "Content-Type", "application/json" );
-                request.AddParameter( "application/json", JsonConvert.SerializeObject( payload ), ParameterType.RequestBody );
+                request.AddParameter( "application/json", payload.ToString( Formatting.None ), ParameterType.RequestBody );
 
                 var response = await client.ExecuteTaskAsync( request ).ConfigureAwait( false );
 
@@ -747,6 +813,22 @@ namespace Rock.WhatsApp.Communication.Transport
             var encrypted = GetAttributeValue( AttributeKey.AppSecret );
             try { return Encryption.DecryptString( encrypted ); }
             catch { return encrypted; }
+        }
+
+        /// <summary>
+        /// Cleans a value so Meta accepts it as a template body parameter: the Cloud API rejects
+        /// parameters containing new-lines, tabs or more than 4 consecutive spaces (error 132000).
+        /// </summary>
+        public static string SanitizeTemplateParameter( string text )
+        {
+            if ( string.IsNullOrWhiteSpace( text ) )
+            {
+                return string.Empty;
+            }
+
+            var cleaned = Regex.Replace( text, @"[\r\n\t]+", " " );
+            cleaned = Regex.Replace( cleaned, @" {2,}", " " );
+            return cleaned.Trim();
         }
 
         /// <summary>
