@@ -1,5 +1,10 @@
 # Changes
 
+## 1.2.0 — Reconstrucción del front-end tras corrupción de disco + chunking del provider
+- **[Incidente]** Los 6 archivos de `RockWeb\Plugins\com_vidareal\Translator\` (translator.js, test_translator.js y los 2 bloques WebForms) se encontraron corruptos en disco (100% bytes nulos — mismo patrón del apagón que corrompió el `.gitignore` el 2026-07-15) y así se commitearon el 2026-07-24 ("Up to date"). Eran la única copia. Se **reconstruyeron desde la especificación** (CONTEXT/CLAUDE/README/CHANGES + el contrato del C# intacto), conservando el comportamiento documentado hasta la v1.1.3: salvaguardas UI-no-datos, paridad de normalización (test en verde), caché localStorage con purga por cuota, batches de 200, reintentos (3) por string, observer incremental con debounce, hooks de postback/SPA, switcher pill (flotante o en contenedor) y los 2 bloques (settings con decoradores + grid con filtro/edición/exclusión/borrado).
+- **[Robustez]** `AzureOpenAiProvider` ahora divide el lote en **chunks de 50** por llamada a la IA: antes un lote grande (hasta 250) podía exceder el tope de tokens de salida → JSON truncado → la regla "solo respuesta completa" descartaba TODO el lote en cada carga (fallo permanente en páginas con muchos strings). Un chunk truncado/fallido ahora solo se descarta a sí mismo. Además, pausa de 500 ms antes del reintento (429/5xx).
+- `ScriptVersion` → `10` (re-activar el toggle off→on para re-inyectar).
+
 ## 1.1.3 — Traducir etiquetas de botones `<input type=submit/button/reset>`
 - Rock (WebForms) usa `<input type="submit" value="...">` para muchos botones (p.ej. "Change Password"). El `value` de esos 3 tipos es la **etiqueta visible**, no un dato → ahora se traduce. **Sigue intacto** el `value` de cualquier otro input (text/password/email/hidden…) y de `<option>`. `ScriptVersion` → `9`.
 

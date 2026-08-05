@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using Newtonsoft.Json;
@@ -30,6 +31,13 @@ namespace com.vidareal.Translator.Providers
             _apiVersion = string.IsNullOrWhiteSpace( apiVersion ) ? "2024-06-01" : apiVersion;
         }
 
+        // Sub-lote por llamada a la IA. Un lote grande (hasta 250) en una sola
+        // llamada puede exceder el tope de tokens de salida -> JSON truncado ->
+        // la regla "solo respuesta completa" descartaria TODO el lote, en cada
+        // carga. Con chunks, un chunk truncado/fallido solo se descarta a si
+        // mismo y el resto del lote se traduce y persiste normal.
+        private const int ChunkSize = 50;
+
         public Dictionary<int, string> TranslateBatch( IList<string> texts, string targetLanguage )
         {
             var result = new Dictionary<int, string>();
@@ -37,6 +45,25 @@ namespace com.vidareal.Translator.Providers
             {
                 return result;
             }
+
+            for ( int offset = 0; offset < texts.Count; offset += ChunkSize )
+            {
+                var chunk = texts.Skip( offset ).Take( ChunkSize ).ToList();
+                var chunkResult = TranslateChunk( chunk, targetLanguage );
+                foreach ( var kv in chunkResult )
+                {
+                    result[offset + kv.Key] = kv.Value;
+                }
+            }
+
+            return result;
+        }
+
+        // Traduce UN chunk. Devuelve vacio si la respuesta no es completa/valida
+        // (el llamador deja los originales de ese chunk).
+        private Dictionary<int, string> TranslateChunk( IList<string> texts, string targetLanguage )
+        {
+            var result = new Dictionary<int, string>();
 
             // Cuerpo del usuario: { "0": "texto", "1": "texto", ... }
             var input = new JObject();
@@ -106,7 +133,7 @@ namespace com.vidareal.Translator.Providers
 
             // SEGURIDAD DE CACHE: solo confiamos en una respuesta COMPLETA (una clave
             // string por cada texto enviado). Si falta/sobra/renumera, descartamos el
-            // lote entero para no persistir una traduccion bajo el hash equivocado.
+            // CHUNK entero para no persistir una traduccion bajo el hash equivocado.
             // (Con temperature=0 la respuesta normal es completa; el reintento la recupera.)
             return result.Count == texts.Count ? result : new Dictionary<int, string>();
         }
@@ -145,6 +172,12 @@ namespace com.vidareal.Translator.Providers
                 catch ( Exception )
                 {
                     // transitorio: reintenta
+                }
+
+                // Pausa breve antes del reintento (typ. 429: darle aire al rate limit).
+                if ( attempt == 0 )
+                {
+                    System.Threading.Thread.Sleep( 500 );
                 }
             }
 
