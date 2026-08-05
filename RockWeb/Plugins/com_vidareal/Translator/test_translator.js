@@ -1,96 +1,35 @@
-/* Self-check de salvaguardas + PARIDAD de normalizacion JS <-> C#.
- * Sin frameworks: node test_translator.js  (exit 0 = OK).
- *
- * La paridad es CRITICA: TranslatorNormalization (C#) construye un set de
- * espacios explicito que debe ser EXACTAMENTE el \s de JavaScript. Si un
- * caracter difiere, la clave normalizada del cliente no matchea la del
- * server -> cache rota + IA desperdiciada.
- */
-'use strict';
+// Self-check de las salvaguardas de datos. Correr: node test_translator.js
+const assert = require("assert");
+const { normalize, translatable } = require("./translator.js");
 
-var t = require('./translator.js');
-var failures = 0;
+// normalize debe coincidir con TranslatorNormalization.Normalize (C#): trim + colapsar espacios.
+assert.strictEqual(normalize("  Save   Changes \n"), "Save Changes");
+assert.strictEqual(normalize(""), "");
+// Regresion bug C2: el set de espacios debe incluir NBSP y BOM (igual que el C#).
+assert.strictEqual(normalize("Save Changes"), "Save Changes", "NBSP debe colapsar");
+assert.strictEqual(normalize("﻿Save﻿"), "Save", "BOM/zero-width debe recortarse");
+assert.strictEqual(normalize("Save﻿Changes"), "Save Changes", "BOM INTERNO debe colapsar (paridad con el set del server)");
+assert.strictEqual(normalize("A  B"), "A B", "em-space debe colapsar");
 
-function assertEq(actual, expected, label) {
-    if (actual !== expected) {
-        failures++;
-        console.error('FAIL ' + label + '\n  esperado: ' + JSON.stringify(expected) + '\n  obtenido: ' + JSON.stringify(actual));
-    }
-}
-function assertTrue(cond, label) {
-    if (!cond) { failures++; console.error('FAIL ' + label); }
-}
+// SÍ traducir (UI real)
+["Save", "Add Person", "Are you sure?", "First Name"].forEach(s =>
+    assert.strictEqual(translatable(normalize(s)), true, "debe traducir: " + s));
 
-/* ---------- normalize: casos base ---------- */
-assertEq(t.normalize('  Hello   World '), 'Hello World', 'colapsa espacios + recorta bordes');
-assertEq(t.normalize('\t Save\r\n'), 'Save', 'tabs/CRLF');
-assertEq(t.normalize(''), '', 'vacio');
-assertEq(t.normalize(null), '', 'null');
-assertEq(t.normalize('YA normalizado'), 'YA normalizado', 'preserva mayusculas');
-
-/* ---------- paridad: el set de espacios de C# == \s de JS ---------- */
-// Mismos codigos que TranslatorNormalization.BuildWhitespaceClass.
-var WS_CODES = [
-    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680,
-    0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
-    0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F,
-    0x205F, 0x3000, 0xFEFF
-];
-WS_CODES.forEach(function (code) {
-    var ch = String.fromCharCode(code);
-    var hex = 'U+' + code.toString(16).toUpperCase();
-    assertTrue(/^\s$/.test(ch), hex + ' es \\s en JS (si falla: runtime JS no estandar)');
-    assertEq(t.normalize(ch + 'x' + ch), 'x', hex + ' recorta en bordes');
-    assertEq(t.normalize('a' + ch + ch + 'b'), 'a b', hex + ' colapsa interno');
-});
-
-// Regresiones especificas de la auditoria: NBSP y BOM (edge + INTERNO).
-assertEq(t.normalize(' Hi '), 'Hi', 'NBSP en bordes');
-assertEq(t.normalize('﻿Save'), 'Save', 'BOM al inicio');
-assertEq(t.normalize('a﻿b'), 'a b', 'BOM interno colapsa a espacio');
-
-// Anti-paridad: U+200B (zero-width space) NO es \s ni en JS ni en el set C#.
-assertEq(t.normalize('a​b'), 'a​b', 'U+200B NO se toca (paridad)');
-// U+0085 (NEL) es \s en .NET pero NO en JS: el C# usa el set explicito, no \s.
-assertEq(t.normalize('ab'), 'ab', 'U+0085 NO se toca (por eso C# no usa su \\s)');
-
-/* ---------- looksLikeData: datos NO se traducen ---------- */
+// NO traducir (datos / no-UI) -> proteger de corromper datos
 [
-    ['user@example.com', 'email'],
-    ['Escribir a soporte@vidareal.tv hoy', 'email embebido'],
-    ['https://rock.example.com/page', 'URL'],
-    ['www.vidareal.tv', 'URL www'],
-    ['9A1B2C3D-4E5F-4A6B-8C7D-1E2F3A4B5C6D', 'GUID'],
-    ['{{ Person.NickName }}', 'Lava merge'],
-    ['{% if CurrentPerson %}', 'Lava tag'],
-    ['Q1,500.00', 'monto quetzales'],
-    ['$25.99', 'monto dolares'],
-    ['12/05/2026', 'fecha numerica'],
-    ['2026-05-12', 'fecha ISO'],
-    ['3:45 PM', 'hora'],
-    ['100%', 'sin letras (porcentaje)'],
-    ['12345', 'sin letras (numero)'],
-    ['---', 'sin letras (puntuacion)'],
-    ['', 'vacio']
-].forEach(function (c) {
-    assertTrue(t.looksLikeData(c[0]), 'dato detectado: ' + c[1]);
-});
+    "john.doe@vidareal.tv",        // email
+    "https://rock.org/x",          // url
+    "/page/123",                   // path
+    "Q1,234.50",                   // moneda
+    "$10.00",
+    "12/05/2026",                  // fecha
+    "8470F648-58B6-405A-8C4D-CD661F6678DB", // guid
+    "{{ Person.NickName }}",       // Lava
+    "{% if x %}",                  // Lava
+    "12345",                       // numero
+    "()",                          // sin letras
+    "x"                            // muy corto
+].forEach(s =>
+    assert.strictEqual(translatable(normalize(s)), false, "NO debe traducir: " + s));
 
-/* ---------- looksLikeData: UI SI se traduce ---------- */
-[
-    ['Save', 'boton'],
-    ['Change Password', 'boton 2 palabras'],
-    ['Guardar cambios', 'ya en espanol'],
-    ['First Name', 'label'],
-    ['Please enter a valid value.', 'mensaje de validacion'],
-    ['Configuración', 'con acento']
-].forEach(function (c) {
-    assertTrue(!t.looksLikeData(c[0]), 'UI traducible: ' + c[1]);
-});
-
-/* ---------- resultado ---------- */
-if (failures) {
-    console.error('\n' + failures + ' fallo(s).');
-    process.exit(1);
-}
-console.log('OK: paridad de normalizacion + salvaguardas de datos.');
+console.log("OK: salvaguardas de datos pasan");

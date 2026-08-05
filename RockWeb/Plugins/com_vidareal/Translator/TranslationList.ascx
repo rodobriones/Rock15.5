@@ -1,55 +1,49 @@
 <%@ Control Language="C#" AutoEventWireup="true" CodeFile="TranslationList.ascx.cs" Inherits="RockWeb.Plugins.com_vidareal.Translator.TranslationList" %>
 
-<asp:UpdatePanel ID="upnlContent" runat="server">
+<asp:UpdatePanel ID="upnl" runat="server">
     <ContentTemplate>
 
-        <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
+        <Rock:NotificationBox ID="nbMessage" runat="server" Visible="false" />
 
+        <%-- notranslate: la pagina admin del propio traductor NO se traduce (confundiria la gestion de traducciones). --%>
+        <div class="panel panel-block notranslate" data-no-translate="1">
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa-list"></i> Traducciones</h1>
+                <h1 class="panel-title"><i class="fa fa-language"></i> Traducciones</h1>
             </div>
-
             <div class="panel-body">
 
-                <Rock:NotificationBox ID="nbMessage" runat="server" Visible="false" Dismissable="true" />
+                <Rock:GridFilter ID="gfFilter" runat="server" OnApplyFilterClick="gfFilter_ApplyFilterClick">
+                    <Rock:RockDropDownList ID="ddlLanguage" runat="server" Label="Idioma" />
+                    <Rock:RockTextBox ID="tbSearch" runat="server" Label="Buscar (original o traduccion)" />
+                </Rock:GridFilter>
 
-                <div class="grid grid-panel">
-                    <Rock:GridFilter ID="gfFilter" runat="server" OnApplyFilterClick="gfFilter_ApplyFilterClick" OnClearFilterClick="gfFilter_ClearFilterClick" OnDisplayFilterValue="gfFilter_DisplayFilterValue">
-                        <Rock:RockDropDownList ID="ddlLanguage" runat="server" Label="Idioma" />
-                        <Rock:RockTextBox ID="tbSearch" runat="server" Label="Buscar (texto original o traducci&#243;n)" />
-                    </Rock:GridFilter>
-
-                    <Rock:Grid ID="gTranslations" runat="server" AllowSorting="false" RowItemText="traducci&#243;n"
-                        DataKeyNames="Id" OnRowSelected="gTranslations_RowSelected" OnGridRebind="gTranslations_GridRebind">
-                        <Columns>
-                            <Rock:RockBoundField DataField="SourceText" HeaderText="Texto original" HtmlEncode="true" TruncateLength="120" />
-                            <Rock:RockBoundField DataField="TranslatedText" HeaderText="Traducci&#243;n" HtmlEncode="true" TruncateLength="120" />
-                            <Rock:RockBoundField DataField="TargetLanguage" HeaderText="Idioma" />
-                            <Rock:RockBoundField DataField="Status" HeaderText="Estado" />
-                            <Rock:RockBoundField DataField="Provider" HeaderText="Proveedor" />
-                            <Rock:DateTimeField DataField="ModifiedDateTime" HeaderText="Modificado" />
-                            <Rock:DeleteField OnClick="gTranslations_DeleteClick" />
-                        </Columns>
-                    </Rock:Grid>
-                </div>
+                <Rock:Grid ID="gTranslations" runat="server" AllowSorting="false" DataKeyNames="Id"
+                    OnRowSelected="gTranslations_RowSelected" OnGridRebind="gTranslations_GridRebind"
+                    RowItemText="traduccion">
+                    <Columns>
+                        <Rock:RockBoundField DataField="SourceText" HeaderText="Texto original (ingl&eacute;s)" />
+                        <Rock:RockBoundField DataField="TargetLanguage" HeaderText="Idioma" ItemStyle-CssClass="text-center" HeaderStyle-Width="80px" />
+                        <Rock:RockBoundField DataField="TranslatedText" HeaderText="Traducci&oacute;n" />
+                        <Rock:RockBoundField DataField="Status" HeaderText="Estado" HeaderStyle-Width="110px" />
+                        <Rock:RockBoundField DataField="ModifiedDateTime" HeaderText="Modificado" HeaderStyle-Width="150px" />
+                        <Rock:DeleteField OnClick="gTranslations_Delete" />
+                    </Columns>
+                </Rock:Grid>
 
             </div>
-        </asp:Panel>
+        </div>
 
-        <Rock:ModalDialog ID="mdEdit" runat="server" Title="Editar traducci&#243;n" OnSaveClick="mdEdit_SaveClick" ValidationGroup="vgEdit">
+        <Rock:ModalDialog ID="mdEdit" runat="server" Title="Editar traduccion" OnSaveClick="mdEdit_SaveClick" ValidationGroup="vgEdit">
             <Content>
-                <asp:HiddenField ID="hfId" runat="server" />
-
-                <Rock:RockLiteral ID="lSourceText" runat="server" Label="Texto original" />
-
-                <Rock:RockTextBox ID="tbTranslatedText" runat="server" Label="Traducci&#243;n"
-                    TextMode="MultiLine" Rows="3" ValidationGroup="vgEdit" />
-
-                <Rock:RockDropDownList ID="ddlStatus" runat="server" Label="Estado"
-                    Help="Excluded = este texto NUNCA se traduce (se deja el original).">
-                    <asp:ListItem Value="Translated" Text="Translated" />
-                    <asp:ListItem Value="Excluded" Text="Excluded" />
-                </Rock:RockDropDownList>
+                <asp:HiddenField ID="hfEditId" runat="server" />
+                <Rock:RockLiteral ID="lSource" runat="server" Label="Texto original" />
+                <Rock:RockLiteral ID="lLang" runat="server" Label="Idioma" />
+                <Rock:RockTextBox ID="tbTranslated" runat="server" Label="Traduccion" TextMode="MultiLine" Rows="3" ValidationGroup="vgEdit" />
+                <Rock:RockDropDownList ID="ddlStatus" runat="server" Label="Estado" ValidationGroup="vgEdit"
+                    Help="Translated: se usa la traduccion. Excluded: nunca se traduce (se deja el original)." />
+                <p class="text-muted">
+                    Tras guardar, limpia la cache del navegador (localStorage 'vrtr:') o haz recarga dura para ver el cambio.
+                </p>
             </Content>
         </Rock:ModalDialog>
 

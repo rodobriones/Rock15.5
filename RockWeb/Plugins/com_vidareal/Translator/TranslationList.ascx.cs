@@ -1,28 +1,25 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Web.UI.WebControls;
-
-using com.vidareal.Translator;
 using Rock;
 using Rock.Data;
+using Rock.Web.UI;
 using Rock.Web.UI.Controls;
+using com.vidareal.Translator;
 
 namespace RockWeb.Plugins.com_vidareal.Translator
 {
     /// <summary>
-    /// Grid de administracion de traducciones cacheadas: ver, buscar, filtrar
-    /// por idioma, editar (correccion manual), excluir y borrar. Usa
-    /// TranslationStore (SQL crudo parametrizado), sin entidad EF.
-    /// Runtime-compiled por RockWeb (NO esta en el csproj).
+    /// Grid de administracion: ver, editar (correccion manual), excluir y borrar
+    /// las traducciones cacheadas en _com_vidareal_Translator_Translation.
+    /// Lee/escribe por TranslationStore (SQL crudo).
     /// </summary>
     [DisplayName( "VidaReal Translation List" )]
     [Category( "VidaReal > Translator" )]
-    [Description( "Ver, editar (correccion manual), excluir y borrar las traducciones cacheadas." )]
-    public partial class TranslationList : Rock.Web.UI.RockBlock
+    [Description( "Ver y editar las traducciones cacheadas." )]
+    public partial class TranslationList : RockBlock
     {
-        private const string FilterLanguage = "Idioma";
-        private const string FilterSearch = "Buscar";
-
         protected override void OnInit( EventArgs e )
         {
             base.OnInit( e );
@@ -35,20 +32,20 @@ namespace RockWeb.Plugins.com_vidareal.Translator
             base.OnLoad( e );
             if ( !Page.IsPostBack )
             {
-                BindLanguages();
-                BindFilter();
+                LoadLanguageFilter();
+                ddlStatus.Items.Clear();
+                ddlStatus.Items.Add( new ListItem( "Translated", "Translated" ) );
+                ddlStatus.Items.Add( new ListItem( "Excluded", "Excluded" ) );
                 BindGrid();
             }
         }
 
-        #region Filtro
-
-        private void BindLanguages()
+        private void LoadLanguageFilter()
         {
-            ddlLanguage.Items.Clear();
-            ddlLanguage.Items.Add( new ListItem( "(todos)", string.Empty ) );
             using ( var rockContext = new RockContext() )
             {
+                ddlLanguage.Items.Clear();
+                ddlLanguage.Items.Add( new ListItem( "Todos", "" ) );
                 foreach ( var lang in TranslationStore.GetLanguages( rockContext ) )
                 {
                     ddlLanguage.Items.Add( new ListItem( lang, lang ) );
@@ -56,48 +53,22 @@ namespace RockWeb.Plugins.com_vidareal.Translator
             }
         }
 
-        private void BindFilter()
-        {
-            ddlLanguage.SetValue( gfFilter.GetFilterPreference( FilterLanguage ) );
-            tbSearch.Text = gfFilter.GetFilterPreference( FilterSearch );
-        }
-
-        protected void gfFilter_ApplyFilterClick( object sender, EventArgs e )
-        {
-            gfFilter.SetFilterPreference( FilterLanguage, ddlLanguage.SelectedValue );
-            gfFilter.SetFilterPreference( FilterSearch, tbSearch.Text );
-            BindGrid();
-        }
-
-        protected void gfFilter_ClearFilterClick( object sender, EventArgs e )
-        {
-            gfFilter.DeleteFilterPreferences();
-            BindFilter();
-            BindGrid();
-        }
-
-        protected void gfFilter_DisplayFilterValue( object sender, GridFilter.DisplayFilterValueArgs e )
-        {
-            // Los dos filtros se muestran tal cual (idioma / texto buscado).
-        }
-
-        #endregion
-
-        #region Grid
-
         private void BindGrid()
         {
             using ( var rockContext = new RockContext() )
             {
                 gTranslations.DataSource = TranslationStore.GetList(
-                    rockContext,
-                    gfFilter.GetFilterPreference( FilterLanguage ),
-                    gfFilter.GetFilterPreference( FilterSearch ) );
+                    rockContext, ddlLanguage.SelectedValue, tbSearch.Text );
                 gTranslations.DataBind();
             }
         }
 
-        protected void gTranslations_GridRebind( object sender, EventArgs e )
+        protected void gfFilter_ApplyFilterClick( object sender, EventArgs e )
+        {
+            BindGrid();
+        }
+
+        protected void gTranslations_GridRebind( object sender, GridRebindEventArgs e )
         {
             BindGrid();
         }
@@ -112,49 +83,45 @@ namespace RockWeb.Plugins.com_vidareal.Translator
                     return;
                 }
 
-                hfId.Value = row.Id.ToString();
-                lSourceText.Text = row.SourceText.EncodeHtml();
-                tbTranslatedText.Text = row.TranslatedText;
-                ddlStatus.SetValue( row.Status );
-                mdEdit.Title = "Editar traducci&oacute;n (" + row.TargetLanguage.EncodeHtml() + ")";
-                mdEdit.Show();
+                hfEditId.Value = row.Id.ToString();
+                lSource.Text = ( row.SourceText ?? "" ).EncodeHtml();   // Literal -> encode para no inyectar markup
+                lLang.Text = ( row.TargetLanguage ?? "" ).EncodeHtml();
+                tbTranslated.Text = row.TranslatedText;
+                ddlStatus.SetValue( string.IsNullOrEmpty( row.Status ) ? "Translated" : row.Status );
             }
+
+            mdEdit.Show();
         }
 
         protected void mdEdit_SaveClick( object sender, EventArgs e )
         {
-            var id = hfId.Value.AsInteger();
+            var id = hfEditId.Value.AsInteger();
             if ( id > 0 )
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    TranslationStore.Update( rockContext, id, tbTranslatedText.Text, ddlStatus.SelectedValue );
+                    TranslationStore.Update( rockContext, id, tbTranslated.Text, ddlStatus.SelectedValue );
                 }
             }
 
             mdEdit.Hide();
-            ShowMessage( NotificationBoxType.Success,
-                "Traducci&oacute;n actualizada. Los usuarios ver&aacute;n el cambio al limpiar su cach&eacute; local (localStorage <code>vrtr:</code>)." );
             BindGrid();
+            ShowMessage( "Traduccion actualizada. Limpia la cache del navegador para verla." );
         }
 
-        protected void gTranslations_DeleteClick( object sender, RowEventArgs e )
+        protected void gTranslations_Delete( object sender, RowEventArgs e )
         {
             using ( var rockContext = new RockContext() )
             {
                 TranslationStore.Delete( rockContext, e.RowKeyId );
             }
-
-            BindLanguages();
             BindGrid();
         }
 
-        #endregion
-
-        private void ShowMessage( NotificationBoxType type, string html )
+        private void ShowMessage( string text )
         {
-            nbMessage.NotificationBoxType = type;
-            nbMessage.Text = html;
+            nbMessage.NotificationBoxType = NotificationBoxType.Success;
+            nbMessage.Text = text;
             nbMessage.Visible = true;
         }
     }

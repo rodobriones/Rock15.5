@@ -1,534 +1,523 @@
-/* VidaReal DOM Translator (com_vidareal/Translator)
- * Traduce la UI de Rock en el DOM (vanilla JS, sin dependencias).
- * - La IA (servidor) traduce solo strings NUEVOS; el resto sale de cache
- *   (localStorage -> BD via REST Resolve).
- * - Alcance = UI, NO datos: nunca toca value de inputs de datos ni de
- *   <option>, ni contenido editable, ni datos (emails, URLs, GUIDs,
- *   montos, fechas, Lava, interior de grids).
- * - Aplicacion SOLO via node.nodeValue / setAttribute (nunca innerHTML).
- * - Degradacion con gracia: ante cualquier error, deja el original.
+/*!
+ * VidaReal DOM Translator  (com_vidareal / Translator)
+ * Traduce la UI de Rock (ingles) al idioma destino en el DOM, en runtime.
+ * Lee de cache (localStorage -> BD); lo nuevo lo traduce la IA via el endpoint
+ * REST y se persiste. Degrada con gracia: ante cualquier error deja el original.
  *
- * PARIDAD CRITICA: normalize() debe producir la MISMA clave que
- * TranslatorNormalization.Normalize (C#). El \s de JS es el set explicito
- * que construye BuildWhitespaceClass; si tocas esto, toca AMBOS lados y
- * corre test_translator.js.
+ * ALCANCE POR DEFECTO = UI, NO DATOS. Ver README: ampliar el alcance corre
+ * riesgo de traducir nombres/valores de la BD.
+ *
+ * Inyeccion: agregar en Site -> Page Header Content:
+ *   <script src="/Plugins/com_vidareal/Translator/translator.js?v=2" defer></script>
+ *
+ * Cobertura de carga (Rock arma la pagina por bloques que llegan async):
+ *  - Carga inicial / recarga completa  -> boot() -> rescanBurst
+ *  - Postback parcial WebForms          -> Sys.WebForms.PageRequestManager
+ *  - Inyeccion AJAX/Obsidian en el DOM  -> MutationObserver (debounced)
+ *  - Navegacion client-side (Obsidian)  -> hook history pushState/replaceState/popstate
+ *  - Render tardio                      -> rescanBurst escalonado (0/600/1500ms)
+ * Fuera de alcance: contenido dentro de <iframe>, Shadow DOM, ::before/::after,
+ * y dialogos nativos (alert/confirm). Ver CONTEXT.md.
  */
 (function () {
-    'use strict';
+    "use strict";
 
-    /* ================= Nucleo puro (testeable en Node) ================= */
+    var API = "/api/com_vidareal/Translator";
+    var DONE = "vrtrDone";            // dataset flag en nodos ya procesados
+    var CACHE_PREFIX = "vrtr:";       // localStorage key prefix
+    var LANG_KEY = "vrtr:lang";       // idioma elegido por el usuario (switcher)
+    var BATCH = 200;                  // items por request (<= tope del server)
+    var DEBOUNCE_MS = 400;
 
-    // Recorta bordes + colapsa runs de espacios internos a UNO (preserva
-    // mayusculas). El cliente NUNCA hashea: envia el texto normalizado.
-    function normalize(text) {
-        if (!text) { return ''; }
-        return String(text).replace(/^\s+|\s+$/g, '').replace(/\s+/g, ' ');
+    // Defaults de exclusion. Configurables via Global Attributes (Config endpoint).
+    var EXCLUDE_CONTAINERS =
+        "script,style,code,pre,kbd,samp,textarea,svg,[contenteditable]," +
+        "[data-no-translate],.notranslate,.vrtr-skip";
+    // Interior de grids de datos: NO traducir (solo encabezados th, que no son td).
+    var DATA_CELLS = ".grid-table td, .grid-table .grid-actions, .js-grid-table td";
+    // <select> de UI cuyas <option> SI se traducen aunque la heuristica dude.
+    var UI_SELECT_WHITELIST = [];
+
+    var cfg = { enabled: true, targetLanguage: "es", sourceLanguage: "en", showSwitcher: false, availableLanguages: [], switcherContainer: "" };
+    var sessionMisses = new Map();    // normText -> # intentos sin resultado (reintenta hasta MAX_MISS_RETRIES)
+    var MAX_MISS_RETRIES = 3;         // respuesta parcial del modelo: reintentar, no abandonar para siempre
+    var inFlight = new Set();         // normText con request en vuelo: los bursts (0/600/1500ms) se
+                                      // solapan con la latencia de la IA; sin este guard, un string
+                                      // NUEVO se re-pediria 2-3 veces y Azure se pagaria 2-3 veces
+    var seenText = new WeakSet();     // text nodes ya procesados (evita re-traducir)
+
+    /* ---------- util ---------- */
+
+    // DEBE coincidir con TranslatorNormalization.Normalize (C#): trim + colapsar espacios.
+    function normalize(s) {
+        return (s || "").trim().replace(/\s+/g, " ");
     }
 
-    // Salvaguardas de DATOS: si el texto parece dato (no UI), NO se traduce.
-    // Conservador a proposito: un falso negativo deja un label en ingles;
-    // un falso positivo manda datos de miembros a la IA.
-    var RE_LETTER = /[A-Za-zÀ-ɏ]/;                                  // al menos una letra (incl. acentos)
-    var RE_EMAIL = /\S+@\S+\.\S+/;
-    var RE_URL = /(^|\s)(https?:\/\/|www\.)/i;
-    var RE_GUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-    var RE_LAVA = /\{\{|\}\}|\{%|%\}/;                                        // tokens Lava/merge
-    var RE_MONEY = /^[\$Q€£¥]\s?[\d.,]+$/;                                    // Q = quetzal
-    var RE_NUMDATE = /^\d{1,4}([\/\-.]\d{1,2}){1,2}([\/\-.]\d{1,4})?$/;       // 12/05/2026, 2026-05-12
-    var RE_TIME = /^\d{1,2}:\d{2}(:\d{2})?\s?(AM|PM)?$/i;
+    function cacheKey(norm) { return CACHE_PREFIX + cfg.targetLanguage + ":" + norm; }
 
-    function looksLikeData(t) {
-        if (!t) { return true; }
-        if (t.length > 2000) { return true; }             // tope del server (MaxCharsPerItem)
-        if (!RE_LETTER.test(t)) { return true; }          // solo digitos/puntuacion/montos
-        if (RE_EMAIL.test(t)) { return true; }
-        if (RE_URL.test(t)) { return true; }
-        if (RE_GUID.test(t)) { return true; }
-        if (RE_LAVA.test(t)) { return true; }
-        if (RE_MONEY.test(t)) { return true; }
-        if (RE_NUMDATE.test(t)) { return true; }
-        if (RE_TIME.test(t)) { return true; }
+    function cacheGet(norm) {
+        try { return localStorage.getItem(cacheKey(norm)); } catch (e) { return null; }
+    }
+    function cacheSet(norm, val) {
+        try {
+            localStorage.setItem(cacheKey(norm), val);
+        } catch (e) {
+            // Cuota llena: purga las claves de traduccion (no la del idioma) y
+            // reintenta una vez. Sin esto, al llenarse se re-pediria todo al server
+            // en cada carga de por vida.
+            try {
+                Object.keys(localStorage).forEach(function (k) {
+                    if (k.indexOf(CACHE_PREFIX) === 0 && k !== LANG_KEY) localStorage.removeItem(k);
+                });
+                localStorage.setItem(cacheKey(norm), val);
+            } catch (e2) { /* sigue sin entrar: se re-pedira al server, no rompe */ }
+        }
+    }
+
+    // Regex de "esto parece DATO, no UI" -> no traducir.
+    var RE_LAVA = /\{\{|\}\}|\{%|%\}/;
+    var RE_EMAIL = /^\S+@\S+\.\S+$/;
+    var RE_URL = /^(https?:\/\/|www\.|\/)\S+$/i;
+    var RE_GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var RE_HASLETTER = /[A-Za-zÀ-ÿ]/;
+    // Solo numeros/moneda/fecha/puntuacion (sin palabras): Q1,234.50  $10  12/05/2026  (555) 123-4567
+    var RE_DATALIKE = /^[\sQ$€¥.,:;%#@()\/\-+0-9]+$/;
+
+    function translatable(norm) {
+        if (!norm) return false;
+        if (norm.length < 2 || norm.length > 2000) return false;
+        if (!RE_HASLETTER.test(norm)) return false;     // sin letras -> no es UI
+        if (RE_LAVA.test(norm)) return false;            // merge fields Lava
+        if (RE_EMAIL.test(norm)) return false;
+        if (RE_URL.test(norm)) return false;
+        if (RE_GUID.test(norm)) return false;
+        if (RE_DATALIKE.test(norm)) return false;
+        return true;
+    }
+
+    /* ---------- recoleccion ---------- */
+
+    // Registra un objetivo: norm -> lista de funciones apply(translation)
+    function register(map, norm, applyFn) {
+        var arr = map.get(norm);
+        if (!arr) { arr = []; map.set(norm, arr); }
+        arr.push(applyFn);
+    }
+
+    // matches/closest LANZAN si un selector (de config) es invalido. Defensivo:
+    // nunca dejar que un selector malo aborte toda la traduccion de la pagina.
+    function safeClosest(el, sel) {
+        try { return el && el.closest ? el.closest(sel) : null; } catch (e) { return null; }
+    }
+    function safeMatches(el, sel) {
+        try { return !!(el && el.matches && el.matches(sel)); } catch (e) { return false; }
+    }
+    function validSelector(sel) {
+        try { document.createDocumentFragment().querySelector(sel); return true; } catch (e) { return false; }
+    }
+    function safeQuery(sel) {
+        try { return document.querySelector(sel); } catch (e) { return null; }
+    }
+    // Elementos que matchean sel DENTRO de root, INCLUYENDO el propio root si
+    // matchea (querySelectorAll excluye al root). Clave para recolectar subarboles
+    // concretos: un <input> anadido con placeholder, o un <select>, puede SER el root.
+    function matchingEls(root, sel) {
+        var out = [];
+        if (root && root.nodeType === 1 && safeMatches(root, sel)) out.push(root);
+        if (root && root.querySelectorAll) {
+            var d = root.querySelectorAll(sel);
+            for (var i = 0; i < d.length; i++) out.push(d[i]);
+        }
+        return out;
+    }
+
+    function isExcluded(el) {
+        if (!el || !el.closest) return true;
+        return !!safeClosest(el, EXCLUDE_CONTAINERS);
+    }
+
+    // Aplica traduccion a un text node preservando whitespace de borde.
+    function applyTextNode(node, original) {
+        return function (t) {
+            var m = original.match(/^(\s*)([\s\S]*?)(\s*)$/);
+            node.nodeValue = (m ? m[1] : "") + t + (m ? m[3] : "");
+        };
+    }
+
+    function applyAttr(el, attr) {
+        return function (t) { try { el.setAttribute(attr, t); } catch (e) {} };
+    }
+
+    // Heuristica: ¿traducir las <option> de este <select>?
+    // SALVAGUARDA DE DATOS (regla dura): por defecto NO se traducen las <option>.
+    // Pueden ser datos con nombres propios (campus, personas, estados, paises) y
+    // una heuristica puede equivocarse. Solo se traducen las options de selects
+    // declarados explicitamente en la whitelist de UI (config "UI Select
+    // Whitelist", p.ej. #ddlStatus). El value NUNCA se toca en ningun caso.
+    function shouldTranslateSelect(sel) {
+        for (var i = 0; i < UI_SELECT_WHITELIST.length; i++) {
+            if (UI_SELECT_WHITELIST[i] && safeMatches(sel, UI_SELECT_WHITELIST[i])) return true;
+        }
         return false;
     }
 
-    // En Node (test_translator.js) solo se exporta el nucleo puro.
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports = { normalize: normalize, looksLikeData: looksLikeData };
-        return;
-    }
-    if (typeof window === 'undefined' || typeof document === 'undefined') { return; }
-
-    /* ======================= Config / estado ======================= */
-
-    var API = '/api/com_vidareal/Translator';
-    var LS_LANG = 'vrtr:lang';       // idioma elegido en el switcher
-    var BATCH_SIZE = 200;            // lote por POST Resolve (server tope 250)
-    var MAX_RETRIES = 3;             // reintentos por string no resuelto (por sesion)
-    var BURST_MS = [0, 600, 1500];   // pasadas full para render tardio (Obsidian/AJAX)
-
-    var cfg = {
-        enabled: true,
-        targetLanguage: 'es',
-        sourceLanguage: 'en',
-        showSwitcher: false,
-        switcherContainer: '',
-        availableLanguages: [],
-        exclude: '',
-        uiSelectWhitelist: ''
-    };
-    var lang = 'es';                 // idioma efectivo (localStorage || config)
-    var started = false;
-    var translating = false;         // false si lang === sourceLanguage
-    var misses = {};                 // norm -> intentos sin resultado (sesion)
-    var inFlight = {};               // norm -> true (request en curso, no re-pedir)
-    var excludeSelector = '';        // defaults + config (validados)
-    var whitelistSelector = '';      // <select> cuyas <option> SI se traducen
-    var applying = false;            // suprime el observer mientras aplicamos
-
-    // Exclusiones por defecto. closest() cubre a los descendientes, asi que
-    // basta listar los contenedores. .grid-table td = interior de grids (datos).
-    var EXCLUDE_DEFAULTS = [
-        'script', 'style', 'code', 'pre', 'textarea',
-        '[contenteditable]', '.notranslate', '[data-no-translate]',
-        '.grid-table td'
-    ];
-
-    /* ======================= Helpers seguros ======================= */
-
-    // Un selector roto en config NUNCA debe romper la traduccion.
-    function validSelector(sel) {
-        try { document.createDocumentFragment().querySelector(sel); return true; }
-        catch (e) { return false; }
-    }
-    function safeMatches(el, sel) {
-        try { return !!(el && el.matches && sel && el.matches(sel)); }
-        catch (e) { return false; }
-    }
-    function safeClosest(el, sel) {
-        try { return el && el.closest && sel ? el.closest(sel) : null; }
-        catch (e) { return null; }
-    }
-    function safeQuery(sel) {
-        try { return sel ? document.querySelector(sel) : null; }
-        catch (e) { return null; }
-    }
-    function linesToArray(memo) {
-        return String(memo || '').split(/\r?\n/)
-            .map(function (l) { return l.trim(); })
-            .filter(function (l) { return l.length > 0; });
-    }
-    function mergeSelectors(defaults, memo) {
-        var extra = linesToArray(memo).filter(validSelector);
-        return defaults.concat(extra).join(',');
-    }
-
-    /* ==================== Cache (localStorage) ==================== */
-
-    function cacheKey(norm) { return 'vrtr:' + lang + ':' + norm; }
-
-    function cacheGet(norm) {
-        try { return window.localStorage.getItem(cacheKey(norm)); }
-        catch (e) { return null; }
-    }
-
-    // Cuota llena -> purgar SOLO claves de traduccion (no vrtr:lang) y reintentar.
-    function cacheSet(norm, value) {
-        try { window.localStorage.setItem(cacheKey(norm), value); }
-        catch (e) {
-            try {
-                purgeLocalCache();
-                window.localStorage.setItem(cacheKey(norm), value);
-            } catch (e2) { /* sin cache local: seguimos, la BD resuelve */ }
-        }
-    }
-
-    function purgeLocalCache() {
-        var doomed = [];
-        for (var i = 0; i < window.localStorage.length; i++) {
-            var k = window.localStorage.key(i);
-            if (k && k.indexOf('vrtr:') === 0 && k !== LS_LANG) { doomed.push(k); }
-        }
-        doomed.forEach(function (k) { window.localStorage.removeItem(k); });
-    }
-
-    /* ==================== Recoleccion del DOM ==================== */
-
-    // Atributos visibles que si se traducen (nunca value de datos).
-    var TEXT_ATTRS = ['title', 'placeholder', 'aria-label', 'alt'];
-    // El value de estos inputs es la ETIQUETA visible del boton, no un dato.
-    var BUTTON_INPUTS = 'input[type=submit],input[type=button],input[type=reset]';
-
-    function isExcluded(el) {
-        return !!safeClosest(el, excludeSelector);
-    }
-
-    // querySelectorAll que incluye al propio root si tambien matchea
-    // (un <input> añadido por una mutacion puede SER el root).
-    function queryWithSelf(rootEl, sel) {
-        var list = [];
-        if (safeMatches(rootEl, sel)) { list.push(rootEl); }
-        try {
-            var found = rootEl.querySelectorAll(sel);
-            for (var i = 0; i < found.length; i++) { list.push(found[i]); }
-        } catch (e) { /* selector roto: ignorar */ }
-        return list;
-    }
-
-    function addWork(map, norm, applyFn) {
-        var fns = map.get(norm);
-        if (!fns) { map.set(norm, fns = []); }
-        fns.push(applyFn);
-    }
-
-    // Recorre root y arma Map(textoNormalizado -> [funciones de aplicar]).
     function collect(root, map) {
-        map = map || new Map();
-        try { collectUnsafe(root, map); } catch (e) { /* nunca romper la pagina */ }
-        return map;
-    }
-
-    function collectUnsafe(root, map) {
-        // Mutacion characterData: el root ES un text node.
-        if (root.nodeType === 3) {
-            collectTextNode(root, map);
-            return;
-        }
-        if (root.nodeType !== 1 && root.nodeType !== 9) { return; }
-        var rootEl = root.nodeType === 9 ? root.body : root;
-        if (!rootEl || isExcluded(rootEl)) { return; }
-
-        // 1) Text nodes visibles.
-        var walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null);
-        var node;
-        while ((node = walker.nextNode())) { collectTextNode(node, map); }
-
-        // 2) Atributos visibles.
-        TEXT_ATTRS.forEach(function (attr) {
-            queryWithSelf(rootEl, '[' + attr + ']').forEach(function (el) {
-                if (isExcluded(el)) { return; }
-                var norm = normalize(el.getAttribute(attr));
-                if (!norm || looksLikeData(norm)) { return; }
-                addWork(map, norm, makeAttrApply(el, attr));
-            });
-        });
-
-        // 3) Etiquetas de botones <input type=submit/button/reset>.
-        queryWithSelf(rootEl, BUTTON_INPUTS).forEach(function (el) {
-            if (isExcluded(el)) { return; }
-            var norm = normalize(el.getAttribute('value'));
-            if (!norm || looksLikeData(norm)) { return; }
-            addWork(map, norm, makeAttrApply(el, 'value'));
-        });
-
-        // 4) <option>: SOLO selects en la whitelist de UI y SOLO options con
-        //    atributo value explicito (si no, su texto ES el valor que viaja
-        //    al server -> traducirlo corromperia el guardado).
-        if (whitelistSelector) {
-            queryWithSelf(rootEl, 'select').forEach(function (sel) {
-                if (isExcluded(sel) || !safeMatches(sel, whitelistSelector)) { return; }
-                for (var i = 0; i < sel.options.length; i++) {
-                    var opt = sel.options[i];
-                    if (!opt.hasAttribute('value')) { continue; }
-                    var tn = opt.firstChild;
-                    if (tn && tn.nodeType === 3) { collectTextNode(tn, map); }
-                }
-            });
-        }
-    }
-
-    function collectTextNode(node, map) {
-        var parent = node.parentNode;
-        if (!parent || parent.nodeType !== 1 || isExcluded(parent)) { return; }
-        var norm = normalize(node.nodeValue);
-        if (!norm || looksLikeData(norm)) { return; }
-        addWork(map, norm, makeTextApply(node));
-    }
-
-    // Aplica preservando el whitespace de los bordes del nodo original.
-    function makeTextApply(node) {
-        return function (translated) {
-            var raw = node.nodeValue;
-            if (raw == null) { return; }
-            var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(raw);
-            var next = m[1] + translated + m[3];
-            if (next !== raw) { node.nodeValue = next; }
-        };
-    }
-
-    function makeAttrApply(el, attr) {
-        return function (translated) {
-            if (el.getAttribute(attr) !== translated) { el.setAttribute(attr, translated); }
-        };
-    }
-
-    /* ==================== Resolucion / batches ==================== */
-
-    function applyAll(fns, translated) {
-        applying = true;
-        try {
-            for (var i = 0; i < fns.length; i++) {
-                try { fns[i](translated); } catch (e) { /* nodo suelto: ignorar */ }
+        // 1) Text nodes
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: function (n) {
+                if (seenText.has(n)) return NodeFilter.FILTER_REJECT;
+                if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                var p = n.parentElement;
+                if (!p) return NodeFilter.FILTER_REJECT;
+                if (isExcluded(p)) return NodeFilter.FILTER_REJECT;
+                if (safeClosest(p, DATA_CELLS)) return NodeFilter.FILTER_REJECT; // celda de datos
+                // <option>: se maneja aparte (respetando value)
+                if (p.tagName === "OPTION") return NodeFilter.FILTER_REJECT;
+                var norm = normalize(n.nodeValue);
+                return translatable(norm) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
             }
-        } finally {
-            // Descarta las mutaciones que causamos nosotros mismos.
-            if (observer) { observer.takeRecords(); }
-            applying = false;
+        });
+        var n;
+        while ((n = walker.nextNode())) {
+            var original = n.nodeValue;
+            var norm = normalize(original);
+            register(map, norm, applyTextNode(n, original));
+            // Marcar "visto" SOLO si ya esta resuelto (en cache). Un nodo aun no
+            // traducido queda recolectable -> se reintenta en el proximo run (hasta
+            // MAX_MISS_RETRIES) en vez de quedar en ingles para siempre.
+            if (cacheGet(norm) !== null) seenText.add(n);
         }
+
+        // 2) Atributos visibles (incluye el root si el mismo los tiene)
+        matchingEls(root, "[placeholder],[title],[aria-label],[alt]").forEach(function (el) {
+            if (el.dataset.vrtrAttr || isExcluded(el) || safeClosest(el, DATA_CELLS)) return;
+            el.dataset.vrtrAttr = "1"; // evita re-traducir el atributo en re-scans
+            ["placeholder", "title", "aria-label", "alt"].forEach(function (attr) {
+                // placeholder solo en campos de texto (nunca el value editable)
+                if (attr === "placeholder" && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return;
+                var v = el.getAttribute(attr);
+                if (!v) return;
+                var norm = normalize(v);
+                if (!translatable(norm)) return;
+                register(map, norm, applyAttr(el, attr));
+            });
+        });
+
+        // 2b) Botones <input type=submit|button|reset>: aquí el `value` ES la
+        // etiqueta VISIBLE (no un dato; el postback de Rock va por __EVENTTARGET).
+        // Seguro traducirlo. NUNCA para otros tipos de input (text/password/etc.).
+        matchingEls(root, "input[type='submit'],input[type='button'],input[type='reset']").forEach(function (el) {
+            if (el.dataset.vrtrVal || isExcluded(el) || safeClosest(el, DATA_CELLS)) return;
+            var v = el.getAttribute("value");
+            if (!v) return;
+            var norm = normalize(v);
+            if (!translatable(norm)) return;
+            el.dataset.vrtrVal = "1";
+            register(map, norm, applyAttr(el, "value"));
+        });
+
+        // 3) <option> (texto visible, NUNCA el value). Incluye el root si es <select>.
+        matchingEls(root, "select").forEach(function (sel) {
+            if (isExcluded(sel) || !shouldTranslateSelect(sel)) return;
+            for (var i = 0; i < sel.options.length; i++) {
+                var opt = sel.options[i];
+                if (opt.dataset[DONE]) continue;
+                // SALVAGUARDA: si el <option> NO tiene atributo value explicito, el
+                // texto ES lo que se envia al guardar -> traducirlo corromperia el
+                // dato. Solo traducimos options con value propio (envio independiente).
+                if (!opt.hasAttribute("value")) continue;
+                var norm = normalize(opt.text);
+                if (!translatable(norm)) continue;
+                register(map, norm, (function (o) { return function (t) { o.text = t; }; })(opt));
+                opt.dataset[DONE] = "1";
+            }
+        });
+    }
+
+    /* ---------- resolver (cache + servidor) ---------- */
+
+    function applyAll(applyFns, t) {
+        applyFns.forEach(function (fn) { try { fn(t); } catch (e) {} });
     }
 
     function resolve(map) {
-        if (!translating || map.size === 0) { return; }
-
-        var toSend = [];
-        var pending = {};
-
-        map.forEach(function (fns, norm) {
+        if (map.size === 0) return;
+        var pending = [];
+        map.forEach(function (applyFns, norm) {
             var cached = cacheGet(norm);
-            if (cached !== null && cached !== '') {
-                applyAll(fns, cached);
-                return;
-            }
-            if (inFlight[norm]) { return; }                      // ya pedido, en vuelo
-            if ((misses[norm] || 0) >= MAX_RETRIES) { return; }  // agoto reintentos
-            pending[norm] = fns;
-            toSend.push(norm);
+            if (cached !== null) { applyAll(applyFns, cached); return; }
+            if (inFlight.has(norm)) return;                          // ya pedido, respuesta en camino
+            if ((sessionMisses.get(norm) || 0) >= MAX_MISS_RETRIES) return;
+            pending.push(norm);
         });
+        if (pending.length === 0) return;
 
-        for (var i = 0; i < toSend.length; i += BATCH_SIZE) {
-            sendBatch(toSend.slice(i, i + BATCH_SIZE), pending);
+        for (var i = 0; i < pending.length; i += BATCH) {
+            sendBatch(pending.slice(i, i + BATCH), map);
         }
     }
 
-    function sendBatch(items, pending) {
-        items.forEach(function (n) { inFlight[n] = true; });
-
-        fetch(API + '/Resolve', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetLanguage: lang, items: items })
-        })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) {
-                var results = (data && data.results) || {};
-                items.forEach(function (norm) {
-                    delete inFlight[norm];
-                    var t = results[norm];
-                    if (typeof t === 'string' && t.length > 0) {
-                        cacheSet(norm, t);
-                        applyAll(pending[norm], t);
-                    } else {
-                        // No resuelto (Excluded, IA caida, etc.): original, con reintento.
-                        misses[norm] = (misses[norm] || 0) + 1;
-                    }
-                });
-            })
-            .catch(function () {
-                items.forEach(function (norm) {
-                    delete inFlight[norm];
-                    misses[norm] = (misses[norm] || 0) + 1;
-                });
+    function sendBatch(items, map) {
+        items.forEach(function (norm) { inFlight.add(norm); });
+        fetch(API + "/Resolve", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetLanguage: cfg.targetLanguage, items: items })
+        }).then(function (r) {
+            return r.ok ? r.json() : null;
+        }).then(function (data) {
+            var results = (data && data.results) || {};
+            var gotNew = false;
+            items.forEach(function (norm) {
+                inFlight.delete(norm);
+                var t = results[norm];
+                if (typeof t === "string" && t.length) {
+                    cacheSet(norm, t);
+                    gotNew = true;
+                    var fns = map.get(norm);
+                    if (fns) applyAll(fns, t);
+                } else {
+                    // respuesta parcial/sin traduccion: cuenta el intento; se
+                    // reintenta en proximos runs hasta MAX_MISS_RETRIES.
+                    sessionMisses.set(norm, (sessionMisses.get(norm) || 0) + 1);
+                }
             });
-    }
-
-    function translateTree(root) {
-        resolve(collect(root));
-    }
-
-    // Pasadas escalonadas para contenido que renderiza tarde (Obsidian, AJAX).
-    function rescanBurst(root) {
-        BURST_MS.forEach(function (ms) {
-            setTimeout(function () { try { translateTree(root || document.body); } catch (e) { } }, ms);
+            // Nodos que aparecieron MIENTRAS este request estaba en vuelo se
+            // saltaron (inFlight). Con las traducciones ya en cache, una pasada
+            // extra los cubre sin re-pedir nada (todo sale de cacheGet).
+            if (gotNew) setTimeout(function () { run(document.body); }, 0);
+        }).catch(function () {
+            // degradar: dejar original (y liberar para que un run futuro reintente)
+            items.forEach(function (norm) { inFlight.delete(norm); });
         });
     }
 
-    /* ==================== Observer (incremental) ==================== */
+    /* ---------- ciclo ---------- */
 
-    var observer = null;
+    function run(root) {
+        try {
+            var map = new Map();
+            collect(root || document.body, map);
+            resolve(map);
+        } catch (e) { /* nunca romper la pagina */ }
+    }
+
+    // Re-escaneo ESCALONADO de TODO el body: cubre contenido que renderiza TARDE
+    // (bloques Obsidian/Vue y AJAX), carga inicial y navegacion. Poco frecuente.
+    // run() es idempotente: seenText + cache evitan retrabajo y refetch.
+    var burstTimers = [];
+    function rescanBurst() {
+        burstTimers.forEach(clearTimeout);
+        burstTimers = [0, 600, 1500].map(function (d) {
+            return setTimeout(function () { run(document.body); }, d);
+        });
+    }
+
+    // PERFORMANCE: en lugar de re-barrer todo document.body en CADA mutacion del
+    // observer, acumulamos solo los subarboles anadidos/mutados y recolectamos
+    // unicamente esos (un solo resolve por tanda, con debounce).
     var pendingRoots = [];
-    var flushTimer = null;
+    var observerTimer = null;
+    function queueRoots(roots) {
+        for (var i = 0; i < roots.length; i++) {
+            if (roots[i]) pendingRoots.push(roots[i]);
+        }
+        clearTimeout(observerTimer);
+        observerTimer = setTimeout(flushObserver, DEBOUNCE_MS);
+    }
+    function flushObserver() {
+        try {
+            var roots = pendingRoots;
+            pendingRoots = [];
+            var map = new Map();
+            for (var i = 0; i < roots.length; i++) {
+                collect(roots[i], map);
+            }
+            resolve(map);
+        } catch (e) { /* nunca romper la pagina */ }
+    }
 
     function startObserver() {
-        observer = new MutationObserver(function (mutations) {
-            if (applying) { return; }
+        var obs = new MutationObserver(function (mutations) {
+            var roots = [];
             for (var i = 0; i < mutations.length; i++) {
                 var m = mutations[i];
-                if (m.type === 'childList') {
+                if (m.type === "childList") {
                     for (var j = 0; j < m.addedNodes.length; j++) {
-                        var n = m.addedNodes[j];
-                        if (n.nodeType === 1 || n.nodeType === 3) { pendingRoots.push(n); }
+                        var node = m.addedNodes[j];
+                        if (node.nodeType === 1) {
+                            roots.push(node);                       // elemento -> recolecta su subarbol
+                        } else if (node.nodeType === 3 && node.parentElement) {
+                            roots.push(node.parentElement);          // text node -> su padre
+                        }
                     }
-                } else if (m.type === 'characterData' && m.target) {
-                    pendingRoots.push(m.target);
+                } else if (m.type === "attributes" && m.target && m.target.nodeType === 1) {
+                    roots.push(m.target);                            // matchingEls incluye al root
                 }
             }
-            if (pendingRoots.length && !flushTimer) {
-                flushTimer = setTimeout(flushRoots, 200);   // debounce: 1 resolve por tanda
+            if (roots.length) {
+                queueRoots(roots);
             }
         });
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        obs.observe(document.body, {
+            childList: true, subtree: true,
+            attributes: true, attributeFilter: ["placeholder", "title", "aria-label", "alt"]
+        });
     }
 
-    // Recolecta SOLO los subarboles añadidos/mutados (no todo el body).
-    function flushRoots() {
-        flushTimer = null;
-        var roots = pendingRoots;
-        pendingRoots = [];
-        var map = new Map();
-        for (var i = 0; i < roots.length; i++) {
-            var r = roots[i];
-            if (r.isConnected === false) { continue; }
-            collect(r, map);
-        }
-        resolve(map);
-    }
-
-    /* ==================== Hooks de navegacion ==================== */
-
-    function hookPostbacks() {
-        // Postbacks parciales de WebForms (ASP.NET AJAX).
+    // El admin de Rock (WebForms) refresca y navega via UpdatePanel async
+    // postbacks. Este es el hook idiomatico y a prueba de balas: re-traduce
+    // despues de CADA postback parcial (mas fiable que solo el MutationObserver).
+    function hookPartialPostbacks() {
         try {
-            if (window.Sys && window.Sys.WebForms && window.Sys.WebForms.PageRequestManager) {
-                window.Sys.WebForms.PageRequestManager.getInstance().add_endRequest(function () {
-                    rescanBurst(document.body);
+            if (window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager) {
+                Sys.WebForms.PageRequestManager.getInstance().add_endRequest(function () {
+                    rescanBurst();
                 });
             }
-        } catch (e) { }
+        } catch (e) { /* sitio sin ASP.NET AJAX */ }
     }
 
+    // Obsidian navega del lado del cliente (history API) SIN recargar ni hacer
+    // postback de WebForms -> ni boot() ni el hook de PageRequestManager
+    // disparan. Parcheamos history + popstate para re-escanear al cambiar de ruta.
     function hookSpaNavigation() {
-        // Navegacion client-side (Obsidian usa history).
-        try {
-            ['pushState', 'replaceState'].forEach(function (fn) {
-                var orig = window.history[fn];
-                window.history[fn] = function () {
-                    var out = orig.apply(this, arguments);
-                    rescanBurst(document.body);
-                    return out;
+        var fire = function () { try { rescanBurst(); } catch (e) {} };
+        ["pushState", "replaceState"].forEach(function (m) {
+            var orig = history[m];
+            if (typeof orig === "function") {
+                history[m] = function () {
+                    var r = orig.apply(this, arguments);
+                    fire();
+                    return r;
                 };
-            });
-            window.addEventListener('popstate', function () { rescanBurst(document.body); });
-        } catch (e) { }
-    }
-
-    /* ==================== Switcher de idioma ==================== */
-
-    // Pill deslizante (replica del .re-language-switcher de registrationEntry.obs):
-    // colapsado muestra el idioma activo; se expande en hover. z-index 1030 =
-    // debajo del backdrop de modales de Rock (1040). No se monta en iframes.
-    var SWITCHER_CSS =
-        '.vrtr-switcher{position:fixed;right:0;bottom:22px;width:54px;height:54px;' +
-        'display:flex;justify-content:flex-end;overflow:hidden;border-radius:8px 0 0 8px;' +
-        'box-shadow:0 12px 24px rgba(15,23,42,.22);z-index:1030;transition:width .18s ease;}' +
-        '.vrtr-switcher:hover,.vrtr-switcher:focus-within{width:var(--vrtr-open-w);}' +
-        '.vrtr-btn{flex:0 0 54px;width:54px;height:54px;border:0;' +
-        'border-left:1px solid rgba(255,255,255,.35);background:#b7b8f6;color:#fff;' +
-        'font-weight:800;font-size:22px;line-height:1;letter-spacing:.02em;cursor:pointer;}' +
-        '.vrtr-btn.vrtr-active{background:#3b43f6;}' +
-        '.vrtr-switcher.vrtr-inline{position:static;width:auto;height:34px;display:inline-flex;' +
-        'border-radius:8px;box-shadow:none;overflow:visible;vertical-align:middle;}' +
-        '.vrtr-switcher.vrtr-inline .vrtr-btn{flex:0 0 auto;width:auto;height:34px;' +
-        'padding:0 10px;font-size:13px;}' +
-        '@media (max-width:767px){.vrtr-switcher{bottom:16px;}}';
-
-    function renderSwitcher() {
-        try {
-            if (!cfg.showSwitcher) { return; }
-            if (window.self !== window.top) { return; }   // no duplicar dentro de iframes
-            var langs = cfg.availableLanguages || [];
-            if (langs.length < 2) { return; }
-            if (document.getElementById('vrtr-switcher')) { return; }
-
-            var style = document.createElement('style');
-            style.textContent = SWITCHER_CSS;
-            document.head.appendChild(style);
-
-            var box = document.createElement('div');
-            box.id = 'vrtr-switcher';
-            box.className = 'vrtr-switcher';
-            box.setAttribute('data-no-translate', '');
-
-            // Colapsado (flex-end + overflow hidden) se ve el ULTIMO boton:
-            // ordenamos con el idioma activo al final.
-            var ordered = langs.filter(function (l) { return l.code !== lang; })
-                .concat(langs.filter(function (l) { return l.code === lang; }));
-
-            ordered.forEach(function (l) {
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'vrtr-btn' + (l.code === lang ? ' vrtr-active' : '');
-                btn.textContent = (l.code || '').toUpperCase();
-                btn.title = l.label || l.code;
-                btn.addEventListener('click', function () {
-                    if (l.code === lang) { return; }
-                    try { window.localStorage.setItem(LS_LANG, l.code); } catch (e) { }
-                    window.location.reload();
-                });
-                box.appendChild(btn);
-            });
-
-            box.style.setProperty('--vrtr-open-w', (54 * ordered.length) + 'px');
-
-            // Modo en-contenedor (no flotante) si hay selector configurado y existe.
-            var host = safeQuery(cfg.switcherContainer);
-            if (host) {
-                box.className += ' vrtr-inline';
-                host.appendChild(box);
-            } else {
-                document.body.appendChild(box);
             }
-        } catch (e) { /* el switcher nunca rompe la pagina */ }
+        });
+        window.addEventListener("popstate", fire);
     }
 
-    /* ==================== Arranque ==================== */
+    // Estilos del switcher (pills EN/ES), replicando el .re-language-switcher de
+    // registrationEntry.obs (que es <style scoped>, no aplica fuera). z-index 1030
+    // = debajo del backdrop de modales de Rock (1040) para NO taparlos.
+    function injectSwitcherStyles(expandedWidth) {
+        if (document.getElementById("vrtr-switcher-style")) return;
+        var st = document.createElement("style");
+        st.id = "vrtr-switcher-style";
+        st.textContent =
+            "#vrtr-switcher{position:fixed;right:0;bottom:22px;height:54px;display:flex;justify-content:flex-end;" +
+            "overflow:hidden;border-radius:8px 0 0 8px;box-shadow:0 12px 24px rgba(15,23,42,.22);z-index:1030;" +
+            "transition:width .18s ease;width:54px;}" +
+            "#vrtr-switcher:hover,#vrtr-switcher:focus-within{width:" + expandedWidth + "px;}" +
+            "#vrtr-switcher.vrtr-inline{position:static;width:auto;height:auto;overflow:visible;box-shadow:none;" +
+            "border-radius:6px;display:inline-flex;vertical-align:middle;}" +
+            "#vrtr-switcher .vrtr-btn{width:54px;height:54px;border:0;border-left:1px solid rgba(255,255,255,.35);" +
+            "background:#b7b8f6;color:#fff;font-weight:800;font-size:18px;line-height:1;letter-spacing:.02em;cursor:pointer;}" +
+            "#vrtr-switcher.vrtr-inline .vrtr-btn{width:auto;height:auto;padding:5px 12px;font-size:13px;}" +
+            "#vrtr-switcher .vrtr-btn.is-active{background:#3b43f6;}";
+        document.head.appendChild(st);
+    }
 
+    // Switcher de idioma: pill deslizante (colapsado muestra el idioma activo, se
+    // expande en hover). El idioma elegido se persiste y se recarga (cada idioma
+    // tiene su cache). Con SwitcherContainer se monta en flujo (no flotante).
+    function renderSwitcher() {
+        if (!cfg.showSwitcher) return;
+        if (window.self !== window.top) return;                 // no en iframes (modales de Rock)
+        if (document.getElementById("vrtr-switcher")) return;
+
+        var langs = cfg.availableLanguages.filter(function (l) { return l && l.code; });
+        if (!langs.length) return;
+
+        var container = cfg.switcherContainer ? safeQuery(cfg.switcherContainer) : null;
+        injectSwitcherStyles(54 * langs.length);
+
+        var wrap = document.createElement("div");
+        wrap.id = "vrtr-switcher";
+        wrap.className = "notranslate" + (container ? " vrtr-inline" : "");
+        wrap.setAttribute("data-no-translate", "1");
+
+        // Flotante colapsado muestra el boton del idioma activo -> lo ponemos al
+        // final (justify-content:flex-end + overflow). En contenedor: todos.
+        var ordered = langs.slice();
+        if (!container) {
+            ordered.sort(function (a, b) {
+                return (a.code === cfg.targetLanguage ? 1 : 0) - (b.code === cfg.targetLanguage ? 1 : 0);
+            });
+        }
+
+        ordered.forEach(function (l) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "vrtr-btn" + (l.code === cfg.targetLanguage ? " is-active" : "");
+            b.textContent = container ? (l.label || l.code) : l.code.toUpperCase();
+            b.title = l.label || l.code;
+            b.addEventListener("click", function () {
+                if (l.code === cfg.targetLanguage) return;
+                try { localStorage.setItem(LANG_KEY, l.code); } catch (e) {}
+                location.reload();
+            });
+            wrap.appendChild(b);
+        });
+
+        (container || document.body).appendChild(wrap);
+    }
+
+    var started = false;
     function start() {
-        if (started) { return; }
+        if (!cfg.enabled || started) return;                   // guard: nunca arrancar dos veces (evita doble observer)
         started = true;
-
-        excludeSelector = mergeSelectors(EXCLUDE_DEFAULTS.concat(['#vrtr-switcher']), cfg.exclude);
-        whitelistSelector = linesToArray(cfg.uiSelectWhitelist).filter(validSelector).join(',');
-
-        renderSwitcher();
-
-        // En el idioma origen NO se traduce (se muestra el original).
-        translating = lang !== cfg.sourceLanguage;
-        if (!translating) { return; }
-
-        rescanBurst(document.body);
+        try { renderSwitcher(); } catch (e) { /* el switcher nunca debe romper el arranque */ }
+        if (cfg.targetLanguage === cfg.sourceLanguage) return; // idioma original: no traducir, dejar UI tal cual
+        rescanBurst();
         startObserver();
-        hookPostbacks();
+        hookPartialPostbacks();
         hookSpaNavigation();
     }
 
     function boot() {
-        fetch(API + '/Config', { credentials: 'same-origin' })
+        fetch(API + "/Config", { credentials: "same-origin" })
             .then(function (r) { return r.ok ? r.json() : null; })
-            .catch(function () { return null; })
-            .then(function (data) {
-                if (data) {
-                    cfg.enabled = data.enabled !== false;
-                    cfg.targetLanguage = data.targetLanguage || 'es';
-                    cfg.sourceLanguage = data.sourceLanguage || 'en';
-                    cfg.showSwitcher = data.showSwitcher === true;
-                    cfg.switcherContainer = data.switcherContainer || '';
-                    cfg.availableLanguages = data.availableLanguages || [];
-                    cfg.exclude = data.exclude || '';
-                    cfg.uiSelectWhitelist = data.uiSelectWhitelist || '';
+            .then(function (c) {
+                if (c) {
+                    cfg.enabled = c.enabled !== false;
+                    cfg.sourceLanguage = c.sourceLanguage || "en";
+                    cfg.showSwitcher = !!c.showSwitcher;
+                    cfg.switcherContainer = c.switcherContainer || "";
+                    cfg.availableLanguages = c.availableLanguages || [];
+                    var saved = null;
+                    try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+                    cfg.targetLanguage = saved || c.targetLanguage || "es";
+                    EXCLUDE_CONTAINERS = mergeSelectors(EXCLUDE_CONTAINERS, c.exclude);
+                    UI_SELECT_WHITELIST = linesToArray(c.uiSelectWhitelist).filter(validSelector);
                 }
-                // Config caida -> defaults (enabled=true, es): degradar traduciendo
-                // desde cache si se puede; si tampoco hay auth, no pasa nada.
-                if (!cfg.enabled) { return; }
-                var stored = null;
-                try { stored = window.localStorage.getItem(LS_LANG); } catch (e) { }
-                lang = stored || cfg.targetLanguage;
                 start();
-            });
+            })
+            // Si Config falla, igual arrancamos con defaults (es) en vez de no
+            // traducir nada. Antes: un fetch fallido mataba observer y traduccion.
+            .catch(function () { start(); });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', boot);
-    } else {
-        boot();
+    function linesToArray(s) {
+        return (s || "").split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
+    }
+    function mergeSelectors(base, extraLines) {
+        // Descarta selectores invalidos (un selector roto en config haria que
+        // closest()/matches() lanzaran y se desactivara la traduccion).
+        var extra = linesToArray(extraLines).filter(validSelector);
+        return extra.length ? base + "," + extra.join(",") : base;
+    }
+
+    if (typeof document !== "undefined") {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", boot);
+        } else {
+            boot();
+        }
+    }
+
+    // Exporta funciones puras para tests bajo Node (no afecta al navegador).
+    if (typeof module !== "undefined" && module.exports) {
+        module.exports = { normalize: normalize, translatable: translatable };
     }
 })();

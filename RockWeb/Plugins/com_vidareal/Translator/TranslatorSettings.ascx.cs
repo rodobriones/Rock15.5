@@ -1,216 +1,117 @@
 using System;
 using System.ComponentModel;
-
-using com.vidareal.Translator;
+using System.Text;
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
-using Rock.Security;
+using Rock.Web.UI;
+using Rock.Web.UI.Controls;
+using com.vidareal.Translator;
 
 namespace RockWeb.Plugins.com_vidareal.Translator
 {
     /// <summary>
-    /// Configuracion del traductor DOM de VidaReal. Las settings se declaran
-    /// como decoradores [Field] en ESTA clase (fuente de verdad; Rock las
-    /// auto-registra al cargar el bloque y genera el formulario del gear).
-    /// El REST las lee por el Guid fijo del bloque
-    /// (TranslatorController.SettingsBlockGuid) via BlockCache.
-    /// OJO: este archivo lo compila RockWeb en runtime (NO esta en el csproj);
-    /// un error aqui solo aparece al cargar la pagina.
+    /// Pagina de configuracion del traductor (bajo Installed Plugins). Las
+    /// settings son block attributes de este bloque (declaradas abajo como
+    /// decoradores -> aparecen en el formulario de propiedades del bloque). El
+    /// REST las lee por el Guid fijo del bloque. Aqui se muestra el estado, se
+    /// prende/apaga (inyecta/retira el script en todos los sitios) y se purga.
     /// </summary>
     [DisplayName( "VidaReal Translator Settings" )]
     [Category( "VidaReal > Translator" )]
-    [Description( "Configuracion del traductor DOM de VidaReal (idioma, proveedor Azure, on/off, selectores, purgar cache)." )]
+    [Description( "Configuracion del traductor DOM de VidaReal." )]
 
-    [BooleanField( "Enabled",
-        "Activa/desactiva el traductor. Al activarlo se inyecta el script en TODOS los sitios automaticamente.",
-        false, "", 0, "Enabled" )]
-    [TextField( "Target Language",
-        "Codigo ISO del idioma destino (p.ej. es).",
-        false, "es", "", 1, "TargetLanguage" )]
-    [TextField( "Provider",
-        "Proveedor de IA. Hoy soportado: AzureOpenAI.",
-        false, "AzureOpenAI", "", 2, "Provider" )]
-    [TextField( "Azure Endpoint",
-        "https://<recurso>.openai.azure.com",
-        false, "", "", 3, "AzureEndpoint" )]
-    [TextField( "Azure Deployment",
-        "Nombre del deployment del modelo.",
-        false, "", "", 4, "AzureDeployment" )]
-    [EncryptedTextField( "Azure API Key",
-        "API key (encriptada).",
-        false, "", "", 5, "AzureApiKey", true )]
-    [TextField( "Azure API Version",
-        "api-version de Azure OpenAI.",
-        false, "2024-06-01", "", 6, "AzureApiVersion" )]
-    [MemoField( "Include Selectors",
-        "Selectores CSS extra a incluir (uno por linea). Vacio = defaults del JS. (El JS aun no lo consume.)",
-        false, "", "", 7, "IncludeSelectors" )]
-    [MemoField( "Exclude Selectors",
-        "Selectores CSS a excluir (uno por linea). Se suman a los defaults del JS.",
-        false, "", "", 8, "ExcludeSelectors" )]
-    [MemoField( "UI Select Whitelist",
-        "Selectores de <select> de UI cuyas <option> SI se traducen (uno por linea). El value nunca se toca.",
-        false, "", "", 9, "UiSelectWhitelist" )]
-    [BooleanField( "Show Language Switcher",
-        "Muestra el switcher flotante de idioma (pill).",
-        false, "", 10, "ShowSwitcher" )]
-    [TextField( "Source Language",
-        "Idioma original de la UI; al elegirlo en el switcher NO se traduce.",
-        false, "en", "", 11, "SourceLanguage" )]
-    [MemoField( "Available Languages",
-        "Idiomas del switcher, uno por linea con formato: codigo|Etiqueta (p.ej. es|Espanol).",
-        false, "", "", 12, "AvailableLanguages" )]
-    [TextField( "Switcher Container Selector",
-        "Selector CSS donde montar el switcher EN FLUJO (p.ej. #secPageTitle). Vacio = flotante.",
-        false, "", "", 13, "SwitcherContainer" )]
-    public partial class TranslatorSettings : Rock.Web.UI.RockBlock
+    [BooleanField( "Enabled", "Activa/desactiva el traductor. Al activarlo se inyecta el script en TODOS los sitios.", false, "", 0, "Enabled" )]
+    [TextField( "Target Language", "Codigo ISO del idioma destino (p.ej. es).", false, "es", "", 1, "TargetLanguage" )]
+    [TextField( "Provider", "Proveedor de IA. Hoy soportado: AzureOpenAI.", false, "AzureOpenAI", "", 2, "Provider" )]
+    [TextField( "Azure Endpoint", "https://<recurso>.openai.azure.com", false, "", "", 3, "AzureEndpoint" )]
+    [TextField( "Azure Deployment", "Nombre del deployment del modelo.", false, "", "", 4, "AzureDeployment" )]
+    [EncryptedTextField( "Azure API Key", "API key de Azure OpenAI (se guarda encriptada).", false, "", "", 5, "AzureApiKey", true )]
+    [TextField( "Azure API Version", "api-version de Azure OpenAI.", false, "2024-06-01", "", 6, "AzureApiVersion" )]
+    [MemoField( "Include Selectors", "Selectores CSS extra a incluir (uno por linea).", false, "", "", 7, "IncludeSelectors" )]
+    [MemoField( "Exclude Selectors", "Selectores CSS a excluir (uno por linea).", false, "", "", 8, "ExcludeSelectors" )]
+    [MemoField( "UI Select Whitelist", "Selectores de <select> de UI cuyas <option> SI se traducen (uno por linea).", false, "", "", 9, "UiSelectWhitelist" )]
+    [BooleanField( "Show Language Switcher", "Muestra un selector de idioma flotante (tipo Weglot) en todas las paginas.", false, "", 10, "ShowSwitcher" )]
+    [TextField( "Source Language", "Idioma original de la UI (ISO). Al elegirlo en el switcher NO se traduce (muestra el original).", false, "en", "", 11, "SourceLanguage" )]
+    [MemoField( "Available Languages", "Idiomas del switcher, uno por linea, formato: codigo|Etiqueta. Ej: en|English / es|Espanol / pt|Portugues.", false, "", "", 12, "AvailableLanguages" )]
+    [TextField( "Switcher Container Selector", "Selector CSS donde montar el switcher EN EL FLUJO (no flotante), para que no se sobreponga. Ej: '#secPageTitle' (barra de titulo) o '.navbar'. Vacio = flotante abajo-derecha.", false, "", "", 13, "SwitcherContainer" )]
+    public partial class TranslatorSettings : RockBlock
     {
-        /// <summary>
-        /// Keys de las settings. Deben coincidir con las consts Attr* de
-        /// TranslatorController (que las lee via BlockCache).
-        /// </summary>
-        private static class AttrKey
-        {
-            public const string Enabled = "Enabled";
-            public const string TargetLanguage = "TargetLanguage";
-            public const string Provider = "Provider";
-            public const string AzureEndpoint = "AzureEndpoint";
-            public const string AzureDeployment = "AzureDeployment";
-            public const string AzureApiKey = "AzureApiKey";
-            public const string AzureApiVersion = "AzureApiVersion";
-            public const string IncludeSelectors = "IncludeSelectors";
-            public const string ExcludeSelectors = "ExcludeSelectors";
-            public const string UiSelectWhitelist = "UiSelectWhitelist";
-            public const string ShowSwitcher = "ShowSwitcher";
-            public const string SourceLanguage = "SourceLanguage";
-            public const string AvailableLanguages = "AvailableLanguages";
-            public const string SwitcherContainer = "SwitcherContainer";
-        }
-
-        protected override void OnInit( EventArgs e )
-        {
-            base.OnInit( e );
-            this.BlockUpdated += Block_BlockUpdated;
-            this.AddConfigurationUpdateTrigger( upnlContent );
-        }
-
         protected override void OnLoad( EventArgs e )
         {
             base.OnLoad( e );
             if ( !Page.IsPostBack )
             {
-                BindStatus();
+                tglEnabled.Checked = GetAttributeValue( "Enabled" ).AsBoolean( true );
+                ShowStatus();
             }
         }
 
-        /// <summary>
-        /// Cambios desde el gear del bloque: re-aplicar la inyeccion (por si
-        /// cambio Enabled desde ahi) y refrescar el estado.
-        /// </summary>
-        protected void Block_BlockUpdated( object sender, EventArgs e )
+        private void ShowStatus()
         {
-            ApplyInjection( GetAttributeValue( AttrKey.Enabled ).AsBoolean() );
-            BindStatus();
+            var sb = new StringBuilder();
+            sb.Append( "<dl class='row'>" );
+            sb.AppendFormat( "<dt class='col-sm-3'>Idioma destino</dt><dd class='col-sm-9'>{0}</dd>",
+                GetAttributeValue( "TargetLanguage" ).EncodeHtml() );
+            sb.AppendFormat( "<dt class='col-sm-3'>Proveedor</dt><dd class='col-sm-9'>{0}</dd>",
+                GetAttributeValue( "Provider" ).EncodeHtml() );
+            sb.AppendFormat( "<dt class='col-sm-3'>Azure Endpoint</dt><dd class='col-sm-9'>{0}</dd>",
+                ConfiguredLabel( GetAttributeValue( "AzureEndpoint" ) ) );
+            sb.AppendFormat( "<dt class='col-sm-3'>Azure Deployment</dt><dd class='col-sm-9'>{0}</dd>",
+                ConfiguredLabel( GetAttributeValue( "AzureDeployment" ) ) );
+            sb.AppendFormat( "<dt class='col-sm-3'>Azure API Key</dt><dd class='col-sm-9'>{0}</dd>",
+                ConfiguredLabel( GetAttributeValue( "AzureApiKey" ) ) );
+            sb.Append( "</dl>" );
+            lStatus.Text = sb.ToString();
         }
 
-        private void BindStatus()
+        // No revela el valor (importante para la API key): solo si esta configurado.
+        private static string ConfiguredLabel( string value )
         {
-            tglEnabled.Checked = GetAttributeValue( AttrKey.Enabled ).AsBoolean();
-
-            var lang = GetAttributeValue( AttrKey.TargetLanguage );
-            var provider = GetAttributeValue( AttrKey.Provider );
-            var endpoint = GetAttributeValue( AttrKey.AzureEndpoint );
-            var deployment = GetAttributeValue( AttrKey.AzureDeployment );
-            var apiKey = GetAttributeValue( AttrKey.AzureApiKey );
-            var switcher = GetAttributeValue( AttrKey.ShowSwitcher ).AsBoolean();
-
-            lStatus.Text = "<ul class='list-unstyled'>"
-                + StatusLine( !string.IsNullOrWhiteSpace( lang ), "Idioma destino: <strong>" + ( string.IsNullOrWhiteSpace( lang ) ? "es (default)" : lang.EncodeHtml() ) + "</strong>" )
-                + StatusLine( !string.IsNullOrWhiteSpace( provider ), "Proveedor: <strong>" + ( string.IsNullOrWhiteSpace( provider ) ? "AzureOpenAI (default)" : provider.EncodeHtml() ) + "</strong>" )
-                + StatusLine( !string.IsNullOrWhiteSpace( endpoint ), "Azure Endpoint " + Configured( endpoint ) )
-                + StatusLine( !string.IsNullOrWhiteSpace( deployment ), "Azure Deployment " + Configured( deployment ) )
-                + StatusLine( !string.IsNullOrWhiteSpace( apiKey ), "Azure API Key " + Configured( apiKey ) )
-                + StatusLine( switcher, "Switcher de idioma: <strong>" + ( switcher ? "visible" : "oculto" ) + "</strong>" )
-                + "</ul>";
-
-            if ( string.IsNullOrWhiteSpace( endpoint ) || string.IsNullOrWhiteSpace( deployment ) || string.IsNullOrWhiteSpace( apiKey ) )
-            {
-                lStatus.Text += "<p class='text-warning'><i class='fa fa-exclamation-triangle'></i> "
-                    + "Sin Azure configurado NO se generan traducciones nuevas (la UI queda en el idioma original; "
-                    + "lo ya cacheado en BD sigue sirviendo).</p>";
-            }
-        }
-
-        private static string Configured( string value )
-        {
-            return string.IsNullOrWhiteSpace( value ) ? "<strong>sin configurar</strong>" : "configurado";
-        }
-
-        private static string StatusLine( bool ok, string html )
-        {
-            var icon = ok
-                ? "<i class='fa fa-check-circle text-success'></i>"
-                : "<i class='fa fa-times-circle text-danger'></i>";
-            return "<li>" + icon + " " + html + "</li>";
+            return string.IsNullOrWhiteSpace( value )
+                ? "<span class='label label-warning'>sin configurar</span>"
+                : "<span class='label label-success'>configurado</span>";
         }
 
         protected void tglEnabled_CheckedChanged( object sender, EventArgs e )
         {
-            SetAttributeValue( AttrKey.Enabled, tglEnabled.Checked.ToString() );
+            SetAttributeValue( "Enabled", tglEnabled.Checked.ToTrueFalse() );
             SaveAttributeValues();
-            ApplyInjection( tglEnabled.Checked );
-            BindStatus();
-        }
 
-        /// <summary>
-        /// Inyecta/retira el script en todos los sitios. En try/catch: un sitio
-        /// que falle no debe impedir guardar el setting.
-        /// </summary>
-        private void ApplyInjection( bool enabled )
-        {
+            // Activar = inyectar el <script> en el Page Header Content de TODOS
+            // los sitios automaticamente; desactivar = quitarlo. Sin SQL manual.
             try
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    TranslatorInjection.Apply( rockContext, enabled );
+                    TranslatorInjection.Apply( rockContext, tglEnabled.Checked );
                 }
 
-                ShowMessage( Rock.Web.UI.Controls.NotificationBoxType.Success, enabled
-                    ? "Traductor ACTIVADO: script inyectado en todos los sitios (v" + TranslatorInjection.ScriptVersion + ")."
-                    : "Traductor DESACTIVADO: script retirado de todos los sitios." );
+                ShowMessage( NotificationBoxType.Success, tglEnabled.Checked
+                    ? "Traductor habilitado e inyectado en todos los sitios."
+                    : "Traductor deshabilitado y retirado de todos los sitios." );
             }
             catch ( Exception ex )
             {
-                ShowMessage( Rock.Web.UI.Controls.NotificationBoxType.Danger,
-                    "El setting se guard&oacute;, pero fall&oacute; la inyecci&oacute;n del script: " + ex.Message.EncodeHtml() );
+                // El estado (Enabled) ya se guardo arriba; solo fallo la inyeccion.
+                ShowMessage( NotificationBoxType.Warning,
+                    "Estado guardado, pero fallo la inyeccion del script en los sitios: " + ex.Message );
             }
         }
 
         protected void btnPurge_Click( object sender, EventArgs e )
         {
-            try
+            using ( var rockContext = new RockContext() )
             {
-                int deleted;
-                using ( var rockContext = new RockContext() )
-                {
-                    deleted = TranslationStore.Purge( rockContext );
-                }
-
-                ShowMessage( Rock.Web.UI.Controls.NotificationBoxType.Success,
-                    "Cach&eacute; purgada: " + deleted + " traducciones borradas." );
-            }
-            catch ( Exception ex )
-            {
-                ShowMessage( Rock.Web.UI.Controls.NotificationBoxType.Danger,
-                    "No se pudo purgar: " + ex.Message.EncodeHtml() );
+                var deleted = TranslationStore.Purge( rockContext );
+                ShowMessage( NotificationBoxType.Success, string.Format( "Cach&eacute; purgada: {0} traducciones eliminadas.", deleted ) );
             }
         }
 
-        private void ShowMessage( Rock.Web.UI.Controls.NotificationBoxType type, string html )
+        private void ShowMessage( NotificationBoxType type, string text )
         {
             nbMessage.NotificationBoxType = type;
-            nbMessage.Text = html;
+            nbMessage.Text = text;
             nbMessage.Visible = true;
         }
     }

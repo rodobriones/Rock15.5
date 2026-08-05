@@ -1,55 +1,38 @@
 <%@ Control Language="C#" AutoEventWireup="true" CodeFile="TranslatorSettings.ascx.cs" Inherits="RockWeb.Plugins.com_vidareal.Translator.TranslatorSettings" %>
 
-<asp:UpdatePanel ID="upnlContent" runat="server">
+<asp:UpdatePanel ID="upnl" runat="server">
     <ContentTemplate>
-
-        <asp:Panel ID="pnlView" runat="server" CssClass="panel panel-block">
-
+        <%-- notranslate: la pagina admin del propio traductor NO se traduce (confundiria la gestion de traducciones). --%>
+        <div class="panel panel-block notranslate" data-no-translate="1">
             <div class="panel-heading">
                 <h1 class="panel-title"><i class="fa fa-language"></i> VidaReal Translator</h1>
             </div>
-
             <div class="panel-body">
 
-                <Rock:NotificationBox ID="nbMessage" runat="server" Visible="false" Dismissable="true" />
+                <Rock:NotificationBox ID="nbMessage" runat="server" Visible="false" />
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <h4>Estado</h4>
-                        <asp:Literal ID="lStatus" runat="server" />
-                    </div>
-                    <div class="col-md-6">
-                        <h4>Habilitado</h4>
-                        <p class="text-muted">
-                            Al activarlo se inyecta el script del traductor autom&aacute;ticamente
-                            en <strong>todos</strong> los sitios; al desactivarlo se retira.
-                        </p>
-                        <Rock:Toggle ID="tglEnabled" runat="server" OnText="ON" OffText="OFF"
-                            ActiveButtonCssClass="btn-success" AutoPostBack="true"
-                            OnCheckedChanged="tglEnabled_CheckedChanged" />
-
-                        <h4 class="margin-t-lg">Cach&eacute; de traducciones</h4>
-                        <p class="text-muted">
-                            Borra TODAS las traducciones cacheadas en BD (se regenerar&aacute;n
-                            con la IA en la pr&oacute;xima carga). Los usuarios deben limpiar
-                            la cach&eacute; del navegador (localStorage) para ver el cambio.
-                        </p>
-                        <asp:LinkButton ID="btnPurge" runat="server" CssClass="btn btn-danger btn-sm"
-                            OnClick="btnPurge_Click"
-                            OnClientClick="return confirm('&iquest;Borrar TODAS las traducciones cacheadas?');">
-                            <i class="fa fa-trash"></i> Purgar cach&eacute;
-                        </asp:LinkButton>
-                    </div>
+                <div class="margin-b-md">
+                    <Rock:Toggle ID="tglEnabled" runat="server" Label="Habilitado"
+                        OnText="S&iacute;" OffText="No" ActiveButtonCssClass="btn-success"
+                        AutoPostBack="true" OnCheckedChanged="tglEnabled_CheckedChanged"
+                        Help="Activa o desactiva el traductor en todo el sitio." />
                 </div>
 
-                <p class="text-muted margin-t-lg">
-                    <i class="fa fa-info-circle"></i>
-                    El resto de la configuraci&oacute;n (idioma, Azure, selectores, switcher)
-                    se edita en las <strong>propiedades del bloque</strong> (&#9881; Configuraci&oacute;n).
+                <asp:Literal ID="lStatus" runat="server" />
+
+                <div class="actions margin-t-md">
+                    <Rock:BootstrapButton ID="btnPurge" runat="server" CssClass="btn btn-default"
+                        Text="Purgar cach&eacute; de traducciones" OnClick="btnPurge_Click"
+                        DataLoadingText="Purgando..." />
+                </div>
+
+                <p class="text-muted margin-t-md">
+                    El idioma destino, el proveedor Azure (endpoint / deployment / API key) y los selectores
+                    se editan en <i class="fa fa-cog"></i> <strong>Configuraci&oacute;n del bloque</strong>
+                    (engranaje arriba a la derecha de este bloque).
                 </p>
 
             </div>
-        </asp:Panel>
-
+        </div>
     </ContentTemplate>
 </asp:UpdatePanel>
