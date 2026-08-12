@@ -1,0 +1,262 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Pase Digital (web): tarjeta con el MISMO diseño del pase de Apple/Google Wallet
+    (capturas Figma 2026-08-07) — navy #0e3a5c, logo globo + VidaReal.tv, foto-montaje,
+    NOMBRE / ASISTO A (campus de la persona) y QR de check-in (Alternate Id) con el código
+    debajo. Mobile-first: en teléfono la tarjeta ocupa el ancho; en pantallas grandes se
+    centra a 420px. Datos e imágenes vienen del bloque C# (Rock.Blocks.Wallet.PaseDigital):
+    la foto y el logo son los de la WalletTemplate, así web y wallet siempre lucen igual.
+    El <style> es NO-scoped a propósito: targetea .panel-block (chrome de Rock fuera del
+    template).
+-->
+<template>
+    <Panel type="block" title="" class="va-panel">
+        <template #default>
+            <div class="vaWrap">
+                <div class="vaPage">
+
+                    <NotificationBox v-if="!config.isAuthenticated" alertType="warning" class="vaAlert">
+                        Inicia sesión para ver tu pase digital.
+                    </NotificationBox>
+
+                    <template v-else>
+                        <div class="vaCard">
+
+                            <div class="vaLogo">
+                                <img v-if="config.logoUrl" class="vaLogoImg" :src="config.logoUrl" alt="" />
+                                <span class="vaLogoText">VidaReal.tv</span>
+                            </div>
+
+                            <div v-if="config.bannerUrl" class="vaBanner">
+                                <img class="vaBannerImg" :src="config.bannerUrl" alt="" />
+                            </div>
+
+                            <div class="vaInfo">
+                                <div class="vaLabel">Nombre:</div>
+                                <div class="vaName">{{ config.personName }}</div>
+
+                                <template v-if="config.campusName">
+                                    <div class="vaLabel">Asisto a:</div>
+                                    <div class="vaGroup">{{ config.campusName }}</div>
+                                </template>
+                            </div>
+
+                            <div v-if="config.qrUrl" class="vaQrWrap">
+                                <img class="vaQr" :src="config.qrUrl" alt="Código QR del pase" />
+                                <div class="vaCode">{{ config.code }}</div>
+                            </div>
+
+                            <div class="vaFooterSpace"></div>
+                        </div>
+
+                        <div v-if="config.showWalletButton" class="vaWalletRow">
+                            <RockButton class="vaWalletBtn"
+                                        btnType="primary"
+                                        :disabled="walletBusy"
+                                        @click="onSaveToWallet">
+                                <i class="fa fa-wallet" aria-hidden="true"></i>
+                                {{ walletBusy ? "Preparando tu pase…" : "Guardar en mi teléfono" }}
+                            </RockButton>
+                            <div v-if="walletError" class="vaWalletError">{{ walletError }}</div>
+                        </div>
+                    </template>
+
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — Pase Digital (web)
+   Paleta del pase de wallet (capturas): navy #0e3a5c, etiquetas
+   celestes #a9c2d6. Clases prefijadas con va. MOBILE-FIRST:
+   base = teléfono; >=480px centra la tarjeta a 420px.
+   ============================================================ */
+
+/* Chrome del panel: solo para este bloque (no afecta otros panel-block). */
+.panel-block:has(.vaWrap) > .panel-heading,
+.panel-block:has(.vaWrap) > .panel-header { display: none !important; }
+.panel-block:has(.vaWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.vaWrap) > .panel-body { padding: 0 !important; }
+
+.vaWrap {
+    --va-navy: #0e3a5c;
+    --va-navy-deep: #0e364c;
+    --va-label: #a9c2d6;
+    --va-ink: #ffffff;
+    /* El pase real renderiza con la fuente del sistema (SF Pro / Roboto) — mismo stack aquí. */
+    --va-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    font-family: var(--va-font);
+    -webkit-font-smoothing: antialiased;
+}
+.vaWrap *, .vaWrap *::before, .vaWrap *::after { box-sizing: border-box; }
+
+/* ---------- Lienzo (full-bleed SIEMPRE: navy de orilla a orilla) ----------
+   width:100vw + margin calc(50% - 50vw) rompe el contenedor/padding de la
+   página de Rock sea cual sea el theme — cero borde blanco alrededor. */
+.vaPage {
+    width: 100vw;
+    margin: 0 calc(50% - 50vw);
+    background: var(--va-navy-deep);
+    min-height: 70vh;
+    padding: 0 0 24px;
+}
+
+.vaAlert.alert { margin: 16px; }
+
+/* ---------- Tarjeta (base = móvil: ocupa todo el ancho, sin bordes) ---------- */
+.vaCard {
+    position: relative;
+    width: 100%;
+    margin: 0;
+    background: var(--va-navy);
+    border-radius: 0;
+    overflow: hidden;
+    color: var(--va-ink);
+}
+
+/* ---------- Logo / marca ---------- */
+.vaLogo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 20px 16px 14px;
+}
+.vaLogoImg { width: 34px; height: 34px; object-fit: contain; display: block; }
+.vaLogoText { font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+
+/* ---------- Foto / banner ---------- */
+.vaBanner { width: 100%; height: 150px; overflow: hidden; background: var(--va-navy-deep); }
+.vaBannerImg { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- Datos de la persona ---------- */
+.vaInfo { padding: 18px 22px 4px; }
+.vaLabel {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--va-label);
+    margin-bottom: 4px;
+}
+.vaName { font-size: 26px; font-weight: 800; line-height: 1.15; margin-bottom: 18px; text-wrap: balance; }
+.vaGroup { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+
+/* ---------- QR ---------- */
+.vaQrWrap {
+    margin: 20px auto 10px;
+    width: calc(100% - 48px);
+    max-width: 300px;
+    background: #fff;
+    border-radius: 20px;
+    padding: 16px;
+    text-align: center;
+}
+.vaQr { width: 100%; height: auto; display: block; }
+.vaCode {
+    margin-top: 10px;
+    font-size: 14px;
+    letter-spacing: .05em;
+    color: var(--va-navy);
+    font-weight: 600;
+}
+.vaFooterSpace { height: 24px; }
+
+/* ---------- Botón "Guardar en mi teléfono" (oculto por defecto; blanco sobre navy) ---------- */
+.vaWalletRow { margin: 0 16px; text-align: center; }
+.vaWalletBtn.btn {
+    width: 100%;
+    background: #fff !important;
+    border-color: #fff !important;
+    color: var(--va-navy) !important;
+    font-weight: 600 !important;
+    border-radius: 999px !important;
+    padding: 12px 22px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.vaWalletBtn.btn:hover,
+.vaWalletBtn.btn:focus {
+    background: #e8eef3 !important;
+    border-color: #e8eef3 !important;
+    color: var(--va-navy) !important;
+}
+.vaWalletError { margin-top: 8px; font-size: 13px; color: #fecaca; }
+
+/* ---------- >= 480px: tarjeta centrada estilo wallet sobre el lienzo navy ---------- */
+@media (min-width: 480px) {
+    .vaPage { padding: 24px 0 32px; }
+    .vaAlert.alert { max-width: 420px; margin: 24px auto; }
+    .vaCard {
+        width: auto;
+        max-width: 420px;
+        margin: 0 auto;
+        border-radius: 28px;
+        box-shadow: 0 14px 28px rgba(0, 0, 0, .35);
+    }
+    .vaBanner { height: 180px; }
+    .vaName { font-size: 30px; }
+    .vaWalletRow { max-width: 420px; margin: 16px auto 0; }
+    .vaWalletBtn.btn { width: auto; }
+}
+</style>
+
+<script setup lang="ts">
+import Panel from "@Obsidian/Controls/panel.obs";
+import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { ref } from "vue";
+import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+
+type InitBag = {
+    isAuthenticated: boolean;
+    personName: string | null;
+    campusName: string | null;
+    code: string | null;
+    qrUrl: string | null;
+    bannerUrl: string | null;
+    logoUrl: string | null;
+    showWalletButton: boolean;
+};
+
+const config = useConfigurationValues<InitBag>();
+const invokeBlockAction = useInvokeBlockAction();
+
+const walletBusy = ref(false);
+const walletError = ref("");
+
+/** Emite el pase real (misma plantilla del wallet) y navega a la URL de descarga:
+ *  iPhone abre la hoja de Apple Wallet, Android la de Google Wallet. */
+async function onSaveToWallet(): Promise<void> {
+    if (walletBusy.value) {
+        return;
+    }
+    walletBusy.value = true;
+    walletError.value = "";
+    try {
+        const res = await invokeBlockAction<{ url: string | null }>("GetWalletUrl");
+        if (!res.isSuccess || !res.data?.url) {
+            walletError.value = res.errorMessage || "No se pudo preparar el pase. Intenta de nuevo.";
+            return;
+        }
+        window.location.href = res.data.url;
+    }
+    catch {
+        walletError.value = "Error de red. Intenta de nuevo.";
+    }
+    finally {
+        walletBusy.value = false;
+    }
+}
+</script>

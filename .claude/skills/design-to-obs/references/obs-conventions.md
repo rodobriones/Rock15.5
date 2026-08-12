@@ -80,8 +80,9 @@ oculta es `.panel-heading`/`.panel-header`; al body solo se le quita el padding.
 - **Prefijo único de 2-3 letras en TODAS las clases** (`ec` → `.ecWrap`, `.ecCard`, `.ecCta`…).
   Verificar que el prefijo no exista ya: `Grep pattern "\.xx" path Rock.JavaScript.Obsidian.Blocks/src`.
 - Sin `@import`, sin fuentes/CSS de CDN, sin URLs de imágenes del mockup hardcodeadas (usar datos
-  del config o placeholder). Tipografía del repo: `"Roboto"` con `"Roboto Mono"` para cifras/códigos
-  (clase utilitaria `.xxMono`).
+  del config o placeholder). Fuentes de marca: servidas desde RockWeb (`/Assets/Fonts/...`) con
+  stacks con fallback en el wrapper — ver SKILL.md Paso 3.5. Si el diseño no trae tipografía
+  propia, la del repo es `"Roboto"` con `"Roboto Mono"` para cifras/códigos (utilitaria `.xxMono`).
 - Utilitarias comunes: `.xxMono` (mono), `.xxCap` (capitalize).
 - SVG inline para iconos decorativos (ver `.ecEndedIcon`); Font Awesome (`fa fa-…`) también está
   disponible en Rock.

@@ -182,8 +182,11 @@ WHERE p.[Status]=@new
             int Count( string sql, params SqlParameter[] ps ) =>
                 rockContext.Database.SqlQuery<int>( sql, ps ).FirstOrDefault();
 
+            // Inclusivo en @to: ReconcileMerges corre en el mismo instante que el fin de ventana,
+            // asi que los pares recien reconciliados quedan con StatusDateTime == @to y un '<'
+            // estricto los excluiria siempre (el KPI de corregidos daria 0 perpetuamente).
             var merged = Count(
-                $"SELECT COUNT(*) FROM [{PairTable}] WHERE [Status]=@st AND [StatusDateTime]>=@from AND [StatusDateTime]<@to",
+                $"SELECT COUNT(*) FROM [{PairTable}] WHERE [Status]=@st AND [StatusDateTime]>=@from AND [StatusDateTime]<=@to",
                 new SqlParameter( "@st", StatusMerged ), new SqlParameter( "@from", windowStart ), new SqlParameter( "@to", windowEnd ) );
 
             var notDup = Count(

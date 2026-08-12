@@ -177,6 +177,8 @@
                                     <div class="col-md-6"><TextBox v-model="google.cardTitle" label="Título de la tarjeta" /></div>
                                     <div class="col-md-6"><TextBox v-model="google.header" label="Encabezado (Lava)" /></div>
                                 </div>
+                                <TextBox v-model="google.subheader" label="Sub-encabezado (Lava)" help="Texto pequeño arriba del encabezado, ej. la etiqueta &quot;Nombre&quot;. Vacío = no se muestra." />
+                                <TextBox v-model="google.logoImageUrl" label="Logo (Lava → URL https)" help="URL pública del logo circular junto al título. Vacío = sin logo." />
                                 <TextBox v-model="google.heroImageUrl" label="Imagen hero (Lava → URL https)" help="URL pública de la imagen, ej. {{ Data.EventImageUrl }}." />
                                 <TextBox v-model="google.expirationDate" label="Fecha de expiración (Lava)" help="Google vence el pase al llegar esta fecha. Vacío = nunca expira." />
                                 <div class="wtColors">
@@ -354,9 +356,9 @@ type AppleDesign = {
     stripImageGuid: string | null; backgroundImageGuid: string | null; thumbnailImageGuid: string | null;
 };
 type GoogleDesign = {
-    hexBackgroundColor: string | null; cardTitle: string | null; header: string | null;
+    hexBackgroundColor: string | null; cardTitle: string | null; subheader: string | null; header: string | null;
     rows: PassField[] | null; barcode: BarcodeDesign | null; heroImageUrl: string | null;
-    expirationDate: string | null;
+    logoImageUrl: string | null; expirationDate: string | null;
 };
 type TemplateBag = {
     id: number; guid: string | null; name: string | null; description: string | null;
@@ -405,10 +407,11 @@ type AppleForm = {
 };
 const apple = reactive<AppleForm>(emptyApple());
 const google = reactive({
-    hexBackgroundColor: "#0f172a", cardTitle: "", header: "",
+    hexBackgroundColor: "#0f172a", cardTitle: "", subheader: "", header: "",
     rows: [] as PassField[],
     barcode: { format: "QR", message: "", altText: "" },
     heroImageUrl: "",
+    logoImageUrl: "",
     expirationDate: ""
 });
 
@@ -477,7 +480,7 @@ function hexToRgb(hex: string): string {
 function newTemplate(): void {
     form.value = { id: 0, name: "", description: "", isActive: true, passStyle: 0, icon: null, logo: null, strip: null, background: null, thumbnail: null, passCount: 0 };
     Object.assign(apple, emptyApple());
-    Object.assign(google, { hexBackgroundColor: "#0f172a", cardTitle: "", header: "", rows: [], barcode: { format: "QR", message: "", altText: "" }, heroImageUrl: "", expirationDate: "" });
+    Object.assign(google, { hexBackgroundColor: "#0f172a", cardTitle: "", subheader: "", header: "", rows: [], barcode: { format: "QR", message: "", altText: "" }, heroImageUrl: "", logoImageUrl: "", expirationDate: "" });
     view.value = "edit";
 }
 
@@ -511,10 +514,12 @@ function editTemplate(t: TemplateBag): void {
     Object.assign(google, {
         hexBackgroundColor: g?.hexBackgroundColor ?? "#0f172a",
         cardTitle: g?.cardTitle ?? "",
+        subheader: g?.subheader ?? "",
         header: g?.header ?? "",
         rows: (g?.rows ?? []).map(f => ({ ...f })),
         barcode: { format: g?.barcode?.format ?? "QR", message: g?.barcode?.message ?? "", altText: g?.barcode?.altText ?? "" },
         heroImageUrl: g?.heroImageUrl ?? "",
+        logoImageUrl: g?.logoImageUrl ?? "",
         expirationDate: g?.expirationDate ?? ""
     });
     view.value = "edit";

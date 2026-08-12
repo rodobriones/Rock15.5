@@ -19,15 +19,12 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.Entity;
 using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using Newtonsoft.Json;
 
 using Rock;
 using Rock.Attribute;
+using Rock.Communication;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
@@ -339,71 +336,6 @@ namespace RockWeb.Blocks.CheckIn.Manager
         }
 
         /// <summary>
-        /// Formatea un número de teléfono de Guatemala para usarlo con WhatsApp/Twilio.
-        /// </summary>
-        private static string FormatPhoneNumberForGuatemala( string phoneNumber )
-        {
-            if ( phoneNumber.StartsWith( "+502" ) )
-            {
-                return phoneNumber;
-            }
-
-            string cleaned = Regex.Replace( phoneNumber, @"\D", string.Empty );
-            if ( cleaned.Length == 8 )
-            {
-                return $"+502{cleaned}";
-            }
-
-            if ( cleaned.Length == 11 && cleaned.StartsWith( "502" ) )
-            {
-                return $"+{cleaned}";
-            }
-
-            throw new ArgumentException( "Número de teléfono no válido para Guatemala." );
-        }
-
-        /// <summary>
-        /// Envía un mensaje por WhatsApp usando la API de Twilio.
-        /// </summary>
-        private bool SendWhatsAppTemplateMessage( string toPhoneNumber, string mensajeCompleto )
-        {
-            var globalAttributes = GlobalAttributesCache.Get();
-            var accountSid = globalAttributes.GetValue( "TwilioAccountSid" );
-            var authToken = globalAttributes.GetValue( "TwilioAuthToken" );
-            var fromPhoneNumber = globalAttributes.GetValue( "TwilioWhatsAppFrom" );
-            var templateSid = globalAttributes.GetValue( "TwilioWhatsAppTemplateSid" );
-
-            try
-            {
-                using ( var client = new HttpClient() )
-                {
-                    var uri = new Uri( $"https://api.twilio.com/2010-04-01/Accounts/{accountSid}/Messages.json" );
-                    var requestBody = new Dictionary<string, string>
-                    {
-                        { "To", $"whatsapp:{toPhoneNumber}" },
-                        { "From", fromPhoneNumber },
-                        { "ContentSid", templateSid },
-                        {
-                            "ContentVariables",
-                            JsonConvert.SerializeObject( new Dictionary<string, string> { { "1", mensajeCompleto } } )
-                        }
-                    };
-
-                    var authHeader = Convert.ToBase64String( Encoding.ASCII.GetBytes( $"{accountSid}:{authToken}" ) );
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue( "Basic", authHeader );
-
-                    var content = new FormUrlEncodedContent( requestBody );
-                    var response = client.PostAsync( uri, content ).Result;
-                    return response.IsSuccessStatusCode;
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
         /// Handles the SaveClick event of the mdSms control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
@@ -428,18 +360,40 @@ namespace RockWeb.Blocks.CheckIn.Manager
                 return;
             }
 
+            var fromPhone = SystemPhoneNumberCache.Get( GetAttributeValue( AttributeKey.SMSFrom ).AsGuid() );
+            if ( fromPhone == null )
+            {
+                ResetSms();
+                DisplaySmsError( "El bloque no tiene configurado el número de origen (Send SMS From)." );
+                return;
+            }
+
             try
             {
-                string formattedPhone = FormatPhoneNumberForGuatemala( phoneNumber.NumberFormatted );
-                bool enviado = SendWhatsAppTemplateMessage( formattedPhone, message );
+                var smsMessage = new RockSMSMessage
+                {
+                    FromSystemPhoneNumber = fromPhone,
+                    Message = message,
+                    CurrentPerson = CurrentPerson,
+                    CreateCommunicationRecord = true,
+                    CommunicationName = "Check-in Manager"
+                };
 
-                if ( enviado )
+                var recipient = new RockSMSMessageRecipient( person, phoneNumber.ToSmsNumber(), new Dictionary<string, object>() );
+                smsMessage.SetRecipients( new List<RockSMSMessageRecipient> { recipient } );
+                recipient.MergeFields.Add( recipient.PersonMergeFieldKey, person );
+
+                // Si la persona escribió por WhatsApp en las últimas 24h, el transport envía
+                // texto libre en lugar de la plantilla (con fallback a plantilla si la ventana ya cerró).
+                smsMessage.AdditionalMergeFields.Add( Rock.WhatsApp.Communication.Transport.WhatsAppTransport.MergeFieldKey.UseConversationWindow, true );
+
+                if ( smsMessage.Send( out var errorMessages ) && !errorMessages.Any() )
                 {
                     DisplaySmsSuccess( "Mensaje de WhatsApp enviado correctamente." );
                 }
                 else
                 {
-                    DisplaySmsError( $"No se pudo enviar el mensaje por WhatsApp a {person.FullName}." );
+                    DisplaySmsError( $"No se pudo enviar el mensaje por WhatsApp a {person.FullName}: {errorMessages.AsDelimited( " | " )}" );
                 }
             }
             catch ( Exception ex )

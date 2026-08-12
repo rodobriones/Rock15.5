@@ -101,7 +101,11 @@ namespace Rock.Communication.SmsActions
                 return null;
             }
 
-            medium.ProcessResponse( message.ToNumber, message.FromNumber, message.Message, message.Attachments, out errorMessage );
+            // Fork VidaReal: pasar el remitente ya resuelto por el webhook (WhatsApp lo
+            // identifica por wamid cuando es reacción/respuesta a un mensaje nuestro) para
+            // que la conversación se atribuya a la persona correcta aunque varios perfiles
+            // compartan el número. Null = el medium resuelve por teléfono como siempre.
+            medium.ProcessResponse( message.ToNumber, message.FromNumber, message.Message, message.Attachments, message.FromPerson, out errorMessage );
             return null;
         }
 

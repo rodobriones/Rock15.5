@@ -31,12 +31,24 @@ using Rock.Web.Cache;
 /// Webhook handler for the WhatsApp Business Cloud API.
 /// Handles three scenarios on the same URL:
 ///   1. GET  - webhook verification handshake from Meta (hub.challenge echo).
-///   2. POST - incoming user messages (text and media).
+///   2. POST - incoming user messages (text, interactive replies, reactions and media;
+///             stickers and images are downloaded and attached).
 ///   3. POST - message status updates (sent, delivered, read, failed).
 /// </summary>
 public class WhatsAppSms : IHttpHandler
 {
     private static readonly Guid WhatsAppEntityTypeGuid = new Guid( "7E3A8D2F-1C94-4B56-A032-5F8E9B6C4D71" );
+
+    private const string GraphApiBase = "https://graph.facebook.com";
+
+    private const string DefaultApiVersion = "v21.0";
+
+    /// <summary>
+    /// Upper bound for media we are willing to pull down from Meta and store as a
+    /// BinaryFile. WhatsApp allows up to 16 MB for video; anything past this limit
+    /// keeps its text placeholder instead of being downloaded.
+    /// </summary>
+    private const long MaxMediaDownloadBytes = 10 * 1024 * 1024;
 
     private TransportComponent _transport;
 
@@ -201,8 +213,14 @@ public class WhatsAppSms : IHttpHandler
     }
 
     /// <summary>
-    /// Processes the array of incoming user messages. Only text type is fully supported in v1.
-    /// Media messages (image/document/audio/video) are accepted but the file is not yet downloaded.
+    /// Processes the array of incoming user messages.
+    ///
+    /// Text-bearing types (text, button, interactive, reaction) provide the body directly.
+    /// Types that carry no text of their own (sticker, image, audio, video, document,
+    /// location, contacts) get a descriptive placeholder so the message never lands in
+    /// SMS Conversations as an empty bubble. Image-like media (sticker / image) is
+    /// additionally downloaded from the Graph API and attached, which is what actually
+    /// renders it in the conversation.
     /// </summary>
     private void ProcessIncomingMessages( JToken value, JArray messages, int? smsPipelineId )
     {
@@ -215,29 +233,18 @@ public class WhatsAppSms : IHttpHandler
             var fromPhone = EnsureE164Plus( from );
             var type = msg["type"]?.Value<string>();
 
-            string body = string.Empty;
-            if ( type == "text" )
-            {
-                body = msg["text"]?["body"]?.Value<string>() ?? string.Empty;
-            }
-            else if ( type == "button" )
-            {
-                body = msg["button"]?["text"]?.Value<string>() ?? string.Empty;
-            }
-            else if ( type == "interactive" )
-            {
-                // Could be button_reply or list_reply
-                body = msg["interactive"]?["button_reply"]?["title"]?.Value<string>()
-                    ?? msg["interactive"]?["list_reply"]?["title"]?.Value<string>()
-                    ?? string.Empty;
-            }
-            // For media types we still create the SmsMessage so SMS Pipeline can react; body left empty.
+            var body = GetMessageBody( msg, type );
+            var hasOwnText = body.IsNotNullOrWhiteSpace();
 
             var smsMessage = new SmsMessage
             {
                 ToNumber = toPhone,
                 FromNumber = fromPhone,
-                Message = body
+
+                // Media with no text of its own starts with a placeholder. If the file
+                // downloads successfully the placeholder is cleared below so the conversation
+                // shows just the image (same as an MMS from Twilio).
+                Message = hasOwnText ? body : GetMediaPlaceholder( msg, type )
             };
 
             if ( smsMessage.ToNumber.IsNullOrWhiteSpace() || smsMessage.FromNumber.IsNullOrWhiteSpace() )
@@ -250,7 +257,22 @@ public class WhatsAppSms : IHttpHandler
             List<SmsActionOutcome> outcomes = null;
             using ( var rockContext = new RockContext() )
             {
-                smsMessage.FromPerson = new PersonService( rockContext ).GetPersonFromMobilePhoneNumber( smsMessage.FromNumber, true );
+                smsMessage.FromPerson = ResolveFromPerson( rockContext, msg, smsMessage.FromNumber );
+
+                if ( IsDownloadableImageType( type ) )
+                {
+                    var mediaFile = TryDownloadMedia( msg, type, rockContext );
+                    if ( mediaFile != null )
+                    {
+                        smsMessage.Attachments.Add( mediaFile );
+
+                        if ( !hasOwnText )
+                        {
+                            // No caption: drop the placeholder so only the image is shown.
+                            smsMessage.Message = string.Empty;
+                        }
+                    }
+                }
 
                 try
                 {
@@ -324,6 +346,360 @@ public class WhatsAppSms : IHttpHandler
 
                 rockContext.SaveChanges();
             }
+        }
+    }
+
+    #endregion
+
+    #region Incoming message parsing
+
+    /// <summary>
+    /// Resolves the sender of an incoming message. Order of precedence:
+    ///
+    ///  1. wamid del mensaje NUESTRO al que responde: reacciones (<c>reaction.message_id</c>),
+    ///     respuestas citadas y taps de botón de plantilla (<c>context.id</c>) traen el id del
+    ///     mensaje original — se busca en <c>CommunicationRecipient.UniqueMessageId</c> (el
+    ///     transport lo guarda al enviar) y la atribución es EXACTA a quien le enviamos,
+    ///     aunque varias personas compartan el número.
+    ///  2. Número compartido entre varios perfiles: gana la persona a la que le ENVIAMOS
+    ///     WhatsApp más recientemente (UniqueMessageId 'wamid…') en los últimos 30 días.
+    ///  3. Fallback: resolución core por número (crea persona nameless si no existe) — el
+    ///     comportamiento histórico.
+    ///
+    /// La persona resuelta viaja por SmsActionConversations → Sms.ProcessResponse (overload
+    /// del fork con remitente pre-resuelto); sin ese overload, el core re-resolvía por número
+    /// y pisaba esta atribución.
+    /// </summary>
+    private static Person ResolveFromPerson( RockContext rockContext, JToken msg, string fromNumber )
+    {
+        // 1) Reacción o respuesta directa a un mensaje nuestro → persona exacta por wamid.
+        var contextWamid = msg["reaction"]?["message_id"]?.Value<string>()
+            ?? msg["context"]?["id"]?.Value<string>();
+
+        if ( contextWamid.IsNotNullOrWhiteSpace() )
+        {
+            var exactPerson = new CommunicationRecipientService( rockContext ).Queryable()
+                .Where( r => r.UniqueMessageId == contextWamid )
+                .Select( r => r.PersonAlias.Person )
+                .FirstOrDefault();
+
+            if ( exactPerson != null )
+            {
+                return exactPerson;
+            }
+        }
+
+        // 2) Número compartido: preferir a quien le enviamos WhatsApp más recientemente.
+        var cleanNumber = PhoneNumber.CleanNumber( fromNumber );
+        if ( cleanNumber.IsNotNullOrWhiteSpace() )
+        {
+            var candidatePersonIds = new PhoneNumberService( rockContext ).Queryable()
+                .Where( pn => pn.FullNumber == cleanNumber )
+                .Select( pn => pn.PersonId )
+                .Distinct()
+                .ToList();
+
+            if ( candidatePersonIds.Count > 1 )
+            {
+                var cutoff = RockDateTime.Now.AddDays( -30 );
+                var recentPerson = new CommunicationRecipientService( rockContext ).Queryable()
+                    .Where( r => r.UniqueMessageId != null
+                        && r.UniqueMessageId.StartsWith( "wamid" )
+                        && r.CreatedDateTime >= cutoff
+                        && candidatePersonIds.Contains( r.PersonAlias.PersonId ) )
+                    .OrderByDescending( r => r.CreatedDateTime )
+                    .Select( r => r.PersonAlias.Person )
+                    .FirstOrDefault();
+
+                if ( recentPerson != null )
+                {
+                    return recentPerson;
+                }
+            }
+        }
+
+        // 3) Comportamiento histórico (incluye crear nameless si el número no existe).
+        return new PersonService( rockContext ).GetPersonFromMobilePhoneNumber( fromNumber, true );
+    }
+
+    /// <summary>
+    /// Extracts the text the user actually typed (or tapped), for the message types that carry text.
+    /// Returns an empty string for media-only types.
+    /// </summary>
+    private static string GetMessageBody( JToken msg, string type )
+    {
+        switch ( type )
+        {
+            case "text":
+                return msg["text"]?["body"]?.Value<string>() ?? string.Empty;
+
+            case "button":
+                return msg["button"]?["text"]?.Value<string>() ?? string.Empty;
+
+            case "interactive":
+                // Could be button_reply or list_reply.
+                return msg["interactive"]?["button_reply"]?["title"]?.Value<string>()
+                    ?? msg["interactive"]?["list_reply"]?["title"]?.Value<string>()
+                    ?? string.Empty;
+
+            case "reaction":
+                // A reaction to one of our messages. The emoji itself is the whole content.
+                return msg["reaction"]?["emoji"]?.Value<string>() ?? string.Empty;
+
+            case "image":
+            case "video":
+            case "document":
+                // These can carry a caption typed by the user. Stickers cannot.
+                return msg[type]?["caption"]?.Value<string>() ?? string.Empty;
+
+            default:
+                return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Builds the text shown for messages that carry no text of their own. Without this the
+    /// SMS Conversations block renders the message as a bubble-less timestamp, because it
+    /// hides the bubble when the body is blank.
+    /// </summary>
+    private static string GetMediaPlaceholder( JToken msg, string type )
+    {
+        switch ( type )
+        {
+            case "sticker":
+                return "[sticker]";
+
+            case "image":
+                return "[imagen]";
+
+            case "audio":
+                return msg["audio"]?["voice"]?.Value<bool>() == true ? "[nota de voz]" : "[audio]";
+
+            case "video":
+                return "[video]";
+
+            case "document":
+                var fileName = msg["document"]?["filename"]?.Value<string>();
+                return fileName.IsNullOrWhiteSpace() ? "[documento]" : $"[documento: {fileName}]";
+
+            case "location":
+                var placeName = msg["location"]?["name"]?.Value<string>()
+                    ?? msg["location"]?["address"]?.Value<string>();
+                if ( placeName.IsNotNullOrWhiteSpace() )
+                {
+                    return $"[ubicación: {placeName}]";
+                }
+
+                var latitude = msg["location"]?["latitude"]?.Value<string>();
+                var longitude = msg["location"]?["longitude"]?.Value<string>();
+                return latitude.IsNotNullOrWhiteSpace() && longitude.IsNotNullOrWhiteSpace()
+                    ? $"[ubicación: {latitude}, {longitude}]"
+                    : "[ubicación]";
+
+            case "contacts":
+                return "[contacto]";
+
+            default:
+                // system, order, unknown, and anything Meta adds later.
+                return type.IsNullOrWhiteSpace() ? string.Empty : $"[{type}]";
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the media for this message type is worth downloading.
+    ///
+    /// SMS Conversations renders every attachment as an &lt;img&gt; tag, so only image-like
+    /// media is downloaded. Audio, video and documents would show up as a broken image;
+    /// they keep their text placeholder instead.
+    /// </summary>
+    private static bool IsDownloadableImageType( string type )
+    {
+        return type == "sticker" || type == "image";
+    }
+
+    /// <summary>
+    /// Downloads the media behind an incoming message and stores it as a BinaryFile so the
+    /// SMS Conversations block can display it. Returns <c>null</c> if anything goes wrong —
+    /// the caller then falls back to the text placeholder.
+    ///
+    /// Meta does not send the file itself, only a media id. Fetching it takes two calls:
+    /// resolve the id to a short-lived (~5 min) URL, then download that URL with the same
+    /// bearer token.
+    /// </summary>
+    private BinaryFile TryDownloadMedia( JToken msg, string type, RockContext rockContext )
+    {
+        try
+        {
+            var mediaId = msg[type]?["id"]?.Value<string>();
+            if ( mediaId.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
+            var transport = this.WhatsAppTransport;
+            if ( transport == null )
+            {
+                return null;
+            }
+
+            var accessToken = GetDecryptedAttribute( transport, "AccessToken" );
+            if ( accessToken.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
+            var apiVersion = transport.GetAttributeValue( "ApiVersion" );
+            if ( apiVersion.IsNullOrWhiteSpace() )
+            {
+                apiVersion = DefaultApiVersion;
+            }
+
+            // Step 1: resolve the media id to a temporary download URL.
+            var metadataJson = GetGraphApiString( $"{GraphApiBase}/{apiVersion}/{mediaId}", accessToken );
+            if ( metadataJson.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
+            var metadata = JObject.Parse( metadataJson );
+            var downloadUrl = metadata["url"]?.Value<string>();
+            if ( downloadUrl.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
+            var mimeType = NormalizeMimeType( metadata["mime_type"]?.Value<string>()
+                ?? msg[type]?["mime_type"]?.Value<string>() );
+
+            var declaredSize = metadata["file_size"]?.Value<long>() ?? 0;
+            if ( declaredSize > MaxMediaDownloadBytes )
+            {
+                return null;
+            }
+
+            // Step 2: download the bytes. The lookaside URL requires the same bearer token.
+            var httpWebRequest = ( HttpWebRequest ) WebRequest.Create( downloadUrl );
+            httpWebRequest.Headers["Authorization"] = "Bearer " + accessToken;
+            httpWebRequest.UserAgent = "RockRMS-WhatsApp-Webhook";
+
+            using ( var httpWebResponse = ( HttpWebResponse ) httpWebRequest.GetResponse() )
+            using ( var responseStream = httpWebResponse.GetResponseStream() )
+            {
+                if ( responseStream == null )
+                {
+                    return null;
+                }
+
+                // Buffered on purpose: the response is often chunked (ContentLength -1) and
+                // BinaryFile.FileSize needs a real number. It also caps what we read.
+                using ( var buffer = new MemoryStream() )
+                {
+                    var chunk = new byte[81920];
+                    int bytesRead;
+                    while ( ( bytesRead = responseStream.Read( chunk, 0, chunk.Length ) ) > 0 )
+                    {
+                        if ( buffer.Length + bytesRead > MaxMediaDownloadBytes )
+                        {
+                            return null;
+                        }
+
+                        buffer.Write( chunk, 0, bytesRead );
+                    }
+
+                    if ( buffer.Length == 0 )
+                    {
+                        return null;
+                    }
+
+                    buffer.Seek( 0, SeekOrigin.Begin );
+
+                    var fileName = $"WhatsApp-{type}-{Guid.NewGuid()}.{GetExtensionForMimeType( mimeType )}";
+
+                    return new BinaryFileService( rockContext ).AddFileFromStream(
+                        buffer,
+                        mimeType,
+                        buffer.Length,
+                        fileName,
+                        Rock.SystemGuid.BinaryFiletype.COMMUNICATION_ATTACHMENT,
+                        Guid.NewGuid() );
+                }
+            }
+        }
+        catch ( Exception ex )
+        {
+            // Never let a media download break the pipeline or the auto-reply.
+            ExceptionLogService.LogException( ex );
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Performs an authenticated GET against the Graph API and returns the response body.
+    /// </summary>
+    private static string GetGraphApiString( string url, string accessToken )
+    {
+        var httpWebRequest = ( HttpWebRequest ) WebRequest.Create( url );
+        httpWebRequest.Headers["Authorization"] = "Bearer " + accessToken;
+        httpWebRequest.UserAgent = "RockRMS-WhatsApp-Webhook";
+
+        using ( var httpWebResponse = ( HttpWebResponse ) httpWebRequest.GetResponse() )
+        using ( var responseStream = httpWebResponse.GetResponseStream() )
+        {
+            if ( responseStream == null )
+            {
+                return null;
+            }
+
+            using ( var reader = new StreamReader( responseStream, Encoding.UTF8 ) )
+            {
+                return reader.ReadToEnd();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Strips parameters from a mime type (Meta sends things like "audio/ogg; codecs=opus")
+    /// so it can be stored on the BinaryFile and matched by the image handler.
+    /// </summary>
+    private static string NormalizeMimeType( string mimeType )
+    {
+        if ( mimeType.IsNullOrWhiteSpace() )
+        {
+            return "application/octet-stream";
+        }
+
+        var separatorIndex = mimeType.IndexOf( ';' );
+        var normalized = separatorIndex >= 0 ? mimeType.Substring( 0, separatorIndex ) : mimeType;
+
+        return normalized.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Derives a file extension from a mime type. Rock's FileUtilities helper has no entry
+    /// for webp (the format WhatsApp uses for stickers), so the subtype is used directly.
+    /// </summary>
+    private static string GetExtensionForMimeType( string mimeType )
+    {
+        var separatorIndex = ( mimeType ?? string.Empty ).IndexOf( '/' );
+        if ( separatorIndex < 0 || separatorIndex == mimeType.Length - 1 )
+        {
+            return "bin";
+        }
+
+        var subType = mimeType.Substring( separatorIndex + 1 );
+
+        switch ( subType )
+        {
+            case "jpeg":
+                return "jpg";
+            case "svg+xml":
+                return "svg";
+            case "octet-stream":
+                return "bin";
+            default:
+                // Keep only characters that are safe in a file name (e.g. "vnd.ms-excel").
+                var safe = new string( subType.Where( c => char.IsLetterOrDigit( c ) ).ToArray() );
+                return safe.IsNullOrWhiteSpace() ? "bin" : safe;
         }
     }
 

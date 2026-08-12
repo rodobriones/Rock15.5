@@ -47,11 +47,13 @@ Se agregó `btnLogout_Click()`, un handler que realiza un cierre de sesión comp
 La carga de tipos de check-in en el dropdown ahora filtra por permisos: solo muestra los `GroupType` que el usuario actual tiene autorización `VIEW`. Si no hay usuario autenticado, la lista queda vacía. Esto evita que operadores de un kiosko vean configuraciones de otras áreas.
 
 ### 6. Notificación por WhatsApp al padre (`Manager/PersonLeft.ascx.cs`)
-El botón de SMS en el módulo Check-in Manager fue reemplazado por un envío directo via WhatsApp usando la API de Twilio (no el transport formal `Rock.WhatsApp`, sino una llamada directa HTTP):
-- `FormatPhoneNumberForGuatemala()`: normaliza números guatemaltecos de 8 dígitos al formato `+502XXXXXXXX`.
-- `SendWhatsAppTemplateMessage()`: hace un POST a `api.twilio.com/.../Messages.json` con autenticación Basic, incluyendo `ContentSid` (plantilla pre-aprobada) y `ContentVariables` con el mensaje como variable `{{1}}`.
-- Los parámetros de conexión se leen de los atributos globales de Rock: `TwilioAccountSid`, `TwilioAuthToken`, `TwilioWhatsAppFrom`, `TwilioWhatsAppTemplateSid`.
-- La lógica SMS original de Rock (que usaba `Rock.Communication.Medium.Sms.CreateCommunicationMobile`) fue completamente reemplazada.
+El botón de SMS del módulo Check-in Manager envía el mensaje por WhatsApp usando el **pipeline estándar de comunicaciones** (`RockSMSMessage` → medio SMS → transport global `Rock.WhatsApp`), el mismo camino que la acción de workflow "WhatsApp Send" (migrado en agosto 2026):
+- El número de origen sale del atributo de bloque estándar **Send SMS From** (System Phone Number). Debe apuntar a la línea de WhatsApp para que el mensaje caiga en el hilo de SMS Conversations de la persona.
+- Activa el merge field `WhatsAppUseConversationWindow` del transport: si la persona escribió por WhatsApp en las últimas 24 h, el mensaje sale como texto libre; si no, con la plantilla default del transport (con fallback automático si la ventana cerró).
+- `CreateCommunicationRecord = true`: cada envío queda en el historial de comunicación de la persona.
+- Los errores reales del transport se muestran en el modal (antes se tragaban en un `catch` que devolvía `false`).
+
+Historial: la primera versión de este cambio llamaba **directo a la API de Twilio** (Content API con `ContentSid`/`ContentVariables`, credenciales en los Global Attributes `TwilioAccountSid`, `TwilioAuthToken`, `TwilioWhatsAppFrom`, `TwilioWhatsAppTemplateSid`) e incluía `FormatPhoneNumberForGuatemala()` para forzar el prefijo `+502`. Todo ese código se eliminó en la migración de agosto 2026 y esos cuatro Global Attributes quedaron huérfanos. La lógica SMS original de Rock (`Rock.Communication.Medium.Sms.CreateCommunicationMobile`) había sido reemplazada desde la primera versión.
 
 ### 7. Nueva vista de presentes: CheckInOutView (archivo nuevo)
 Se agregaron dos archivos nuevos:

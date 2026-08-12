@@ -18,9 +18,11 @@ namespace com.vidareal.Translator.Rest
     /// Plugin.CybersourceInlineRestGateway: Rock.Rest.ApiControllerBase +
     /// [RestControllerGuid] + rutas [Route] explicitas bajo api/com_vidareal.
     /// </summary>
-    // [Authenticate] = exige usuario autenticado de Rock. CRITICO: ApiControllerBase
-    // NO autentica por si solo; sin esto el endpoint Resolve seria anonimo y
-    // cualquiera podria agotar el presupuesto de Azure (Denial-of-Wallet).
+    // [Authenticate] SOLO establece la identidad (cookie .ROCK, apikey, JWT);
+    // NO rechaza anonimos (eso lo haria [Secured], que aqui NO se usa a
+    // proposito: los sitios publicos deben traducir para visitantes sin login).
+    // La defensa de presupuesto contra abuso anonimo es el throttle global de
+    // abajo (MaxNewPerHour); Purge si valida admin explicitamente.
     [Authenticate]
     [Rock.SystemGuid.RestControllerGuid( "C7E1A2F4-1B3D-4A6E-8F90-1A2B3C4D5E6F" )]
     public class TranslatorController : Rock.Rest.ApiControllerBase
@@ -96,11 +98,35 @@ namespace com.vidareal.Translator.Rest
         public const string AttrSourceLanguage = "SourceLanguage";
         public const string AttrAvailableLanguages = "AvailableLanguages";
         public const string AttrSwitcherContainer = "SwitcherContainer";
+        public const string AttrCacheEpoch = "CacheEpoch";
 
         private static string Cfg( string key )
         {
             var block = BlockCache.Get( SettingsBlockGuid );
             return block?.GetAttributeValue( key );
+        }
+
+        /// <summary>
+        /// Invalida el cache local (localStorage) de TODOS los navegadores: el
+        /// cliente compara el epoch que recibe en Config con el que guardo y, si
+        /// difiere, limpia sus claves vrtr:*. Llamar tras purgar o corregir
+        /// traducciones; sin esto una correccion nunca llegaria a un navegador
+        /// que ya tenia la traduccion vieja cacheada.
+        /// </summary>
+        public static void BumpCacheEpoch( RockContext rockContext )
+        {
+            try
+            {
+                var block = new BlockService( rockContext ).Get( SettingsBlockGuid );
+                if ( block == null )
+                {
+                    return;
+                }
+                block.LoadAttributes( rockContext );
+                block.SetAttributeValue( AttrCacheEpoch, DateTime.UtcNow.Ticks.ToString() );
+                block.SaveAttributeValues( rockContext );
+            }
+            catch ( Exception ) { /* best-effort: no romper la purga/edicion por el epoch */ }
         }
 
         #endregion
@@ -145,6 +171,7 @@ namespace com.vidareal.Translator.Rest
                 sourceLanguage,
                 showSwitcher = ( Cfg( AttrShowSwitcher ) ?? "false" ).AsBoolean(),
                 switcherContainer = Cfg( AttrSwitcherContainer ) ?? string.Empty,
+                cacheEpoch = Cfg( AttrCacheEpoch ) ?? string.Empty,
                 availableLanguages,
                 include = Cfg( AttrIncludeSelectors ) ?? string.Empty,
                 exclude = Cfg( AttrExcludeSelectors ) ?? string.Empty,
@@ -245,9 +272,15 @@ namespace com.vidareal.Translator.Rest
                     {
                         translated = provider.TranslateBatch( missingTexts, lang );
                     }
-                    catch ( Exception )
+                    catch ( Exception ex )
                     {
-                        translated = new Dictionary<int, string>(); // degradar: dejar originales
+                        // degradar: dejar originales, pero DEJAR RASTRO (antes moria mudo)
+                        try
+                        {
+                            ExceptionLogService.LogException( new Exception( "[VidaReal Translator] TranslateBatch fallo", ex ) );
+                        }
+                        catch ( Exception ) { }
+                        translated = new Dictionary<int, string>();
                     }
 
                     var produced = 0;
@@ -316,6 +349,7 @@ namespace com.vidareal.Translator.Rest
                 }
 
                 var deleted = TranslationStore.Purge( rockContext, targetLanguage );
+                BumpCacheEpoch( rockContext ); // los navegadores limpian su localStorage al ver el epoch nuevo
                 return Ok( new { deleted } );
             }
         }

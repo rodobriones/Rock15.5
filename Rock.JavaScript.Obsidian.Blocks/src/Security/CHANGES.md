@@ -11,17 +11,20 @@ Los cambios se dividen en cuatro categorías principales:
 3. **Nuevo componente:** Se creó `vrSimpleRegistration.obs` como pantalla de registro simplificada para usuarios que acaban de autenticarse via passwordless.
 4. **Extensión funcional (passwordless):** Se extendió el flujo de login sin contraseña para soportar selección de método (Email/Teléfono) con prefijos internacionales específicos para Centroamérica.
 
+**Rediseño 2026-07:** el flujo passwordless y `vrSimpleRegistration.obs` se realinearon a un nuevo sistema visual (encabezado "Login / Bienvenido", tarjeta blanca con pestañas, botón `#272b31`, Roboto + Inter) y se agregaron tres piezas funcionales: enlace "Regresar", modal de confirmación antes de asociar el número/correo a un perfil, y botón "Continuar" deshabilitado hasta que el dato esté completo. Detalle en [`Login/CHANGES.md`](./Login/CHANGES.md).
+
 ---
 
 ## Tabla de archivos modificados
 
 | Archivo | Tipo de cambio | Descripción |
 |---|---|---|
-| `login.obs` | Modificado | Traducción de textos y mensajes de error |
+| `login.obs` | Modificado | Traducción de textos y mensajes de error + leyenda del fieldset condicional (`isPasswordlessVisible`) |
 | `Login/credentialLogin.partial.obs` | Modificado | Traducción de etiquetas y botones |
 | `Login/loginMethodPicker.partial.obs` | Modificado | Traducción de botones de selección de método |
-| `Login/passwordlessLoginStartStep.partial.obs` | Rediseño mayor | UI completamente nueva + selector Email/Teléfono + códigos de país |
-| `Login/passwordlessLoginVerifyStep.partial.obs` | Rediseño mayor | UI completamente nueva + selector de persona visual con avatares |
+| `Login/passwordlessLogin.partial.obs` | Modificado | Limpieza de estado entre sesiones + manejo del evento `back` ("Regresar") |
+| `Login/passwordlessLoginStartStep.partial.obs` | Rediseño mayor | UI nueva (encabezado + pestañas Teléfono/Correo en tarjeta) + códigos de país |
+| `Login/passwordlessLoginVerifyStep.partial.obs` | Rediseño mayor | UI nueva (OTP → selección de perfil → modal de confirmación) + enlace "Regresar" |
 | `accountEntry.obs` | Modificado | Envuelto en `.aeWrap/.aeCard`, traducción de mensajes, limpieza de JSDoc |
 | `AccountEntry/completedStep.partial.obs` | Modificado | Reemplazado `NotificationBox`+`RockButton` por HTML nativo con clase `aeCompletedBox` |
 | `AccountEntry/duplicatePersonSelectionStep.partial.obs` | Rediseño mayor | Reemplazada tabla+radio por tarjetas visuales con avatar e iniciales |
@@ -88,7 +91,8 @@ Cambios menores: traducción de etiquetas y textos en los tres pasos del flujo d
 - Si la sesión passwordless ya fue usada o es inválida (`config.isBlocked`), redirige automáticamente a `/Login`
 - Al detectar conflicto de persona existente, muestra paso "conflict" con enlace al login
 - Invoca la block action `Register` con los datos
-- Sistema de diseño visual: clases `cy*` (mismo sistema que los bloques de donación VidaReal), fondo negro superior + gris inferior, animación `cyRise`
+- Sistema de diseño visual: clases `vrReg*`, alineado con el rediseño 2026-07 del flujo passwordless (encabezado "Crear cuenta / Completa tu perfil", tarjeta blanca, botón `#272b31`, tipografías Roboto + Inter). Antes usaba el sistema `cy*` de los bloques de donación (hero negro a sangre completa).
+- Overlay de carga mientras se envía el registro (`vrRegOverlay` + spinner)
 
 **Configuración recibida del servidor (`VRSimpleRegistrationInitBox`):**
 ```typescript
@@ -125,8 +129,9 @@ El componente `codeBox.obs` y su partial `codeBoxCharacter.partial.obs` fueron m
 | Prefijo | Módulo |
 |---|---|
 | `ae*` | AccountEntry (ej: `aeWrap`, `aeCard`, `aeActions`, `aeSubmitBtn`) |
-| `pl*` | Passwordless Login (ej: `plWrap`, `plMethodSwitch`, `plVerifyWrap`) |
-| `cy*` | Sistema de diseño general VidaReal (usado en vrSimpleRegistration y bloques de donación) |
+| `pl*` | Passwordless Login (ej: `plScreen`, `plCard`, `plTab`, `plVerifyScreen`, `plModal`) |
+| `vrReg*` | vrSimpleRegistration (ej: `vrRegScreen`, `vrRegCard`, `vrRegField`) |
+| `cy*` | Sistema de diseño de los bloques de donación VidaReal (ya no se usa en Security) |
 
 ---
 

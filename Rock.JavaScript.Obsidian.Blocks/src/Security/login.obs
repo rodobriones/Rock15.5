@@ -10,7 +10,8 @@
             </div>
             <div v-else class="login-block">
                 <fieldset>
-                    <legend>Iniciar sesión</legend>
+                    <!-- El flujo passwordless trae su propio encabezado ("Login / Bienvenido"). -->
+                    <legend v-if="!isPasswordlessVisible">Iniciar sesión</legend>
 
                     <template v-if="config.configurationErrors?.length">
                         <NotificationBox v-for="configError in config.configurationErrors"
@@ -62,8 +63,7 @@
                                              @login="onCredentialLogin($event)"
                                              @register="onRegister()" />
 
-                            <PasswordlessLogin v-else-if="loginMethod !== LoginMethod.InternalDatabase
-                                && ((config.isPasswordlessLoginSupported && !mfa?.passwordless) || mfa?.passwordless?.isError === false)"
+                            <PasswordlessLogin v-else-if="isPasswordlessVisible"
                                                v-model="passwordlessLoginOptions"
                                                :config="config"
                                                :disabled="isAuthenticating || isNavigating"
@@ -176,6 +176,12 @@
     const loginMethod = ref<LoginMethod | undefined>();
 
     const isMobile = computed<boolean>(() => isMobileForced || breakpoint.value === "xs");
+
+    /** Determines whether the passwordless flow is the one being rendered. */
+    const isPasswordlessVisible = computed<boolean>(() =>
+        loginMethod.value !== LoginMethod.InternalDatabase
+        && ((config.isPasswordlessLoginSupported && !mfa.value?.passwordless) || mfa.value?.passwordless?.isError === false)
+    );
 
     const mfaMessage = computed<string | null>(() => {
         if (!mfa.value) {

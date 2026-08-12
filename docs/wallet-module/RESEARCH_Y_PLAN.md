@@ -144,6 +144,10 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
    (eventTicket, fondo/thumbnail con uploader), Wallet en checkout de Eventos (bundle
    .pkpasses multi-entrada), expiración (Eventos = fin del evento; VidaAventura = nunca),
    nombre corto, caché de PNGs. Deploy prod: ver runbook §8b.
+10. ✅ Rediseño navy del pase (capturas Figma del diseñador) + generalización como **pase
+   digital de la iglesia** ("Asisto a" = campus) + **bloque web "Pase Digital"** (tarjeta
+   Obsidian con el mismo diseño, mobile-first full-bleed). Migraciones 014–016; Google ganó
+   `Subheader`/`LogoImageUrl`. Ver historial 2026-08-10.
 
 ## 8b. Runbook de deploy a producción
 
@@ -152,9 +156,12 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
    checkout ganó flags wallet), `com.vidareal.Wallet`,
    **`System.Net.Http.WinHttpHandler.dll` (nuevo en prod)**.
 3. Bundles: `Eventos\myTickets.obs.js` + `Eventos\eventCheckout.obs.js` (botón Wallet del
-   paso Listo) + `Wallet\walletTemplateAdmin.obs.js` (carpeta nueva).
-4. Reciclo → verificar `[PluginMigration]` 1–13 de `com.vidareal.Wallet` + página
+   paso Listo) + `Wallet\walletTemplateAdmin.obs.js` + `Wallet\paseDigital.obs.js`
+   (carpeta nueva).
+4. Reciclo → verificar `[PluginMigration]` 1–16 de `com.vidareal.Wallet` + página
    Eventos → Boletería → Plantillas de Wallet.
+4b. Push del rediseño a pases YA emitidos: abrir la plantilla VidaAventura en el admin y
+   guardarla (las migraciones no disparan el refresh; guardar sí).
 5. Global Attributes en prod: `AppleWalletPassP12` (Memo, base64 del txt en
    `Documents\AppleWalletCert`) + `AppleWalletPassP12Password` (Encrypted Text).
 6. Smokes: (a) agregar pase desde Mis Entradas en iPhone; (b) fila en
@@ -246,6 +253,42 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
     excepciones** (harness: 20 pases loadtest + HttpClient Task.WhenAll, script en
     scratchpad de la sesión).
 
+- **2026-08-10 — rediseño navy + pase digital web (migraciones 014–016)**:
+  - **Rediseño del pase según las capturas del diseñador** (`Downloads\wallet`: Figma
+    "Paswordless / eventos", mocks Apple y Google): navy `#0e3a5c`, globo blanco + texto
+    "VidaReal.tv", foto-montaje institucional, etiquetas celestes `#a9c2d6`, QR con el
+    código visible. **Migración 014**: vuelve a **storeCard** (logo+strip arriba, campos
+    debajo de la foto, QR al pie — el eventTicket con fondo de la 011 no permite ese
+    layout); 3 BinaryFiles embebidos generados con Pillow desde los elementos del diseñador
+    (guids `…980000000001` strip 1125×369 recortado a la proporción 750×246 de Apple,
+    `…02` globo blanco rasterizado del SVG con svglib, `…03` globo sobre navy 480×480 =
+    icon Apple + logo Google). Lección de guids: la 011 reutilizó `…960000000001` que la
+    002 ya usaba para una PÁGINA (tablas distintas, funciona, pero confunde) — los nuevos
+    van en rango `…98…` propio.
+  - **GoogleDesign ganó `Subheader`** ("Nombre" pequeño sobre el nombre, como el mock) **y
+    `LogoImageUrl`** (globo circular junto al título; Google descarga de URL https pública
+    → se sirven vía `GetImage.ashx?guid=`). Soporte en PassTemplateResolver +
+    GoogleWalletService + 2 campos nuevos en el admin.
+  - **Generalización como pase de iglesia** (pedido del usuario): "ASISTO A:" = campus de
+    la persona vía Lava `{{ Person | Campus | Property:'Name' }}` (sin campus el campo se
+    omite — el resolver descarta vacíos); nota del reverso y Description sin "VidAventura".
+    **Migración 016** (JSON_MODIFY; la 014 ya había corrido en dev — nunca se editan
+    migraciones corridas).
+  - **Bloque web "Pase Digital"** (`Rock.Blocks.Wallet.PaseDigital` +
+    `src/Wallet/paseDigital.obs`, BlockType `…950000000002`, skill design-to-obs, prefijo
+    CSS `va`): tarjeta con el mismo diseño para poner en cualquier página. Datos del
+    CurrentPerson (nombre corto, campus, Alternate Id → QR por `GetQRCode.ashx`); las
+    imágenes se leen de la WalletTemplate (strip/logo) — web y wallet nunca se desalinean.
+    Botón "Guardar en mi teléfono" (emite el pase real vía `GetOrIssuePass` AL CLIC, no en
+    el init) — **oculto por defecto** (BooleanField, pedido del usuario). **Mobile-first
+    full-bleed**: lienzo navy de orilla a orilla (`width:100vw; margin:0 calc(50% - 50vw)`
+    rompe el contenedor del theme); ≥480px tarjeta centrada 420px estilo wallet.
+    **Migración 015** registró el BlockType como "Pase VidAventura"; la **016** lo
+    re-apunta a PaseDigital (mismo guid — instancias colocadas sobreviven). Sin página
+    seed: el bloque se coloca a mano.
+  - Verificado en iPhone real (screenshot del usuario 15:44): tarjeta renderizando con
+    foto, campus "Punto Villa Nueva" y QR.
+
 ## 10. Pendientes
 
 1. **Deploy a prod** (runbook §8b) + smoke del ciclo de updates (primera vez).
@@ -255,7 +298,9 @@ del UpdatedDateTime (se devuelve como `lastUpdated` tag).
 2. Decisión del usuario: rediseñar el visor fullscreen de Mis Entradas con el mockup
    pixel-perfect (front + flip al reverso). Ofrecido, sin respuesta aún.
 3. Google Wallet: código listo; esperar cuenta emisor del usuario → Global Attributes
-   `GoogleWalletIssuerId` + `GoogleWalletServiceAccountJson`.
+   `GoogleWalletIssuerId` + `GoogleWalletServiceAccountJson`. Ojo: el hero/logo del diseño
+   Google se descargan de `GetImage.ashx` con PublicApplicationRoot — solo funcionan con
+   HTTPS público (prod), en dev el objeto sale sin imágenes.
 4. Chequeo de seguridad (previo al módulo): `GetFile.ashx?guid=<QR>` en incógnito en prod —
    si sirve, migración con deny explícito al BinaryFileType de QRs.
 5. Renovación del cert Pass Type ID antes de 2027-08-05 (llave en `Documents\AppleWalletCert`).

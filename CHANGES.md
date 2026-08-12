@@ -21,6 +21,7 @@ Este repositorio es un **fork de [SparkDevNetwork/Rock](https://github.com/Spark
 | **FamilyHub** | Portal familiar — vista y edición de miembros de familia y relaciones conocidas (Known Relationships) |
 | **Layout Personalizado** | Bloques de Header y Footer propios de VidaReal (Obsidian, no WebForms) |
 | **Seguridad / Autenticacion** | Flujos de login, AccountEntry, ConfirmAccount, ForgotUserName — todos traducidos al español y con UI adaptada a VidaReal.tv. Bloque nuevo: VRSimpleRegistration (registro simplificado post-passwordless) |
+| **Wallet (pases digitales)** | Módulo self-hosted de pases Apple/Google Wallet (esquema `_com_vidareal_Wallet_*`): plantillas con diseño JSON+Lava, pkpass firmado, updates push APNs, PassKit Web Service, filtro Lava `WalletPassUrl`, admin de plantillas y bloque "Pase Digital" (tarjeta web del pase con QR de check-in). Migraciones 001–016 en `Plugin.VidaRealWallet`. Ver `docs/wallet-module/RESEARCH_Y_PLAN.md` |
 | **WhatsApp Transport** | Transporte de comunicacion nuevo via WhatsApp Business Cloud API (Meta) |
 | **Plugins de pasarela** | `Plugin.CybersourceInlineRestGateway` — gateway Cybersource como plugin Rock independiente; `Plugin.EpayVisanetGateway` — gateway ePay Visanet Guatemala via SOAP |
 | **Eventos/Boletería custom** | Producto propio de boletería end-to-end (NO reusa `Registration*`): esquema `_com_vidareal_Events_*`, 7 bloques Obsidian (admin, checkout con pago/FEL, mis entradas, scanner, reportería, catálogo de preguntas, calendario público), permisos por-usuario, multi-sesión, visibilidad (público/privado/contraseña), workflow launcher por evento/boleto, archivado, migraciones 001–021 en `Plugin.VidaRealEvents`. Arquitectura hexagonal: lógica en `Rock/Model/Eventos/Services/`. Ver `Rock/Model/Eventos/ARCHITECTURE.md` |
@@ -62,6 +63,7 @@ Todos los commits por debajo de `ca2ca0ec94` son del upstream SparkDevNetwork y 
 | 2026-06-22 | `7fc618ef10` | **Up to Date, translate, eventos, odoo** — Plugin.VidaRealTranslator, ajustes Odoo, base del módulo de eventos |
 | 2026-06-29 → 07-02 | *(sin commit)* | **Módulo Eventos/Boletería custom completo** — Producto propio de boletería end-to-end (esquema `_com_vidareal_Events_*`, 7 entidades, 6 bloques Obsidian, migraciones 001–017 en `Plugin.VidaRealEvents`): admin + checkout 2026 (hold/timer, mutex anti doble-cobro, promos, NIT/SAT, FEL multilínea, preguntas al asistente, invitados como personas reales), Mis Entradas, scanner continuo, reportería, permisos por-usuario (`EventStaff`), correo con PDF de boletos, job de conciliación `EventsMaintenance`. **2026-07-02: migrado a arquitectura hexagonal** — bloques como adaptadores delgados, lógica en `Rock/Model/Eventos/Services/` (CheckoutService, HoldService, PricingService, CheckoutAttendeeService, NitLookupService), front del checkout en partials. Docs: `Rock/Model/Eventos/ARCHITECTURE.md` (capas), `docs/eventos-custom/RESEARCH_Y_PLAN.md` (historial §9.x), `docs/eventos-custom/SMOKE_TESTS.md` (pruebas). |
 | 2026-06-18 | *(sin commit)* | **Rediseño UI/UX del wizard RegistrationEntry** — Solo frontend/CSS, sin tocar lógica. Capa de diseño 2026 en el `<style scoped>` del shell `registrationEntry.obs` (cascadea a hijos vía `:deep()`): superficie sólida calmada (se retiró glassmorphism/blob), jerarquía tipográfica fuerte (h1 grande + barra de acento sobre el título), **barra de acción fija (sticky)**, **transiciones direccionales** entre pasos (usa `navBack`), botones de acento. Tarjetas de registrante con avatar en `summary.partial.obs`; header con ícono en `registrar.partial.obs`; fix doble-tarjeta en `intro.partial.obs`. Sin cambios de marca (acento azul para cohesión con `payment`/`success`). |
+| 2026-08-04 | *(sin commit)* | **OTP passwordless por plantilla WhatsApp Authentication** — El código del login passwordless (system communication 40) ahora sale por la plantilla `auth_vidareal` de categoría Authentication de Meta (copy fijo + botón "Copiar código"), en cumplimiento de la política de Meta para OTPs. Ruteo nuevo en `WhatsAppTransport`: atributos `OTP Template Name/Language/System Communication Ids`; el payload incluye el código como parámetro de body y del botón copy-code (`sub_type: "url"`). Ver `Rock.WhatsApp/CHANGES.md` §"Códigos de un solo uso". |
 
 ---
 
@@ -109,6 +111,16 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 - `Rock.JavaScript.Obsidian.Blocks/src/Eventos/` — 7 `.obs` + `EventCheckout/*.partial.*` (shell + estado compartido + 5 pasos; ver su `README.md`)
 - `Plugin.VidaRealEvents/` — proyecto de solo migraciones (`com.vidareal.Events`, 001–021; ver su `README.md`)
 - `docs/eventos-custom/RESEARCH_Y_PLAN.md` — doc maestro (historial §9.x) · `docs/eventos-custom/SMOKE_TESTS.md` — runbook de pruebas runtime
+
+### Modulo Wallet — pases de Apple/Google Wallet self-hosted (2026-07-06 → 08-10)
+- `Rock/Model/Wallet/` — entidades `WalletTemplate` / `WalletPass` / `WalletDeviceRegistration` + `WalletEnums`
+- `Rock/Model/Wallet/Services/` — `WalletService` (emisión/refresh), `ApplePassBuilder` (pkpass firmado), `ApplePushService` (APNs), `GoogleWalletService` (JWT/objetos), `PassTemplateResolver` (diseño JSON + Lava)
+- `Rock/Lava/Filters/LavaFilters.VidaRealWallet.cs` — filtro `WalletPassUrl` (emite pase por Lava y devuelve URL de descarga)
+- `Rock.Rest/VidaReal/WalletPassKitController.cs` — PassKit Web Service (registro de dispositivos, updates push) + endpoint humano de descarga
+- `Rock.Blocks/Wallet/WalletTemplateAdmin.cs` + `src/Wallet/walletTemplateAdmin.obs` — admin de plantillas (página `wallet/plantillas`)
+- `Rock.Blocks/Wallet/PaseDigital.cs` + `src/Wallet/paseDigital.obs` — tarjeta web del pase digital (diseño navy del pase, QR de check-in, campus; 2026-08-10)
+- `Plugin.VidaRealWallet/` — proyecto de solo migraciones (`com.vidareal.Wallet`, 001–016; ver su `README.md`)
+- `docs/wallet-module/RESEARCH_Y_PLAN.md` — doc maestro (arquitectura, runbook de deploy §8b, historial §9)
 
 ### Modulo WhatsApp
 - `Rock.WhatsApp/` — Proyecto C# completo: transport para WhatsApp Business Cloud API (Meta)
@@ -161,6 +173,10 @@ Estos archivos EXISTEN en SparkDevNetwork/Rock pero tienen modificaciones de Vid
 - `Rock.JavaScript.Obsidian.Blocks/src/Event/RegistrationEntry/` — Multiples parciales modificados para i18n (+ `payment.partial.obs` con sección NIT/FEL, 2026-06-15)
 - `Rock.Blocks/Event/RegistrationEntry.cs` — BlockAction `ValidateNitInfo` + passthrough NIT al workflow (2026-06-15)
 - `Rock.ViewModels/Blocks/Event/RegistrationEntry/RegistrationEntryArgsBag.cs` — props `Nit`/`WantsInvoice` (2026-06-15)
+
+### Comunicación (atribución WhatsApp, 2026-08-11)
+- `Rock/Communication/Medium/Sms.cs` — Overload nuevo de `ProcessResponse` con remitente pre-resuelto (`Person resolvedFromPerson`; null = comportamiento histórico, Twilio no cambia)
+- `Rock/Communication/SmsActions/SmsActionConversations.cs` — Pasa `message.FromPerson` al overload nuevo (antes re-resolvía por número y atribuía respuestas al perfil equivocado cuando varias personas comparten celular). Detalle en `Rock.WhatsApp/CHANGES.md` §"Atribución del remitente"
 
 ### CheckIn y asistencia
 - `RockWeb/Blocks/CheckIn/Admin.ascx` + `.cs` — Modificaciones al admin de CheckIn

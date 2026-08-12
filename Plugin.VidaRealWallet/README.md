@@ -6,7 +6,7 @@ Wallet passes). El código vive en core (decisión del fork): entidades/servicio
 `Rock.Blocks/Wallet/`. Documento maestro: `docs/wallet-module/RESEARCH_Y_PLAN.md`.
 
 > ⚠️ **Numeración**: independiente del plugin de Eventos (`com.vidareal.Events`). Rock
-> registra por-assembly en `[PluginMigration]`. **Próxima migración = 14+.** Cambios al seed
+> registra por-assembly en `[PluginMigration]`. **Próxima migración = 17+.** Cambios al seed
 > de plantilla = SIEMPRE migración nueva (la 001 ya corrió en dev; nunca editarla).
 
 ## Migraciones
@@ -26,6 +26,9 @@ Wallet passes). El código vive en core (decisión del fork): entidades/servicio
 | 011 | `011_VidaAventuraBackgroundDesign.cs` | VidaAventura → estilo **eventTicket con FONDO completo** (BACK2.png, réplica del pase real de MinistryPass) + thumbnail LOGO_VA.png (BinaryFile nuevo guid `…960000000001`, contenido embebido en hex); strip fuera (excluyente con fondo). |
 | 012 | `012_TemplateBackgroundThumbnailColumns.cs` | Columnas `BackgroundBinaryFileId`/`ThumbnailBinaryFileId` en WalletTemplate (+ FKs) → fondo/thumbnail editables con uploader en el admin (guardar = push a pases emitidos); seed VidaAventura pasa a las columnas y limpia los guids Lava del diseño. |
 | 013 | `013_VidaAventuraShortName.cs` | Nombre CORTO en el pase VidaAventura: `{{ Person.NickName \| Split:' ' \| First }} {{ Person.LastName \| Split:' ' \| First }}` (Apple PrimaryFields[0] + Google Header). Eventos hace lo mismo server-side (`TicketWalletService.ShortAttendeeName`). |
+| 014 | `014_VidaAventuraNavyDesign.cs` | **Rediseño VidaAventura** según capturas de Figma (2026-08-07): navy `#0e3a5c`, vuelve a **storeCard** (logo globo + "VidaReal.tv", strip = foto-montaje, "NOMBRE:"/"ASISTO A:" debajo, QR al pie). 3 BinaryFiles nuevos embebidos (`…980000000001` strip, `…02` logo blanco, `…03` icono/logo Google). Google estrena `Subheader` + `LogoImageUrl` (soporte agregado en `PassTemplateResolver`/`GoogleWalletService`). Pases ya emitidos: abrir la plantilla en el admin y guardar = push del rediseño. |
+| 015 | `015_VidaAventuraPassBlockType.cs` | Registra el BlockType **"Pase VidAventura"** (`Rock.Blocks.Wallet.VidaAventuraPass`, guid `…950000000002`): tarjeta web con el diseño del pase (imágenes desde la WalletTemplate, QR = Alternate Id, botón "Guardar en mi teléfono" que emite el pase real). No crea página — el bloque se coloca a mano. |
+| 016 | `016_PaseDigitalCampus.cs` | El pase se generaliza como **pase digital de la iglesia**: "ASISTO A:" = campus de la persona (`{{ Person \| Campus \| Property:'Name' }}`, Apple + Google vía `JSON_MODIFY`; sin campus el campo se omite), nota del reverso y Description sin "VidAventura". El BlockType `…950000000002` se re-apunta a `Rock.Blocks.Wallet.PaseDigital` ("Pase Digital") — la clase/`.obs` de la 015 se renombraron; mismo guid. |
 
 ## Build y deploy
 

@@ -101,12 +101,14 @@ namespace RockWeb.Plugins.com_vidareal.Translator
                 using ( var rockContext = new RockContext() )
                 {
                     TranslationStore.Update( rockContext, id, tbTranslated.Text, ddlStatus.SelectedValue );
+                    // Invalida el localStorage de todos los navegadores (via epoch en Config)
+                    com.vidareal.Translator.Rest.TranslatorController.BumpCacheEpoch( rockContext );
                 }
             }
 
             mdEdit.Hide();
             BindGrid();
-            ShowMessage( "Traduccion actualizada. Limpia la cache del navegador para verla." );
+            ShowMessage( "Traduccion actualizada. Los navegadores refrescan su cache local en la proxima carga." );
         }
 
         protected void gTranslations_Delete( object sender, RowEventArgs e )
@@ -114,6 +116,7 @@ namespace RockWeb.Plugins.com_vidareal.Translator
             using ( var rockContext = new RockContext() )
             {
                 TranslationStore.Delete( rockContext, e.RowKeyId );
+                com.vidareal.Translator.Rest.TranslatorController.BumpCacheEpoch( rockContext );
             }
             BindGrid();
         }

@@ -28,6 +28,7 @@ Los bloques Obsidian reemplazan a los WebForms tradicionales (`.ascx`). Rock 18.
 | `Security/Login.cs` | Modificacion upstream | Se agrega `Category = p.PhotoUrl` al mapeo de personas en seleccion passwordless |
 | `Security/VRSimpleRegistration.cs` | Nuevo — personalización VidaReal | Bloque de registro simplificado post-validacion passwordless (ver detalle abajo) |
 | `Dar/CybersourceDonationEntry.cs` | Modificacion previa | Bloque de donacion con Cybersource (rama anterior, no en esta sesion) |
+| `Wallet/PaseDigital.cs` | Nuevo — personalización VidaReal | Tarjeta web del pase digital de la iglesia (diseño del pase de wallet: navy, "Asisto a" = campus de la persona, QR = Alternate Id). Imágenes leídas de la WalletTemplate. Botón "Guardar en mi teléfono" oculto por defecto (BooleanField para reactivarlo; emite el pase real al clic). GUID BlockType `f0a1b2c3-d4e5-4f60-8a01-950000000002`, registrado en migración 015 y renombrado en la 016 del plugin Wallet (antes `VidaAventuraPass`). Frontend: `src/Wallet/paseDigital.obs` |
 
 ---
 

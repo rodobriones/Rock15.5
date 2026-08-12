@@ -1,0 +1,581 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Mi Pase Digital (maqueta): pase de asistencia personal con QR, estado, próximo evento
+    registrado y acciones rápidas. Convertido del diseño "Mi Pase Digital Vida Real" de
+    Claude Design (tokens del design system Brújula VR). Datos MOCK — sin backend todavía.
+    El <style> es NO-scoped a propósito: targetea .panel-block (chrome de Rock fuera del
+    template) y el overlay de zoom.
+-->
+<template>
+    <Panel type="block" title="" class="mp-panel">
+        <template #default>
+            <div class="mpWrap">
+                <div class="mpPage">
+
+                    <header class="mpNavbar">
+                        <div class="mpNavBrand">
+                            <div class="mpNavLogo">VR</div>
+                            <div class="mpNavName">Vida Real · Mi pase</div>
+                        </div>
+                        <div class="mpNavRight">
+                            <span class="mpNavSession">Sesión iniciada</span>
+                            <button type="button" class="mpNavUtil" @click="onLogout">
+                                <i class="fa fa-sign-out" aria-hidden="true"></i> Salir
+                            </button>
+                        </div>
+                    </header>
+
+                    <main class="mpMain">
+                        <div>
+                            <div class="mpEyebrow">Asistencias · Vida Real</div>
+                            <h1 class="mpH1">Mi pase digital</h1>
+                            <p class="mpIntro">Mostrá este código en el ingreso de tu sede para registrar tu asistencia. Funciona sin conexión.</p>
+                        </div>
+
+                        <div class="mpGrid">
+
+                            <section class="mpPass">
+                                <div class="mpPassBody">
+                                    <div class="mpPassTop">
+                                        <div class="mpPassTopText">
+                                            <div class="mpPassLabel">Pase de asistencia</div>
+                                            <div class="mpPassName">{{ person.name }}</div>
+                                        </div>
+                                        <span class="mpBadge" :class="'mpBadge--' + badgeTone">
+                                            <span v-if="badgeTone !== 'blue'" class="mpBadgeDot"></span>{{ passState }}
+                                        </span>
+                                    </div>
+
+                                    <div class="mpPassMeta">
+                                        <div>
+                                            <div class="mpMetaLabel">Sede</div>
+                                            <div class="mpMetaValue">{{ person.campus }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="mpMetaLabel">Miembro desde</div>
+                                            <div class="mpMetaValue mpNum">{{ person.memberSince }}</div>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" class="mpQrBtn" @click="openZoom">
+                                        <div class="mpQrBox">
+                                            <svg class="mpQrSvg" viewBox="0 0 25 25" shape-rendering="crispEdges" role="img" aria-label="Código QR del pase">
+                                                <rect v-for="(m, i) in qrModules" :key="i" :x="m[1]" :y="m[0]" width="1" height="1" rx="0.28" fill="#0F334B" />
+                                            </svg>
+                                        </div>
+                                        <div v-if="showNumericCode" class="mpQrCode mpNum">{{ person.passCode }}</div>
+                                        <div class="mpQrHint">Tocá para ampliar</div>
+                                    </button>
+                                </div>
+                                <div class="mpPassFooter">
+                                    <i class="fa fa-refresh" aria-hidden="true"></i>
+                                    <span>Actualizado {{ lastUpdated }}</span>
+                                </div>
+                            </section>
+
+                            <div class="mpSide">
+
+                                <section class="mpEventCard">
+                                    <div class="mpCardTitle">Próximo evento registrado</div>
+                                    <div class="mpEventName">{{ nextEvent.name }}</div>
+                                    <div class="mpEventMeta">
+                                        <div><span class="mpNum">{{ nextEvent.date }}</span> · <span class="mpNum">{{ nextEvent.time }}</span> h</div>
+                                        <div>{{ nextEvent.place }}</div>
+                                    </div>
+                                    <div class="mpEventActions">
+                                        <RockButton class="mpBtnPrimary" btnType="primary" @click="onEventDetails">Ver detalles</RockButton>
+                                        <RockButton class="mpBtnGhost" btnType="link" @click="onEventCancel">Cancelar registro</RockButton>
+                                    </div>
+                                </section>
+
+                                <div class="mpActions">
+                                    <button v-for="action in quickActions"
+                                            :key="action.title"
+                                            type="button"
+                                            class="mpAction"
+                                            @click="action.onClick">
+                                        <span class="mpActionIcon" :class="{ 'mpActionIcon--warn': action.warn }">
+                                            <i :class="'fa ' + action.icon" aria-hidden="true"></i>
+                                        </span>
+                                        <span class="mpActionText">
+                                            <span class="mpActionTitle">{{ action.title }}</span>
+                                            <span class="mpActionSub">{{ action.subtitle }}</span>
+                                        </span>
+                                        <span class="mpActionChevron">
+                                            <i class="fa fa-chevron-right" aria-hidden="true"></i>
+                                        </span>
+                                    </button>
+                                </div>
+
+                            </div>
+                        </div>
+                    </main>
+
+                    <div v-if="zoom" class="mpZoom" @click="closeZoom">
+                        <div class="mpZoomQr">
+                            <svg class="mpQrSvg" viewBox="0 0 25 25" shape-rendering="crispEdges" role="img" aria-label="Código QR del pase">
+                                <rect v-for="(m, i) in qrModules" :key="i" :x="m[1]" :y="m[0]" width="1" height="1" rx="0.28" fill="#0F334B" />
+                            </svg>
+                        </div>
+                        <div class="mpZoomText">
+                            <div class="mpZoomName">{{ person.name }}</div>
+                            <div class="mpZoomCode mpNum">{{ person.passCode }}</div>
+                        </div>
+                        <button type="button" class="mpZoomClose">Cerrar</button>
+                    </div>
+
+                </div>
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+/* ============================================================
+   Vida Real — Mi Pase Digital
+   Paleta: tokens Brújula VR (tema claro) en variables de .mpWrap.
+   Estilo aislado a este bloque (todas las clases con prefijo mp).
+   ============================================================ */
+
+/* Fuentes Brújula VR servidas por RockWeb (ver /Assets/Fonts/BrujulaVR/brujula-fonts.css).
+   Declaradas aquí porque el tema aún no enlaza ese CSS; si el tema lo agrega, estas reglas
+   duplicadas son inocuas. Blogger Sans © Fontfabric (CC 4.0 BY-ND); Fira Sans/Mono (SIL OFL). */
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Bold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Mono";
+    src: url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* Chrome del panel: solo para este bloque (no afecta otros panel-block). */
+.panel-block:has(.mpWrap) > .panel-heading,
+.panel-block:has(.mpWrap) > .panel-header { display: none !important; }
+.panel-block:has(.mpWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.mpWrap) > .panel-body { padding: 0 !important; }
+
+.mpWrap {
+    /* Tokens Brújula VR (colors.css / base.css / typography.css del design system) */
+    --vr-navy: #0F334B;
+    --vr-navy-600: #2B577A;
+    --vr-red: #E74133;
+    --vr-red-hover: #C93225;
+    --vr-steel: #A2BACA;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-strong: #0F334B;
+    --ink-soft: #5A6E7C;
+    --ink-faint: #8296A6;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-text: #1E7A64;  --ok-bg: #E9F6F2;
+    --warn-text: #8F5B0B; --warn-bg: #FDF2E1;
+    --neu-text: #5A6E7C;  --neu-bg: #EFF3F6;
+    --btn-primary: #0F334B;
+    --btn-primary-hover: #143E5A;
+    --btn-primary-ink: #FFFFFF;
+    --focus-ring: rgba(30,91,135,.28);
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --radius-sm: 6px;
+    --radius: 10px;
+    /* Fuentes del DS con fallbacks (Blogger Sans / Fira Sans no viven en Rock — ver NOTES) */
+    --font-title: "Blogger Sans", "Century Gothic", Futura, sans-serif;
+    --font-body: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+    --font-num: "Fira Mono", "Fira Sans", Consolas, monospace;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+.mpWrap *, .mpWrap *::before, .mpWrap *::after { box-sizing: border-box; }
+
+.mpNum { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+/* ---------- Página (full-bleed dentro del ancho de página de Rock) ---------- */
+.mpPage {
+    position: relative;
+    background: var(--bg);
+    margin: 0 -15px;
+    min-height: 60vh;
+}
+
+/* ---------- Navbar del diseño (ver NOTES: removible al integrar) ---------- */
+.mpNavbar {
+    background: var(--vr-navy);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 0 20px;
+    height: 56px;
+    font-family: var(--font-body);
+}
+.mpNavBrand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mpNavLogo {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--vr-red); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-title); font-weight: 700; font-size: 13px; flex: none;
+}
+.mpNavName {
+    font-family: var(--font-title); font-weight: 700; font-size: 15px; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mpNavRight { display: flex; align-items: center; gap: 10px; }
+.mpNavSession { font-size: 12px; color: #D7E2EA; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mpNavUtil {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; font-family: var(--font-body);
+    background: rgba(255,255,255,.1); border: 1px solid var(--vr-navy-600);
+    border-radius: var(--radius-sm); padding: 6px 10px; color: #fff; cursor: pointer;
+}
+.mpNavUtil:hover { background: rgba(255,255,255,.18); }
+.mpNavUtil .fa { font-size: 12px; }
+
+/* ---------- Encabezado ---------- */
+.mpMain {
+    max-width: 1000px; margin: 0 auto;
+    padding: 24px 20px 56px;
+    display: flex; flex-direction: column; gap: 24px;
+}
+.mpEyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .24em;
+    text-transform: uppercase; color: var(--vr-red); margin-bottom: 4px;
+}
+.mpH1 {
+    font-family: var(--font-title); font-weight: 700; font-size: 24px;
+    line-height: 1.25; margin: 0; color: var(--ink);
+}
+.mpIntro { margin: 6px 0 0; font-size: 13px; color: var(--ink-soft); max-width: 56ch; text-wrap: pretty; }
+
+.mpGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+/* ---------- Tarjeta del pase (navy) ---------- */
+.mpPass {
+    background: var(--vr-navy);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(15,51,75,.22);
+    overflow: hidden;
+    color: #fff;
+}
+.mpPassBody { padding: 20px 22px 16px; display: flex; flex-direction: column; gap: 14px; }
+.mpPassTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.mpPassTopText { min-width: 0; }
+.mpPassLabel {
+    font-size: 11px; font-weight: 600; letter-spacing: .24em;
+    text-transform: uppercase; color: var(--vr-steel);
+}
+.mpPassName {
+    font-family: var(--font-title); font-weight: 700; font-size: 26px;
+    line-height: 1.2; margin-top: 6px; text-wrap: balance;
+}
+.mpPassMeta {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    border-top: 1px solid var(--vr-navy-600);
+    border-bottom: 1px solid var(--vr-navy-600);
+    padding: 14px 0;
+}
+.mpMetaLabel {
+    font-size: 11px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--vr-steel);
+}
+.mpMetaValue { font-size: 14px; font-weight: 600; margin-top: 3px; }
+.mpPassFooter {
+    background: rgba(255,255,255,.06);
+    padding: 12px 22px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #D7E2EA;
+}
+.mpPassFooter .fa { font-size: 12px; }
+
+/* Badge de estado (Badge del DS → CSS propio) */
+.mpBadge {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    font-size: 11px; line-height: 1.35; font-weight: 600; letter-spacing: .025em;
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+}
+.mpBadgeDot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.mpBadge--ok { background: var(--ok-bg); color: var(--ok-text); }
+.mpBadge--blue { background: var(--action-soft); color: var(--action); }
+.mpBadge--neu { background: var(--neu-bg); color: var(--neu-text); }
+
+/* Botón blanco con el QR */
+.mpQrBtn {
+    background: #fff; border: 0; border-radius: var(--radius);
+    padding: 16px; width: 100%; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.mpQrBox { width: 190px; height: 190px; display: flex; align-items: center; justify-content: center; }
+.mpQrBox .mpQrSvg { width: 190px; height: 190px; }
+.mpQrCode { font-size: 13px; letter-spacing: .18em; color: var(--vr-navy); }
+.mpQrHint {
+    font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: #8296A6;
+}
+
+/* ---------- Columna derecha ---------- */
+.mpSide { display: flex; flex-direction: column; gap: 16px; }
+
+.mpEventCard {
+    background: var(--paper);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    border-top: 3px solid var(--vr-red);
+    padding: 18px;
+}
+.mpCardTitle {
+    font-size: 11px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-soft);
+}
+.mpEventName {
+    font-family: var(--font-title); font-weight: 700; font-size: 19px;
+    line-height: 1.25; margin-top: 8px; color: var(--ink-strong); text-wrap: balance;
+}
+.mpEventMeta {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-top: 10px; font-size: 13px; color: var(--ink-soft);
+}
+.mpEventActions { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+/* Botones del DS sobre RockButton (selector compuesto .mpX.btn — NO :deep) */
+.mpBtnPrimary.btn {
+    background: var(--btn-primary) !important;
+    border-color: var(--btn-primary) !important;
+    color: var(--btn-primary-ink) !important;
+    font-size: 12px !important; font-weight: 600 !important;
+    padding: 6px 10px !important; border-radius: var(--radius-sm) !important;
+    line-height: 1.2 !important;
+}
+.mpBtnPrimary.btn:hover,
+.mpBtnPrimary.btn:focus {
+    background: var(--btn-primary-hover) !important;
+    border-color: var(--btn-primary-hover) !important;
+    color: var(--btn-primary-ink) !important;
+}
+.mpBtnGhost.btn {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--action) !important;
+    font-size: 12px !important; font-weight: 600 !important;
+    padding: 6px 10px !important; border-radius: var(--radius-sm) !important;
+    line-height: 1.2 !important;
+    text-decoration: none !important;
+}
+.mpBtnGhost.btn:hover,
+.mpBtnGhost.btn:focus { background: var(--action-soft) !important; color: var(--action) !important; }
+
+/* Acciones rápidas */
+.mpActions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.mpAction {
+    background: var(--paper);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    border: 0; padding: 16px; text-align: left; cursor: pointer;
+    display: flex; align-items: center; gap: 12px;
+    font-family: var(--font-body);
+    transition: background-color .15s;
+}
+.mpAction:hover { background: var(--action-soft); }
+.mpActionIcon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--action-soft); color: var(--action);
+    display: flex; align-items: center; justify-content: center; flex: none;
+}
+.mpActionIcon .fa { font-size: 18px; }
+.mpActionIcon--warn { background: var(--warn-bg); color: var(--warn-text); }
+.mpActionText { min-width: 0; flex: 1; }
+.mpActionTitle { display: block; font-size: 14px; font-weight: 600; color: var(--ink-strong); }
+.mpActionSub { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+.mpActionChevron { color: var(--ink-faint); flex: none; }
+.mpActionChevron .fa { font-size: 14px; }
+
+/* ---------- Zoom del QR (pantalla completa) ---------- */
+.mpZoom {
+    position: fixed; inset: 0; background: #fff; z-index: 1080;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; padding: 24px; cursor: pointer;
+}
+.mpZoomQr { width: min(78vw, 340px); height: min(78vw, 340px); display: flex; align-items: center; justify-content: center; }
+.mpZoomQr .mpQrSvg { width: 100%; height: 100%; }
+.mpZoomText { text-align: center; }
+.mpZoomName { font-family: var(--font-title); font-weight: 700; font-size: 20px; color: #0F334B; }
+.mpZoomCode { font-size: 13px; letter-spacing: .18em; color: #5A6E7C; margin-top: 4px; }
+.mpZoomClose {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-body, "Fira Sans", "Segoe UI", system-ui, sans-serif);
+    font-size: 13px; font-weight: 600; line-height: 1;
+    background: #FFFFFF; color: #0F334B;
+    border: 1px solid #C9D4DC; border-radius: 6px;
+    padding: 8px 14px; cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+.mpZoomClose:hover { background: #F8FAFB; border-color: #A2BACA; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 720px) {
+    .mpPage { margin: 0; }
+}
+</style>
+
+<script setup lang="ts">
+import Panel from "@Obsidian/Controls/panel.obs";
+import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { computed, ref } from "vue";
+
+type PassState = "Activo" | "Registrado hoy" | "Sin registro";
+
+type QuickAction = {
+    icon: string;
+    title: string;
+    subtitle: string;
+    warn?: boolean;
+    onClick: () => void;
+};
+
+// MOCK: datos de maqueta — reemplazar por useConfigurationValues<InitBag>() al conectar backend.
+const passState = ref<PassState>("Activo");
+const showNumericCode = ref(true);
+const showBrightnessAction = ref(true);
+
+const person = ref({
+    name: "Ana Lucía Ramírez",
+    campus: "Zona 10",
+    memberSince: "2019",
+    passCode: "VR · 4821 · 0937"
+});
+const lastUpdated = ref("hoy · 07:40");
+const nextEvent = ref({
+    name: "Encuentro de jóvenes",
+    date: "Sáb 1 ago",
+    time: "18:00",
+    place: "Sede Zona 10 · Auditorio principal"
+});
+
+const zoom = ref(false);
+
+const badgeTone = computed<"ok" | "blue" | "neu">(() =>
+    passState.value === "Activo" ? "ok" : passState.value === "Registrado hoy" ? "blue" : "neu");
+
+// MOCK: pseudo-QR decorativo — mismo algoritmo determinístico del diseño (seed fija).
+// Al conectar backend, reemplazar por un QR real generado con el código de la persona.
+const QR_N = 25;
+function buildQrModules(): [number, number][] {
+    let seed = 20260801;
+    const rnd = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const on: [number, number][] = [];
+    const finder = (r: number, c: number): void => {
+        for (let dr = 0; dr < 7; dr++) {
+            for (let dc = 0; dc < 7; dc++) {
+                const d = Math.max(Math.abs(dr - 3), Math.abs(dc - 3));
+                if (d === 3 || d === 1) {
+                    on.push([r + dr, c + dc]);
+                }
+            }
+        }
+    };
+    const reserved = (r: number, c: number): boolean =>
+        (r < 8 && c < 8) || (r < 8 && c > QR_N - 9) || (r > QR_N - 9 && c < 8);
+    for (let r = 0; r < QR_N; r++) {
+        for (let c = 0; c < QR_N; c++) {
+            if (!reserved(r, c) && rnd() > 0.52) {
+                on.push([r, c]);
+            }
+        }
+    }
+    finder(0, 0);
+    finder(0, QR_N - 7);
+    finder(QR_N - 7, 0);
+    for (let i = 8; i < QR_N - 8; i += 2) {
+        on.push([6, i]);
+        on.push([i, 6]);
+    }
+    return on;
+}
+const qrModules = buildQrModules();
+
+function openZoom(): void {
+    zoom.value = true;
+}
+
+function closeZoom(): void {
+    zoom.value = false;
+}
+
+// MOCK: acciones sin wiring todavía — conectar a páginas/bloques de Rock al integrar.
+function onLogout(): void {
+}
+
+function onEventDetails(): void {
+}
+
+function onEventCancel(): void {
+}
+
+function onRegisterEvent(): void {
+}
+
+function onHistory(): void {
+}
+
+function onUpdateData(): void {
+}
+
+const quickActions = computed<QuickAction[]>(() => {
+    const actions: QuickAction[] = [
+        { icon: "fa-plus", title: "Registrarme a un evento", subtitle: "3 eventos abiertos esta semana", onClick: onRegisterEvent },
+        { icon: "fa-search", title: "Mi historial de asistencia", subtitle: "18 registros en 2026", onClick: onHistory },
+        { icon: "fa-pencil", title: "Actualizar mis datos", subtitle: "Teléfono, correo y sede", onClick: onUpdateData }
+    ];
+    if (showBrightnessAction.value) {
+        actions.push({ icon: "fa-sun-o", title: "Ampliar el código", subtitle: "Pantalla completa para el lector", warn: true, onClick: openZoom });
+    }
+    return actions;
+});
+</script>

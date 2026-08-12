@@ -26,6 +26,7 @@
     var DONE = "vrtrDone";            // dataset flag en nodos ya procesados
     var CACHE_PREFIX = "vrtr:";       // localStorage key prefix
     var LANG_KEY = "vrtr:lang";       // idioma elegido por el usuario (switcher)
+    var EPOCH_KEY = "vrtr:epoch";     // marca de invalidacion del cache local (la manda el server)
     var BATCH = 200;                  // items por request (<= tope del server)
     var DEBOUNCE_MS = 400;
 
@@ -66,12 +67,31 @@
             // reintenta una vez. Sin esto, al llenarse se re-pediria todo al server
             // en cada carga de por vida.
             try {
-                Object.keys(localStorage).forEach(function (k) {
-                    if (k.indexOf(CACHE_PREFIX) === 0 && k !== LANG_KEY) localStorage.removeItem(k);
-                });
+                clearTranslationCache();
                 localStorage.setItem(cacheKey(norm), val);
             } catch (e2) { /* sigue sin entrar: se re-pedira al server, no rompe */ }
         }
+    }
+
+    // Borra SOLO las traducciones cacheadas (conserva idioma elegido y epoch).
+    function clearTranslationCache() {
+        Object.keys(localStorage).forEach(function (k) {
+            if (k.indexOf(CACHE_PREFIX) === 0 && k !== LANG_KEY && k !== EPOCH_KEY) localStorage.removeItem(k);
+        });
+    }
+
+    // Invalidacion remota: si el epoch del server cambio (correccion manual,
+    // borrado o purga en BD), el cache local puede tener traducciones viejas ->
+    // limpiarlo. Sin esto, una correccion NUNCA llegaria a un navegador que ya
+    // tenia cacheada la traduccion anterior.
+    function checkCacheEpoch(serverEpoch) {
+        try {
+            var epoch = serverEpoch || "";
+            if (localStorage.getItem(EPOCH_KEY) !== epoch) {
+                clearTranslationCache();
+                localStorage.setItem(EPOCH_KEY, epoch);
+            }
+        } catch (e) { /* sin localStorage: no hay cache que invalidar */ }
     }
 
     // Regex de "esto parece DATO, no UI" -> no traducir.
@@ -480,6 +500,7 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (c) {
                 if (c) {
+                    checkCacheEpoch(c.cacheEpoch);
                     cfg.enabled = c.enabled !== false;
                     cfg.sourceLanguage = c.sourceLanguage || "en";
                     cfg.showSwitcher = !!c.showSwitcher;

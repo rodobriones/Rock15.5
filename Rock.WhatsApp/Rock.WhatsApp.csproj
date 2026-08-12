@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <Reference Include="System.ComponentModel.Composition" />
+    <!-- Used to downscale / re-encode images that exceed WhatsApp's 5 MB limit. -->
+    <Reference Include="System.Drawing" />
   </ItemGroup>
 
 </Project>

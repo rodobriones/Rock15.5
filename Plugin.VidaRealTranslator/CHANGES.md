@@ -1,5 +1,18 @@
 # Changes
 
+## 1.3.0 — Chunks paralelos + invalidación remota de caché + logging de errores
+- **[Perf]** `AzureOpenAiProvider.TranslateBatch`: los chunks de 50 ahora van a Azure en **paralelo limitado (4 concurrentes)** en vez de en serie. Una página nueva con 250 strings pasa de ~10-20 s (5 llamadas encadenadas) a ~el costo de una llamada. `Task.Run` + `Task.WaitAll` (pool threads sin SynchronizationContext: sin riesgo de deadlock).
+- **[Operación]** Invalidación remota del caché local: nuevo block attribute `CacheEpoch` (interno). Se actualiza solo al **purgar** (REST), **editar** o **borrar** (grid) traducciones; `Config` lo devuelve y el cliente limpia sus claves `vrtr:*` cuando cambia. Antes una corrección manual NUNCA llegaba a un navegador que ya la tenía cacheada. También se puede cambiar a mano en settings para forzar limpieza global.
+- **[Diagnóstico]** Los fallos de Azure ya no mueren mudos: `PostWithRetry` loguea al Exception Log de Rock (con anti-spam de 5 min) el status + snippet de la respuesta; el catch de `Resolve` también deja rastro.
+- **[Docs/Seguridad]** Corregido el comentario de `[Authenticate]`: NO exige login (solo establece identidad); los endpoints funcionan para visitantes anónimos de sitios públicos **a propósito**. La defensa de presupuesto es el throttle global (5,000 nuevas/h) y `Purge` valida admin explícito.
+- **[Menor]** `GetList`: escapa comodines de `LIKE` en la búsqueda del grid. Mensaje del grid ya no pide limpiar caché a mano.
+- csproj: referencia a `Rock.Lava.Shared` (HintPath a Bin, `Private=false`) requerida por `LoadAttributes`/`SetAttributeValue`.
+- `ScriptVersion` → `12` (re-activar el toggle off→on para re-inyectar).
+
+## 1.2.1 — Cache-busting pendiente del switcher
+- `ScriptVersion` → `11`: el translator.js restaurado del respaldo (2026-08-05, con el switcher de idioma) se desplegó sin subir la versión, así que los navegadores seguían sirviendo el `?v=10` cacheado sin switcher. Re-activar el toggle off→on para re-inyectar.
+- Nota de uso: **Available Languages** es uno por línea (`codigo|Etiqueta`); todo en una línea con `/` se parsea como un solo idioma.
+
 ## 1.2.0 — Recuperación del front-end tras corrupción de disco + anti-duplicados + chunking del provider
 - **[Incidente]** Los 6 archivos de `RockWeb\Plugins\com_vidareal\Translator\` (translator.js, test_translator.js y los 2 bloques WebForms) se encontraron corruptos en disco (100% bytes nulos — mismo patrón del apagón que corrompió el `.gitignore` el 2026-07-15) y así se commitearon el 2026-07-24 ("Up to date"). Primero se reconstruyeron desde la especificación (commit `1e1efd641f`); después el usuario **recuperó los originales de un respaldo externo** y se restauraron esos (son el código probado). El respaldo además validó que el C# del repo era el auténtico (12/12 archivos idénticos byte a byte).
 - **[Costo]** `translator.js`: guard `inFlight` — los bursts (0/600/1500 ms) se solapan con la latencia de la IA y un string NUEVO se re-pedía 2-3 veces al server → **Azure se pagaba 2-3 veces por string** en la primera visita a cada página. Ahora un string con request en vuelo no se re-pide; al llegar la respuesta, una pasada extra (todo desde caché) cubre los nodos que aparecieron mientras tanto.

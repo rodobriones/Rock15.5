@@ -100,6 +100,15 @@ Bloques C# correspondientes: `Rock.Blocks/QREVENT/QRScanner.cs`, `CelebremosQrCh
 
 Bloque C# correspondiente: `Rock.Blocks/FamilyHub/FamilyHub.cs`
 
+### `src/Wallet/` — Modulo Wallet (pases Apple/Google)
+
+| Archivo | Descripcion |
+|---|---|
+| `walletTemplateAdmin.obs` | Admin de plantillas de pases (colores, imagenes, campos Lava, barcode, preview). 2026-08-10: campos Google `subheader` y `logoImageUrl` (rediseño VidaAventura) |
+| `paseDigital.obs` | Tarjeta web del pase digital de la iglesia con el diseño del pase de wallet (navy #0e3a5c, logo + foto de la plantilla, NOMBRE / ASISTO A = campus, QR de check-in). Mobile-first full-bleed: lienzo navy de orilla a orilla (breakout `100vw` del contenedor del theme); ≥480px tarjeta centrada 420px. Botón de wallet oculto por defecto. 2026-08-10 (antes `vidaAventuraPass.obs`) |
+
+Bloque C# correspondiente: `Rock.Blocks/Wallet/WalletTemplateAdmin.cs`
+
 ### `src/LayoutCustom/` — Bloques de Layout Global
 
 | Archivo | Descripcion |

@@ -208,7 +208,7 @@ VidaReal reemplaza el juego de caracteres por digitos del 0 al 9 exclusivamente.
 3. **Sin preocupacion por palabras inapropiadas en espanol:** El filtrado original estaba disenado para evitar palabras en ingles. Al usar solo numeros, el problema no aplica en ningun idioma.
 
 **Efecto en seguridad:** El codigo sigue teniendo 6 caracteres (`GeneratedCodeLength = 6`). Con solo digitos el espacio de posibilidades baja de 23^6 (~148 millones) a 10^6 (1 millon). Esto es aceptable dado que:
-- El codigo expira en el tiempo configurado en `PasswordlessSignInDailyIpThrottle`.
+- El codigo expira a los 60 minutos (`PasswordlessLoginCodeLifetimeInMinutes` en `Rock.Blocks/Security/Login.cs`; `PasswordlessSignInDailyIpThrottle` es otra cosa: el limite diario de intentos por IP).
 - Hay limite de intentos por IP (`ValidateIpCountWithinLimits`).
 - El codigo se invalida tras el primer uso exitoso.
 
@@ -246,9 +246,13 @@ GetMatchingPeopleQuery()
         [N personas] -> pantalla de seleccion con nombre + foto  <-- CAMBIO #1.3 + #2
 ```
 
----
-
-## Merge con upstream de Spark
+**Nota sobre el envio SMS (2026-08-04):** el paso `[SMS enviado al usuario]` sale por el transporte
+WhatsApp (`Rock.WhatsApp`), que rutea la system communication *Passwordless Login Confirmation* (Id 40)
+a la plantilla `auth_vidareal` de categoria **Authentication** de Meta (copy fijo + boton "Copiar codigo",
+con el merge field `Code` como parametro de body y de boton). Ese ruteo vive completo en el plugin — este
+archivo de core NO se modifico para eso. Detalles en `Rock.WhatsApp/CHANGES.md`, seccion "Codigos de un
+solo uso (plantillas Authentication)". La vida real del codigo son 60 minutos, constante
+`PasswordlessLoginCodeLifetimeInMinutes` en `Rock.Blocks/Security/Login.cs` (no configurable por UI).
 
 Al recibir actualizaciones de Spark (nuevos hotfixes de la rama 18.x), los archivos que probablemente generen conflictos son:
 

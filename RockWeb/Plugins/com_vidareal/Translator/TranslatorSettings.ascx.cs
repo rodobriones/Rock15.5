@@ -35,6 +35,7 @@ namespace RockWeb.Plugins.com_vidareal.Translator
     [TextField( "Source Language", "Idioma original de la UI (ISO). Al elegirlo en el switcher NO se traduce (muestra el original).", false, "en", "", 11, "SourceLanguage" )]
     [MemoField( "Available Languages", "Idiomas del switcher, uno por linea, formato: codigo|Etiqueta. Ej: en|English / es|Espanol / pt|Portugues.", false, "", "", 12, "AvailableLanguages" )]
     [TextField( "Switcher Container Selector", "Selector CSS donde montar el switcher EN EL FLUJO (no flotante), para que no se sobreponga. Ej: '#secPageTitle' (barra de titulo) o '.navbar'. Vacio = flotante abajo-derecha.", false, "", "", 13, "SwitcherContainer" )]
+    [TextField( "Cache Epoch", "INTERNO: marca de invalidacion del cache local (localStorage) de los navegadores. Se actualiza sola al purgar o corregir traducciones; cambia el valor a mano para forzar que TODOS los navegadores limpien su cache.", false, "", "", 14, "CacheEpoch" )]
     public partial class TranslatorSettings : RockBlock
     {
         protected override void OnLoad( EventArgs e )

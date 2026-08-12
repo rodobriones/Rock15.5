@@ -1,0 +1,67 @@
+/*
+   Fuentes del design system Brújula VR (Vida Real)
+   ------------------------------------------------
+   Blogger Sans  — títulos/display. Sergiy Tkachenko / Fontfabric, v1.2, CC 4.0 BY-ND
+                   (atribución requerida; NO convertir de formato — se sirve el .otf original).
+   Fira Sans     — cuerpo.  Mozilla/Carrois, SIL OFL 1.1 (woff2 generado de los ttf oficiales
+                   de google/fonts; .ttf como fallback).
+   Fira Mono     — cifras/códigos. SIL OFL 1.1.
+
+   Solo los pesos que usan los diseños: Blogger 400/700 · Fira Sans 400/500/600/700 · Fira Mono 400.
+
+   Este archivo puede enlazarse desde un tema de Rock (<link href="/Assets/Fonts/BrujulaVR/brujula-fonts.css">)
+   para dar las fuentes a TODOS los bloques. Los bloques .obs individuales pueden declarar
+   estas mismas reglas en su <style> si el tema aún no lo incluye (duplicarlas es inocuo).
+*/
+
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Fira Sans";
+    src: url("FiraSans-Regular.woff2") format("woff2"), url("FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("FiraSans-Medium.woff2") format("woff2"), url("FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("FiraSans-SemiBold.woff2") format("woff2"), url("FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("FiraSans-Bold.woff2") format("woff2"), url("FiraSans-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Fira Mono";
+    src: url("FiraMono-Regular.woff2") format("woff2"), url("FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}

@@ -341,7 +341,9 @@ const invokeBlockAction = useInvokeBlockAction();
 
 const members = ref<Member[]>(config.members || []);
 const statusHtml = ref<string>(config.statusHtml || "");
-const relationshipRoles = ref<ListItemBag[]>(config.relationshipRoles || []);
+// Solo visual: la opción marital "Casado" se muestra como "Esposo(a)"; el value (y lo guardado) no cambia.
+const relationshipRoles = ref<ListItemBag[]>((config.relationshipRoles || [])
+    .map(r => r.text === "Casado" ? { ...r, text: "Esposo(a)" } : r));
 const genderOptions = ref<ListItemBag[]>(config.genderOptions || []);
 const phoneMenuOpen = ref<boolean>(false);
 const modalOpen = ref<boolean>(false);

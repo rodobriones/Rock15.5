@@ -90,8 +90,10 @@ VALUES
             }
             if ( !string.IsNullOrWhiteSpace( search ) )
             {
+                // Escapa comodines de LIKE para que buscar "50%" o "[x]" sea literal.
+                var q = search.Replace( "[", "[[]" ).Replace( "%", "[%]" ).Replace( "_", "[_]" );
                 where.Add( "( [SourceText] LIKE @q OR [TranslatedText] LIKE @q )" );
-                parameters.Add( new SqlParameter( "@q", "%" + search + "%" ) );
+                parameters.Add( new SqlParameter( "@q", "%" + q + "%" ) );
             }
 
             var whereSql = where.Count > 0 ? "WHERE " + string.Join( " AND ", where ) : string.Empty;

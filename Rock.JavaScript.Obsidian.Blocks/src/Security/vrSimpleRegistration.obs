@@ -1,132 +1,116 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <div v-if="!config.isBlocked" class="cyWrap">
-        <div class="cyScreen">
-            <!-- Overlay de carga -->
-            <div v-if="isSubmitting" class="cyStateOverlay">
-                <div class="cyStateModal">
-                    <div class="cySpinner"></div>
-                    <h4 class="cyStateTitle">Registrando</h4>
-                    <p class="cyStateText">Por favor espera un momento...</p>
+    <div v-if="!config.isBlocked" class="vrRegScreen">
+        <header class="vrRegHeader">
+            <p class="vrRegEyebrow">Crear cuenta</p>
+            <h1 class="vrRegTitle">Completa tu perfil</h1>
+            <p class="vrRegSubtitle">Solo necesitamos un par de datos más para terminar.</p>
+        </header>
+
+        <section class="vrRegCard">
+            <div class="vrRegCardBody">
+                <div v-if="errorMessage" class="vrRegAlert">
+                    <span v-html="errorMessage"></span>
+                </div>
+
+                <form v-if="currentStep === 'form'" @submit.prevent="onRegister">
+                    <div class="vrRegFields">
+                        <label class="vrRegField">
+                            <span class="vrRegLabel">Nombre</span>
+                            <input class="vrRegInput" type="text" required maxlength="50"
+                                   v-model.trim="firstName" :disabled="isSubmitting" autocomplete="given-name" />
+                        </label>
+
+                        <label class="vrRegField">
+                            <span class="vrRegLabel">Apellido</span>
+                            <input class="vrRegInput" type="text" required maxlength="50"
+                                   v-model.trim="lastName" :disabled="isSubmitting" autocomplete="family-name" />
+                        </label>
+
+                        <label class="vrRegField">
+                            <span class="vrRegLabel">
+                                Correo electrónico
+                                <span v-if="emailVerified" class="vrRegBadge">Verificado</span>
+                            </span>
+                            <input class="vrRegInput" type="email"
+                                   :class="{ isLocked: emailVerified }"
+                                   :required="!phoneVerified"
+                                   :readonly="emailVerified"
+                                   v-model.trim="email"
+                                   :disabled="isSubmitting"
+                                   placeholder="correo@ejemplo.com"
+                                   autocomplete="email" />
+                        </label>
+
+                        <label class="vrRegField">
+                            <span class="vrRegLabel">Género</span>
+                            <select class="vrRegInput vrRegSelect" required v-model="gender" :disabled="isSubmitting">
+                                <option value="" disabled>Selecciona...</option>
+                                <option value="1">Masculino</option>
+                                <option value="2">Femenino</option>
+                            </select>
+                        </label>
+
+                        <label class="vrRegField">
+                            <span class="vrRegLabel">
+                                Teléfono
+                                <span v-if="phoneVerified" class="vrRegBadge">Verificado</span>
+                            </span>
+                            <div class="vrRegFieldRow">
+                                <select class="vrRegCountrySelect"
+                                        v-model="phoneCountryCode"
+                                        :disabled="isSubmitting || phoneVerified">
+                                    <option v-for="code in config.countryCodes" :key="code" :value="code">
+                                        {{ code }}
+                                    </option>
+                                </select>
+                                <input class="vrRegInput vrRegInputRight" type="tel" placeholder="55555555"
+                                       :class="{ isLocked: phoneVerified }"
+                                       v-model.trim="phoneNumber"
+                                       :readonly="phoneVerified"
+                                       :disabled="isSubmitting"
+                                       autocomplete="tel-national" />
+                            </div>
+                        </label>
+
+                        <label v-if="config.isCampusPickerShown && config.campuses && config.campuses.length"
+                               class="vrRegField">
+                            <span class="vrRegLabel">Campus</span>
+                            <select class="vrRegInput vrRegSelect" v-model="selectedCampusGuid" :disabled="isSubmitting">
+                                <option value="">Selecciona un campus...</option>
+                                <option v-for="c in config.campuses" :key="c.guid" :value="c.guid">
+                                    {{ c.name }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <button class="vrRegBtn vrRegBtnDark" type="submit" :disabled="isSubmitting">
+                        {{ isSubmitting ? "Registrando..." : "Continuar" }}
+                    </button>
+
+                    <p class="vrRegHelper">Con esto completas tu acceso a VidaReal.tv</p>
+                </form>
+
+                <div v-else-if="currentStep === 'conflict'" class="vrRegConflict">
+                    <h2 class="vrRegCardTitle">Cuenta existente</h2>
+                    <p class="vrRegCardSubtitle">
+                        Ya existe una cuenta con esta información. Por favor inicia sesión.
+                    </p>
+                    <a class="vrRegBtn vrRegBtnDark" :href="config.loginPageUrl || '/Login'">
+                        Ir a inicio de sesión
+                    </a>
                 </div>
             </div>
+        </section>
+    </div>
 
-            <header class="cyTopBar">
-                <div class="cyTopBrand">
-                    <span class="cyTopName">Completa tu perfil</span>
-                </div>
-            </header>
-
-            <section class="cyAmountHero" style="padding-bottom:48px;">
-                <p class="cyAmountLabel" style="font-size:16px;">Solo necesitamos un par de datos más</p>
-            </section>
-
-            <div class="cyStage">
-                <div v-if="errorMessage" class="cyMainCard" style="background:#fef3f2; border-color:#fecdc9;">
-                    <p style="margin:0; color:#b42318; font-weight:600; font-size:14px;" v-html="errorMessage"></p>
-                </div>
-
-                <div class="cyMainCard" v-if="currentStep === 'form'">
-                    <form @submit.prevent="onRegister">
-                        <div class="cySection">
-                            <div class="cySectionHead">
-                                <h3 class="cySectionTitle">Datos personales</h3>
-                            </div>
-
-                            <div class="cyGrid">
-                                <label class="cyField">
-                                    <span>• Nombre</span>
-                                    <input class="cyInput" type="text" required maxlength="50"
-                                           v-model.trim="firstName" :disabled="isSubmitting" autocomplete="given-name" />
-                                </label>
-
-                                <label class="cyField">
-                                    <span>• Apellido</span>
-                                    <input class="cyInput" type="text" required maxlength="50"
-                                           v-model.trim="lastName" :disabled="isSubmitting" autocomplete="family-name" />
-                                </label>
-
-                                <label class="cyField cyWide">
-                                    <span>
-                                        • Correo electrónico
-                                        <span v-if="emailVerified" class="cyStatusBadge isGood" style="margin-left:6px;">Verificado</span>
-                                    </span>
-                                    <input class="cyInput" type="email"
-                                           :required="!phoneVerified"
-                                           :readonly="emailVerified"
-                                           :style="emailVerified ? 'background:#f3f4f6; color:#6b7280; cursor:not-allowed;' : ''"
-                                           v-model.trim="email"
-                                           :disabled="isSubmitting" autocomplete="email" />
-                                </label>
-
-                                <label class="cyField">
-                                    <span>• Género</span>
-                                    <select class="cyInput" required v-model="gender" :disabled="isSubmitting">
-                                        <option value="" disabled>Selecciona...</option>
-                                        <option value="1">Masculino</option>
-                                        <option value="2">Femenino</option>
-                                    </select>
-                                </label>
-
-                                <label class="cyField">
-                                    <span>
-                                        Teléfono
-                                        <span v-if="phoneVerified" class="cyStatusBadge isGood" style="margin-left:6px;">Verificado</span>
-                                    </span>
-                                    <div style="display:flex; gap:6px;">
-                                        <select class="cyInput"
-                                                style="flex:0 0 90px; padding-right:8px;"
-                                                v-model="phoneCountryCode"
-                                                :disabled="isSubmitting || phoneVerified"
-                                                :style="phoneVerified ? 'flex:0 0 90px; padding-right:8px; background:#f3f4f6; color:#6b7280; cursor:not-allowed;' : 'flex:0 0 90px; padding-right:8px;'">
-                                            <option v-for="code in config.countryCodes" :key="code" :value="code">
-                                                {{ code }}
-                                            </option>
-                                        </select>
-                                        <input class="cyInput" type="tel" placeholder="5555-1234"
-                                               style="flex:1;"
-                                               v-model.trim="phoneNumber"
-                                               :readonly="phoneVerified"
-                                               :style="phoneVerified ? 'flex:1; background:#f3f4f6; color:#6b7280; cursor:not-allowed;' : 'flex:1;'"
-                                               :disabled="isSubmitting" />
-                                    </div>
-                                </label>
-
-                                <label v-if="config.isCampusPickerShown && config.campuses && config.campuses.length"
-                                       class="cyField cyWide">
-                                    <span>Campus</span>
-                                    <select class="cyInput" v-model="selectedCampusGuid" :disabled="isSubmitting">
-                                        <option value="">Selecciona un campus...</option>
-                                        <option v-for="c in config.campuses" :key="c.guid" :value="c.guid">
-                                            {{ c.name }}
-                                        </option>
-                                    </select>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="cyActions">
-                            <button class="btn btn-primary" type="submit" :disabled="isSubmitting">
-                                <span v-if="isSubmitting">Registrando...</span>
-                                <span v-else>Continuar</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="cyMainCard" v-else-if="currentStep === 'conflict'">
-                    <div class="cySection">
-                        <h3 class="cySectionTitle">Cuenta existente</h3>
-                        <p class="cySectionText">Ya existe una cuenta con esta información. Por favor inicia sesión.</p>
-                    </div>
-                    <div class="cyActions">
-                        <a class="btn btn-primary" :href="config.loginPageUrl || '/Login'"
-                           style="text-decoration:none;">
-                            Ir a inicio de sesión
-                        </a>
-                    </div>
-                </div>
-            </div>
+    <!-- Overlay de carga -->
+    <div v-if="isSubmitting" class="vrRegOverlay">
+        <div class="vrRegOverlayModal">
+            <div class="vrRegSpinner"></div>
+            <h2 class="vrRegOverlayTitle">Registrando</h2>
+            <p class="vrRegOverlayText">Por favor espera un momento...</p>
         </div>
     </div>
 </template>
@@ -234,6 +218,7 @@
 </script>
 
 <style>
+/* Oculta el marco del panel de Rock: esta pantalla es de pantalla completa. */
 .panel-block .panel-heading,
 .panel-block .panel-header {
     display: none !important;
@@ -251,1405 +236,371 @@
     padding: 0 !important;
 }
 
-.cyWrap {
-    --cy-black: #090909;
-    --cy-gray-100: #f3f3f3;
-    --cy-gray-200: #e5e5e5;
-    --cy-gray-300: #d5d5d5;
-    --cy-gray-500: #7d7d7d;
-    --cy-text: #1f2933;
-    --cy-danger: #c22016;
-    --cy-success: #0f8f53;
-    --cy-radius-xl: 22px;
-    --cy-radius-lg: 14px;
-    --cy-radius-pill: 999px;
+/* ── Variables y contenedor ────────────────────────────────── */
+.vrRegScreen {
+    --vr-surface: #ffffff;
+    --vr-dark: #272b31;
+    --vr-text-secondary: #767676;
+    --vr-text-muted: #71727a;
+    --vr-gray: #8e8e93;
+    --vr-gray-2: #aeaeb2;
+    --vr-gray-5: #e5e5ea;
+    --vr-border: #c5c6cc;
+    --vr-accent: #006ffd;
+    --vr-danger: #b42318;
+    --vr-radius-lg: 12px;
+    --vr-radius-xl: 16px;
+    --vr-font-heading: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --vr-font-body: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
 
-    background: linear-gradient(#000 0 380px, #ececec 380px 100%);
-    border-radius: 18px;
-    color: var(--cy-text);
-    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
-    overflow: hidden;
-    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 8px 0 32px;
+    font-family: var(--vr-font-body);
+    color: var(--vr-dark);
+    animation: vrRegRise 0.3s ease-out both;
 }
 
-.cyScreen {
-    min-height: 100%;
+.vrRegScreen * {
+    box-sizing: border-box;
 }
 
-.cyTopBar {
-    color: #fff;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-}
-
-.cyTopBrand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.cyTopLogo {
-    width: 44px;
-    height: 44px;
-    border-radius: 6px;
-    background: #fff;
-    color: #121212;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-family: Manrope, sans-serif;
-    font-weight: 800;
-    font-size: 12px;
-}
-
-.cyTopName {
-    color: #fff;
-    font-family: Manrope, sans-serif;
-    font-size: 21px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-}
-
-.cyTopMeta {
-    border-radius: var(--cy-radius-pill);
-    border: 1px solid #ffffff38;
-    padding: 6px 10px;
-    color: #fff;
-    font-family: Manrope, sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
-
-.cyTopMeta.isLive {
-    background: #163b28;
-    border-color: #2c8b5e;
-}
-
-.cyTopMeta.isTest {
-    background: #1a2b42;
-    border-color: #4d709b;
-}
-
-.cyTopTabs {
-    display: flex;
-    justify-content: center;
-    gap: 24px;
+/* ── Encabezado ────────────────────────────────────────────── */
+.vrRegHeader {
     margin-bottom: 24px;
 }
 
-.cyTopTabBtn {
-    background: transparent;
-    border: none;
-    color: #8c8c8c;
-    font-family: Manrope, sans-serif;
-    font-size: 19px;
-    font-weight: 800;
-    cursor: pointer;
-    padding: 0 0 6px 0;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s ease;
+.vrRegEyebrow {
+    margin: 0 0 4px;
+    font-family: var(--vr-font-heading);
+    font-weight: 300;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--vr-text-secondary);
 }
 
-.cyTopTabBtn.isActive {
-    color: #ffffff;
-    border-bottom: 2px solid #ffffff;
-}
-
-.cyAmountHero {
-    color: #fff;
-    text-align: center;
-    padding: 18px 12px 60px;
-}
-
-.cyAmountLabel {
-    margin: 0;
-    color: #d9d9d9;
-    font-size: 14px;
-    letter-spacing: 0.04em;
-}
-
-.cyAmountValue {
-    margin: 8px auto 0;
-    width: fit-content;
-    max-width: 90vw;
-    display: inline-flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 2px;
-    font-family: Manrope, sans-serif;
-}
-
-.cyAmountCurrency {
-    font-size: clamp(38px, 13vw, 120px);
-    line-height: 0.9;
+.vrRegTitle {
+    margin: 0 0 12px;
+    font-family: var(--vr-font-heading);
     font-weight: 500;
-    color: #efefef;
-    flex-shrink: 0;
+    font-size: 40px;
+    line-height: 1.05;
+    letter-spacing: -0.5px;
+    color: #000;
 }
 
-.cyAmountNumberInput {
-    font-size: clamp(38px, 13vw, 120px);
-    line-height: 0.9;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    font-family: Manrope, sans-serif;
-    color: #8f8f8f;
-    min-width: 2ch;
-    max-width: 80vw;
-    flex-shrink: 0;
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    -webkit-appearance: none;
-    padding: 0;
+.vrRegSubtitle {
     margin: 0;
-    outline: none;
-    text-align: left;
-}
-
-.cyAmountNumberInput::placeholder {
-    color: #676767;
-}
-
-.cyAmountNumberInput.isInvalid {
-    color: #f1a8a4;
-}
-
-/* Sobreescribe la regla anti-zoom de iOS en Blank.aspx (.rock-blank input:not(...)... = especificidad 0,8,1).
-   Agregar .cyAmountNumberInput sube la especificidad a 0,9,1 para que nuestro font-size gane. */
-@media (max-width: 991px) {
-    .rock-blank input.cyAmountNumberInput:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]) {
-        font-size: clamp(38px, 13vw, 120px) !important;
-    }
-}
-
-.cyHeroControls {
-    margin: 12px auto 0;
-    width: 100%;
-    max-width: 420px;
-    padding: 0 16px;
-    box-sizing: border-box;
-    display: flex;
-    justify-content: center;
-}
-
-.cyCurrencySwitch {
-    background: #111111;
-    border: 1px solid #3e3e3e;
-    border-radius: var(--cy-radius-pill);
-    padding: 3px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    width: 100%;
-}
-
-.cyCurrencyBtn {
-    min-height: 38px;
-    border: 0;
-    border-radius: var(--cy-radius-pill);
-    background: transparent;
-    color: #cfcfcf;
-    font-family: Manrope, sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-}
-
-.cyCurrencyBtn.isActive {
-    background: #ffffff;
-    color: #0f0f0f;
-}
-
-.cyAmountAlert {
-    margin: 14px auto 0;
-    width: fit-content;
-    max-width: min(92vw, 380px);
-    color: #ffffff;
-    padding: 8px 12px;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-}
-
-.cyStage {
-    width: min(960px, calc(100% - 18px));
-    margin: -36px auto 16px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-}
-
-@media (min-width: 576px) {
-    .cyStage {
-        margin-top: -28px;
-    }
-}
-
-.cyMainCard {
-    background: var(--cy-gray-100);
-    border: 1px solid var(--cy-gray-300);
-    border-radius: var(--cy-radius-xl);
-    box-shadow: 0 14px 28px rgba(8, 8, 8, 0.12);
-}
-
-.cyMainCard {
-    padding: 14px;
-    animation: cyRise 0.35s ease-out both;
-}
-
-.cyPromptRow {
-    margin-bottom: 12px;
-}
-
-.cyPromptLabel {
-    margin: 0 0 7px;
-    font-size: 14px;
-    color: #2e2e2e;
-}
-
-.cySubmenu {
-    margin-bottom: 12px;
-    border: 1px solid #bdbdbd;
-    border-radius: 10px;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: 1fr;
-}
-
-.cySubmenuBtn {
-    border: 0;
-    border-bottom: 1px solid #bdbdbd;
-    background: #ededed;
-    color: #333;
-    min-height: 44px;
-    font-family: Manrope, sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.cySubmenuBtn:last-child {
-    border-bottom: 0;
-}
-
-.cySubmenuBtn.isActive {
-    background: #000;
-    color: #fff;
-}
-
-.cyGiftToggle {
-    border: 1px solid #bdbdbd;
-    border-radius: 8px;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: 1fr;
-}
-
-.cyGiftBtn {
-    border: 0;
-    border-bottom: 1px solid #bdbdbd;
-    background: #ececec;
-    color: #3a3a3a;
-    min-height: 50px;
-    font-family: Manrope, sans-serif;
+    font-family: var(--vr-font-heading);
+    font-weight: 400;
     font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
+    line-height: 1.4;
+    color: var(--vr-text-secondary);
+    max-width: 360px;
 }
 
-.cyGiftBtn:last-child {
-    border-bottom: 0;
+/* ── Tarjeta ───────────────────────────────────────────────── */
+.vrRegCard {
+    background: var(--vr-surface);
+    border-radius: var(--vr-radius-lg);
+    box-shadow: 0 4px 4px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
 }
 
-.cyGiftBtn.isActive {
-    background: #000;
-    color: #fff;
+.vrRegCardBody {
+    padding: 30px 24px 26px;
 }
 
-.cySection {
-    margin-top: 12px;
-    background: #fff;
-    border: 1px solid #d7d7d7;
-    border-radius: var(--cy-radius-lg);
-    padding: 12px;
-}
-
-.cySectionHead {
-    margin-bottom: 10px;
-}
-
-.cySectionTitle {
-    margin: 0;
-    font-family: Manrope, sans-serif;
-    font-size: 18px;
-    font-weight: 800;
-    color: #222;
-    text-transform: none;
-}
-
-.cySectionText {
-    margin: 4px 0 0;
-    color: #666;
-    font-size: 13px;
-}
-
-.cyGrid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-}
-
-.cyWide {
-    grid-column: auto;
-}
-
-.cyField,
-.cyCardField {
-    display: grid;
-    gap: 6px;
-}
-
-.cyField > span,
-.cyCardField > span {
-    color: #4a4a4a;
-    font-family: Manrope, sans-serif;
-    font-size: 11px;
+.vrRegCardTitle {
+    margin: 0 0 8px;
+    font-size: 16px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    line-height: 1.3;
+    color: #1f2024;
+    text-align: center;
 }
 
-.cyField .form-control,
-.cyInput {
+.vrRegCardSubtitle {
+    margin: 0 0 24px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--vr-text-muted);
+    text-align: center;
+}
+
+/* ── Campos ────────────────────────────────────────────────── */
+.vrRegFields {
+    display: grid;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.vrRegField {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    font-weight: 400;
+}
+
+.vrRegLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1f2024;
+}
+
+.vrRegBadge {
+    border-radius: 999px;
+    background: rgba(0, 111, 253, 0.1);
+    color: var(--vr-accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+}
+
+.vrRegFieldRow {
+    display: flex;
+    align-items: stretch;
+}
+
+.vrRegInput {
     width: 100%;
-    min-height: 44px;
-    border: 1px solid #bfbfbf;
-    border-radius: 10px;
-    background: #fff;
-    color: #1e1e1e;
+    height: 48px;
+    border: 1px solid var(--vr-border);
+    border-radius: var(--vr-radius-lg);
+    background: var(--vr-surface);
+    color: var(--vr-dark);
+    font-family: var(--vr-font-body);
     font-size: 14px;
-    padding: 10px 12px;
+    padding: 0 16px;
     box-shadow: none;
+    -webkit-appearance: none;
+    outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.cyField .form-control:focus,
-.cyInput:focus {
+.vrRegInput::placeholder {
+    color: #8f9098;
+}
+
+.vrRegInput:focus,
+.vrRegCountrySelect:focus {
+    border-color: var(--vr-accent);
+    box-shadow: 0 0 0 2px rgba(0, 111, 253, 0.15);
+}
+
+.vrRegInput.isLocked,
+.vrRegInput:disabled,
+.vrRegCountrySelect:disabled {
+    background: #f3f3f3;
+    color: var(--vr-gray);
+    cursor: not-allowed;
+}
+
+.vrRegInputRight {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    border-radius: 0 var(--vr-radius-lg) var(--vr-radius-lg) 0;
+    border-left: 0;
+}
+
+.vrRegSelect,
+.vrRegCountrySelect {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    background-repeat: no-repeat;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%238e8e93' d='M6 8L0 0h12z'/></svg>");
+}
+
+.vrRegSelect {
+    padding-right: 38px;
+    background-position: right 16px center;
+    background-size: 10px 7px;
+}
+
+.vrRegCountrySelect {
+    flex: 0 0 78px;
+    width: 78px;
+    height: 48px;
+    border: 0.5px solid var(--vr-gray-2);
+    border-right: 0;
+    border-radius: var(--vr-radius-lg) 0 0 var(--vr-radius-lg);
+    background-color: var(--vr-gray-5);
+    color: var(--vr-gray);
+    font-family: var(--vr-font-body);
+    font-size: 14px;
+    padding: 0 22px 0 10px;
     outline: none;
-    border-color: #7b7b7b;
-    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
+    background-position: right 8px center;
+    background-size: 9px 6px;
 }
 
-.cyField .form-control.isInvalid {
-    border-color: #dc6e66;
+/* Evita el zoom automático de iOS sin perder la escala del diseño. */
+@media (max-width: 991px) {
+    .rock-blank input.vrRegInput:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    .vrRegInput,
+    .vrRegCountrySelect {
+        font-size: 16px !important;
+    }
 }
 
-.cyCardInputs {
-    display: grid;
-    gap: 10px;
-}
-
-.cyCardRow {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-}
-
-.cyInputWrap {
-    border: 1px solid #bfbfbf;
-    border-radius: 10px;
-    background: #fff;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px;
-}
-
-.cyInputWrap:focus-within {
-    border-color: #7b7b7b;
-    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
-}
-
-.cyInputWrap.isInvalid {
-    border-color: #dc6e66;
-}
-
-.cyInputWrap .cyInput {
+/* ── Botones ───────────────────────────────────────────────── */
+.vrRegBtn {
+    width: 100%;
+    height: 48px;
     border: 0;
-    box-shadow: none;
-    min-height: 42px;
-    padding: 0;
-}
-
-.cyCardFieldHead {
+    border-radius: var(--vr-radius-lg);
+    font-family: var(--vr-font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 6px;
-}
-
-.cyCardFieldHead > span {
-    margin: 0;
-}
-
-.cyCardBrands {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.cyBrandIcon {
-    display: inline-flex;
-    width: 34px;
-    height: 22px;
-    border-radius: 4px;
-    overflow: hidden;
-    transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.cyBrandIcon svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-
-.cyBrandIcon.isDimmed {
-    opacity: 0.32;
-    filter: grayscale(1);
-}
-
-.cyBrandIcon.isActive {
-    transform: scale(1.08);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
-}
-
-.cyCardBrandTag {
-    flex: 0 0 auto;
-    border-radius: var(--cy-radius-pill);
-    border: 1px solid #bfc6cf;
-    background: #edf1f7;
-    color: #405061;
-    font-family: Manrope, sans-serif;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 4px 7px;
-}
-
-.cyCardBrandTag.brand-visa {
-    background: #eaf1ff;
-    border-color: #bcd2ff;
-    color: #1e44a8;
-}
-
-.cyCardBrandTag.brand-mastercard {
-    background: #fff1e8;
-    border-color: #ffd7c2;
-    color: #9a3412;
-}
-
-.cyCardBrandTag.brand-amex {
-    background: #e8fbff;
-    border-color: #b7effa;
-    color: #0f6f88;
-}
-
-.cyCardBrandTag.brand-discover {
-    background: #fff4ec;
-    border-color: #fed7aa;
-    color: #c2410c;
-}
-
-.cyFieldHint {
-    color: #727272;
-    font-size: 12px;
-}
-
-.cyFieldError {
-    color: var(--cy-danger);
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.cyPreviewBar {
-    margin-top: 12px;
-    border-radius: 12px;
-    border: 1px solid #cecece;
-    background: #fff;
-    padding: 10px 12px;
-    display: grid;
-    gap: 3px;
-}
-
-.cyPreviewBar span {
-    color: #4e4e4e;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 700;
-}
-
-.cyPreviewBar strong {
-    color: #1d1d1d;
-    font-size: 15px;
-    font-family: Manrope, sans-serif;
-    font-weight: 800;
-}
-
-.cyPreviewBar small {
-    color: #5f5f5f;
-    font-size: 12px;
-}
-
-.cyActions {
-    margin-top: 14px;
-    display: grid;
-    gap: 8px;
-}
-
-.cyActions .btn-primary,
-.cyActions .rock-button.btn-primary {
-    width: 100%;
-    min-height: 56px;
-    border-radius: var(--cy-radius-pill) !important;
-    border: 1px solid #000 !important;
-    background: #000 !important;
-    color: #fff !important;
-    font-family: Manrope, sans-serif !important;
-    font-size: 32px !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.01em;
-    padding: 8px 20px !important;
-    display: inline-flex;
     justify-content: center;
-    align-items: center;
+    text-decoration: none;
+    transition: opacity 0.2s ease;
 }
 
-.cyActions .btn-primary:hover,
-.cyActions .rock-button.btn-primary:hover {
-    background: #101010 !important;
+.vrRegBtnDark,
+.vrRegBtnDark:hover,
+.vrRegBtnDark:focus {
+    background: var(--vr-dark);
+    color: #fff;
+    text-decoration: none;
 }
 
-.cyActionMeta {
-    margin: 0;
-    color: #5e5e5e;
+.vrRegBtnDark:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.vrRegBtnDark:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.vrRegHelper {
+    margin: 16px 0 0;
+    text-align: center;
     font-size: 12px;
+    line-height: 1.4;
+    color: var(--vr-text-muted);
 }
 
-.cyAlert {
-    margin-top: 10px;
+/* ── Alerta de error ───────────────────────────────────────── */
+.vrRegAlert {
+    background: #fef3f2;
+    border: 1px solid #fecdc9;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
 }
 
-.cyResult {
-    margin-top: 10px;
-    border: 1px solid #d0d0d0;
-    border-radius: 12px;
-    background: #f8f8f8;
-    padding: 10px;
-    display: grid;
-    gap: 4px;
-    font-size: 13px;
-}
-
-.cyHistoryCard {
-    border: 1px solid #d7d7d7;
-    border-radius: 12px;
-    background: #fff;
-    padding: 12px;
-}
-
-.cyHistoryTitle {
-    margin: 0;
-    font-family: Manrope, sans-serif;
-    font-size: 17px;
-    font-weight: 800;
-    color: #242424;
-    text-transform: none;
-}
-
-.cyHistoryPanel {
-    margin-top: 12px;
-}
-
-.cyHistoryHeader {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.cyHistoryCard .btn-default,
-.cyHistoryCard .rock-button.btn-default {
-    border-radius: var(--cy-radius-pill) !important;
-    border: 1px solid #b6b6b6 !important;
-    background: #fff !important;
-    color: #262626 !important;
-    font-family: Manrope, sans-serif !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    padding: 7px 14px !important;
-}
-
-.cyHistoryList {
-    display: grid;
-    gap: 8px;
-}
-
-.cyHistoryItem {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 12px 14px;
-    display: grid;
-    gap: 6px;
-}
-
-.cyHistoryItemTop {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-}
-
-.cyHistoryDate {
-    font-size: 12px;
-    color: #6b7280;
-}
-
-.cyHistoryItemMid {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.cyHistoryAmount {
-    font-family: Manrope, sans-serif;
-    font-size: 20px;
-    font-weight: 800;
-    color: #0f0f0f;
-}
-
-.cyHistoryFondo {
+.vrRegAlert span {
+    color: var(--vr-danger);
     font-size: 13px;
     font-weight: 600;
-    color: #374151;
-    text-align: right;
 }
 
-.cyHistoryItemBot {
+/* ── Paso de cuenta existente ──────────────────────────────── */
+.vrRegConflict {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 6px;
-    border-top: 1px solid #f3f4f6;
+    flex-direction: column;
 }
 
-.cyHistoryMeta {
-    font-size: 10px;
+/* ── Overlay de carga ──────────────────────────────────────── */
+.vrRegOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(31, 32, 36, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    animation: vrRegFade 0.2s ease;
+}
+
+.vrRegOverlayModal {
+    width: 100%;
+    max-width: 320px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 20px;
+    text-align: center;
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
+    box-sizing: border-box;
+}
+
+.vrRegOverlayTitle {
+    margin: 20px 0 8px;
+    font-size: 18px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
+    color: #1f2024;
 }
 
-.cyHistoryMetaVal {
-    font-size: 12px;
-    font-weight: 500;
-    color: #6b7280;
-    font-family: 'Courier New', monospace;
+.vrRegOverlayText {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #71727a;
 }
 
-.cyStatusBadge {
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--cy-radius-pill);
-    padding: 2px 8px;
-    border: 1px solid #d1d5db;
-    font-family: Manrope, sans-serif;
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.vrRegSpinner {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto;
+    border: 4px solid #e5e5ea;
+    border-top-color: #272b31;
+    border-radius: 50%;
+    animation: vrRegSpin 0.9s linear infinite;
 }
 
-.cyStatusBadge.isGood {
-    background: #ecfdf3;
-    color: #067647;
-    border-color: #abe7c0;
-}
-
-.cyStatusBadge.isBad {
-    background: #fef3f2;
-    color: #b42318;
-    border-color: #fecdc9;
-}
-
-.cyStatusBadge.isNeutral {
-    background: #f3f4f6;
-    color: #344054;
-    border-color: #d4d8df;
-}
-
-.cyStatusCode {
-    display: block;
-    margin-top: 2px;
-    color: #667085;
-    font-size: 11px;
-}
-
-.cyEmpty {
-    color: #666;
-    font-size: 13px;
-}
-
-@keyframes cyRise {
+/* ── Animaciones ───────────────────────────────────────────── */
+@keyframes vrRegRise {
     from {
         opacity: 0;
-        transform: translateY(16px);
+        transform: translateY(12px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
     }
 }
 
-/* Estilos del flujo de recibo fiscal (NIT) */
-.cyReceiptSection {
-    background: #fafafa; /* Fondo ligeramente distinto para diferenciar la sección */
-}
-
-.cyReceiptToggle {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-}
-
-.cyReceiptText {
-    flex: 1;
-}
-
-.cyReceiptTitle {
-    margin: 0 0 2px;
-    font-family: Manrope, sans-serif;
-    font-size: 15px;
-    font-weight: 800;
-    color: #222;
-}
-
-.cyReceiptDesc {
-    margin: 0;
-    color: #666;
-    font-size: 13px;
-}
-
-.cySwitch {
-    position: relative;
-    display: inline-block;
-    width: 46px;
-    height: 26px;
-    flex-shrink: 0;
-}
-
-.cySwitch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.cySlider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #d1d5db;
-    transition: .3s;
-    border-radius: 26px;
-}
-
-.cySlider:before {
-    position: absolute;
-    content: "";
-    height: 20px;
-    width: 20px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .3s;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.cySwitch input:checked + .cySlider {
-    background-color: #000;
-}
-
-.cySwitch input:checked + .cySlider:before {
-    transform: translateX(20px);
-}
-
-.cyReceiptForm {
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px dashed #d7d7d7;
-    animation: cyFadeIn 0.3s ease;
-}
-
-.cyNitRow {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: end;
-    gap: 10px;
-    margin-bottom: 12px;
-}
-
-.cyNitRow > label {
-    margin-bottom: 0 !important;
-}
-
-.cyNitInput {
-    flex: 1;
-}
-
-.cyNitInput input {
-    height: 44px !important;
-    min-height: 44px !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    border-radius: 10px;
-    border: 1px solid #d1d5db;
-    font-family: inherit;
-    font-size: 14px;
-}
-
-.cyValidateBtn {
-    height: 44px !important;
-    min-height: 44px !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    border-radius: 10px !important;
-    border: 1px solid #000 !important;
-    background: #000 !important;
-    color: #fff !important;
-    font-family: Manrope, sans-serif !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    padding: 0 20px !important;
-    cursor: pointer;
-    transition: background 0.2s;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-
-.cyValidateBtn:hover {
-    background: #1a1a1a !important;
-}
-
-.cyValidateBtn:disabled {
-    background: #9ca3af !important;
-    border-color: #9ca3af !important;
-    cursor: not-allowed;
-}
-
-.cyNitResult {
-    display: grid;
-    gap: 10px;
-}
-
-.cyNitResult input {
-    background: #f3f4f6;
-    color: #6b7280;
-    cursor: not-allowed;
-    border-color: #e5e7eb;
-}
-
-/* Overlays modales (carga y éxito) */
-.cyStateOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    animation: cyFadeIn 0.3s ease;
-}
-
-.cyStateModal {
-    background: #fff;
-    border-radius: var(--cy-radius-xl);
-    padding: 34px 24px;
-    width: min(100%, 380px);
-    text-align: center;
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.25);
-    animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.cyStateTitle {
-    margin: 20px 0 8px;
-    font-size: 22px;
-    font-weight: 800;
-    font-family: Manrope, sans-serif;
-    color: #111;
-}
-
-.cyStateText {
-    margin: 0;
-    color: #555;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.cySpinner {
-    width: 60px;
-    height: 60px;
-    margin: 0 auto;
-    border: 5px solid #eaeaea;
-    border-top-color: #000;
-    border-radius: 50%;
-    animation: cySpin 0.9s linear infinite;
-}
-
-.cySuccessIcon {
-    width: 72px;
-    height: 72px;
-    margin: 0 auto;
-    background: #ecfdf3;
-    color: #067647;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.cySuccessIcon svg {
-    width: 40px;
-    height: 40px;
-}
-
-.cyStateActions {
-    margin-top: 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.cyStateBtnPrimary,
-.cyStateBtnSecondary {
-    width: 100%;
-    min-height: 52px;
-    border-radius: var(--cy-radius-pill);
-    font-weight: 700;
-    font-family: Manrope, sans-serif;
-    font-size: 15px;
-    cursor: pointer;
-    border: 0;
-    transition: all 0.2s;
-}
-
-.cyStateBtnPrimary {
-    background: #000;
-    color: #fff;
-    border: 1px solid #000;
-}
-.cyStateBtnPrimary:hover {
-    background: #1a1a1a;
-}
-.cyStateBtnSecondary {
-    background: #fff;
-    color: #111;
-    border: 1px solid #dcdcdc;
-}
-.cyStateBtnSecondary:hover {
-    background: #f0f0f0;
-}
-
-@keyframes cyFadeIn {
+@keyframes vrRegFade {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
-@keyframes cyScaleUp {
-    from { opacity: 0; transform: translateY(16px) scale(0.95); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes cySpin {
+@keyframes vrRegSpin {
     to { transform: rotate(360deg); }
 }
 
-@media (min-width: 680px) {
-    .cyWrap {
-        background: linear-gradient(#000 0 480px, #ececec 480px 100%);
-    }
-
-    .cyTopBar {
-        padding: 16px 20px;
-    }
-
-    .cyAmountHero {
-        padding-bottom: 76px;
-    }
-
-    .cySubmenu {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .cySubmenuBtn {
-        border-bottom: 0;
-        border-right: 1px solid #bdbdbd;
-    }
-
-    .cySubmenuBtn:last-child {
-        border-right: 0;
-    }
-
-    .cyGiftToggle {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .cyGiftBtn {
-        border-bottom: 0;
-        border-right: 1px solid #bdbdbd;
-    }
-
-    .cyGiftBtn:last-child {
-        border-right: 0;
-    }
-
-    .cyGrid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .cyWide {
-        grid-column: 1 / span 2;
-    }
-
-    .cyCardRow {
-        grid-template-columns: 1.2fr 1fr;
-    }
-}
-
-@media (min-width: 1080px) {
-    .cyMainCard {
-        padding: 18px;
-    }
-}
-
+/* ── Responsive móvil ──────────────────────────────────────── */
 @media (max-width: 575px) {
-    main.container-fluid,
-    .zone-instance,
-    .block-instance,
-    .obsidian-block {
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
+    .vrRegTitle {
+        font-size: 34px;
     }
 
-    .cyWrap {
-        border-radius: 0;
+    .vrRegEyebrow {
+        font-size: 16px;
     }
 
-    .cyStage {
-        width: 100%;
-        margin-left: 0;
-        margin-right: 0;
-    }
-}
-
-@media (max-width: 460px) {
-    .cyTopLogo {
-        width: 40px;
-        height: 40px;
+    .vrRegSubtitle {
+        font-size: 14px;
     }
 
-    .cyTopName {
-        font-size: 17px;
+    .vrRegCardBody {
+        padding: 26px 20px 22px;
     }
-
-    .cyActions .btn-primary,
-    .cyActions .rock-button.btn-primary {
-        font-size: 28px !important;
-    }
-}
-
-.cyDropdown {
-    position: relative;
-}
-
-.cyDropdownTrigger {
-    width: 100%;
-    min-height: 44px;
-    border: 1px solid #bfbfbf;
-    border-radius: 10px;
-    background: #fff;
-    color: #1e1e1e;
-    font-size: 14px;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    cursor: pointer;
-    text-align: left;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.cyDropdown.isOpen .cyDropdownTrigger {
-    border-color: #7b7b7b;
-    box-shadow: 0 0 0 3px rgba(51, 51, 51, 0.12);
-}
-
-.cyDropdown.isInvalid .cyDropdownTrigger {
-    border-color: #dc6e66;
-}
-
-.cyDropdownPlaceholder {
-    color: #9ca3af;
-}
-
-.cyDropdownChevron {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    color: #6b7280;
-    transition: transform 0.2s ease;
-}
-
-.cyDropdown.isOpen .cyDropdownChevron {
-    transform: rotate(180deg);
-}
-
-.cyDropdownMenu {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 100;
-    background: #fff;
-    border: 1px solid #d1d5db;
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-    animation: cyFadeIn 0.15s ease;
-}
-
-.cyDropdownItem {
-    width: 100%;
-    min-height: 48px;
-    border: 0;
-    border-bottom: 1px solid #f3f4f6;
-    background: #fff;
-    color: #1e1e1e;
-    font-family: Manrope, sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.12s ease;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.cyDropdownItem:last-child {
-    border-bottom: 0;
-}
-
-.cyDropdownItem:hover {
-    background: #f9fafb;
-}
-
-.cyDropdownItem.isSelected {
-    background: #f0fdf4;
-    color: #067647;
-}
-
-.cyAccountCheck {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-}
-
-/* Modal de confirmación */
-.cyConfirmOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    padding: 0;
-    animation: cyFadeIn 0.2s ease;
-}
-
-@media (min-width: 576px) {
-    .cyConfirmOverlay {
-        align-items: center;
-        padding: 20px;
-    }
-}
-
-.cyConfirmModal {
-    background: #fff;
-    border-radius: 22px 22px 0 0;
-    padding: 28px 20px 32px;
-    width: 100%;
-    max-width: 480px;
-    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
-    animation: cySlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1);
-}
-
-@media (min-width: 576px) {
-    .cyConfirmModal {
-        border-radius: 22px;
-        padding: 32px 28px;
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
-        animation: cyScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-}
-
-@keyframes cySlideUp {
-    from { transform: translateY(100%); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
-}
-
-.cyConfirmTitle {
-    font-family: Manrope, sans-serif;
-    font-size: 20px;
-    font-weight: 800;
-    color: #0f0f0f;
-    margin: 0 0 4px;
-}
-
-.cyConfirmSubtitle {
-    font-size: 13px;
-    color: #6b7280;
-    margin: 0 0 20px;
-}
-
-.cyConfirmRows {
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    overflow: hidden;
-    margin-bottom: 20px;
-}
-
-.cyConfirmRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 13px 16px;
-    border-bottom: 1px solid #e5e7eb;
-}
-
-.cyConfirmRow:last-child {
-    border-bottom: 0;
-}
-
-.cyConfirmRowHighlight {
-    background: #f9fafb;
-}
-
-.cyConfirmLabel {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #6b7280;
-    flex-shrink: 0;
-}
-
-.cyConfirmValue {
-    font-size: 14px;
-    font-weight: 500;
-    color: #111827;
-    text-align: right;
-}
-
-.cyConfirmAmount {
-    font-family: Manrope, sans-serif;
-    font-size: 18px;
-    font-weight: 800;
-    color: #0f0f0f;
-}
-
-.cyConfirmActions {
-    display: grid;
-    gap: 10px;
-}
-
-.cyConfirmSubmit {
-    width: 100%;
-    min-height: 52px;
-    border: 0;
-    border-radius: 999px;
-    background: #0f0f0f;
-    color: #fff;
-    font-family: Manrope, sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.cyConfirmSubmit:hover {
-    background: #333;
-}
-
-.cyConfirmSubmit:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
-}
-
-.cyConfirmCancel {
-    width: 100%;
-    min-height: 48px;
-    border: 1px solid #d1d5db;
-    border-radius: 999px;
-    background: transparent;
-    color: #374151;
-    font-family: Manrope, sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.cyConfirmCancel:hover {
-    background: #f3f4f6;
-}
-
-.cyConfirmNote {
-    margin: 14px 0 0;
-    font-size: 11px;
-    color: #9ca3af;
-    text-align: center;
 }
 </style>

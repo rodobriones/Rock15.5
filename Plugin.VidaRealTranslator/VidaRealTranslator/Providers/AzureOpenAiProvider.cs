@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -38,6 +39,12 @@ namespace com.vidareal.Translator.Providers
         // mismo y el resto del lote se traduce y persiste normal.
         private const int ChunkSize = 50;
 
+        // Chunks en PARALELO limitado. En serie, un lote de 250 strings eran 5
+        // llamadas de ~2-4s encadenadas (10-20s la primera visita a una pagina
+        // pesada); en paralelo cuesta ~una llamada. Cap de 4 concurrentes para
+        // no provocar 429 en Azure.
+        private const int MaxParallelChunks = 4;
+
         public Dictionary<int, string> TranslateBatch( IList<string> texts, string targetLanguage )
         {
             var result = new Dictionary<int, string>();
@@ -46,13 +53,29 @@ namespace com.vidareal.Translator.Providers
                 return result;
             }
 
+            var offsets = new List<int>();
             for ( int offset = 0; offset < texts.Count; offset += ChunkSize )
             {
-                var chunk = texts.Skip( offset ).Take( ChunkSize ).ToList();
-                var chunkResult = TranslateChunk( chunk, targetLanguage );
-                foreach ( var kv in chunkResult )
+                offsets.Add( offset );
+            }
+
+            for ( int g = 0; g < offsets.Count; g += MaxParallelChunks )
+            {
+                var tasks = offsets.Skip( g ).Take( MaxParallelChunks )
+                    .Select( off => Task.Run( () => new KeyValuePair<int, Dictionary<int, string>>(
+                        off, TranslateChunk( texts.Skip( off ).Take( ChunkSize ).ToList(), targetLanguage ) ) ) )
+                    .ToArray();
+
+                // WaitAll bloquea el hilo del request, pero las tareas corren en el
+                // thread pool SIN SynchronizationContext -> no hay riesgo de deadlock.
+                Task.WaitAll( tasks );
+
+                foreach ( var t in tasks )
                 {
-                    result[offset + kv.Key] = kv.Value;
+                    foreach ( var kv in t.Result.Value )
+                    {
+                        result[t.Result.Key + kv.Key] = kv.Value;
+                    }
                 }
             }
 
@@ -138,8 +161,35 @@ namespace com.vidareal.Translator.Providers
             return result.Count == texts.Count ? result : new Dictionary<int, string>();
         }
 
+        // Un fallo persistente (key mala, endpoint caido) se repetiria en CADA
+        // request; logueamos a lo sumo una vez cada 5 min para no inundar el
+        // Exception Log de Rock. Antes era catch{} mudo: la traduccion moria en
+        // silencio y el diagnostico era a ciegas.
+        private static DateTime _lastErrorLogUtc = DateTime.MinValue;
+        private static readonly object ErrorLogLock = new object();
+
+        private static void LogError( string message, Exception ex = null )
+        {
+            try
+            {
+                lock ( ErrorLogLock )
+                {
+                    if ( ( DateTime.UtcNow - _lastErrorLogUtc ).TotalMinutes < 5 )
+                    {
+                        return;
+                    }
+                    _lastErrorLogUtc = DateTime.UtcNow;
+                }
+                Rock.Model.ExceptionLogService.LogException( new Exception( "[VidaReal Translator] " + message, ex ) );
+            }
+            catch ( Exception ) { /* el log nunca debe tumbar la traduccion */ }
+        }
+
         private string PostWithRetry( string url, string json )
         {
+            string lastFailure = null;
+            Exception lastEx = null;
+
             for ( int attempt = 0; attempt < 2; attempt++ )
             {
                 try
@@ -160,18 +210,24 @@ namespace com.vidareal.Translator.Providers
                                 return respBody;
                             }
 
-                            // 429/5xx: reintenta una vez; otros: abandona.
                             var code = ( int ) resp.StatusCode;
+                            var snippet = respBody != null && respBody.Length > 300 ? respBody.Substring( 0, 300 ) : respBody;
+                            lastFailure = "HTTP " + code + ": " + snippet;
+
+                            // 429/5xx: reintenta una vez; otros (401/403/404...): abandona.
                             if ( code != 429 && code < 500 )
                             {
+                                LogError( "Azure OpenAI rechazo la llamada (no reintentable). " + lastFailure );
                                 return null;
                             }
                         }
                     }
                 }
-                catch ( Exception )
+                catch ( Exception ex )
                 {
                     // transitorio: reintenta
+                    lastEx = ex;
+                    lastFailure = ex.Message;
                 }
 
                 // Pausa breve antes del reintento (typ. 429: darle aire al rate limit).
@@ -181,6 +237,7 @@ namespace com.vidareal.Translator.Providers
                 }
             }
 
+            LogError( "Azure OpenAI fallo tras reintento. " + lastFailure, lastEx );
             return null;
         }
     }

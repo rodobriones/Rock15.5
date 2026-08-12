@@ -76,6 +76,13 @@ namespace Rock.Model
         {
             public string HexBackgroundColor { get; set; }
             public string CardTitle { get; set; }
+
+            /// <summary>
+            /// Texto pequeño (Lava) que Google pinta ARRIBA del Header (p. ej. la etiqueta
+            /// "Nombre" sobre el nombre de la persona). Vacío = no se envía.
+            /// </summary>
+            public string Subheader { get; set; }
+
             public string Header { get; set; }
             public List<PassField> Rows { get; set; }
             public BarcodeDesign Barcode { get; set; }
@@ -91,6 +98,12 @@ namespace Rock.Model
             /// <c>{{ Data.EventImageUrl }}</c>). Google la descarga de esta URL.
             /// </summary>
             public string HeroImageUrl { get; set; }
+
+            /// <summary>
+            /// URL pública (Lava) del logo del pase Google (círculo junto al CardTitle).
+            /// Vacío = la tarjeta sale sin logo.
+            /// </summary>
+            public string LogoImageUrl { get; set; }
         }
 
         /// <summary>Un campo del pase. Label y Value aceptan Lava.</summary>
@@ -169,8 +182,10 @@ namespace Rock.Model
 
             design.HexBackgroundColor = Resolve( design.HexBackgroundColor, mergeFields );
             design.CardTitle = Resolve( design.CardTitle, mergeFields );
+            design.Subheader = Resolve( design.Subheader, mergeFields );
             design.Header = Resolve( design.Header, mergeFields );
             design.HeroImageUrl = Resolve( design.HeroImageUrl, mergeFields );
+            design.LogoImageUrl = Resolve( design.LogoImageUrl, mergeFields );
             design.ExpirationDate = Resolve( design.ExpirationDate, mergeFields );
             design.Rows = ResolveFields( design.Rows, mergeFields );
 

@@ -104,6 +104,25 @@ namespace Rock.Communication.Medium
         /// <param name="errorMessage">The error message.</param>
         public void ProcessResponse( string toPhone, string fromPhone, string message, List<BinaryFile> attachments, out string errorMessage )
         {
+            ProcessResponse( toPhone, fromPhone, message, attachments, null, out errorMessage );
+        }
+
+        /// <summary>
+        /// Process inbound messages that are sent to a SMS number, with the sender optionally
+        /// pre-resolved by the caller (fork VidaReal: el webhook de WhatsApp identifica al
+        /// remitente por el wamid del mensaje respondido/reaccionado — exacto aunque varias
+        /// personas compartan el número. Sin esto, la re-resolución por teléfono de abajo
+        /// pisaba esa atribución). Con <paramref name="resolvedFromPerson"/> null se comporta
+        /// exactamente como siempre (Twilio y demás transportes no cambian).
+        /// </summary>
+        /// <param name="toPhone">The transport (e.g. Twilio) phone number a message is sent to.</param>
+        /// <param name="fromPhone">The phone number a message is sent from. (This would be the number from somebody's mobile device)</param>
+        /// <param name="message">The message that was sent.</param>
+        /// <param name="attachments">The attachments.</param>
+        /// <param name="resolvedFromPerson">Sender already resolved by the caller; null = resolve here by phone number.</param>
+        /// <param name="errorMessage">The error message.</param>
+        public void ProcessResponse( string toPhone, string fromPhone, string message, List<BinaryFile> attachments, Person resolvedFromPerson, out string errorMessage )
+        {
             errorMessage = string.Empty;
 
             using ( var rockContext = new RockContext() )
@@ -115,7 +134,7 @@ namespace Rock.Communication.Medium
                 toPhone = toPhone.Replace( "+", "" );
 
                 // Get the person who sent the message. This will always return a Person record since we want to get a nameless Person record if there isn't a regular person record found
-                var fromPerson = new PersonService( rockContext ).GetPersonFromMobilePhoneNumber( fromPhone, true );
+                var fromPerson = resolvedFromPerson ?? new PersonService( rockContext ).GetPersonFromMobilePhoneNumber( fromPhone, true );
 
                 // Get recipient from system phone number.
                 var rockSmsFromNumber = FindRockSmsSystemPhoneNumber( toPhone );

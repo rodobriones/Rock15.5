@@ -17,7 +17,7 @@ namespace com.vidareal.Translator
     {
         // Subir al cambiar translator.js (cache-busting). El reemplazo es por
         // marcador, asi que al re-inyectar se actualiza la version sola.
-        public const string ScriptVersion = "10";
+        public const string ScriptVersion = "12";
 
         private const string ScriptPath = "/Plugins/com_vidareal/Translator/translator.js";
 

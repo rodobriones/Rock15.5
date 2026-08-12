@@ -88,12 +88,19 @@ namespace Rock.WhatsApp.Workflow.Action
         Key = AttributeKey.TemplateParameters,
         FieldTypeClassNames = new string[] { "Rock.Field.Types.MemoFieldType", "Rock.Field.Types.TextFieldType" } )]
 
+    [BooleanField(
+        "Static Template (no parameters)",
+        Description = "Enable when the approved template already contains all of its text and has no {{1}}, {{2}}, ... placeholders. No parameters are sent, so Message is free to describe the send for communication history without being pushed into the template (which Meta would reject with error 132000). Overrides Template Parameters.",
+        DefaultBooleanValue = false,
+        Order = 6,
+        Key = AttributeKey.StaticTemplate )]
+
     [WorkflowTextOrAttribute(
         "Message",
         "Attribute Value",
-        Description = "The message to use as the single {{1}} template parameter when no Template Parameters are provided. Also saved to communication history. <span class='tip tip-lava'></span>",
+        Description = "The message to use as the single {{1}} template parameter when no Template Parameters are provided. Also saved to communication history. Ignored as a parameter when Static Template is enabled. <span class='tip tip-lava'></span>",
         IsRequired = false,
-        Order = 6,
+        Order = 7,
         Key = AttributeKey.Message,
         FieldTypeClassNames = new string[] { "Rock.Field.Types.TextFieldType", "Rock.Field.Types.MemoFieldType" } )]
 
@@ -101,7 +108,7 @@ namespace Rock.WhatsApp.Workflow.Action
         "Save Communication History",
         Description = "Should a record of this communication be saved. If a person is provided then it will save to the recipient's profile. If a phone number is provided then the communication record is saved but a communication recipient is not.",
         DefaultBooleanValue = false,
-        Order = 7,
+        Order = 8,
         Key = AttributeKey.SaveCommunicationHistory )]
 
     [Rock.SystemGuid.EntityTypeGuid( "D9F0C4A2-6B3E-4E8A-9C15-2B7D8A4F6E30" )]
@@ -120,6 +127,7 @@ namespace Rock.WhatsApp.Workflow.Action
             public const string TemplateName = "TemplateName";
             public const string TemplateLanguage = "TemplateLanguage";
             public const string TemplateParameters = "TemplateParameters";
+            public const string StaticTemplate = "StaticTemplate";
             public const string Message = "Message";
             public const string SaveCommunicationHistory = "SaveCommunicationHistory";
         }
@@ -274,15 +282,25 @@ namespace Rock.WhatsApp.Workflow.Action
             string templateName = GetAttributeValue( action, AttributeKey.TemplateName, checkWorkflowAttributeValue: true ).ResolveMergeFields( mergeFields );
             string templateLanguage = GetAttributeValue( action, AttributeKey.TemplateLanguage, checkWorkflowAttributeValue: true ).ResolveMergeFields( mergeFields );
 
+            // A static template carries all of its own text, so no parameters are sent at all.
+            // This frees Message to describe the send for communication history: without the flag
+            // the transport would push it in as {{1}} and Meta would reject the send (132000).
+            var isStaticTemplate = GetAttributeValue( action, AttributeKey.StaticTemplate ).AsBoolean();
+
             var templateParameters = new List<string>();
             string templateParametersRaw = GetAttributeValue( action, AttributeKey.TemplateParameters, checkWorkflowAttributeValue: true );
-            if ( !string.IsNullOrWhiteSpace( templateParametersRaw ) )
+            if ( !isStaticTemplate && !string.IsNullOrWhiteSpace( templateParametersRaw ) )
             {
                 templateParameters = templateParametersRaw
                     .Split( new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries )
                     .Select( p => p.Trim() )
                     .Where( p => p.Length > 0 )
                     .ToList();
+            }
+
+            if ( isStaticTemplate && templateParametersRaw.IsNotNullOrWhiteSpace() )
+            {
+                action.AddLogEntry( "Static Template is enabled, so the configured Template Parameters were ignored." );
             }
 
             string message = GetAttributeValue( action, AttributeKey.Message, checkWorkflowAttributeValue: true );
@@ -307,7 +325,11 @@ namespace Rock.WhatsApp.Workflow.Action
                     smsMessage.AdditionalMergeFields.Add( WhatsAppTransport.MergeFieldKey.TemplateLanguage, templateLanguage );
                 }
 
-                if ( templateParameters.Any() )
+                if ( isStaticTemplate )
+                {
+                    smsMessage.AdditionalMergeFields.Add( WhatsAppTransport.MergeFieldKey.StaticTemplate, true );
+                }
+                else if ( templateParameters.Any() )
                 {
                     smsMessage.AdditionalMergeFields.Add( WhatsAppTransport.MergeFieldKey.TemplateParameters, templateParameters );
                 }

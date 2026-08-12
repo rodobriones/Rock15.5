@@ -377,6 +377,20 @@ namespace Rock.Model
                 ["header"] = Localized( design.Header.IsNotNullOrWhiteSpace() ? design.Header : " " )
             };
 
+            if ( design.Subheader.IsNotNullOrWhiteSpace() )
+            {
+                obj["subheader"] = Localized( design.Subheader );
+            }
+
+            // Logo: círculo junto al CardTitle; Google lo descarga de una URL pública (https).
+            if ( design.LogoImageUrl?.StartsWith( "https://", StringComparison.OrdinalIgnoreCase ) == true )
+            {
+                obj["logo"] = new JObject
+                {
+                    ["sourceUri"] = new JObject { ["uri"] = design.LogoImageUrl }
+                };
+            }
+
             if ( design.HexBackgroundColor.IsNotNullOrWhiteSpace() )
             {
                 obj["hexBackgroundColor"] = design.HexBackgroundColor;

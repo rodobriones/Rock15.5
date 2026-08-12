@@ -495,6 +495,14 @@ namespace RockWeb
                 return false;
             }
 
+            // WebP can't be resized: ImageResizer runs on System.Drawing, which has no WebP
+            // decoder, so resizing throws. Browsers render WebP natively (animation included),
+            // so it is served as-is. This is what WhatsApp stickers arrive as.
+            if ( mimeType == "image/webp" )
+            {
+                return false;
+            }
+
             // Final logic for animated gifs. We'll only resize gifs if they are over 10MB to preserve animated gifs.
             // We could add the ImageResizer animated gif plug-in but the quality is terrible and would likely create Github issues.
             // We also need to move away from ImageResizer as it's not .net core compatible.
