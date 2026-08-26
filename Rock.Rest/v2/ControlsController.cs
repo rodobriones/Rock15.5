@@ -472,6 +472,13 @@ namespace Rock.Rest.v2
                 hasStateList = states.Any();
             }
 
+            // [VidaReal] Generate the list of Cities (Municipios) for the selected State (Departamento).
+            var cityCascade = AddressCascade.Get( countryCode, options.StateCode );
+
+            var cities = cityCascade.Cities
+                .Select( c => new ListItemBag { Value = c, Text = c } )
+                .ToList();
+
             // Get Labels and Validation Rules
             string cityLabel = null;
             string localityLabel = null;
@@ -515,6 +522,9 @@ namespace Rock.Rest.v2
                 States = states,
 
                 HasStateList = hasStateList,
+                Cities = cities,
+                HasCityList = cityCascade.HasCities,
+                SupportsCityList = cityCascade.IsSupported,
                 SelectedCountry = countryCode,
 
                 CityLabel = cityLabel,

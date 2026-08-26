@@ -28,8 +28,18 @@ assert.strictEqual(normalize("A  B"), "A B", "em-space debe colapsar");
     "{% if x %}",                  // Lava
     "12345",                       // numero
     "()",                          // sin letras
-    "x"                            // muy corto
+    "x",                           // muy corto
+    // SENSIBLE (regresion 2026-08-14: una tarjeta real llego a traducirse)
+    "Visa 4487 9x00 xxxx 1071",    // tarjeta enmascarada con 'x'
+    "Visa •••• 4242",              // tarjeta enmascarada con bullets
+    "Tarjeta ****1071",            // tarjeta enmascarada con asteriscos
+    "Cuenta 12345678 activa",      // 8+ digitos incrustados en texto
+    "Primicia | Email: p@gmail.com | NIT" // email INCRUSTADO en texto (regresion 2026-08-14)
 ].forEach(s =>
     assert.strictEqual(translatable(normalize(s)), false, "NO debe traducir: " + s));
+
+// Los digitos normales de UI NO deben bloquear la traduccion
+["Page 1 of 20", "Top 100 results"].forEach(s =>
+    assert.strictEqual(translatable(normalize(s)), true, "debe traducir: " + s));
 
 console.log("OK: salvaguardas de datos pasan");

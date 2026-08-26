@@ -17,15 +17,26 @@
                     <TextBox v-model="internalValue.street2" :placeholder="address2.label" :validationTitle="address2.label" :rules="rules.street2" :disabled="disabled" :autocomplete="address2.autocomplete" />
                 </div>
                 <div class="form-row">
-                    <div class="form-group" :class="county.isVisible ? 'col-sm-3' : 'col-sm-6'" v-if="city.isVisible">
-                        <TextBox v-model="internalValue.city" :placeholder="city.label" :validationTitle="city.label" :rules="rules.city" :disabled="disabled" :autocomplete="city.autocomplete" />
+                    <!--
+                        [VidaReal] En países con cascada (Departamento -> Municipio) el departamento va ANTES
+                        del municipio, porque es el que filtra su lista. El bloque de estado se repite en las
+                        dos posiciones porque hay que invertir el orden real del DOM: el .form-row de Rock usa
+                        el grid flotado de Bootstrap 3, donde el `order` de flexbox no tiene efecto.
+                    -->
+                    <div class="form-group" :class="stateColumnClass" v-if="state.isVisible && supportsCityList">
+                        <DropDownList v-if="hasStateList" v-model="internalValue.state" v-bind="stateListProps" />
+                        <TextBox v-else v-model="internalValue.state" v-bind="stateTextProps" />
+                    </div>
+                    <div class="form-group" :class="cityColumnClass" v-if="city.isVisible">
+                        <DropDownList v-if="hasCityList" v-model="internalValue.city" :items="cityOptions" :validationTitle="city.label" :rules="rules.city" :disabled="disabled" :autocomplete="city.autocomplete" enhanceForLongLists />
+                        <TextBox v-else v-model="internalValue.city" :placeholder="city.label" :validationTitle="city.label" :rules="rules.city" :disabled="disabled" :autocomplete="city.autocomplete" />
                     </div>
                     <div class="form-group col-sm-3" v-if="county.isVisible">
                         <TextBox v-model="internalValue.locality" :placeholder="county.label" :validationTitle="county.label" :rules="rules.locality" :disabled="disabled" :autocomplete="county.autocomplete" />
                     </div>
-                    <div class="form-group col-sm-3" v-if="state.isVisible">
-                        <DropDownList v-if="hasStateList" v-model="internalValue.state" :items="stateOptions" :validationTitle="state.label" :rules="rules.state" :disabled="disabled" :autocomplete="state.autocomplete" showBlankItem enhanceForLongLists />
-                        <TextBox v-else v-model="internalValue.state" :placeholder="state.label" :validationTitle="state.label" :rules="rules.state" :disabled="disabled" :autocomplete="state.autocomplete" />
+                    <div class="form-group" :class="stateColumnClass" v-if="state.isVisible && !supportsCityList">
+                        <DropDownList v-if="hasStateList" v-model="internalValue.state" v-bind="stateListProps" />
+                        <TextBox v-else v-model="internalValue.state" v-bind="stateTextProps" />
                     </div>
                     <div class="form-group col-sm-3" v-if="zip.isVisible">
                         <TextBox v-model="internalValue.postalCode" :placeholder="zip.label" :validationTitle="zip.label" :rules="rules.postalCode" :disabled="disabled" :autocomplete="zip.autocomplete" />
@@ -149,6 +160,9 @@
     const isLoading = ref<boolean>(false);
     const isInternational = ref(false);
 
+    /** Descarta respuestas de configuración que lleguen fuera de orden. */
+    let configurationSequence = 0;
+
     type FieldConfig = {
         isVisible: boolean | ComputedRef<boolean>,
         label: string,
@@ -202,6 +216,28 @@
     const stateOptions = ref<ListItemBag[]>([]);
     const hasStateList = ref<boolean>(false);
 
+    // [VidaReal] Cascada Departamento -> Municipio: municipios del departamento seleccionado.
+    const fetchedCities = ref<ListItemBag[]>([]);
+    const hasCityList = ref<boolean>(false);
+    const supportsCityList = ref<boolean>(false);
+
+    /**
+     * Opciones del municipio. Es computed y no ref a propósito: DropDownList normaliza (y emite)
+     * cualquier valor que no esté en `items`, así que un municipio legado en texto libre se
+     * perdería en silencio si la lista se calculara solo al recibir la respuesta del servidor.
+     * Manteniéndolo como opción extra, abrir y guardar una dirección vieja no altera el dato.
+     */
+    const cityOptions = computed<ListItemBag[]>(() => {
+        // Los <select> no muestran placeholder: la opción vacía lleva el nombre del campo.
+        const options: ListItemBag[] = [{ value: "", text: city.label }, ...fetchedCities.value];
+
+        if (internalValue.city && !options.some(o => o.value === internalValue.city)) {
+            options.push({ value: internalValue.city, text: internalValue.city });
+        }
+
+        return options;
+    });
+
 
     const rules = computed(() => {
         const rules: Record<keyof AddressControlBag, ValidationRule | undefined> = {
@@ -242,8 +278,50 @@
         return rules;
     });
 
-    async function getConfiguration(selectedCountry: string | undefined | null): Promise<void> {
+    /**
+     * Props del campo de departamento. Están aquí y no en el template porque el bloque se dibuja en
+     * dos posiciones distintas según haya cascada o no (ver el comentario del template), y así las
+     * dos copias no pueden divergir.
+     */
+    const stateListProps = computed(() => ({
+        items: stateOptions.value,
+        validationTitle: state.label,
+        rules: rules.value.state,
+        disabled: props.disabled,
+        autocomplete: state.autocomplete,
+        // Con cascada la opción vacía ya viene en la lista, con el nombre del campo como texto.
+        showBlankItem: !supportsCityList.value,
+        enhanceForLongLists: true
+    }));
+
+    const stateTextProps = computed(() => ({
+        placeholder: state.label,
+        validationTitle: state.label,
+        rules: rules.value.state,
+        disabled: props.disabled,
+        autocomplete: state.autocomplete
+    }));
+
+    /**
+     * Con cascada, el departamento necesita más ancho que el col-sm-3 nativo: los nombres son largos
+     * ("Quetzaltenango", "Suchitepéquez") y se truncaban tanto en el campo como en el desplegable.
+     * Se le presta una columna al municipio; los totales siguen sumando 12.
+     */
+    const useCascadeWidths = computed(() => supportsCityList.value && !county.isVisible);
+
+    const stateColumnClass = computed(() => useCascadeWidths.value ? "col-sm-4" : "col-sm-3");
+
+    const cityColumnClass = computed(() => {
+        if (county.isVisible) {
+            return "col-sm-3";
+        }
+
+        return useCascadeWidths.value ? "col-sm-5" : "col-sm-6";
+    });
+
+    async function getConfiguration(selectedCountry: string | undefined | null, selectedState?: string | null): Promise<void> {
         let loadingTimer: number | undefined;
+        const sequence = ++configurationSequence;
 
         if (countryOptions.value.length === 0) {
             isLoading.value = true;
@@ -254,11 +332,18 @@
 
         const options: AddressControlGetConfigurationOptionsBag = {
             useCountryAbbreviation: props.useCountryAbbreviation,
-            countryCode: selectedCountry
+            countryCode: selectedCountry,
+            stateCode: selectedState
         };
 
         // TODO: At some point, we should find some way to cache this
         const result = await post<AddressControlConfigurationBag>("/api/v2/Controls/AddressControlGetConfiguration", undefined, options);
+
+        if (sequence !== configurationSequence) {
+            // Llegó fuera de orden: manda una petición más reciente, que también apagará el loading.
+            clearTimeout(loadingTimer);
+            return;
+        }
 
         if (result.isSuccess && result.data) {
             const data = result.data;
@@ -296,8 +381,25 @@
             stateOptions.value = data.states ?? [];
             hasStateList.value = data.hasStateList;
 
+            // [VidaReal] Municipios del departamento seleccionado. cityOptions se deriva de esto.
+            fetchedCities.value = data.cities ?? [];
+            hasCityList.value = data.hasCityList ?? false;
+            supportsCityList.value = data.supportsCityList ?? false;
+
+            if (supportsCityList.value) {
+                // Igual que en el municipio: darle nombre a la opción vacía del departamento.
+                stateOptions.value = [{ value: "", text: state.label }, ...stateOptions.value];
+            }
+
             const countryValue = (data.selectedCountry || data.defaultCountry) ?? "";
-            const stateValue = data.defaultState ?? "";
+
+            // Solo se propone el departamento por defecto si existe en la lista: asignar uno que el
+            // DropDownList no reconoce provoca que lo normalice y lo vuelva a emitir, lo que con el
+            // watch de abajo se convierte en un ciclo de peticiones.
+            const defaultState = data.defaultState ?? "";
+            const stateValue = !hasStateList.value || stateOptions.value.some(o => o.value === defaultState)
+                ? defaultState
+                : "";
 
             // If we don't have a country set yet, and we have a good countryValue, set to that
             if (!internalValue.country && countryValue && !props.omitDefaultValues) {
@@ -319,11 +421,30 @@
 
     watch(() => internalValue.country, (currentVal, oldVal) => {
         if (currentVal != oldVal) {
-            getConfiguration(currentVal);
+            getConfiguration(currentVal, internalValue.state);
         }
     }, { deep: true });
 
+    // [VidaReal] Al cambiar el departamento hay que recargar la lista de municipios. Se limita a los
+    // países con cascada para no agregar un roundtrip (ni el remonte del formulario que hace Loading)
+    // a los países donde el municipio es texto libre.
+    watch(() => internalValue.state, async (currentVal, oldVal) => {
+        if (currentVal === oldVal || !supportsCityList.value) {
+            return;
+        }
+
+        // Un departamento previo indica que el cambio lo hizo el usuario; en la hidratación inicial
+        // (oldVal vacío) no se toca el municipio para no borrar el dato que ya venía guardado.
+        const isUserChange = !!oldVal;
+
+        await getConfiguration(internalValue.country, currentVal);
+
+        if (isUserChange && internalValue.city && !fetchedCities.value.some(c => c.value === internalValue.city)) {
+            internalValue.city = "";
+        }
+    });
+
     // Initialize with configuration from the server
-    getConfiguration(props.modelValue.country);
+    getConfiguration(props.modelValue.country, props.modelValue.state);
 
 </script>

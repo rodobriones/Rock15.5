@@ -39,6 +39,21 @@ namespace com.vidareal.Translator.Rest
         private static int _newThisWindow;
         private static DateTime _windowStartUtc = DateTime.UtcNow;
 
+        /// <summary>Uso actual del throttle (para el panel de admin).</summary>
+        public static void GetThrottleStatus( out int used, out int limit )
+        {
+            lock ( ThrottleLock )
+            {
+                if ( ( DateTime.UtcNow - _windowStartUtc ).TotalHours >= 1 )
+                {
+                    _windowStartUtc = DateTime.UtcNow;
+                    _newThisWindow = 0;
+                }
+                used = _newThisWindow;
+                limit = MaxNewPerHour;
+            }
+        }
+
         // ¿Hay cupo en la ventana actual? (resetea la ventana si paso 1h).
         private static bool ThrottleAllowsNew()
         {
@@ -78,11 +93,11 @@ namespace com.vidareal.Translator.Rest
         #region Config (block attributes del bloque de settings)
 
         // La config NO vive en Global Attributes, sino como block attributes del
-        // bloque de settings (pagina bajo Installed Plugins). Lo encontramos por
-        // su Guid fijo (creado por la migracion 002) y leemos sus atributos.
-        // Asi la config esta encapsulada en la pagina del plugin, no en la lista
-        // global, y se edita ahi (toggle Habilitado, gear de Configuracion).
-        public static readonly Guid SettingsBlockGuid = new Guid( "9A1B2C3D-4E5F-4A6B-8C7D-1E2F3A4B5C6D" );
+        // bloque DASHBOARD Obsidian (pagina bajo Installed Plugins). Lo
+        // encontramos por su Guid fijo (creado por la migracion 004, que copio
+        // los valores del bloque WebForms viejo) y leemos sus atributos. La
+        // config se edita desde el propio dashboard.
+        public static readonly Guid SettingsBlockGuid = new Guid( "B8C9D0E1-2F3A-4B4C-9D5E-7F8A9B0C1D2E" );
 
         public const string AttrEnabled = "Enabled";
         public const string AttrTargetLanguage = "TargetLanguage";
@@ -352,6 +367,15 @@ namespace com.vidareal.Translator.Rest
                 BumpCacheEpoch( rockContext ); // los navegadores limpian su localStorage al ver el epoch nuevo
                 return Ok( new { deleted } );
             }
+        }
+
+        /// <summary>
+        /// Provider ya configurado desde los block attributes, o null si falta
+        /// config. Publico para que el panel de admin pruebe la conexion.
+        /// </summary>
+        public static ITranslationProvider GetConfiguredProvider()
+        {
+            return GetProvider();
         }
 
         private static ITranslationProvider GetProvider()

@@ -49,4 +49,15 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Web" />
   </ItemGroup>
+
+  <!-- El dashboard Obsidian se sirve desde la carpeta del plugin (distribuible).
+       El fuente vive en Rock.JavaScript.Obsidian.Blocks\src\Translator y se
+       compila con npm run build-fast; este paso copia el compilado a la carpeta
+       del plugin si existe (si aun no se ha corrido el build de Obsidian, no
+       falla el build de C#). -->
+  <Target Name="CopyObsidianDashboard" AfterTargets="Build"
+          Condition="Exists('..\..\RockWeb\Obsidian\Blocks\Translator\translatorDashboard.obs.js')">
+    <Copy SourceFiles="..\..\RockWeb\Obsidian\Blocks\Translator\translatorDashboard.obs.js"
+          DestinationFolder="..\..\RockWeb\Plugins\com_vidareal\Translator" />
+  </Target>
 </Project>

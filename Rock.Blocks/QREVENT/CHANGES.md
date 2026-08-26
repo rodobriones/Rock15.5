@@ -139,6 +139,41 @@ El modulo cubre dos casos de uso distintos:
 **Workflow de confirmacion (opcional):**
 - Atributos enviados al workflow: `Persona`, `CodigoReserva`, `ReservationId`, `EsReemplazo`, `Campus`, `Horario`, `Fecha`, `Cantidad`.
 
+**Merge fields en la plantilla del correo (2026-08-24):**
+
+`Entity` **no existe** como merge field en la accion *Send Email* de un workflow.
+`ActionComponent.GetMergeFields()` (Rock/Workflow/ActionComponent.cs:362) solo agrega
+`Action`, `Activity` y `Workflow` sobre los comunes (`Global`, `CurrentPerson`, `Date`,
+`Campuses`). Por eso `{{ Entity.NickName }}` y `{{ Entity.Email }}` renderizaban vacio
+mientras los `{{ Workflow | Attribute:'...' }}` si funcionaban.
+
+Aunque el bloque pasa la persona como entidad (`LaunchWorkflowTransaction<Person>` la
+resuelve en `GetEntity()` y la entrega a `WorkflowService.Process`), esa entidad se usa
+para procesar el workflow: nunca se expone en Lava con el nombre `Entity`.
+
+La forma correcta es leer el atributo `Persona` que el bloque ya puebla:
+
+```liquid
+{% assign persona = Workflow | Attribute:'Persona','Object' %}
+{{ persona.NickName }}
+{{ persona.Email }}
+```
+
+`PersonFieldType` implementa `IEntityFieldType`, asi que el qualifier `'Object'`
+devuelve el `Person` completo (Rock/Lava/Filters/LavaFilters.cs:2203-2217 ->
+Rock/Field/Types/PersonFieldType.cs:193-203). Atajo para un solo campo:
+`{{ Workflow | Attribute:'Persona','NickName' }}`.
+
+`{{ Person.NickName }}` tambien funcionaria, pero **solo** si el *Send To Email
+Addresses* de la accion apunta al atributo `Persona`: en ese caso
+`SendEmail.cs:447-450` inyecta `{ "Person", person }` en el diccionario de ese
+destinatario. Si alguien cambia el destinatario a un correo literal o a un grupo, el
+saludo se rompe en silencio. Preferir `Workflow | Attribute`.
+
+**Ojo:** Lava resuelve el atributo por su **Key**, no por el nombre visible. Si la Key
+quedo como `persona` en minuscula o `Persona_1`, el filtro devuelve vacio y reaparece
+el mismo sintoma.
+
 ---
 
 ## Arquitectura de escaneo QR
@@ -275,7 +310,111 @@ Este script aplica restricciones de integridad a las tablas del sistema de reser
 **Stored Procedures que define/actualiza:**
 - `dbo.sp_SundayServiceHoldUpsert`: Crea o actualiza hold temporal con logica de concurrencia (`UPDLOCK`, `HOLDLOCK`, `ROWLOCK`). Cap. max de hold: 3 minutos. Cap. max de personas: 8.
 - `dbo.sp_SundayServiceReservationCancel`: Cancela una reserva activa y actualiza `ReservedCount` del slot.
-- `dbo.sp_SundayService_ConfirmFromHold`: Stub deshabilitado. Usar `sp_SundayServiceReservationConfirm` en su lugar.
+- `dbo.sp_SundayServiceCheckIn`: Marca la asistencia a partir del codigo QR, respetando el orden de locks Slot -> Reservation. Agregado en v3 (2026-08-24), ver abajo.
+- `dbo.sp_SundayService_ConfirmFromHold`: Stub deshabilitado. Usar `sp_SundayServiceReservationConfirm` en su lugar. **No lo llama nadie en el repo.**
+
+---
+
+## Fix de deadlock en el check-in (2026-08-24)
+
+**Sintoma:** durante el pico de reservaciones, el escaner de la puerta devolvia
+*"Error al procesar el codigo"* de forma intermitente.
+
+**Causa:** el `UPDATE` del check-in vivia suelto dentro de `ProcessScan` y era el
+unico acceso a `SundayServiceReservation` que **no tomaba primero el lock del Slot**,
+rompiendo la regla que el propio hardening habia fijado para el resto del modulo.
+El UPDATE entra por `PK_SundayServiceReservation` y, como cambia `Status`, necesita
+`X` en `IX_SundayServiceReservation_SlotPersonStatus`. Al mismo tiempo
+`sp_SundayServiceReservationConfirm` entra por ese indice con `UPDLOCK, HOLDLOCK` y
+necesita `S` en la clustered. Orden inverso -> ciclo -> deadlock, y SQL Server elige
+**siempre** al escaner como victima (es el que menos trabajo de rollback tiene).
+La excepcion caia en el `catch` generico, sin reintento.
+
+**Fix:** el check-in se movio a `dbo.sp_SundayServiceCheckIn`, que sigue el mismo
+patron que `sp_SundayServiceReservationCancel`: localizar sin lock para conocer el
+`SlotId`, lockear el Slot, y recien entonces revalidar la reserva por PK. La logica
+de estados (ya-checkeado / cancelada / no-show / otro horario) paso de C# al SP, que
+la resuelve bajo lock.
+
+**Medido** (replica fiel de la BD, SPs identicos por hash, concurrencia real):
+
+| | Check-ins OK | Deadlocks | Duracion |
+|---|---|---|---|
+| UPDATE anterior | 33 / 120 | 87 | 29.8 s |
+| `sp_SundayServiceCheckIn` | **120 / 120** | **0** | **5.6 s** |
+
+Aparecia ya con **5 usuarios confirmando en paralelo** (13 deadlocks de 20 escaneos):
+lo que importa es la coincidencia temporal, no el volumen. Ninguna de las dos
+variantes produjo sobreventa ni drift de contadores: era un problema de
+disponibilidad del escaner, no de integridad.
+
+**ResultCodes del SP:** `1` registrado, `0` ya tenia check-in (idempotente), `-1`
+codigo inexistente, `-2` la reserva es de otro horario, `-3` cancelada o no-show,
+`-99` error. En el bloque, `-1/-2/-3` colapsan al mismo mensaje generico para no
+revelar el motivo, igual que antes.
+
+**Nota para futuros SP de este modulo:** requieren `SET QUOTED_IDENTIFIER ON` porque
+`SundayServiceReservation` tiene un indice filtrado; sin eso el `UPDATE` falla con
+Msg 1934. `sqlcmd` lo pone `OFF` por defecto.
+
+**Limitacion conocida:** el SP hace `ROLLBACK` en sus salidas tempranas, asi que no
+se puede invocar con `INSERT ... EXEC` (Msg 3915). Se llama con `SqlQuery`/
+`ExecuteReader`, igual que el resto de los SP del modulo.
+
+---
+
+## Prueba de carga y concurrencia (2026-08-24)
+
+Ejecutada contra `QREVENT_LoadTest`, replica fiel de la BD (mismos indices y
+constraints; los 5 SP verificados **identicos por hash SHA-256**). 14 escenarios con
+concurrencia real, hasta **600 hilos verdaderamente simultaneos**.
+
+**Conclusion: no existe sobreventa.**
+
+| Escenario | Carga | Resultado |
+|---|---|---|
+| Estampida por el ultimo lugar | 300 personas, capacidad 50 | 50 exactas |
+| Cantidades variables 1-8 | 250 personas, capacidad 100 | 100 lugares exactos |
+| Cambio de horario concurrente | 120 migran a un slot de 60 | 60 exactas, sin drift en origen |
+| Presion extrema | 600 simultaneos, capacidad 100 | 100 exactas, 0 errores |
+| Doble clic | 40 personas x 12 clics | 40 reservas activas |
+| Holds expirados + cleanup en paralelo | 150 compiten por 40 liberados | 40 exactas |
+| Token de hold ajeno | atacante usa token de otro | rechazado (`rc=-1`) |
+
+En ningun escenario hubo drift entre `ReservedCount` y la suma real, personas con dos
+reservas activas, ni codigos duplicados. El diseno de Slot como punto unico de
+serializacion (`UPDLOCK, HOLDLOCK` + `CK_SundayServiceSlot_Counts`) aguanta.
+
+El unico fallo encontrado fue de disponibilidad, no de integridad: el deadlock del
+check-in documentado arriba.
+
+### Hallazgos abiertos (pendientes de decision)
+
+**Correos de confirmacion duplicados.** `SundayServiceRegistration.cs:354-369` encola
+el workflow en **cada** `ConfirmRc = 1`. Un doble clic genera varias confirmaciones
+validas: medido con 30 personas x 10 clics dio 60 `ConfirmRc = 1`, o sea ~2 correos por
+persona, mas 30 filas `Status = 2` de descarte. Solo queda 1 reserva activa por
+persona (el indice unico filtrado lo garantiza), asi que no afecta el aforo.
+
+**Cancelar una reserva ya escaneada.** El backend la protege bien:
+`sp_SundayServiceReservationCancel` valida `IF @Status <> 1`, devuelve `0` y hace
+`ROLLBACK`, dejando `Status = 3`, `CheckedInDateTime` y `ReservedCount` intactos: la
+asistencia no se pierde. Dos consecuencias verificadas:
+
+1. El `.obs` (`SundayServiceRegistration.obs`, `confirmCancelReservation`) al recibir
+   `resultCode != 1` llama a `refreshActive()`; como `GetActiveReservationInternal`
+   filtra `Status = 1`, la reserva ya no aparece y entra en la rama "tratamos la
+   operacion como exitosa", mostrando el toast verde **"Reserva cancelada."**. Nada se
+   cancelo. El fallback existe para evitar falsos errores, pero aqui acierta por el
+   motivo equivocado.
+2. Tras el check-in la app deja al usuario "libre", y `sp_SundayServiceReservationConfirm`
+   solo reemplaza reservas con `Status = 1` (paso 6). Puede reservar otro horario y
+   quedarse con **dos cupos**: los que ya uso mas los nuevos. Los contadores quedan
+   exactos y el aforo de cada slot se respeta, asi que no es sobreventa. Si un asistente
+   del primer servicio puede reservar el segundo del mismo dia es una decision de
+   negocio, no un defecto tecnico.
+
+Los scripts de la prueba quedaron fuera del repo (scratchpad de la sesion).
 
 ---
 

@@ -1035,6 +1035,7 @@ namespace Rock.Blocks.Dar
                 ["NitName"] = ( bag.nitName ?? string.Empty ).Trim(),
                 ["NitAddress"] = ( bag.nitAddress ?? string.Empty ).Trim(),
                 ["DonorEmail"] = ( bag.donorEmail ?? string.Empty ).Trim(),
+                ["Note"] = ( bag.note ?? string.Empty ).Trim(),
                 ["RockTransactionId"] = transaction.Id.ToString(),
                 ["ExternalId"] = $"ROCK-{transaction.Id}",
                 ["ReferenceNumber"] = chargeResult.referenceNumber ?? string.Empty,

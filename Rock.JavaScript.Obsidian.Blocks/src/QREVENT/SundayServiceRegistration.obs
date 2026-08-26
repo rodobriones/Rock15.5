@@ -67,6 +67,7 @@
                                     <div class="ssQrWrap">
                                         <div class="ssQrImgClip">
                                             <img
+                                                ref="qrImgEl"
                                                 class="ssQrImg"
                                                 :src="qrUrl(activeReservation.reservationCode)"
                                                 alt="QR Reserva" />
@@ -78,8 +79,8 @@
                                     </div>
 
                                     <div class="ssActions" style="flex-direction: column; align-items: center; display: flex; gap: 14px;">
-                                        <RockButton btnType="primary" @click="downloadImage" :disabled="busy" style="width: 100%;">
-                                            Descargar
+                                        <RockButton btnType="primary" @click="downloadImage" :disabled="busy || downloadBusy" style="width: 100%;">
+                                            {{ downloadBusy ? "Generando..." : "Guardar imagen" }}
                                         </RockButton>
 
                                         <RockButton btnType="default" @click="startReplaceFlow" :disabled="busy" style="width: 100%;">
@@ -296,6 +297,29 @@
                             </div>
                         </div>
 
+                        <!-- Modal Guardar Imagen -->
+                        <!-- Fallback para WebView de iOS: ahi <a download>, data: y blob: no
+                             descargan nada. Mostrar la imagen y dejar que el usuario la
+                             mantenga presionada SI funciona en WKWebView. -->
+                        <div v-if="showSaveModal" class="ssModalOverlay" @click.self="closeSaveModal">
+                            <div class="ssModalCard">
+                                <div class="ssModalTitle">Guardar tu QR</div>
+                                <div class="ssModalText">
+                                    Mantén presionada la imagen y elige <strong>Guardar en Fotos</strong>.
+                                </div>
+
+                                <div class="ssSaveImgWrap">
+                                    <img :src="savedImageUrl" class="ssSaveImg" alt="Comprobante de reserva" />
+                                </div>
+
+                                <div class="ssModalActions" style="grid-template-columns: 1fr;">
+                                    <RockButton btnType="primary" @click="closeSaveModal">
+                                        Listo
+                                    </RockButton>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Modal Tiempo Expirado -->
                         <div v-if="showExpiredModal" class="ssModalOverlay" @click.self="closeExpiredModal">
                             <div class="ssModalCard">
@@ -427,6 +451,12 @@ let holdInFlightSeq = 0;
 const showCancelModal = ref<boolean>(false);
 const showExpiredModal = ref<boolean>(false);
 
+// Guardado del comprobante con QR
+const qrImgEl = ref<HTMLImageElement | null>(null);
+const downloadBusy = ref<boolean>(false);
+const showSaveModal = ref<boolean>(false);
+const savedImageUrl = ref<string>("");
+
 type ToastKind = "success" | "danger" | "info";
 const toast = ref<{ show: boolean; kind: ToastKind; message: string }>({
     show: false,
@@ -473,98 +503,229 @@ function closeExpiredModal() {
 }
 
 function qrUrl(code: string): string {
-    const dim = 240;
-    return `/GetQRCode.ashx?data=${encodeURIComponent(code)}&size=${dim}`;
+    // Sin parametro 'size': GetQRCode.ashx no lo lee (solo data, outputType,
+    // foreground, background, pixelsPerModule). Una sola URL para el <img> y para
+    // el canvas, asi el guardado reusa la imagen ya cacheada en vez de re-pedirla.
+    return `/GetQRCode.ashx?data=${encodeURIComponent(code)}`;
 }
 
-function downloadImage() {
-    if (!activeReservation.value) return;
+/**
+ * Detecta iOS, incluido iPadOS 13+ que se reporta como Macintosh con touch.
+ */
+function isIOS(): boolean {
+    const ua = navigator.userAgent || "";
+    const isTouchMac = /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1;
+    return /iPad|iPhone|iPod/.test(ua) || isTouchMac;
+}
+
+/**
+ * Dibuja el comprobante en un canvas y devuelve el data URL del JPEG.
+ *
+ * Es deliberadamente SINCRONO: usa el <img> del QR que ya esta renderizado en
+ * pantalla en vez de volver a pedir la imagen por red. Dos razones:
+ *  1. navigator.share() exige user activation. Un await de red antes de llamarlo
+ *     hace que Safari lo rechace con NotAllowedError.
+ *  2. Evita un round-trip inutil: GetQRCode.ashx no manda Cache-Control.
+ */
+function buildReservationDataUrl(qrImg: HTMLImageElement): string | null {
+    if (!activeReservation.value) {
+        return null;
+    }
 
     const res = activeReservation.value;
     const qrSize = 280;
-    const qrSrc = `/GetQRCode.ashx?data=${encodeURIComponent(res.reservationCode)}&size=${qrSize}`;
+    const canvasWidth = 420;
+    const canvasHeight = 580;
+    const padding = 30;
 
-    // Cargar imagen QR primero
-    const qrImg = new Image();
-    qrImg.crossOrigin = "anonymous";
-    
-    qrImg.onload = () => {
-        // Dimensiones del canvas
-        const canvasWidth = 420;
-        const canvasHeight = 580;
-        const padding = 30;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
 
-        const canvas = document.createElement("canvas");
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        return null;
+    }
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("VidaReal.tv", canvasWidth / 2, 45);
+
+    const infoY = 80;
+    const colWidth = (canvasWidth - padding * 2) / 2;
+
+    const drawInfo = (label: string, value: string, x: number, y: number): void => {
+        ctx.fillStyle = "#6B7280";
+        ctx.font = "600 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(label.toUpperCase(), x, y);
+
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+        ctx.fillText(value, x, y + 18);
+    };
+
+    drawInfo("Campus", res.campusName, padding, infoY);
+    drawInfo("Dia", res.occurrenceDateText, padding + colWidth, infoY);
+    drawInfo("Horario", res.scheduleName, padding, infoY + 50);
+    drawInfo("Cantidad", String(res.quantity), padding + colWidth, infoY + 50);
+
+    const qrX = (canvasWidth - qrSize) / 2;
+    const qrY = 195;
+
+    ctx.strokeStyle = "#E5E7EB";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8);
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    ctx.fillStyle = "#9CA3AF";
+    ctx.font = "12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Presenta este codigo QR al ingresar", canvasWidth / 2, qrY + qrSize + 35);
+
+    // toDataURL puede lanzar SecurityError si el canvas quedo tainted, o devolver
+    // "data:," cuando iOS se queda sin memoria de canvas. El llamador valida.
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    if (!dataUrl || dataUrl.length < 100) {
+        return null;
+    }
+
+    return dataUrl;
+}
+
+function dataUrlToFile(dataUrl: string, fileName: string): File | null {
+    try {
+        const comma = dataUrl.indexOf(",");
+        if (comma < 0) {
+            return null;
+        }
+
+        const binary = atob(dataUrl.slice(comma + 1));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        return new File([bytes], fileName, { type: "image/jpeg" });
+    }
+    catch {
+        return null;
+    }
+}
+
+function closeSaveModal(): void {
+    showSaveModal.value = false;
+    savedImageUrl.value = "";
+}
+
+/**
+ * Guarda el comprobante con QR.
+ *
+ * La version anterior hacia link.href = canvas.toDataURL(); link.click(), que en
+ * iOS no descarga nada: Safari tiene soporte pobre del atributo download y
+ * bloquea la navegacion top-level a data: URIs, asi que el WebView se quedaba
+ * "pensando" sin descargar ni avisar. En WKWebView es peor todavia, porque no hay
+ * gestor de descargas: ni download, ni blob:, ni data: producen un archivo.
+ *
+ * Estrategia actual:
+ *  1. Web Share API con el archivo, que abre la hoja nativa con "Guardar en Fotos".
+ *  2. Si no esta disponible (comun en WebView), modal con la imagen para mantener
+ *     presionado y guardar. Eso si funciona en WKWebView.
+ *  3. En Android y escritorio, descarga normal con blob URL y <a download>
+ *     agregado al DOM (desconectado, varios navegadores ignoran el click).
+ */
+async function downloadImage(): Promise<void> {
+    if (!activeReservation.value || downloadBusy.value) {
+        return;
+    }
+
+    downloadBusy.value = true;
+
+    try {
+        const res = activeReservation.value;
+        const fileName = `reserva-${res.reservationCode}.jpg`;
+        const imgEl = qrImgEl.value;
+
+        // El QR debe estar ya cargado en pantalla. Si no lo esta no forzamos una
+        // carga por red aqui: perderiamos la user activation que necesita share().
+        if (!imgEl || !imgEl.complete || imgEl.naturalWidth === 0) {
+            showToast("danger", "El codigo QR aun se esta cargando. Intenta de nuevo.");
+            return;
+        }
+
+        let dataUrl: string | null = null;
+        try {
+            dataUrl = buildReservationDataUrl(imgEl);
+        }
+        catch {
+            dataUrl = null;
+        }
+
+        if (!dataUrl) {
             showToast("danger", "No se pudo generar la imagen.");
             return;
         }
 
-        // Fondo blanco
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        const file = dataUrlToFile(dataUrl, fileName);
 
-        // Header
-        ctx.fillStyle = "#111827";
-        ctx.font = "bold 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("VidaReal.tv", canvasWidth / 2, 45);
-
-        // Info grid
-        const infoY = 80;
-        const labelStyle = "#6B7280";
-        const valueStyle = "#111827";
-        const colWidth = (canvasWidth - padding * 2) / 2;
-
-        const drawInfo = (label: string, value: string, x: number, y: number) => {
-            ctx.fillStyle = labelStyle;
-            ctx.font = "600 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-            ctx.textAlign = "left";
-            ctx.fillText(label.toUpperCase(), x, y);
-            
-            ctx.fillStyle = valueStyle;
-            ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-            ctx.fillText(value, x, y + 18);
+        // 1) Web Share API: la unica via que guarda directo en Fotos en iOS.
+        const nav = navigator as Navigator & {
+            canShare?: (data: unknown) => boolean;
+            share?: (data: unknown) => Promise<void>;
         };
 
-        drawInfo("Campus", res.campusName, padding, infoY);
-        drawInfo("Día", res.occurrenceDateText, padding + colWidth, infoY);
-        drawInfo("Horario", res.scheduleName, padding, infoY + 50);
-        drawInfo("Cantidad", String(res.quantity), padding + colWidth, infoY + 50);
+        if (file
+            && typeof nav.share === "function"
+            && typeof nav.canShare === "function"
+            && nav.canShare({ files: [file] })) {
+            try {
+                await nav.share({ files: [file], title: "Mi reserva" });
+                return; // la hoja del sistema ya dio feedback
+            }
+            catch (err) {
+                // El usuario cerro la hoja: no es un error que reportar.
+                if ((err as DOMException)?.name === "AbortError") {
+                    return;
+                }
+                // Cualquier otra falla cae al siguiente metodo.
+            }
+        }
 
-        // QR centrado
-        const qrX = (canvasWidth - qrSize) / 2;
-        const qrY = 195;
-        
-        // Borde del QR
-        ctx.strokeStyle = "#E5E7EB";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8);
-        
-        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+        // 2) iOS o WebView sin Web Share: mostrar para mantener presionado.
+        if (isIOS()) {
+            savedImageUrl.value = dataUrl;
+            showSaveModal.value = true;
+            return;
+        }
 
-        // Footer
-        ctx.fillStyle = "#9CA3AF";
-        ctx.font = "12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-        ctx.fillText("Presenta este código QR al ingresar", canvasWidth / 2, qrY + qrSize + 35);
-
-        // Descargar
-        const link = document.createElement("a");
-        link.download = `reserva-${res.reservationCode}.jpg`;
-        link.href = canvas.toDataURL("image/jpeg", 0.95);
-        link.click();
-
-        showToast("success", "Imagen descargada");
-    };
-
-    qrImg.onerror = () => {
-        showToast("danger", "No se pudo cargar el código QR.");
-    };
-
-    qrImg.src = qrSrc;
+        // 3) Android y escritorio: descarga real con blob URL.
+        const objectUrl = file ? URL.createObjectURL(file) : dataUrl;
+        try {
+            const link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = fileName;
+            link.rel = "noopener";
+            document.body.appendChild(link); // debe estar en el DOM para que click() funcione
+            link.click();
+            document.body.removeChild(link);
+            showToast("success", "Imagen descargada");
+        }
+        finally {
+            if (file) {
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+            }
+        }
+    }
+    catch {
+        showToast("danger", "No se pudo guardar la imagen.");
+    }
+    finally {
+        downloadBusy.value = false;
+    }
 }
 
 const nextOccurrenceDateText = computed<string>(() => {
@@ -1858,6 +2019,24 @@ onBeforeUnmount(() => {
     font-weight: 900;
     color: var(--vr-text);
     text-align: right;
+}
+
+.ssSaveImgWrap {
+    display: flex;
+    justify-content: center;
+    margin: 14px 0 4px;
+}
+
+.ssSaveImg {
+    max-width: 100%;
+    width: 260px;
+    height: auto;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    /* Permite el menu contextual de iOS para "Guardar en Fotos" */
+    -webkit-touch-callout: default;
+    -webkit-user-select: auto;
+    user-select: auto;
 }
 
 .ssModalActions {

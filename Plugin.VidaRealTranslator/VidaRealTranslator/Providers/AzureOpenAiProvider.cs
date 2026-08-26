@@ -24,6 +24,10 @@ namespace com.vidareal.Translator.Providers
 
         public string Name => "AzureOpenAI";
 
+        // Ultimo motivo de fallo HTTP/parseo (para TestConnection del panel admin).
+        // Por instancia: el provider se construye por request, no hay carrera real.
+        private string _lastError;
+
         public AzureOpenAiProvider( string endpoint, string deployment, string apiKey, string apiVersion )
         {
             _endpoint = ( endpoint ?? string.Empty ).TrimEnd( '/' );
@@ -80,6 +84,20 @@ namespace com.vidareal.Translator.Providers
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Prueba end-to-end: traduce 1 string real. null = OK; si no, el motivo.
+        /// </summary>
+        public string TestConnection( string targetLanguage )
+        {
+            _lastError = null;
+            var probe = TranslateChunk( new List<string> { "Welcome" }, targetLanguage );
+            if ( probe.Count == 1 )
+            {
+                return null;
+            }
+            return _lastError ?? "El modelo respondio, pero con un JSON incompleto o invalido (¿el deployment soporta response_format json_object?).";
         }
 
         // Traduce UN chunk. Devuelve vacio si la respuesta no es completa/valida
@@ -149,8 +167,9 @@ namespace com.vidareal.Translator.Providers
                     }
                 }
             }
-            catch ( Exception )
+            catch ( Exception ex )
             {
+                _lastError = "Respuesta del modelo no parseable como JSON: " + ex.Message;
                 return new Dictionary<int, string>(); // respuesta no-JSON/basura -> dejar originales
             }
 
@@ -217,6 +236,7 @@ namespace com.vidareal.Translator.Providers
                             // 429/5xx: reintenta una vez; otros (401/403/404...): abandona.
                             if ( code != 429 && code < 500 )
                             {
+                                _lastError = lastFailure;
                                 LogError( "Azure OpenAI rechazo la llamada (no reintentable). " + lastFailure );
                                 return null;
                             }
@@ -237,6 +257,7 @@ namespace com.vidareal.Translator.Providers
                 }
             }
 
+            _lastError = lastFailure;
             LogError( "Azure OpenAI fallo tras reintento. " + lastFailure, lastEx );
             return null;
         }

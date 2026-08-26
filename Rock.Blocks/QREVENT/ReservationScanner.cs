@@ -146,84 +146,58 @@ namespace Rock.Blocks.QREVENT
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    var sql = @"
-SELECT TOP 1
-    r.Id,
-    r.SlotId,
-    r.PersonId,
-    CAST(r.Quantity AS INT) AS Quantity,
-    CAST(r.Status AS INT) AS Status,
-    r.ReservationCode,
-    p.NickName,
-    p.LastName
-FROM dbo.SundayServiceReservation r
-INNER JOIN Person p ON p.Id = r.PersonId
-WHERE r.ReservationCode = @ReservationCode
-";
-
-                    var reservation = rockContext.Database.SqlQuery<ReservationInfo>(
-                        sql,
-                        new SqlParameter( "@ReservationCode", reservationCode )
-                    ).FirstOrDefault();
-
-                    if ( reservation == null )
-                    {
-                        RegisterInvalidScanAttempt();
-                        return ActionOk( BuildGenericDeniedResult() );
-                    }
-
-                    string personName = BuildPersonName( reservation.NickName, reservation.LastName );
-
-                    if ( reservation.SlotId != activeSlotResult.Slot.slotId )
-                    {
-                        RegisterInvalidScanAttempt();
-                        return ActionOk( BuildGenericDeniedResult() );
-                    }
-
-                    switch ( reservation.Status )
-                    {
-                        case 2:
-                        case 4:
-                            RegisterInvalidScanAttempt();
-                            return ActionOk( BuildGenericDeniedResult() );
-
-                        case 3:
-                            return ActionOk( BuildAlreadyProcessedResult() );
-                    }
-
-                    if ( reservation.Status != 1 )
-                    {
-                        RegisterInvalidScanAttempt();
-                        return ActionOk( BuildGenericDeniedResult() );
-                    }
-
-                    int? currentPersonAliasId = ( int? ) new PersonAliasService( rockContext )
+                    var currentPersonAliasId = ( int? ) new PersonAliasService( rockContext )
                         .GetPrimaryAliasId( RequestContext.CurrentPerson.Id );
 
-                    var updateSql = @"
-UPDATE dbo.SundayServiceReservation
-SET Status = 3,
-    CheckedInDateTime = GETDATE(),
-    CheckedInByPersonAliasId = @PersonAliasId,
-    ModifiedDateTime = GETDATE()
-WHERE Id = @ReservationId
-  AND Status = 1
-";
+                    // El check-in vive en sp_SundayServiceCheckIn para respetar el orden de
+                    // locks del modulo (Slot -> Reservation). Cuando el UPDATE se hacia aqui
+                    // suelto entraba por la PK y hacia deadlock contra
+                    // sp_SundayServiceReservationConfirm, que entra por IX_...SlotPersonStatus:
+                    // el escaner siempre era la victima. Ver encabezado v3 de
+                    // Dev Tools/Sql/QREVENT_SundayService_Hardening.sql.
+                    var sql = @"
+EXEC dbo.sp_SundayServiceCheckIn
+    @ReservationCode,
+    @ActiveSlotId,
+    @ScannerAliasId";
 
-                    int rowsAffected = rockContext.Database.ExecuteSqlCommand(
-                        updateSql,
-                        new SqlParameter( "@PersonAliasId", ( object ) currentPersonAliasId ?? DBNull.Value ),
-                        new SqlParameter( "@ReservationId", reservation.Id )
-                    );
+                    var pCode = new SqlParameter( "@ReservationCode", reservationCode );
+                    var pSlot = new SqlParameter( "@ActiveSlotId", activeSlotResult.Slot.slotId );
+                    var pScanner = new SqlParameter( "@ScannerAliasId", ( object ) currentPersonAliasId ?? DBNull.Value );
 
-                    if ( rowsAffected == 0 )
+                    var row = rockContext.Database
+                        .SqlQuery<CheckInResultRow>( sql, pCode, pSlot, pScanner )
+                        .FirstOrDefault();
+
+                    if ( row == null )
+                    {
+                        return ActionOk( BuildResult( "error", "", "Error al procesar el codigo.", null, 0 ) );
+                    }
+
+                    // 0 = ya tenia check-in. Respuesta legitima, no un intento invalido.
+                    if ( row.ResultCode == 0 )
                     {
                         return ActionOk( BuildAlreadyProcessedResult() );
                     }
 
+                    if ( row.ResultCode != 1 )
+                    {
+                        if ( row.ResultCode == -99 )
+                        {
+                            return ActionOk( BuildResult( "error", "", "Error al procesar el codigo.", null, 0 ) );
+                        }
+
+                        // -1 codigo inexistente, -2 no pertenece al slot activo,
+                        // -3 cancelada/no-show: mismo mensaje generico, sin revelar el motivo.
+                        RegisterInvalidScanAttempt();
+                        return ActionOk( BuildGenericDeniedResult() );
+                    }
+
                     ClearInvalidScanAttempts();
 
-                    return ActionOk( BuildResult( "checked_in", personName, "Asistencia marcada correctamente.", activeSlotResult.Slot.scheduleName, reservation.Quantity ) );
+                    var personName = GetReservationPersonName( rockContext, row.PersonId );
+
+                    return ActionOk( BuildResult( "checked_in", personName, "Asistencia marcada correctamente.", activeSlotResult.Slot.scheduleName, row.Quantity ?? 0 ) );
                 }
             }
             catch ( Exception ex )
@@ -544,6 +518,30 @@ ORDER BY slot.OccurrenceDate, sch.Id
             return list;
         }
 
+        /// <summary>
+        /// Resuelve el nombre a mostrar del reservante. Se consulta despues del check-in,
+        /// fuera de la transaccion del SP, para no alargar el lock del slot.
+        /// </summary>
+        private static string GetReservationPersonName( RockContext rockContext, int? personId )
+        {
+            if ( !personId.HasValue )
+            {
+                return string.Empty;
+            }
+
+            var person = new PersonService( rockContext ).Queryable()
+                .Where( p => p.Id == personId.Value )
+                .Select( p => new { p.NickName, p.LastName } )
+                .FirstOrDefault();
+
+            if ( person == null )
+            {
+                return string.Empty;
+            }
+
+            return BuildPersonName( person.NickName, person.LastName );
+        }
+
         private static string BuildPersonName( string nickName, string lastName )
         {
             return string.Format( "{0} {1}",
@@ -606,16 +604,16 @@ ORDER BY slot.OccurrenceDate, sch.Id
             public int? CheckInEndOffsetMinutes { get; set; }
         }
 
-        private class ReservationInfo
+        /// <summary>
+        /// Resultado de dbo.sp_SundayServiceCheckIn.
+        /// ResultCode: 1 registrado, 0 ya tenia check-in, -1 codigo inexistente,
+        /// -2 no pertenece al slot activo, -3 cancelada/no-show, -99 error.
+        /// </summary>
+        private class CheckInResultRow
         {
-            public int Id { get; set; }
-            public int SlotId { get; set; }
-            public int PersonId { get; set; }
-            public int Quantity { get; set; }
-            public int Status { get; set; }
-            public string ReservationCode { get; set; }
-            public string NickName { get; set; }
-            public string LastName { get; set; }
+            public int ResultCode { get; set; }
+            public int? Quantity { get; set; }
+            public int? PersonId { get; set; }
         }
 
         private class InvalidScanThrottleState

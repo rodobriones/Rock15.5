@@ -271,6 +271,13 @@ namespace Rock.SystemGuid
         public const string LOCATION_ADDRESS_STATE = "C3A20D2D-AEAF-4E2B-A1D9-2E072CEFC2BB";
 
         /// <summary>
+        /// [VidaReal] Guid for the Municipalities (Municipios) that can be tied to a Location's address.
+        /// Each defined value has a "Departamento" attribute pointing to a value of <see cref="LOCATION_ADDRESS_STATE"/>,
+        /// enabling the Departamento -> Municipio cascade in the address control.
+        /// </summary>
+        public const string LOCATION_ADDRESS_MUNICIPALITY = "85788452-69E0-45C5-B7A4-8134AFDC5975";
+
+        /// <summary>
         /// Guid for the types of named locations (such as Campus, Building, Room, etc)
         /// </summary>
         public const string LOCATION_TYPE = "3285DCEF-FAA4-43B9-9338-983F4A384ABA";

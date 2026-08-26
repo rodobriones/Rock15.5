@@ -51,6 +51,23 @@ namespace Rock.ViewModels.Rest.Controls
         /// Whether there are any states for the picker. If not, use a text field
         /// </summary>
         public bool HasStateList { get; set; }
+
+        /// <summary>
+        /// [VidaReal] List of cities/municipios for the city picker, filtered by the selected state (if any)
+        /// </summary>
+        public List<ListItemBag> Cities { get; set; }
+
+        /// <summary>
+        /// [VidaReal] Whether there are any cities/municipios for the picker. If not, use a text field
+        /// </summary>
+        public bool HasCityList { get; set; }
+
+        /// <summary>
+        /// [VidaReal] Whether the selected country uses the state -> city (Departamento -> Municipio) cascade.
+        /// Unlike <see cref="HasCityList"/> this does not depend on a state being selected, so the control
+        /// can keep the state field before the city field while the user is still choosing one.
+        /// </summary>
+        public bool SupportsCityList { get; set; }
         /// <summary>
         /// Currently selected country
         /// </summary>

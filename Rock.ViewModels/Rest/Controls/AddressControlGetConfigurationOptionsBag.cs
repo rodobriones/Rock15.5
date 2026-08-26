@@ -30,6 +30,12 @@ namespace Rock.ViewModels.Rest.Controls
         public string CountryCode { get; set; }
 
         /// <summary>
+        /// [VidaReal] The currently selected state/departamento, used to filter the city/municipio list
+        /// for countries that define municipalities (e.g. Guatemala).
+        /// </summary>
+        public string StateCode { get; set; }
+
+        /// <summary>
         /// Whether or not to use an abbreviated form of the country name in the list
         /// </summary>
         public bool UseCountryAbbreviation { get; set; } = false;

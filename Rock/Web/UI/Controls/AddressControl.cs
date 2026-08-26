@@ -153,6 +153,45 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// [VidaReal] Gets or sets a value indicating whether the Address control has a City (Municipio) drop-down list
+        /// filtered by the selected State (Departamento).
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if it uses a drop-down list; otherwise, <c>false</c>.
+        /// </value>
+        public bool HasCityList
+        {
+            get
+            {
+                return ViewState["HasCityList"] as bool? ?? false;
+            }
+
+            set
+            {
+                ViewState["HasCityList"] = value;
+            }
+        }
+
+        /// <summary>
+        /// [VidaReal] Gets or sets a value indicating whether the selected country uses the
+        /// State -> City (Departamento -> Municipio) cascade. Unlike <see cref="HasCityList"/> this does not
+        /// depend on a State being selected, so the State field can stay ahead of the City field
+        /// while the user is still choosing one.
+        /// </summary>
+        public bool SupportsCityList
+        {
+            get
+            {
+                return ViewState["SupportsCityList"] as bool? ?? false;
+            }
+
+            set
+            {
+                ViewState["SupportsCityList"] = value;
+            }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether an Address must be entered.
         /// </summary>
         /// <value>
@@ -301,6 +340,7 @@ namespace Rock.Web.UI.Controls
         private TextBox _tbStreet1;
         private TextBox _tbStreet2;
         private TextBox _tbCity;
+        private DropDownList _ddlCity;
         private TextBox _tbCounty;
         private TextBox _tbState;
         private DropDownList _ddlState;
@@ -372,13 +412,17 @@ namespace Rock.Web.UI.Controls
             get
             {
                 EnsureChildControls();
-                return _tbCity.Text;
+                return HasCityList ? _ddlCity.SelectedValue : _tbCity.Text;
             }
 
             set
             {
                 EnsureChildControls();
                 _tbCity.Text = value;
+                if ( HasCityList )
+                {
+                    ApplyCitySelection( value, preserveUnlistedValue: true );
+                }
             }
         }
 
@@ -637,6 +681,7 @@ namespace Rock.Web.UI.Controls
                 _tbStreet1.ValidationGroup = value;
                 _tbStreet2.ValidationGroup = value;
                 _tbCity.ValidationGroup = value;
+                _ddlCity.ValidationGroup = value;
                 _tbCounty.ValidationGroup = value;
                 _tbState.ValidationGroup = value;
                 _ddlState.ValidationGroup = value;
@@ -819,6 +864,16 @@ namespace Rock.Web.UI.Controls
             _tbCity.ID = "tbCity";
             _tbCity.CssClass = "form-control js-address-field js-city";
 
+            // [VidaReal] Drop-down de Municipio, visible cuando el departamento seleccionado tiene municipios definidos.
+            _ddlCity = new DropDownList();
+            Controls.Add( _ddlCity );
+            _ddlCity.ID = "ddlCity";
+            _ddlCity.CssClass = "form-control js-address-field js-city";
+
+            // Oculto hasta que BindCities confirme que hay municipios: un <select> vacío con clase
+            // "required" haría imposible satisfacer la validación de cliente.
+            _ddlCity.Visible = false;
+
             _tbCounty = new TextBox();
             Controls.Add( _tbCounty );
             _tbCounty.ID = "tbCounty";
@@ -834,6 +889,10 @@ namespace Rock.Web.UI.Controls
             _ddlState.ID = "ddlState";
             _ddlState.DataValueField = "Id";
             _ddlState.CssClass = "form-control js-address-field js-state";
+
+            // [VidaReal] Al cambiar el departamento hay que recargar la lista de municipios.
+            // AutoPostBack se habilita en BindCities solo en países con cascada.
+            _ddlState.SelectedIndexChanged += _ddlState_SelectedIndexChanged;
 
             _tbPostalCode = new TextBox();
             Controls.Add( _tbPostalCode );
@@ -985,6 +1044,7 @@ namespace Rock.Web.UI.Controls
                 _tbStreet1.CssClass += ( _AddressLine1Requirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
                 _tbStreet2.CssClass += ( _AddressLine2Requirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
                 _tbCity.CssClass += ( _CityRequirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
+                _ddlCity.CssClass += ( _CityRequirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
                 _tbCounty.CssClass += ( _LocalityRequirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
                 _tbState.CssClass += ( _StateRequirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
                 _ddlState.CssClass += ( _StateRequirement == DataEntryRequirementLevelSpecifier.Required ? " required" : string.Empty );
@@ -1005,6 +1065,7 @@ namespace Rock.Web.UI.Controls
 
             _tbStreet2.Attributes["field-name"] = "Address Line 2";
             _tbCity.Attributes["field-name"] = _CityLabel;
+            _ddlCity.Attributes["field-name"] = _CityLabel;
             _tbCounty.Attributes["field-name"] = _LocalityLabel;
             _tbState.Attributes["field-name"] = _StateLabel;
             _ddlState.Attributes["field-name"] = _StateLabel;
@@ -1084,38 +1145,80 @@ namespace Rock.Web.UI.Controls
 
             bool localityIsVisible = ( _LocalityRequirement != DataEntryRequirementLevelSpecifier.Unavailable );
 
+            // [VidaReal] Con cascada, el departamento necesita más ancho que el col-sm-3 nativo: los
+            // nombres son largos ("Quetzaltenango", "Suchitepéquez") y se truncaban tanto en el campo
+            // como en el desplegable. Se le presta una columna al municipio; los totales siguen sumando 12.
+            var useCascadeWidths = this.SupportsCityList && !localityIsVisible;
+            var stateColumnClass = useCascadeWidths ? " col-sm-4" : " col-sm-3";
+            var cityColumnClass = localityIsVisible
+                ? " col-sm-3"
+                : ( useCascadeWidths ? " col-sm-5" : " col-sm-6" );
+
             writer.AddAttribute( "class", "form-row" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
             // City or Town
-            if ( _CityRequirement != DataEntryRequirementLevelSpecifier.Unavailable )
+            Action renderCity = () =>
             {
-                writer.AddAttribute( "class", "form-group" + ( localityIsVisible ? " col-sm-3" : " col-sm-6" ) );
+                if ( _CityRequirement == DataEntryRequirementLevelSpecifier.Unavailable )
+                {
+                    return;
+                }
+
+                writer.AddAttribute( "class", "form-group" + cityColumnClass );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _tbCity.Attributes["autocomplete"] = ( localityIsVisible ? "address-level3" : "address-level2" );
+                _ddlCity.Attributes["autocomplete"] = ( localityIsVisible ? "address-level3" : "address-level2" );
                 _tbCity.RenderControl( writer );
+                _ddlCity.RenderControl( writer );
                 writer.RenderEndTag();  // div.form-group
-            }
-
-            // Locality or County
-            if ( _LocalityRequirement != DataEntryRequirementLevelSpecifier.Unavailable )
-            {
-                writer.AddAttribute( "class", "form-group col-sm-3" );
-                writer.RenderBeginTag( HtmlTextWriterTag.Div );
-                _tbCounty.Attributes["autocomplete"] = "address-level2";
-                _tbCounty.RenderControl( writer );
-                writer.RenderEndTag();  // div.form-group
-            }
+            };
 
             // State or Region
-            if ( _StateRequirement != DataEntryRequirementLevelSpecifier.Unavailable )
+            Action renderState = () =>
             {
-                writer.AddAttribute( "class", "form-group col-sm-3" );
+                if ( _StateRequirement == DataEntryRequirementLevelSpecifier.Unavailable )
+                {
+                    return;
+                }
+
+                writer.AddAttribute( "class", "form-group" + stateColumnClass );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _tbState.Attributes["autocomplete"] = "address-level1";
                 _tbState.RenderControl( writer );
                 _ddlState.RenderControl( writer );
                 writer.RenderEndTag();  // div.form-group
+            };
+
+            // Locality or County
+            Action renderLocality = () =>
+            {
+                if ( _LocalityRequirement == DataEntryRequirementLevelSpecifier.Unavailable )
+                {
+                    return;
+                }
+
+                writer.AddAttribute( "class", "form-group col-sm-3" );
+                writer.RenderBeginTag( HtmlTextWriterTag.Div );
+                _tbCounty.Attributes["autocomplete"] = "address-level2";
+                _tbCounty.RenderControl( writer );
+                writer.RenderEndTag();  // div.form-group
+            };
+
+            // [VidaReal] En países con cascada (Departamento -> Municipio) el departamento se dibuja
+            // ANTES del municipio, porque es el que filtra su lista. Hay que invertir el orden real del
+            // DOM: el .form-row de Rock usa el grid flotado de Bootstrap 3, donde `order` de flexbox no aplica.
+            if ( this.SupportsCityList )
+            {
+                renderState();
+                renderCity();
+                renderLocality();
+            }
+            else
+            {
+                renderCity();
+                renderLocality();
+                renderState();
             }
 
             // Postal Code
@@ -1149,6 +1252,29 @@ namespace Rock.Web.UI.Controls
             EnsureChildControls();
 
             SetCountryAndState( _ddlCountry.SelectedValue );
+        }
+
+        /// <summary>
+        /// [VidaReal] Handles the SelectedIndexChanged event of the _ddlState control.
+        /// Rebinds the City (Municipio) list for the newly selected State (Departamento).
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        public void _ddlState_SelectedIndexChanged( object sender, EventArgs e )
+        {
+            EnsureChildControls();
+
+            // ASP.NET dispara este evento aunque AutoPostBack sea false (basta que el valor posteado
+            // difiera del de ViewState), así que en países sin cascada no hay nada que hacer.
+            if ( !this.SupportsCityList )
+            {
+                return;
+            }
+
+            var country = _ddlCountry.SelectedValue.IsNotNullOrWhiteSpace() ? _ddlCountry.SelectedValue : GetDefaultCountry();
+
+            // El usuario cambió el departamento: el municipio anterior deja de aplicar si no está en la nueva lista.
+            BindCities( country, _ddlState.SelectedValue, preserveUnlistedValue: false );
         }
 
         #endregion
@@ -1450,6 +1576,96 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// [VidaReal] Binds the Cities (Municipios) data source to the selection control,
+        /// filtered by the selected State (Departamento). Mirrors <see cref="BindStates"/>.
+        /// </summary>
+        /// <param name="country">The currently selected country.</param>
+        /// <param name="state">The currently selected state (departamento).</param>
+        /// <param name="preserveUnlistedValue">
+        /// If true, a current city value that is not in the list (legacy free-text data) is kept
+        /// as an extra list item so it is not lost; if false, the selection is reset to blank.
+        /// </param>
+        private void BindCities( string country, string state, bool preserveUnlistedValue )
+        {
+            // Capturar el municipio actual ANTES de cambiar HasCityList (el getter depende de él).
+            var currentCity = this.City;
+
+            var cascade = AddressCascade.Get( country, state );
+
+            this.HasCityList = cascade.HasCities;
+            this.SupportsCityList = cascade.IsSupported;
+
+            // Solo los países con cascada necesitan recargar los municipios al cambiar el
+            // departamento; en el resto se evita el postback extra.
+            _ddlState.AutoPostBack = cascade.IsSupported;
+
+            if ( cascade.IsSupported )
+            {
+                // Los <select> no muestran placeholder: darle nombre a la opción vacía del
+                // departamento, que es el primer campo que el usuario debe elegir.
+                var blankStateItem = _ddlState.Items.FindByValue( string.Empty );
+                if ( blankStateItem != null && blankStateItem.Text.IsNullOrWhiteSpace() )
+                {
+                    blankStateItem.Text = _StateLabel;
+                }
+            }
+
+            if ( cascade.HasCities )
+            {
+                _ddlCity.Visible = true;
+                _tbCity.Visible = false;
+
+                _ddlCity.Items.Clear();
+                _ddlCity.SelectedIndex = -1;
+                _ddlCity.SelectedValue = null;
+                _ddlCity.ClearSelection();
+
+                // Los <select> no muestran placeholder, así que la opción vacía lleva el nombre
+                // del campo ("Municipio") para que se entienda qué se está eligiendo.
+                _ddlCity.Items.Add( new ListItem( _CityLabel, string.Empty ) );
+
+                foreach ( var city in cascade.Cities )
+                {
+                    _ddlCity.Items.Add( new ListItem( city, city ) );
+                }
+
+                ApplyCitySelection( currentCity, preserveUnlistedValue );
+            }
+            else
+            {
+                _ddlCity.Visible = false;
+                _tbCity.Visible = true;
+                _tbCity.Text = currentCity;
+            }
+        }
+
+        /// <summary>
+        /// [VidaReal] Applies a value to the City drop-down list, optionally preserving values
+        /// that are not in the bound list (legacy free-text data) as an extra item.
+        /// </summary>
+        private void ApplyCitySelection( string city, bool preserveUnlistedValue )
+        {
+            if ( city.IsNullOrWhiteSpace() )
+            {
+                _ddlCity.SetValue( string.Empty );
+                return;
+            }
+
+            if ( _ddlCity.Items.FindByValue( city ) == null )
+            {
+                if ( !preserveUnlistedValue )
+                {
+                    _ddlCity.SetValue( string.Empty );
+                    return;
+                }
+
+                _ddlCity.Items.Add( new ListItem( city, city ) );
+            }
+
+            _ddlCity.SetValue( city );
+        }
+
+        /// <summary>
         /// Gets the default state.
         /// </summary>
         /// <returns></returns>
@@ -1545,6 +1761,14 @@ namespace Rock.Web.UI.Controls
             {
                 _tbState.Text = selectedState;
             }
+
+            // [VidaReal] Sincronizar la lista de municipios con el departamento final.
+            // Se usa this.State (el valor EFECTIVO del control) y no selectedState, porque SetValue
+            // cae al primer item de la lista cuando el valor pedido no existe: con un State sucio
+            // ("GT", "Guate") el departamento acaba mostrando uno válido, y el municipio debe
+            // corresponder a ESE, no al valor descartado.
+            // Se preservan valores legados (texto libre) como item extra para no perder datos al editar.
+            BindCities( selectedCountry, this.State, preserveUnlistedValue: true );
         }
 
         private class StateListSelectionItem

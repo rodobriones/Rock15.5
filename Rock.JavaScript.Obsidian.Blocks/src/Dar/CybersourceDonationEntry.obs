@@ -1,7 +1,9 @@
 <template>
     <Panel type="block" title="">
         <template #default>
-            <div class="cyWrap">
+            <!-- notranslate: flujo de pago — datos sensibles (tarjetas enmascaradas, nombres, montos)
+                 jamas deben viajar al traductor IA. El bloque ya esta autorado en espanol. -->
+            <div class="cyWrap notranslate" data-no-translate="1">
                 <!-- Cybersource Device Fingerprint (invisible, antifraude) -->
                 <iframe
                     v-if="deviceFingerprintReady && deviceFingerprintUrl"

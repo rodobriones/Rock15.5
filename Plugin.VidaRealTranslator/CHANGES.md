@@ -1,5 +1,54 @@
 # Changes
 
+## 1.4.5 — HOTFIX: datos sensibles (tarjetas) jamás viajan a la IA
+- **Incidente**: llegó a traducirse "Visa 4487 9x00 xxxx 1071" — pasaba `translatable()` porque tiene letras y los dígitos van mezclados con enmascarado.
+- **Regla genérica en `translatable()`** (aplica en TODO el sitio): se rechaza cualquier string con enmascarado de secretos (`••`, `**`, `xxxx`, `9x00`) o con **8+ dígitos en total** (tarjetas/cuentas/teléfonos incrustados en texto). Ningún label de UI real trae tantos dígitos. Tests de regresión agregados (incluye el caso real del incidente).
+- **Bloques Dar excluidos completos** (`notranslate`/`data-no-translate` en su raíz): `CybersourceDonationEntry` (flujo de pago) y `DonationDashboard` (donantes/montos/tarjetas). Están autorados en español: excluirlos no pierde nada.
+- **Emails incrustados**: `RE_EMAIL` ya sin anclas — un email dentro de un texto ("… | Email: x@y.com | NIT …") también se rechaza (antes solo se rechazaban strings que eran puramente un email; se tradujo uno con email+NIT de un donante).
+- **BD limpiada**: 4 filas sensibles borradas de la caché (tarjeta enmascarada, IDs de Cybersource, email+NIT de un donante). Usar "Refrescar navegadores" para purgar las copias en localStorage.
+- Recordatorio estructural: el traductor NUNCA lee `value` de inputs (contraseñas/números tecleados no viajan) ni entra a iframes (microform de Cybersource fuera de alcance); este hotfix cierra el canal restante, el texto visible.
+- `ScriptVersion` → `18`.
+
+## 1.4.4 — Check-in: nombres de personas excluidos de la IA (privacidad) + dropdown de género traducido
+- Nuevos defaults en `EXCLUDE_CONTAINERS` usando los ganchos del markup **stock** de Rock (a pedido del usuario: NO depender de los `.ascx` traducidos a mano del fork, que un upgrade revierte): `.js-person-select`, `.checkin-person`, `.checkin-person-list` (Multi/CheckOut person select), `.js-family-select` (FamilySelect) y, del kiosco next-gen, `.family-button`, `.attendee-button`, `.attendee-banner`. Los nombres — incluidos los de **niños** (VidAventura) — ya no se envían a Azure; los botones de acción (Check Out/Save/Cancel) siguen siendo traducibles.
+- **GAP conocido**: `PersonSelect.ascx` (check-in modo *individual*) no tiene clase distintiva en stock; si se usa ese modo, agregar `.btn-checkin-select` en **Exclude Selectors** del panel (config, no código).
+- **Género**: `UI Select Whitelist` configurada (valor del block attribute, no código) con `select[id*="Gender"]` → los dropdowns de género WebForms (ddlGender/GenderPicker) muestran Masculino/Femenino. Los GenderPicker Obsidian no tienen selector estable sin parchar core (contra la meta de upgrades limpios); pendiente si aparece uno.
+- Si un nombre aparece en otra pantalla no cubierta, se agrega el selector en **Exclude Selectors** del panel sin tocar código.
+- `ScriptVersion` → `17` (botón "Re-inyectar script").
+
+## 1.4.3 — Excluida la barra admin de Rock (fuga de costo)
+- `#cms-admin-footer` agregado a los defaults de `EXCLUDE_CONTAINERS`: la barra de admins (Page Load Time / ViewState / HTML Size) no solo es chrome — el load time cambia en CADA carga, así que cada página generaba un string único nuevo pagado a Azure. En dev ya había **332 filas basura** acumuladas (limpiadas a mano de la BD el 2026-08-14).
+- `ScriptVersion` → `15` (botón "Re-inyectar script" + "Refrescar navegadores" para limpiar las copias en localStorage).
+
+## 1.4.2 — Fin del doble pago a Azure + modal del dashboard sin traducir
+- **[Costo]** `translator.js`: `seenText` (WeakSet de nodos) → `processedText` (WeakMap nodo→texto procesado). Al **aplicar** una traducción se registra el valor aplicado, así el siguiente rescan ya no recolecta el texto traducido como string "nuevo" — antes cada string traducido generaba una **segunda llamada a Azure** para cachear su identidad es→es (por eso el grid mostraba filas con original en español). Y como se compara contra el texto actual del nodo: **si la app cambia el texto después, difiere y se re-traduce** (no queda marcado "visto para siempre").
+- **[Dashboard]** El modal de edición se teletransporta al `body` (fuera del `vtWrap` con notranslate) → ahora lleva `modalWrapperClasses="notranslate"` + `data-no-translate` en su contenido. Etiqueta del modal corregida: decía "Texto original (es)" mostrando el idioma *destino* como si fuera el de origen; ahora "Texto original · se traduce a «es»".
+- Nota: las filas identidad ya cacheadas (original en español) son inofensivas; se pueden borrar desde el grid o purgar el idioma si molestan.
+- `ScriptVersion` → `14` (usar el botón "Re-inyectar script" del dashboard).
+
+## 1.4.1 — Dashboard servido desde la carpeta del plugin (distribuible)
+- `ObsidianFileUrl` ahora apunta a `~/Plugins/com_vidareal/Translator/translatorDashboard.obs` (antes: árbol Obsidian del core). Los imports `@Obsidian/*` los resuelve el import map de Rock en runtime, así que la ruta del archivo da igual.
+- El csproj copia el compilado (`RockWeb\Obsidian\Blocks\Translator\translatorDashboard.obs.js` → carpeta del plugin) post-build, si existe. Flujo al tocar el `.obs`: `npm run build-fast` y luego `dotnet build` del plugin (o copiar a mano).
+- **Paquete distribuible** = 3 archivos + reinicio de Rock (las migraciones hacen el resto): `Bin\com.vidareal.Translator.dll`, `Plugins\com_vidareal\Translator\translator.js`, `Plugins\com_vidareal\Translator\translatorDashboard.obs.js`. Requiere Rock v18+.
+- **Fix**: el dashboard lleva `notranslate`/`data-no-translate` (el WebForms viejo lo tenía; el Obsidian nuevo no) — sin esto, el traductor DOM traducía en pantalla los textos originales del grid mientras se revisaban.
+
+## 1.4.0 — Panel de administración migrado a Obsidian (dashboard único)
+- **Nuevo bloque Obsidian `TranslatorDashboard`** (C# en `VidaRealTranslator/Blocks/`, front en `Rock.JavaScript.Obsidian.Blocks/src/Translator/translatorDashboard.obs` → compila a `RockWeb/Obsidian/Blocks/Translator/translatorDashboard.obs.js`). Reemplaza a los DOS bloques WebForms (`TranslatorSettings` + `TranslationList`), que la migración 004 retira de la página. Un solo panel con:
+  - **Tarjetas de estado**: traducciones en caché (por idioma), uso del throttle de IA por hora (barra), sitios con el script inyectado (y cuáles quedaron con versión vieja), estado de Azure.
+  - **Probar conexión**: traducción real de prueba contra Azure con el motivo del fallo visible (nuevo `ITranslationProvider.TestConnection` / `_lastError` en el provider).
+  - **Configuración editable en el propio panel** (ya no en Block Properties): idiomas, switcher, Azure (API key write-only: vacío = conservar), selectores avanzados.
+  - **Mantenimiento**: purga total o por idioma, "Refrescar navegadores" (bump del CacheEpoch), "Re-inyectar script" sin el ciclo off→on del toggle.
+  - **Grid de traducciones** con búsqueda, filtro por idioma/status, paginación (50), edición en modal (traducción + status Excluida) y borrado. Toda escritura invalida los navegadores vía epoch.
+- **Migración 004**: registra el BlockType Obsidian + 15 attributes (mismas keys), agrega el bloque (su Guid = nuevo `TranslatorController.SettingsBlockGuid`), **copia los valores de configuración del bloque viejo** (incluida la API key encriptada) y elimina los bloques/blocktypes WebForms con sus attributes. Los `.ascx` quedan en disco pero sin uso.
+- Soporte en librería: `TranslationStore.GetStats` (resumen por idioma) y `GetPage` (paginado con filtro por status), `TranslatorInjection.GetStatus` (tag y versión por sitio), `TranslatorController.GetThrottleStatus` y `GetConfiguredProvider`.
+- Acciones destructivas del dashboard exigen EDIT en el bloque; la página sigue bajo Admin Tools → Installed Plugins.
+
+## 1.3.1 — Switcher flotante rediseñado: pestañita discreta, tap-para-expandir
+- El flotante ya no es el pill de 54px con expansión por hover (que en iOS ni funcionaba: los botones no reciben focus al tocarlos, `:focus-within` nunca disparaba). Ahora: **pestañita de 36px** con el idioma activo, **se atenúa** (opacidad 50%) tras unos segundos de reposo, y al tocarla despliega el **menú vertical** con las etiquetas completas. Tap fuera cierra (listener en capture). Respeta `env(safe-area-inset-bottom)` (barra de home iOS).
+- Primera visita (sin `vrtr:lang`): visible 4 s a opacidad completa para que el visitante lo descubra; visitas siguientes se atenúa a 1.5 s.
+- El modo inline (`SwitcherContainer`) queda igual que antes (pills en flujo, sin tab ni atenuado).
+- `ScriptVersion` → `13` (re-activar el toggle off→on para re-inyectar).
+
 ## 1.3.0 — Chunks paralelos + invalidación remota de caché + logging de errores
 - **[Perf]** `AzureOpenAiProvider.TranslateBatch`: los chunks de 50 ahora van a Azure en **paralelo limitado (4 concurrentes)** en vez de en serie. Una página nueva con 250 strings pasa de ~10-20 s (5 llamadas encadenadas) a ~el costo de una llamada. `Task.Run` + `Task.WaitAll` (pool threads sin SynchronizationContext: sin riesgo de deadlock).
 - **[Operación]** Invalidación remota del caché local: nuevo block attribute `CacheEpoch` (interno). Se actualiza solo al **purgar** (REST), **editar** o **borrar** (grid) traducciones; `Config` lo devuelve y el cliente limpia sus claves `vrtr:*` cuando cambia. Antes una corrección manual NUNCA llegaba a un navegador que ya la tenía cacheada. También se puede cambiar a mano en settings para forzar limpieza global.

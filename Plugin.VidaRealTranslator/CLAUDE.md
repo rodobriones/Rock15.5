@@ -8,8 +8,8 @@ Plugin de Rock RMS v18 que traduce la UI (inglés → idioma destino) en el DOM 
 ## Superficie (qué tocar para qué)
 - **Traducción + switcher de idioma**: `translator.js` (vanilla, runtime, no compila). El switcher persiste idioma en localStorage y recarga.
 - **C# library** (`com.vidareal.Translator.dll`): normalización/hash, `TranslationStore` (SQL crudo), `TranslatorInjection` (inyecta/retira el script en todos los sitios), providers, `TranslatorController` (REST), migraciones 001/002/003.
-- **Bloques WebForms** (runtime-compiled, NO en el csproj): `TranslatorSettings.ascx(.cs)` (config: toggle, purgar, settings por decoradores) y `TranslationList.ascx(.cs)` (grid ver/editar/borrar, usa `TranslationStore.GetList/GetById/Update/Delete`). Ambos en la misma página bajo *Installed Plugins*.
-- Acentos en `.ascx`: usar **entidades HTML** (`&eacute;`…) — ASP.NET lee los `.ascx` como Windows-1252 y los UTF-8 salen mojibake.
+- **Panel de administración (Obsidian, desde 1.4.0)**: C# `VidaRealTranslator\Blocks\TranslatorDashboard.cs` (en el DLL del plugin; init + block actions: settings, toggle, test Azure, purga, re-inyección, grid) + front `Rock.JavaScript.Obsidian.Blocks\src\Translator\translatorDashboard.obs`. Build del front: `npm run build-fast` en ese proyecto y LUEGO `dotnet build` del plugin (el csproj copia el compilado a `RockWeb\Plugins\com_vidareal\Translator\`, desde donde se sirve — distribuible, ver 1.4.1). Convenciones .obs del repo: `.claude/skills/design-to-obs/references/obs-conventions.md`.
+- **Bloques WebForms OBSOLETOS** (la migración 004 los retiró de la página; los `.ascx` quedan en disco sin uso): `TranslatorSettings.ascx(.cs)` y `TranslationList.ascx(.cs)`.
 
 ## Convenciones que DEBES respetar
 - **Namespace** C#: `com.vidareal.Translator` · **AssemblyName**: `com.vidareal.Translator` · **TargetFramework**: `net472`.
@@ -43,11 +43,11 @@ cd RockWeb/Plugins/com_vidareal/Translator && node test_translator.js
 Tras editar `translator.js`, **subir `TranslatorInjection.ScriptVersion`** (cache-busting) y re-activar el toggle (off→on) para re-inyectar el tag con la nueva versión en todos los sitios. La inyección global es automática: `TranslatorInjection.Apply(rockContext, enabled)` escribe/quita el `<script>` en el `PageHeaderContent` de todos los sitios; lo dispara el toggle del bloque. No hay paso manual de pegar el script.
 
 ## Configuración
-NO son Global Attributes. La config son **block attributes** del bloque `TranslatorSettings`, declaradas como **decoradores `[…Field]` en `TranslatorSettings.ascx.cs`** (fuente de verdad; Rock los auto-registra al cargar el bloque y genera el formulario del ⚙). El REST las lee por el Guid fijo del bloque: `BlockCache.Get(TranslatorController.SettingsBlockGuid).GetAttributeValue(key)`.
+NO son Global Attributes. La config son **block attributes** del bloque **`TranslatorDashboard` (Obsidian)**, declaradas como **decoradores `[…Field]` en `Blocks\TranslatorDashboard.cs`** (fuente de verdad) y **editadas desde el propio dashboard** (acción `SaveSettings`), no vía Block Properties. El REST las lee por el Guid fijo del bloque: `BlockCache.Get(TranslatorController.SettingsBlockGuid).GetAttributeValue(key)` — ese Guid es el del bloque que crea la migración 004 (que copió los valores del bloque WebForms viejo).
 
-**Para agregar/renombrar una setting**, toca coherentemente: (1) el decorador `[…Field(...,"Key")]` en `TranslatorSettings.ascx.cs`; (2) la const `Attr*` y su lectura `Cfg(...)` en `TranslatorController`; (3) si el front la necesita, agrégala a la respuesta de `GetConfig` y consúmela en `translator.js`. (La migración 002 crea las 10 settings originales para disponibilidad inmediata, pero los decoradores son la fuente; no es obligatorio tocar la migración.)
+**Para agregar/renombrar una setting**, toca coherentemente: (1) el decorador en `TranslatorDashboard.cs` + su `AttributeKey`; (2) el `SettingsBag`/`GetObsidianBlockInitialization`/`SaveSettings` del mismo bloque y el campo en `translatorDashboard.obs`; (3) la const `Attr*` y su lectura `Cfg(...)` en `TranslatorController`; (4) si el front runtime la necesita, agrégala a la respuesta de `GetConfig` y consúmela en `translator.js`.
 
-La API key es `Encrypted Text` (se lee con `Encryption.DecryptString`). No hardcodear secretos. El bloque WebForms (`TranslatorSettings.ascx.cs`) lo compila RockWeb en runtime — NO está en el csproj; un error ahí solo aparece al cargar la página.
+La API key es `Encrypted Text` (se lee con `Encryption.DecryptString`; en el dashboard es write-only: vacío = conservar). No hardcodear secretos.
 
 ## Al hacer cambios
 - Si tocas la lógica no trivial, deja/actualiza el check en `test_translator.js` (assert simple, sin frameworks).

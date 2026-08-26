@@ -1,0 +1,644 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- Dashboard de administracion del VidaReal Translator (C#: com.vidareal.Translator.Blocks.TranslatorDashboard,
+     en el DLL del plugin). Todo el estado vive en este archivo (sin partials). El <style> es NO-scoped a
+     proposito: targetea .panel-block (chrome del panel, fuera del template) y los .btn de RockButton. -->
+<template>
+    <Panel type="block">
+        <template #default>
+            <!-- notranslate: la pagina admin del propio traductor NO se traduce (el grid muestra
+                 los textos originales; traducirlos en el DOM mutaria justo lo que se esta revisando). -->
+            <div class="vtWrap notranslate" data-no-translate="1">
+
+                <div v-if="err" class="vtToast vtToast--err" role="alert">
+                    <i class="fa fa-exclamation-circle"></i>
+                    <span>{{ err }}</span>
+                    <button type="button" class="vtToastX" aria-label="Cerrar" @click="err = ''">&times;</button>
+                </div>
+                <div v-if="ok" class="vtToast vtToast--ok" role="status">
+                    <i class="fa fa-check-circle"></i>
+                    <span>{{ ok }}</span>
+                </div>
+
+                <!-- ===== Header ===== -->
+                <div class="vtBar">
+                    <div>
+                        <h1 class="vtTitle"><i class="fa fa-language"></i> VidaReal Translator</h1>
+                        <p class="vtSub">Traducci&oacute;n de la UI en tiempo real, con cach&eacute; en BD y Azure OpenAI.</p>
+                    </div>
+                    <div class="vtBarRight">
+                        <span class="vtVer vtMono">script v{{ status.scriptVersion }}</span>
+                        <label class="vtSwitch">
+                            <input type="checkbox" :checked="status.enabled" :disabled="!canEdit || busy.enabled"
+                                   @change="toggleEnabled(($event.target as HTMLInputElement).checked)" />
+                            <span class="vtSwitchTrack"><span class="vtSwitchThumb"></span></span>
+                            <span class="vtSwitchLbl" :class="status.enabled ? 'is-on' : ''">{{ status.enabled ? "Activo" : "Inactivo" }}</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ===== Tarjetas de estado ===== -->
+                <div class="vtCards">
+                    <div class="vtCard">
+                        <span class="vtCardIcon vtIco--indigo"><i class="fa fa-database"></i></span>
+                        <div class="vtCardBody">
+                            <span class="vtCardNum">{{ totalTranslations.toLocaleString() }}</span>
+                            <span class="vtCardLbl">traducciones en cach&eacute;</span>
+                            <span class="vtCardHint">{{ status.stats.length }} idioma{{ status.stats.length === 1 ? "" : "s" }}</span>
+                        </div>
+                    </div>
+
+                    <div class="vtCard">
+                        <span class="vtCardIcon vtIco--amber"><i class="fa fa-tachometer-alt"></i></span>
+                        <div class="vtCardBody">
+                            <span class="vtCardNum">{{ status.throttleUsed.toLocaleString() }}<small> / {{ status.throttleLimit.toLocaleString() }}</small></span>
+                            <span class="vtCardLbl">traducciones nuevas esta hora</span>
+                            <span class="vtMeter"><span class="vtMeterFill" :style="{ width: throttlePct + '%' }" :class="throttlePct > 80 ? 'is-hot' : ''"></span></span>
+                        </div>
+                    </div>
+
+                    <div class="vtCard">
+                        <span class="vtCardIcon vtIco--teal"><i class="fa fa-sitemap"></i></span>
+                        <div class="vtCardBody">
+                            <span class="vtCardNum">{{ injectedCount }}<small> / {{ status.sites.length }}</small></span>
+                            <span class="vtCardLbl">sitios con el script</span>
+                            <span v-if="staleCount > 0" class="vtCardHint vtCardHint--warn"><i class="fa fa-exclamation-triangle"></i> {{ staleCount }} con versi&oacute;n vieja</span>
+                            <span v-else class="vtCardHint">todos al d&iacute;a</span>
+                        </div>
+                    </div>
+
+                    <div class="vtCard">
+                        <span class="vtCardIcon vtIco--sky"><i class="fa fa-cloud"></i></span>
+                        <div class="vtCardBody">
+                            <span class="vtCardNum vtCardNum--sm">Azure OpenAI</span>
+                            <span class="vtCardLbl">{{ settings.hasApiKey && settings.azureEndpoint ? "configurado" : "sin configurar" }}</span>
+                            <button type="button" class="vtLink" :disabled="busy.test" @click="testConnection">
+                                <i class="fa" :class="busy.test ? 'fa-spinner fa-spin' : 'fa-stethoscope'"></i>
+                                {{ busy.test ? "Probando…" : "Probar conexi&oacute;n" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="testResult" class="vtTest" :class="testResult.success ? 'vtTest--ok' : 'vtTest--err'">
+                    <i class="fa" :class="testResult.success ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                    {{ testResult.message }}
+                </div>
+
+                <!-- ===== Configuracion ===== -->
+                <section class="vtSec">
+                    <div class="vtSecHead">
+                        <h2 class="vtSecTitle"><i class="fa fa-sliders-h"></i> Configuraci&oacute;n</h2>
+                        <RockButton v-if="canEdit" btnType="primary" class="vtX" :disabled="busy.save" @click="saveSettings">
+                            {{ busy.save ? "Guardando…" : "Guardar configuraci&oacute;n" }}
+                        </RockButton>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h3 class="vtSubHead">Idiomas</h3>
+                            <div class="row">
+                                <div class="col-sm-6"><TextBox v-model="settings.targetLanguage" label="Idioma destino (ISO)" help="Idioma por defecto al que se traduce la UI, p.ej. es" /></div>
+                                <div class="col-sm-6"><TextBox v-model="settings.sourceLanguage" label="Idioma original (ISO)" help="Idioma en que est&aacute; la UI; al elegirlo en el switcher no se traduce" /></div>
+                            </div>
+
+                            <h3 class="vtSubHead">Selector de idioma (switcher)</h3>
+                            <CheckBox v-model="settings.showSwitcher" label="Mostrar el selector flotante en todas las p&aacute;ginas" />
+                            <TextBox v-model="settings.availableLanguages" label="Idiomas disponibles" textMode="multiline" :rows="3"
+                                     help="Uno por l&iacute;nea, formato codigo|Etiqueta. Ej: en|English (una l&iacute;nea) y es|Espa&ntilde;ol (otra l&iacute;nea)" />
+                            <TextBox v-model="settings.switcherContainer" label="Selector CSS del contenedor (opcional)"
+                                     help="Si se define y existe en la p&aacute;gina, el switcher se monta ah&iacute; (en flujo). Vac&iacute;o = flotante abajo-derecha" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <h3 class="vtSubHead">Azure OpenAI</h3>
+                            <TextBox v-model="settings.azureEndpoint" label="Endpoint" help="https://&lt;recurso&gt;.openai.azure.com" />
+                            <div class="row">
+                                <div class="col-sm-6"><TextBox v-model="settings.azureDeployment" label="Deployment" /></div>
+                                <div class="col-sm-6"><TextBox v-model="settings.azureApiVersion" label="API version" /></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="control-label">API key {{ settings.hasApiKey ? "" : "(sin configurar)" }}</label>
+                                <input v-model="settings.newApiKey" type="password" class="form-control" autocomplete="new-password"
+                                       :placeholder="settings.hasApiKey ? 'Configurada — escribe aquí solo para reemplazarla' : 'Pega la API key de Azure'" />
+                            </div>
+
+                            <h3 class="vtSubHead">Selectores avanzados</h3>
+                            <TextBox v-model="settings.excludeSelectors" label="Excluir (CSS, uno por l&iacute;nea)" textMode="multiline" :rows="2" />
+                            <TextBox v-model="settings.uiSelectWhitelist" label="Whitelist de &lt;select&gt; de UI (uno por l&iacute;nea)" textMode="multiline" :rows="2" />
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===== Cache por idioma + mantenimiento ===== -->
+                <section class="vtSec">
+                    <div class="vtSecHead">
+                        <h2 class="vtSecTitle"><i class="fa fa-globe-americas"></i> Cach&eacute; por idioma</h2>
+                        <div v-if="canEdit" class="vtSecBtns">
+                            <RockButton btnType="default" class="vtGhost" :disabled="busy.refresh" @click="refreshBrowsers">
+                                <i class="fa fa-sync-alt"></i> {{ busy.refresh ? "Enviando…" : "Refrescar navegadores" }}
+                            </RockButton>
+                            <RockButton btnType="default" class="vtGhost" :disabled="busy.reinject" @click="reinject">
+                                <i class="fa fa-syringe"></i> {{ busy.reinject ? "Aplicando…" : "Re-inyectar script" }}
+                            </RockButton>
+                            <RockButton btnType="default" class="vtGhost vtGhost--danger" :disabled="busy.purge" @click="purge('')">
+                                <i class="fa fa-trash-alt"></i> Purgar todo
+                            </RockButton>
+                        </div>
+                    </div>
+
+                    <div v-if="!status.stats.length" class="vtEmpty">
+                        <i class="fa fa-inbox"></i>
+                        <p>A&uacute;n no hay traducciones en cach&eacute;.</p>
+                    </div>
+                    <div v-else class="vtScroll">
+                        <table class="vtTable">
+                            <thead>
+                                <tr><th>Idioma</th><th class="vtNum">Total</th><th class="vtNum">Traducidas</th><th class="vtNum">Excluidas</th><th>&Uacute;ltima actividad</th><th v-if="canEdit"></th></tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="s in status.stats" :key="s.language">
+                                    <td><span class="vtPill vtMono">{{ s.language }}</span></td>
+                                    <td class="vtNum">{{ s.total.toLocaleString() }}</td>
+                                    <td class="vtNum">{{ s.translated.toLocaleString() }}</td>
+                                    <td class="vtNum">{{ s.excluded.toLocaleString() }}</td>
+                                    <td class="vtMuted vtMono">{{ s.lastActivity }}</td>
+                                    <td v-if="canEdit" class="vtRowActions">
+                                        <button type="button" class="vtLink vtLink--danger" :disabled="busy.purge" @click="purge(s.language)">
+                                            <i class="fa fa-trash-alt"></i> Purgar
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="vtScroll vtSites">
+                        <table class="vtTable vtTable--tight">
+                            <thead><tr><th>Sitio</th><th>Script</th></tr></thead>
+                            <tbody>
+                                <tr v-for="s in status.sites" :key="s.name">
+                                    <td>{{ s.name }}</td>
+                                    <td>
+                                        <span v-if="!s.isInjected" class="vtPill vtPill--off">no inyectado</span>
+                                        <span v-else-if="s.isStale" class="vtPill vtPill--warn vtMono">v{{ s.version }} &rarr; desactualizado</span>
+                                        <span v-else class="vtPill vtPill--ok vtMono">v{{ s.version }}</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ===== Traducciones ===== -->
+                <section class="vtSec">
+                    <div class="vtSecHead">
+                        <h2 class="vtSecTitle"><i class="fa fa-list"></i> Traducciones</h2>
+                        <span class="vtMuted">{{ grid.total.toLocaleString() }} resultado{{ grid.total === 1 ? "" : "s" }}</span>
+                    </div>
+
+                    <div class="vtFilters">
+                        <div class="vtFilterGrow">
+                            <TextBox v-model="filter.search" label="" placeholder="Buscar en texto original o traducci&oacute;n…" @keyup.enter="search" />
+                        </div>
+                        <DropDownList v-model="filter.language" label="" :items="langItems" :showBlankItem="false" class="vtFilterSel" />
+                        <DropDownList v-model="filter.status" label="" :items="statusItems" :showBlankItem="false" class="vtFilterSel" />
+                        <RockButton btnType="primary" class="vtX" :disabled="busy.grid" @click="search"><i class="fa fa-search"></i> Buscar</RockButton>
+                    </div>
+
+                    <div v-if="busy.grid" class="vtEmpty"><i class="fa fa-spinner fa-spin"></i><p>Cargando…</p></div>
+                    <div v-else-if="!grid.rows.length" class="vtEmpty"><i class="fa fa-search"></i><p>Sin resultados con esos filtros.</p></div>
+                    <div v-else class="vtScroll">
+                        <table class="vtTable vtTable--rows">
+                            <thead><tr><th>Original</th><th>Traducci&oacute;n</th><th>Idioma</th><th>Status</th><th>Modificada</th></tr></thead>
+                            <tbody>
+                                <tr v-for="r in grid.rows" :key="r.id" class="vtRow" @click="openEdit(r)">
+                                    <td class="vtCell">{{ r.sourceText }}</td>
+                                    <td class="vtCell">{{ r.translatedText }}</td>
+                                    <td><span class="vtPill vtMono">{{ r.language }}</span></td>
+                                    <td><span class="vtPill" :class="r.status === 'Excluded' ? 'vtPill--off' : 'vtPill--ok'">{{ statusLabel(r.status) }}</span></td>
+                                    <td class="vtMuted vtMono">{{ r.modified }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-if="pageCount > 1" class="vtPager">
+                        <button type="button" class="vtPageBtn" :disabled="filter.page === 0 || busy.grid" @click="goPage(filter.page - 1)"><i class="fa fa-chevron-left"></i></button>
+                        <span class="vtMuted">P&aacute;gina {{ filter.page + 1 }} de {{ pageCount }}</span>
+                        <button type="button" class="vtPageBtn" :disabled="filter.page >= pageCount - 1 || busy.grid" @click="goPage(filter.page + 1)"><i class="fa fa-chevron-right"></i></button>
+                    </div>
+                </section>
+
+                <!-- ===== Modal de edicion =====
+                     El Modal se teletransporta FUERA del arbol del bloque (al body), asi que el
+                     notranslate del vtWrap no lo cubre: se marca via modalWrapperClasses. -->
+                <Modal v-model="editOpen" title="Editar traducci&oacute;n" :saveText="canEdit ? 'Guardar' : ''"
+                       modalWrapperClasses="notranslate" @save="saveEdit">
+                    <div v-if="editRow" class="notranslate" data-no-translate="1">
+                        <div class="vtEditSrc">
+                            <span class="vtEditLbl">Texto original &middot; se traduce a &laquo;{{ editRow.language }}&raquo;</span>
+                            <p>{{ editRow.sourceText }}</p>
+                        </div>
+                        <TextBox v-model="editText" label="Traducci&oacute;n" textMode="multiline" :rows="3" />
+                        <DropDownList v-model="editStatus" label="Status" :items="editStatusItems" :showBlankItem="false"
+                                      help="Excluida = se deja el texto original y no se vuelve a pedir a la IA" />
+                        <button v-if="canEdit" type="button" class="vtLink vtLink--danger" :disabled="busy.edit" @click="deleteEdit">
+                            <i class="fa fa-trash-alt"></i> Eliminar esta traducci&oacute;n (la IA la regenerar&aacute; si reaparece)
+                        </button>
+                    </div>
+                </Modal>
+
+            </div>
+        </template>
+    </Panel>
+</template>
+
+<style>
+.panel-block:has(.vtWrap) > .panel-heading,
+.panel-block:has(.vtWrap) > .panel-header { display: none !important; }
+.panel-block:has(.vtWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.vtWrap) > .panel-body { padding: 0 !important; }
+
+.vtWrap {
+    --vt-ink: #0f172a;
+    --vt-muted: #64748b;
+    --vt-line: #e2e8f0;
+    --vt-surface: #ffffff;
+    --vt-soft: #f8fafc;
+    --vt-indigo: #3b43f6;
+    --vt-indigo-soft: #eef0ff;
+    --vt-ok: #059669;
+    --vt-ok-soft: #ecfdf5;
+    --vt-warn: #b45309;
+    --vt-warn-soft: #fffbeb;
+    --vt-err: #dc2626;
+    --vt-err-soft: #fef2f2;
+    font-family: "Roboto", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--vt-ink);
+    padding-bottom: 24px;
+}
+.vtWrap *, .vtWrap *::before, .vtWrap *::after { box-sizing: border-box; }
+.vtMono { font-family: "Roboto Mono", Consolas, monospace; }
+.vtMuted { color: var(--vt-muted); }
+
+/* Toasts */
+.vtToast { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; margin-bottom: 14px; font-size: 14px; }
+.vtToast--ok { background: var(--vt-ok-soft); color: var(--vt-ok); border: 1px solid #a7f3d0; }
+.vtToast--err { background: var(--vt-err-soft); color: var(--vt-err); border: 1px solid #fecaca; }
+.vtToastX { margin-left: auto; border: 0; background: none; font-size: 18px; line-height: 1; color: inherit; cursor: pointer; }
+
+/* Header */
+.vtBar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.vtTitle { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
+.vtTitle .fa { color: var(--vt-indigo); margin-right: 6px; }
+.vtSub { margin: 0; color: var(--vt-muted); font-size: 14px; }
+.vtBarRight { display: flex; align-items: center; gap: 14px; }
+.vtVer { font-size: 12px; color: var(--vt-muted); background: var(--vt-soft); border: 1px solid var(--vt-line); padding: 4px 10px; border-radius: 999px; }
+
+/* Switch */
+.vtSwitch { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; font-weight: 400; }
+.vtSwitch input { position: absolute; opacity: 0; }
+.vtSwitchTrack { width: 44px; height: 24px; border-radius: 999px; background: #cbd5e1; position: relative; transition: background .15s ease; flex: none; }
+.vtSwitch input:checked + .vtSwitchTrack { background: var(--vt-ok); }
+.vtSwitch input:disabled + .vtSwitchTrack { opacity: .5; }
+.vtSwitchThumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s ease; box-shadow: 0 1px 3px rgba(15,23,42,.3); }
+.vtSwitch input:checked + .vtSwitchTrack .vtSwitchThumb { left: 23px; }
+.vtSwitchLbl { font-size: 14px; color: var(--vt-muted); min-width: 60px; }
+.vtSwitchLbl.is-on { color: var(--vt-ok); font-weight: 600; }
+
+/* Cards */
+.vtCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.vtCard { display: flex; gap: 12px; align-items: flex-start; background: var(--vt-surface); border: 1px solid var(--vt-line); border-radius: 12px; padding: 16px; }
+.vtCardIcon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex: none; }
+.vtIco--indigo { background: var(--vt-indigo-soft); color: var(--vt-indigo); }
+.vtIco--amber { background: var(--vt-warn-soft); color: var(--vt-warn); }
+.vtIco--teal { background: #f0fdfa; color: #0d9488; }
+.vtIco--sky { background: #f0f9ff; color: #0284c7; }
+.vtCardBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vtCardNum { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.vtCardNum small { font-size: 13px; font-weight: 400; color: var(--vt-muted); }
+.vtCardNum--sm { font-size: 16px; }
+.vtCardLbl { font-size: 13px; color: var(--vt-muted); }
+.vtCardHint { font-size: 12px; color: var(--vt-muted); }
+.vtCardHint--warn { color: var(--vt-warn); }
+.vtMeter { width: 100%; max-width: 160px; height: 6px; border-radius: 999px; background: var(--vt-line); overflow: hidden; margin-top: 4px; }
+.vtMeterFill { display: block; height: 100%; border-radius: 999px; background: var(--vt-ok); transition: width .3s ease; }
+.vtMeterFill.is-hot { background: var(--vt-err); }
+
+/* Test result */
+.vtTest { padding: 10px 16px; border-radius: 10px; font-size: 14px; margin-bottom: 14px; }
+.vtTest--ok { background: var(--vt-ok-soft); color: var(--vt-ok); border: 1px solid #a7f3d0; }
+.vtTest--err { background: var(--vt-err-soft); color: var(--vt-err); border: 1px solid #fecaca; }
+
+/* Secciones */
+.vtSec { background: var(--vt-surface); border: 1px solid var(--vt-line); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+.vtSecHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.vtSecTitle { margin: 0; font-size: 17px; font-weight: 700; }
+.vtSecTitle .fa { color: var(--vt-indigo); margin-right: 6px; font-size: 15px; }
+.vtSecBtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.vtSubHead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--vt-muted); margin: 18px 0 10px; }
+.vtSubHead:first-child { margin-top: 0; }
+
+/* Botones */
+.vtX.btn { background: var(--vt-indigo) !important; border-color: var(--vt-indigo) !important; color: #fff !important; border-radius: 8px; }
+.vtX.btn:hover, .vtX.btn:focus { background: #2f36d8 !important; border-color: #2f36d8 !important; }
+.vtGhost.btn { background: var(--vt-surface) !important; border: 1px solid var(--vt-line) !important; color: var(--vt-ink) !important; border-radius: 8px; }
+.vtGhost.btn:hover { background: var(--vt-soft) !important; }
+.vtGhost--danger.btn { color: var(--vt-err) !important; }
+.vtLink { border: 0; background: none; padding: 0; color: var(--vt-indigo); font-size: 13px; cursor: pointer; text-align: left; }
+.vtLink:hover { text-decoration: underline; }
+.vtLink:disabled { opacity: .6; cursor: default; }
+.vtLink--danger { color: var(--vt-err); }
+
+/* Tablas */
+.vtScroll { overflow-x: auto; }
+.vtTable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.vtTable th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--vt-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--vt-line); white-space: nowrap; }
+.vtTable td { padding: 10px; border-bottom: 1px solid var(--vt-soft); vertical-align: middle; }
+.vtTable tbody tr:last-child td { border-bottom: 0; }
+.vtNum { text-align: right; }
+th.vtNum { text-align: right; }
+.vtTable--tight td, .vtTable--tight th { padding: 6px 10px; }
+.vtSites { margin-top: 18px; max-width: 560px; }
+.vtRow { cursor: pointer; }
+.vtRow:hover td { background: var(--vt-indigo-soft); }
+.vtCell { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtRowActions { text-align: right; white-space: nowrap; }
+
+/* Pills */
+.vtPill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; background: var(--vt-indigo-soft); color: var(--vt-indigo); }
+.vtPill--ok { background: var(--vt-ok-soft); color: var(--vt-ok); }
+.vtPill--warn { background: var(--vt-warn-soft); color: var(--vt-warn); }
+.vtPill--off { background: #f1f5f9; color: var(--vt-muted); }
+
+/* Filtros del grid */
+.vtFilters { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.vtFilterGrow { flex: 1 1 260px; }
+.vtFilterSel { min-width: 160px; }
+.vtFilters .form-group { margin-bottom: 0; }
+
+/* Vacios / pager */
+.vtEmpty { text-align: center; color: var(--vt-muted); padding: 28px 0; }
+.vtEmpty .fa { font-size: 26px; margin-bottom: 8px; display: block; }
+.vtEmpty p { margin: 0; }
+.vtPager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; }
+.vtPageBtn { border: 1px solid var(--vt-line); background: var(--vt-surface); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; color: var(--vt-ink); }
+.vtPageBtn:disabled { opacity: .4; cursor: default; }
+.vtPageBtn:not(:disabled):hover { background: var(--vt-soft); }
+
+/* Modal de edicion */
+.vtEditSrc { background: var(--vt-soft); border: 1px solid var(--vt-line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.vtEditLbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--vt-muted); margin-bottom: 4px; }
+.vtEditSrc p { margin: 0; font-size: 14px; }
+
+@media (max-width: 720px) {
+    .vtBar { flex-direction: column; }
+    .vtCell { max-width: 180px; }
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, reactive, ref } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { confirm } from "@Obsidian/Utility/dialogs";
+    import type { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
+    // ----- Tipos espejo de los bags C# (TranslatorDashboard.cs) -----
+    type SettingsBag = {
+        targetLanguage: string; sourceLanguage: string;
+        azureEndpoint: string; azureDeployment: string; azureApiVersion: string;
+        newApiKey: string; hasApiKey: boolean;
+        includeSelectors: string; excludeSelectors: string; uiSelectWhitelist: string;
+        showSwitcher: boolean; availableLanguages: string; switcherContainer: string;
+    };
+    type LangStat = { language: string; total: number; translated: number; excluded: number; lastActivity: string };
+    type SiteInfo = { name: string; isInjected: boolean; version: string; isStale: boolean };
+    type StatusBag = { enabled: boolean; scriptVersion: string; stats: LangStat[]; sites: SiteInfo[]; throttleUsed: number; throttleLimit: number };
+    type InitBag = StatusBag & { canEdit: boolean; settings: SettingsBag };
+    type RowBag = { id: number; sourceText: string; translatedText: string; language: string; status: string; provider: string; modified: string };
+    type PageBag = { total: number; rows: RowBag[] };
+
+    const config = useConfigurationValues<InitBag>();
+    const invokeBlockAction = useInvokeBlockAction();
+
+    const canEdit = config.canEdit;
+    const status = reactive<StatusBag>({
+        enabled: config.enabled,
+        scriptVersion: config.scriptVersion,
+        stats: config.stats ?? [],
+        sites: config.sites ?? [],
+        throttleUsed: config.throttleUsed,
+        throttleLimit: config.throttleLimit
+    });
+    const settings = reactive<SettingsBag>({ ...config.settings, newApiKey: "" });
+
+    const ok = ref("");
+    const err = ref("");
+    const busy = reactive({ enabled: false, save: false, test: false, reinject: false, refresh: false, purge: false, grid: false, edit: false });
+    const testResult = ref<{ success: boolean; message: string } | null>(null);
+
+    // ----- Derivados -----
+    const totalTranslations = computed(() => status.stats.reduce((acc, s) => acc + s.total, 0));
+    const injectedCount = computed(() => status.sites.filter(s => s.isInjected).length);
+    const staleCount = computed(() => status.sites.filter(s => s.isStale).length);
+    const throttlePct = computed(() => status.throttleLimit > 0 ? Math.min(100, Math.round(status.throttleUsed * 100 / status.throttleLimit)) : 0);
+
+    function toast(kind: "ok" | "err", msg: string): void {
+        if (kind === "ok") { ok.value = msg; window.setTimeout(() => { if (ok.value === msg) ok.value = ""; }, 4000); }
+        else { err.value = msg; }
+    }
+    function statusLabel(s: string): string {
+        return s === "Excluded" ? "Excluida" : "Traducida";
+    }
+
+    // ----- Acciones de estado / mantenimiento -----
+    async function toggleEnabled(enabled: boolean): Promise<void> {
+        busy.enabled = true;
+        const result = await invokeBlockAction<StatusBag>("SetEnabled", { enabled });
+        busy.enabled = false;
+        if (result.isSuccess && result.data) {
+            Object.assign(status, result.data);
+            toast("ok", enabled ? "Traductor activado e inyectado en todos los sitios." : "Traductor desactivado y retirado de todos los sitios.");
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo cambiar el estado.");
+        }
+    }
+
+    async function saveSettings(): Promise<void> {
+        busy.save = true;
+        const result = await invokeBlockAction("SaveSettings", { settings: { ...settings } });
+        busy.save = false;
+        if (result.isSuccess) {
+            if (settings.newApiKey) { settings.hasApiKey = true; }
+            settings.newApiKey = "";
+            toast("ok", "Configuración guardada.");
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo guardar la configuración.");
+        }
+    }
+
+    async function testConnection(): Promise<void> {
+        busy.test = true;
+        testResult.value = null;
+        const result = await invokeBlockAction<{ success: boolean; message: string }>("TestConnection", {});
+        busy.test = false;
+        testResult.value = result.isSuccess && result.data
+            ? result.data
+            : { success: false, message: result.errorMessage || "No se pudo probar la conexión." };
+    }
+
+    async function reinject(): Promise<void> {
+        busy.reinject = true;
+        const result = await invokeBlockAction<StatusBag>("Reinject", {});
+        busy.reinject = false;
+        if (result.isSuccess && result.data) {
+            Object.assign(status, result.data);
+            toast("ok", "Script re-inyectado (v" + status.scriptVersion + ") en todos los sitios.");
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo re-inyectar.");
+        }
+    }
+
+    async function refreshBrowsers(): Promise<void> {
+        if (!await confirm("Todos los navegadores limpiarán su caché local en la próxima carga y la reconstruirán desde la BD. ¿Continuar?")) {
+            return;
+        }
+        busy.refresh = true;
+        const result = await invokeBlockAction("RefreshBrowsers", {});
+        busy.refresh = false;
+        if (result.isSuccess) { toast("ok", "Listo: los navegadores refrescarán su caché local."); }
+        else { toast("err", result.errorMessage || "No se pudo."); }
+    }
+
+    async function purge(language: string): Promise<void> {
+        const scope = language ? `las traducciones de "${language}"` : "TODAS las traducciones";
+        if (!await confirm(`Se eliminarán ${scope} de la BD y la IA las regenerará (con costo) conforme se naveguen las páginas. ¿Continuar?`)) {
+            return;
+        }
+        busy.purge = true;
+        const result = await invokeBlockAction<{ deleted: number; status: StatusBag }>("Purge", { language });
+        busy.purge = false;
+        if (result.isSuccess && result.data) {
+            Object.assign(status, result.data.status);
+            toast("ok", `Caché purgada: ${result.data.deleted.toLocaleString()} traducciones eliminadas.`);
+            loadGrid();
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo purgar.");
+        }
+    }
+
+    // ----- Grid de traducciones -----
+    const PAGE_SIZE = 50;
+    const filter = reactive({ search: "", language: "", status: "", page: 0 });
+    const grid = reactive<PageBag>({ total: 0, rows: [] });
+    const pageCount = computed(() => Math.ceil(grid.total / PAGE_SIZE));
+
+    const langItems = computed<ListItemBag[]>(() => [
+        { value: "", text: "Todos los idiomas" },
+        ...status.stats.map(s => ({ value: s.language, text: s.language }))
+    ]);
+    const statusItems: ListItemBag[] = [
+        { value: "", text: "Todos los status" },
+        { value: "Translated", text: "Traducidas" },
+        { value: "Excluded", text: "Excluidas" }
+    ];
+
+    async function loadGrid(): Promise<void> {
+        busy.grid = true;
+        const result = await invokeBlockAction<PageBag>("GetTranslations", {
+            language: filter.language, status: filter.status, search: filter.search, page: filter.page, pageSize: PAGE_SIZE
+        });
+        busy.grid = false;
+        if (result.isSuccess && result.data) {
+            grid.total = result.data.total;
+            grid.rows = result.data.rows;
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudieron cargar las traducciones.");
+        }
+    }
+    function search(): void {
+        filter.page = 0;
+        loadGrid();
+    }
+    function goPage(p: number): void {
+        filter.page = p;
+        loadGrid();
+    }
+
+    // ----- Edicion -----
+    const editOpen = ref(false);
+    const editRow = ref<RowBag | null>(null);
+    const editText = ref("");
+    const editStatus = ref("Translated");
+    const editStatusItems: ListItemBag[] = [
+        { value: "Translated", text: "Traducida" },
+        { value: "Excluded", text: "Excluida (dejar original)" }
+    ];
+
+    function openEdit(row: RowBag): void {
+        editRow.value = row;
+        editText.value = row.translatedText || "";
+        editStatus.value = row.status === "Excluded" ? "Excluded" : "Translated";
+        editOpen.value = true;
+    }
+
+    async function saveEdit(): Promise<void> {
+        if (!editRow.value) {
+            return;
+        }
+        busy.edit = true;
+        const result = await invokeBlockAction("SaveTranslation", {
+            id: editRow.value.id, translatedText: editText.value, status: editStatus.value
+        });
+        busy.edit = false;
+        if (result.isSuccess) {
+            editOpen.value = false;
+            toast("ok", "Traducción actualizada; los navegadores la refrescan en la próxima carga.");
+            loadGrid();
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo guardar.");
+        }
+    }
+
+    async function deleteEdit(): Promise<void> {
+        if (!editRow.value) {
+            return;
+        }
+        if (!await confirm("¿Eliminar esta traducción de la caché?")) {
+            return;
+        }
+        busy.edit = true;
+        const result = await invokeBlockAction("DeleteTranslation", { id: editRow.value.id });
+        busy.edit = false;
+        if (result.isSuccess) {
+            editOpen.value = false;
+            toast("ok", "Traducción eliminada.");
+            loadGrid();
+        }
+        else {
+            toast("err", result.errorMessage || "No se pudo eliminar.");
+        }
+    }
+
+    // Carga inicial del grid.
+    loadGrid();
+</script>

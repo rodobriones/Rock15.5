@@ -18,5 +18,12 @@ namespace com.vidareal.Translator.Providers
         /// llamador deja el texto original). Lanza excepcion ante fallo duro.
         /// </summary>
         Dictionary<int, string> TranslateBatch( IList<string> texts, string targetLanguage );
+
+        /// <summary>
+        /// Prueba de conectividad end-to-end (una traduccion real de 1 string).
+        /// Devuelve null si todo OK; si falla, el motivo legible (status HTTP,
+        /// mensaje del servicio, etc.) para mostrarlo en el panel de admin.
+        /// </summary>
+        string TestConnection( string targetLanguage );
     }
 }

@@ -29,6 +29,9 @@ export type AddressControlGetConfigurationOptionsBag = {
     /** The 2-character code name of the selected country */
     countryCode?: string | null;
 
+    /** [VidaReal] The currently selected state/departamento, used to filter the city/municipio list */
+    stateCode?: string | null;
+
     /** Whether or not to use an abbreviated form of the country name in the list */
     useCountryAbbreviation: boolean;
 };

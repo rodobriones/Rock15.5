@@ -1,274 +1,306 @@
-{% assign currency     = Workflow | Attribute:'Currency'     | StripHtml | Truncate:8 | Escape %}
-{% assign amount       = Workflow | Attribute:'Amount'       | StripHtml | Truncate:20 | Escape %}
+{% assign currency     = Workflow | Attribute:'Currency'     | StripHtml | Truncate:8   | Escape %}
+{% assign amount       = Workflow | Attribute:'Amount'       | StripHtml | Truncate:20  | Escape %}
 {% assign symbol       = '$' %}{% if currency == 'GTQ' %}{% assign symbol = 'Q' %}{% endif %}
-{% assign nit          = Workflow | Attribute:'Nit'          | StripHtml | Truncate:32 | Escape %}
+{% assign nit          = Workflow | Attribute:'Nit'          | StripHtml | Truncate:32  | Escape %}
 {% assign nitName      = Workflow | Attribute:'NitName'      | StripHtml | Truncate:120 | Escape %}
 {% assign nitAddr      = Workflow | Attribute:'NitAddress'   | StripHtml | Truncate:200 | Escape %}
-{% assign mode         = Workflow | Attribute:'Mode'         | StripHtml | Truncate:10 | Escape %}
-{% assign donorName    = Workflow | Attribute:'DonorName'    | StripHtml | Truncate:80 | Escape %}
+{% assign mode         = Workflow | Attribute:'Mode'         | StripHtml | Truncate:10  | Escape %}
+{% assign donorName    = Workflow | Attribute:'DonorName'    | StripHtml | Truncate:80  | Escape %}
 {% assign donorEmail   = Workflow | Attribute:'DonorEmail'   | StripHtml | Truncate:120 | Escape %}
-{% assign donationType = Workflow | Attribute:'DonationType' | StripHtml | Truncate:80 | Escape %}
+{% assign donationType = Workflow | Attribute:'DonationType' | StripHtml | Truncate:80  | Escape %}
+{% assign note         = Workflow | Attribute:'Note'         | StripHtml | Truncate:250 | Escape | NewlineToBr %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet" />
-  <title>Confirmación de donación – DAR</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="color-scheme" content="light dark" />
+<meta name="supported-color-schemes" content="light dark" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet" />
+<title>Confirmación de donación – DAR</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+
+  body, table, td, p, a, span { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  /* Sin border-collapse: la caja de Notas usa border-radius y `collapse` lo anula.
+     Los mso-table-*space son el fix real para los huecos de Outlook. */
+  table { border-spacing:0; mso-table-lspace:0pt; mso-table-rspace:0pt; }
+  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
+
+  @media screen and (max-width: 600px) {
+    .padding-movil { padding-left:20px !important; padding-right:20px !important; }
+    .hero-amount   { font-size:42px !important; }
+  }
+
+  /* ── Modo oscuro: Apple Mail, iOS Mail, Outlook para Mac, clientes modernos ── */
+  @media (prefers-color-scheme: dark) {
+    .bg-page    { background:#14181c !important; background-color:#14181c !important; }
+    .bg-card    { background:#1b2126 !important; background-color:#1b2126 !important; }
+    .bg-row     { background:#242b31 !important; background-color:#242b31 !important; }
+    .bg-graybox { background:#3c4b54 !important; background-color:#3c4b54 !important; }
+    .bg-navy    { background:#0b2c3e !important; background-color:#0b2c3e !important; }
+    .txt-navy   { color:#e6eef5 !important; }
+    .txt-label  { color:#9dbdd4 !important; }
+    .txt-white  { color:#ffffff !important; }
+    .txt-soft   { color:#c2cfd9 !important; }
+    .txt-footer { color:#9aa7b2 !important; }
+    .divider    { border-color:#2b3238 !important; }
+    .divider-strong { border-color:#39434b !important; }
+  }
+
+  /* ── Modo oscuro de Outlook.com / Outlook móvil (prefijos data-ogsc / data-ogsb) ── */
+  [data-ogsc] .bg-page,    [data-ogsb] .bg-page    { background:#14181c !important; background-color:#14181c !important; }
+  [data-ogsc] .bg-card,    [data-ogsb] .bg-card    { background:#1b2126 !important; background-color:#1b2126 !important; }
+  [data-ogsc] .bg-row,     [data-ogsb] .bg-row     { background:#242b31 !important; background-color:#242b31 !important; }
+  [data-ogsc] .bg-graybox, [data-ogsb] .bg-graybox { background:#3c4b54 !important; background-color:#3c4b54 !important; }
+  [data-ogsc] .bg-navy,    [data-ogsb] .bg-navy    { background:#0b2c3e !important; background-color:#0b2c3e !important; }
+  [data-ogsc] .txt-navy   { color:#e6eef5 !important; }
+  [data-ogsc] .txt-label  { color:#9dbdd4 !important; }
+  [data-ogsc] .txt-white  { color:#ffffff !important; }
+  [data-ogsc] .txt-soft   { color:#c2cfd9 !important; }
+  [data-ogsc] .txt-footer { color:#9aa7b2 !important; }
+  [data-ogsc] .divider    { border-color:#2b3238 !important; }
+  [data-ogsc] .divider-strong { border-color:#39434b !important; }
+</style>
 </head>
-<body style="margin:0;padding:0;background:#ececec;font-family:'Montserrat','Roboto',Arial,sans-serif;">
+<body class="bg-page" style="margin:0;padding:0;background:#ececec;background-color:#ececec;font-family:'Montserrat','Roboto',Arial,sans-serif;">
 
-  <!-- Wrapper -->
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ececec;padding:32px 16px;">
+  <!-- Preheader oculto: primera línea que muestra la bandeja de entrada -->
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    Recibimos tu donación de {{ symbol }} {{ amount }} {{ currency }}. ¡Gracias por tu generosidad!
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-page" style="background:#ececec;background-color:#ececec;padding:32px 16px;">
+  <tr>
+  <td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+
+    <!-- ══════════════ HEADER NAVY ══════════════ -->
     <tr>
-      <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+    <td class="bg-navy" style="background:#0e364c;background-color:#0e364c;padding:20px 24px 0;">
 
-
-          <!-- ══════════════════════════════════
-               HEADER NEGRO
-          ══════════════════════════════════ -->
-          <tr>
-            <td style="background:#272b31;border-radius:22px 22px 0 0;padding:20px 24px 0;">
-
-              <!-- Top bar: badge -->
-              {% if mode != 'live' %}
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="right" style="vertical-align:middle;">
-                    <span style="display:inline-block;background:#1a2b42;border:1px solid #4d709b;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Test</span>
-                  </td>
-                </tr>
-              </table>
-              {% endif %}
-
-              <!-- Logo -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding:20px 0 0;">
-                    <a href="https://www.vidareal.tv/" target="_blank">
-                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'logoblancopq' }}"
-                           alt="VidaReal" width="70"
-                           style="display:block;margin:0 auto 15px;border:0;">
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Ícono de éxito + monto -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="padding:32px 0 28px;">
-
-                    <!-- Círculo verde con check -->
-                    <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;">
-                      <tr>
-                        <td width="42" height="42" align="center" valign="middle" style="width:42px;height:42px;background:#ecfdf3;border-radius:50%;font-size:34px;line-height:42px;color:#067647;font-weight:700;">
-                          &#10003;
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Título -->
-                    <p style="margin:0 0 10px;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:0.01em;">¡Tu donación ha sido recibida!</p>
-
-                    <!-- Monto destacado -->
-                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:54px;font-weight:700;color:#ffffff;line-height:1;letter-spacing:-0.01em;">
-                      <span style="font-size:28px;font-weight:500;color:#d9d9d9;vertical-align:top;line-height:1.6;">{{ symbol }}</span>{{ amount }}
-                    </p>
-                    <p style="margin:8px 0 0;font-size:13px;color:#888888;text-transform:uppercase;letter-spacing:0.1em;">{{ currency }}</p>
-
-                    <p style="margin:8px 0 20px;font-size:13px;color:#b0b0b0;letter-spacing:0.01em;">Tu generosidad hace la diferencia.</p>
-
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-
-          <!-- ══════════════════════════════════
-               CARD BLANCA
-          ══════════════════════════════════ -->
-          <tr>
-            <td style="background:#f3f3f3;border-left:1px solid #d5d5d5;border-right:1px solid #d5d5d5;padding:0 16px;">
-
-              <!-- Tarjeta principal -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #d7d7d7;border-radius:14px;margin:16px 0 0;overflow:hidden;">
-
-                <!-- Section head -->
-                <tr>
-                  <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
-                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#222222;">Detalles de la transacción</p>
-                  </td>
-                </tr>
-
-                <!-- Fila: Donante -->
-                <tr>
-                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Donante</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donorName }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- Fila: Tipo de donación (solo si viene el fondo) -->
-                {% if donationType != '' and donationType != null %}
-                <tr>
-                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Tipo de donación</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donationType }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                {% endif %}
-
-                <!-- Fila: Correo -->
-                <tr>
-                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Correo</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ donorEmail }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- Fila: Monto -->
-                <tr>
-                  <td style="padding:12px 16px;background:#f9fafb;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Monto</td>
-                        <td align="right" style="font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:18px;font-weight:700;color:#0f0f0f;">{{ symbol }}{{ amount }} <span style="font-size:12px;font-weight:500;color:#6b7280;">{{ currency }}</span></td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-              </table>
-
-
-              <!-- ── Sección NIT (solo si hay NIT) ── -->
-              {% if nit != '' and nit != null %}
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #d7d7d7;border-radius:14px;margin:12px 0 0;overflow:hidden;">
-
-                <tr>
-                  <td style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
-                    <p style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#222222;">Datos de facturación</p>
-                  </td>
-                </tr>
-
-                <!-- NIT -->
-                <tr>
-                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">NIT</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nit }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- Nombre / Razón social -->
-                {% if nitName != '' and nitName != null %}
-                <tr>
-                  <td style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Razón social</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nitName }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                {% endif %}
-
-                <!-- Dirección -->
-                {% if nitAddr != '' and nitAddr != null %}
-                <tr>
-                  <td style="padding:12px 16px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;">Dirección</td>
-                        <td align="right" style="font-size:14px;font-weight:500;color:#111827;">{{ nitAddr }}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                {% endif %}
-
-              </table>
-              {% endif %}
-
-
-              <!-- ── Notas ── -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 16px;">
-                <tr>
-                  <td style="background:#DEDEDE;border:1px solid #abe7c0;border-radius:10px;padding:12px 16px;">
-                    <p style="margin:0;font-size:13px;color:#5c5c5c;letter-spacing:0.01em;"><i>NOTAS:</i> Agradecemos tu donación.{% if nit != '' and nit != null %} Tu recibo llegará en breve.{% endif %}</p>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-
-          <!-- ══════════════════════════════════
-               FOOTER NEGRO
-          ══════════════════════════════════ -->
-          <tr>
-            <td align="center" style="background:#272b31;border-radius:0 0 22px 22px;padding:20px 24px;text-align:center;">
-              <p style="margin:0 0 6px;font-size:11px;color:#b7b7b7;">Este correo fue enviado a <span style="color:#b7b7b7;">{{ donorEmail }}</span></p>
-              <p style="margin:0;font-size:11px;color:#b7b7b7;">Este correo fue generado automáticamente, por favor no responder.</p>
-
-              <!-- Logo -->
-              <br>
-              <a href="https://www.vidareal.tv/" target="_blank">
-                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'nombrevrblanco' }}"
-                     alt="VidaReal" width="100"
-                     style="display:block;margin:0 auto 15px;border:0;">
-              </a>
-
-              <!-- SOCIAL ICONS -->
-              <br>
-              <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
-                <tr>
-                  <td align="center" style="font-size:0;line-height:0;">
-                    <a href="https://www.instagram.com/vidaventura.tv/" target="_blank">
-                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoInstagramBlanco' }}" width="25" style="margin:0 6px;border:0;">
-                    </a>
-                    <a href="https://www.facebook.com/vidaventura.tv" target="_blank">
-                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoFacebookBlanco' }}" width="25" style="margin:0 6px;border:0;">
-                    </a>
-                    <a href="https://www.youtube.com/@vidaventuratv4487" target="_blank">
-                      <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoYoutubeBlanco' }}" width="25" style="margin:0 6px;border:0;">
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-
-          <!-- Espacio inferior -->
-          <tr>
-            <td style="height:24px;"></td>
-          </tr>
-
-        </table>
+      {% if mode != 'live' %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+      <td align="right" style="vertical-align:middle;">
+        <span class="txt-white" style="display:inline-block;background:#1a2b42;background-color:#1a2b42;border:1px solid #4d709b;border-radius:999px;padding:5px 12px;font-size:10px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:0.08em;">Test</span>
       </td>
+      </tr>
+      </table>
+      {% endif %}
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+      <td align="center" style="padding:20px 0 0;">
+        <a href="https://www.vidareal.tv/" target="_blank">
+          <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'logoblancopq' }}" alt="VidaReal" width="70" style="display:block;margin:0 auto 15px;border:0;">
+        </a>
+      </td>
+      </tr>
+      </table>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+      <td align="center" style="padding:32px 0 28px;">
+        <p class="txt-white" style="margin:0 0 10px;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:22px;letter-spacing:0.01em;color:#ffffff;"><span style="font-weight:700;color:#ffffff;">¡Gracias</span><span style="font-weight:400;color:#ffffff;"> Por Tu Generosidad!</span></p>
+        <p class="txt-white hero-amount" style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:54px;font-weight:700;color:#ffffff;line-height:1;letter-spacing:-0.01em;">
+          <span class="txt-soft" style="font-size:28px;font-weight:500;color:#d9d9d9;vertical-align:top;line-height:1.6;">{{ symbol }}</span> {{ amount }}
+        </p>
+        <p class="txt-soft" style="margin:8px 0 0;font-size:13px;color:#b0b0b0;text-transform:uppercase;letter-spacing:0.1em;">{{ currency }}</p>
+      </td>
+      </tr>
+      </table>
+    </td>
     </tr>
+
+    <!-- ══════════════ DETALLES / FACTURACIÓN ══════════════ -->
+    <tr>
+    <td class="padding-movil bg-card" style="background:#ffffff;background-color:#ffffff;padding:0 30px;">
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-card" style="background:#ffffff;background-color:#ffffff;margin:30px 0 0;overflow:hidden;">
+        <tr>
+        <td class="divider-strong" style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
+          <p class="txt-navy" style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#0e364c;">Detalles de la transacción</p>
+        </td>
+        </tr>
+
+        <!-- Donante -->
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Donante</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ donorName }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+
+        <!-- Tipo de donación -->
+        {% if donationType != '' and donationType != null %}
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Tipo de donación</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ donationType }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+        {% endif %}
+
+        <!-- Correo -->
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Correo</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ donorEmail }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+
+        <!-- Monto -->
+        <tr>
+        <td class="bg-row" style="padding:12px 16px 12px 24px;background:#f9fafb;background-color:#f9fafb;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Monto</td>
+            <td class="txt-navy" align="right" style="font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:18px;font-weight:700;color:#0e364c;">{{ symbol }} {{ amount }} <span class="txt-label" style="font-size:12px;font-weight:500;color:#0e364c;">{{ currency }}</span></td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+      </table>
+
+      <!-- Datos de facturación (solo si el donante pidió recibo con NIT) -->
+      {% if nit != '' and nit != null %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-card" style="background:#ffffff;background-color:#ffffff;margin:12px 0 0;overflow:hidden;">
+        <tr>
+        <td class="divider-strong" style="padding:14px 16px 10px;border-bottom:1px solid #eeeeee;">
+          <p class="txt-navy" style="margin:0;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#0e364c;">Datos de facturación</p>
+        </td>
+        </tr>
+
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">NIT</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ nit }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+
+        {% if nitName != '' and nitName != null %}
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Razón social</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ nitName }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+        {% endif %}
+
+        {% if nitAddr != '' and nitAddr != null %}
+        <tr>
+        <td class="divider" style="padding:12px 16px;border-bottom:1px solid #f3f3f3;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="txt-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#0e364c;">Dirección</td>
+            <td class="txt-navy" align="right" style="font-size:14px;font-weight:500;color:#0e364c;">{{ nitAddr }}</td>
+          </tr>
+          </table>
+        </td>
+        </tr>
+        {% endif %}
+      </table>
+      {% endif %}
+
+      <div style="height:20px;line-height:20px;">&nbsp;</div>
+    </td>
+    </tr>
+
+    <!-- ══════════════ NOTAS: texto escrito por el donante ══════════════ -->
+    <tr>
+    <td class="bg-card" style="padding:0 30px;background:#ffffff;background-color:#ffffff;">
+      {% if note != '' and note != null %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="divider-strong" style="border:1px solid #d7d7d7;border-radius:14px;margin:0 0 20px;overflow:hidden;">
+      <tr>
+      <td class="padding-movil" style="padding:20px 24px;">
+        <p class="txt-navy" style="margin:0 0 8px;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#0e364c;">Notas</p>
+        <p class="txt-navy" style="margin:0;font-size:13px;line-height:1.5;color:#0e364c;letter-spacing:0.01em;">{{ note }}</p>
+      </td>
+      </tr>
+      </table>
+      {% elseif nit != '' and nit != null %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="divider-strong" style="border:1px solid #d7d7d7;border-radius:14px;margin:0 0 20px;overflow:hidden;">
+      <tr>
+      <td class="padding-movil" style="padding:20px 24px;">
+        <p class="txt-navy" style="margin:0 0 8px;font-family:'Montserrat','Roboto',Arial,sans-serif;font-size:15px;font-weight:700;color:#0e364c;">Notas</p>
+        <p class="txt-navy" style="margin:0;font-size:13px;line-height:1.5;color:#0e364c;letter-spacing:0.01em;">Agradecemos tu donación. Tu recibo llegará en breve.</p>
+      </td>
+      </tr>
+      </table>
+      {% endif %}
+      <div style="height:20px;line-height:20px;">&nbsp;</div>
+    </td>
+    </tr>
+
+    <!-- ══════════════ CAJA GRIS ══════════════ -->
+    <tr>
+    <td class="bg-graybox" style="background:#e3e3e3;background-color:#e3e3e3;padding:0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+      <td align="center" class="padding-movil" style="padding:24px 30px;text-align:center;">
+        <p class="txt-navy" style="margin:0;text-align:center;font-size:13px;line-height:1.5;color:#0e364c;letter-spacing:0.01em;">Agradecemos tu donación.<br><strong>Equipo de Vida Real.tv</strong></p>
+      </td>
+      </tr>
+      </table>
+    </td>
+    </tr>
+
+    <!-- ══════════════ FOOTER NAVY ══════════════ -->
+    <tr>
+    <td align="center" class="bg-navy" style="background:#0e364c;background-color:#0e364c;padding:20px 24px;text-align:center;">
+      <p class="txt-footer" style="margin:0 0 6px;font-size:11px;color:#b7b7b7;">Este correo fue enviado a <span class="txt-footer" style="color:#b7b7b7;">{{ donorEmail }}</span></p>
+      <p class="txt-footer" style="margin:0;font-size:11px;color:#b7b7b7;">Este correo fue generado automáticamente, por favor no responder.</p>
+
+      <div style="height:15px;line-height:15px;">&nbsp;</div>
+
+      <a href="https://www.vidareal.tv/" target="_blank">
+        <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'nombrevrblanco' }}" alt="VidaReal" width="100" style="display:block;margin:0 auto 15px;border:0;">
+      </a>
+
+      <!-- Íconos de redes sociales -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+      <tr>
+      <td align="center" style="font-size:0;line-height:0;">
+        <a href="https://www.instagram.com/vidaventura.tv/" target="_blank">
+          <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoInstagramBlanco' }}" width="25" alt="Instagram" style="margin:0 6px;border:0;">
+        </a>
+        <a href="https://www.facebook.com/vidaventura.tv" target="_blank">
+          <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoFacebookBlanco' }}" width="25" alt="Facebook" style="margin:0 6px;border:0;">
+        </a>
+        <a href="https://www.youtube.com/@vidaventuratv4487" target="_blank">
+          <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoYoutubeBlanco' }}" width="25" alt="YouTube" style="margin:0 6px;border:0;">
+        </a>
+      </td>
+      </tr>
+      </table>
+    </td>
+    </tr>
+
+  </table>
+  </td>
+  </tr>
   </table>
 
 </body>

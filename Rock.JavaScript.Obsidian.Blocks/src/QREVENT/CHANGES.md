@@ -487,3 +487,58 @@ El build de Rock publica los bloques en:
 - **Android Chrome**: Funciona correctamente con `facingMode: "environment"` para camara trasera.
 - **iPad con app Rock Check-in**: `ReservationScanner` detecta y usa la camara nativa via `RockCheckinNative` bridge, omitiendo `getUserMedia` completamente.
 - **iPhone doble camara**: La lectura puede tardar algunos frames hasta que la camara se enfoca. El scan loop es tolerante a `NotFoundException`.
+
+### Guardado del QR en iOS y WebView (2026-08-24)
+
+**Sintoma:** en un WebView de iOS, el boton "Descargar" del comprobante no hacia
+nada; el WebView se quedaba "pensando" como si estuviera cargando una URL.
+
+**Causa:** `downloadImage` hacia `link.href = canvas.toDataURL(); link.click()`.
+En iOS eso no descarga:
+
+- Safari tiene soporte pobre del atributo `download`, y con `data:` URIs intenta
+  *abrir* el contenido en vez de guardarlo.
+- Safari **bloquea la navegacion top-level a `data:` URIs** desde 2018. Ese intento
+  de apertura queda colgado, y de ahi el indicador de carga.
+- En **WKWebView** es peor: no hay gestor de descargas, asi que ni `download`, ni
+  `blob:`, ni `data:` producen un archivo sin que la app implemente un
+  `WKDownloadDelegate`.
+- El `<a>` nunca se agregaba al DOM; varios navegadores ignoran `click()` en
+  elementos desconectados.
+- Todo el cuerpo de `qrImg.onload` estaba sin `try/catch`, asi que cualquier fallo
+  de `toDataURL` se perdia sin un solo toast. Y en iOS, bajo presion de memoria,
+  `toDataURL()` devuelve `"data:,"` en lugar de lanzar.
+
+**Solucion:** el boton ahora dice "Guardar imagen" y usa tres vias en cascada:
+
+1. **Web Share API** (`navigator.canShare({files})` + `navigator.share`): abre la
+   hoja nativa con "Guardar en Fotos". Es la unica via que guarda directo en iOS.
+2. **Modal de guardado** si Web Share no esta disponible (comun en WebView):
+   muestra la imagen para mantenerla presionada y guardarla. Eso si funciona en
+   WKWebView.
+3. **Descarga clasica** en Android y escritorio, con blob URL y un `<a download>`
+   agregado al DOM.
+
+**Detalles que importan:**
+
+- `buildReservationDataUrl` es **sincrono a proposito**: dibuja desde el `<img>` del
+  QR ya renderizado en pantalla. `navigator.share()` exige user activation, y
+  cualquier `await` de red antes de llamarlo hace que Safari lo rechace con
+  `NotAllowedError`.
+- Se quito `qrImg.crossOrigin = "anonymous"`. La imagen es same-origin, no
+  necesitaba CORS, y `GetQRCode.ashx` no emite `Access-Control-Allow-Origin`: con el
+  atributo puesto, cualquier diferencia de origen (proxy, WebView con base URL
+  propia, `www` o no) hacia fallar la carga. El handler usa `UrlProxySafe()`, senal
+  de que hay un proxy adelante.
+- `AbortError` de `share()` (el usuario cierra la hoja) no se reporta como error.
+- El boton se deshabilita y muestra "Generando..." mientras trabaja.
+
+**Nota sobre `qrUrl`:** se le quito el parametro `size`. `GetQRCode.ashx` **no lo
+lee** (solo `data`, `outputType`, `foreground`, `background`, `pixelsPerModule`), asi
+que `size=240` y `size=280` devolvian la misma imagen de 580x580 px pero como dos
+URLs distintas: dos peticiones sin cache compartido, y el handler tampoco manda
+`Cache-Control`. Unificadas, el guardado reusa la imagen que el `<img>` ya cargo.
+
+**Mejora futura:** si la app nativa expone un puente (como el `RockCheckinNative`
+que ya usa `ReservationScanner` para la camara), lo ideal seria pasarle el base64
+para que guarde en Fotos sin pasar por la hoja de compartir.

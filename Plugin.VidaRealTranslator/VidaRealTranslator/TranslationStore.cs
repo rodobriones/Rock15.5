@@ -104,6 +104,74 @@ VALUES
             return rockContext.Database.SqlQuery<FullRow>( sql, parameters.ToArray() ).ToList();
         }
 
+        public class PageResult
+        {
+            public int Total { get; set; }
+            public List<FullRow> Rows { get; set; }
+        }
+
+        /// <summary>
+        /// Pagina de traducciones para el dashboard Obsidian: filtro por idioma,
+        /// status y busqueda + total (para el paginador). OFFSET/FETCH.
+        /// </summary>
+        public static PageResult GetPage( RockContext rockContext, string targetLanguage, string status,
+            string search, int offset, int pageSize )
+        {
+            offset = Math.Max( offset, 0 );
+            pageSize = Math.Min( Math.Max( pageSize, 1 ), 200 );
+
+            var where = new List<string>();
+            if ( !string.IsNullOrWhiteSpace( targetLanguage ) )
+            {
+                where.Add( "[TargetLanguage] = @lang" );
+            }
+            if ( !string.IsNullOrWhiteSpace( status ) )
+            {
+                where.Add( "[Status] = @status" );
+            }
+            if ( !string.IsNullOrWhiteSpace( search ) )
+            {
+                where.Add( "( [SourceText] LIKE @q OR [TranslatedText] LIKE @q )" );
+            }
+            var whereSql = where.Count > 0 ? "WHERE " + string.Join( " AND ", where ) : string.Empty;
+
+            // Los SqlParameter NO se pueden reusar entre comandos -> factory.
+            Func<object[]> makeParams = () =>
+            {
+                var list = new List<object>();
+                if ( !string.IsNullOrWhiteSpace( targetLanguage ) )
+                {
+                    list.Add( new SqlParameter( "@lang", targetLanguage ) );
+                }
+                if ( !string.IsNullOrWhiteSpace( status ) )
+                {
+                    list.Add( new SqlParameter( "@status", status ) );
+                }
+                if ( !string.IsNullOrWhiteSpace( search ) )
+                {
+                    var q = search.Replace( "[", "[[]" ).Replace( "%", "[%]" ).Replace( "_", "[_]" );
+                    list.Add( new SqlParameter( "@q", "%" + q + "%" ) );
+                }
+                return list.ToArray();
+            };
+
+            var total = rockContext.Database.SqlQuery<int>(
+                $"SELECT COUNT(*) FROM [{TableName}] {whereSql}", makeParams() ).First();
+
+            var pageParams = makeParams().ToList();
+            pageParams.Add( new SqlParameter( "@offset", offset ) );
+            pageParams.Add( new SqlParameter( "@pageSize", pageSize ) );
+
+            var rows = rockContext.Database.SqlQuery<FullRow>(
+                $@"SELECT [Id], [SourceText], [TargetLanguage], [TranslatedText], [Status], [Provider], [ModifiedDateTime]
+                   FROM [{TableName}] {whereSql}
+                   ORDER BY [ModifiedDateTime] DESC, [Id] DESC
+                   OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY",
+                pageParams.ToArray() ).ToList();
+
+            return new PageResult { Total = total, Rows = rows };
+        }
+
         public static FullRow GetById( RockContext rockContext, int id )
         {
             return rockContext.Database.SqlQuery<FullRow>(
@@ -125,6 +193,32 @@ VALUES
         {
             rockContext.Database.ExecuteSqlCommand(
                 $"DELETE FROM [{TableName}] WHERE [Id] = @id", new SqlParameter( "@id", id ) );
+        }
+
+        // ----- Estadisticas para el panel de administracion -----
+
+        public class StatRow
+        {
+            public string TargetLanguage { get; set; }
+            public int Total { get; set; }
+            public int Translated { get; set; }
+            public int Excluded { get; set; }
+            public DateTime? LastActivity { get; set; }
+        }
+
+        /// <summary>Resumen por idioma: totales, por status y ultima actividad.</summary>
+        public static List<StatRow> GetStats( RockContext rockContext )
+        {
+            var sql = $@"SELECT [TargetLanguage],
+                                COUNT(*) AS [Total],
+                                SUM( CASE WHEN [Status] = 'Translated' THEN 1 ELSE 0 END ) AS [Translated],
+                                SUM( CASE WHEN [Status] = 'Excluded' THEN 1 ELSE 0 END ) AS [Excluded],
+                                MAX( [ModifiedDateTime] ) AS [LastActivity]
+                         FROM [{TableName}]
+                         GROUP BY [TargetLanguage]
+                         ORDER BY [TargetLanguage]";
+
+            return rockContext.Database.SqlQuery<StatRow>( sql ).ToList();
         }
 
         /// <summary>Idiomas distintos presentes en la tabla (para el filtro del grid).</summary>

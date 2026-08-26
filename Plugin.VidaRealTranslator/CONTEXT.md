@@ -16,14 +16,17 @@ Traducir la **interfaz** de Rock (inglés) al idioma destino **en el navegador, 
 | Normalización + hash (fuente única) | `VidaRealTranslator\TranslatorNormalization.cs` | Compilada |
 | Acceso a la tabla (SQL crudo) | `VidaRealTranslator\TranslationStore.cs` | Compilada |
 | Inyección global del script (auto on/off) | `VidaRealTranslator\TranslatorInjection.cs` | Compilada |
-| Bloque grid ver/editar traducciones (WebForms) | `RockWeb\Plugins\com_vidareal\Translator\TranslationList.ascx(.cs)` | Runtime-compiled |
-| Migración 003 (registra el grid en la página) | `VidaRealTranslator\Migrations\003_TranslationListBlock.cs` | Compilada |
+| **Dashboard admin Obsidian (C#)** | `VidaRealTranslator\Blocks\TranslatorDashboard.cs` | Compilada |
+| **Dashboard admin Obsidian (front)** | `Rock.JavaScript.Obsidian.Blocks\src\Translator\translatorDashboard.obs` → `RockWeb\Obsidian\Blocks\Translator\translatorDashboard.obs.js` | `npm run build-fast` |
+| Migración 004 (dashboard reemplaza a los bloques WebForms; copia config) | `VidaRealTranslator\Migrations\004_TranslatorDashboard.cs` | Compilada |
+| Bloque grid ver/editar traducciones (WebForms — RETIRADO por la 004, archivo queda en disco) | `RockWeb\Plugins\com_vidareal\Translator\TranslationList.ascx(.cs)` | Obsoleto |
+| Migración 003 (registraba el grid; la 004 lo retira) | `VidaRealTranslator\Migrations\003_TranslationListBlock.cs` | Compilada |
 | Proveedor IA (abstracción) | `VidaRealTranslator\Providers\ITranslationProvider.cs` | Compilada |
 | Proveedor IA (Azure OpenAI) | `VidaRealTranslator\Providers\AzureOpenAiProvider.cs` | Compilada |
 | REST (`Config`, `Resolve`, `Purge`) | `VidaRealTranslator\Rest\TranslatorController.cs` | Compilada |
 | Migración 001 (solo crea la tabla + índice único) | `VidaRealTranslator\Migrations\001_TranslatorSetup.cs` | Compilada |
 | Migración 002 (página + bloque de config; borra Global Attributes legacy si existieran) | `VidaRealTranslator\Migrations\002_TranslatorSettingsPage.cs` | Compilada |
-| Bloque de configuración (WebForms) | `RockWeb\Plugins\com_vidareal\Translator\TranslatorSettings.ascx(.cs)` | Runtime-compiled |
+| Bloque de configuración (WebForms — RETIRADO por la 004, archivo queda en disco) | `RockWeb\Plugins\com_vidareal\Translator\TranslatorSettings.ascx(.cs)` | Obsoleto |
 | Traductor DOM (vanilla JS) | `RockWeb\Plugins\com_vidareal\Translator\translator.js` | Listo |
 | Self-check de salvaguardas | `RockWeb\Plugins\com_vidareal\Translator\test_translator.js` | `node test_translator.js` |
 | DLL compilada | `VidaRealTranslator\bin\Release\net472\com.vidareal.Translator.dll` | Copiar a `RockWeb\Bin` |
@@ -36,7 +39,7 @@ Docs: `README.md` (punto de entrada, instalación y afinación) · `CONTEXT.md` 
 2. **Sin entidad EF (`Model<T>`/`Service<T>`), SQL crudo parametrizado.** El único consumidor de la tabla es el controller REST; raw SQL evita todo el boilerplate de EF/DbContext (no hay grid ni REST auto-CRUD que justifique una entidad). Subir a `Model<T>` solo si después se quiere un grid/CRUD para la pantalla de revisión manual.
 3. **El cliente no hashea.** `translator.js` envía el **texto normalizado**; el servidor hashea (SHA-256). El único uso del hash es el índice único de BD, así que vive solo donde se necesita. Esto **elimina toda una clase de bugs**: "hash desincronizado cliente/servidor". La normalización sí está duplicada (debe coincidir), y por eso hay un test que lo verifica.
 4. **localStorage, no IndexedDB.** El mapeo es string→string; localStorage sobra. IndexedDB sería sobre-ingeniería.
-5. **Config en página propia bajo Installed Plugins (block attributes), NO Global Attributes.** Encapsulada (no ensucia la lista global). Settings declaradas como decoradores `[…Field]` en el bloque (Rock genera el formulario, incl. `Encrypted Text` para la API key). El REST las lee por el Guid fijo del bloque vía `BlockCache`.
+5. **Config en página propia bajo Installed Plugins (block attributes), NO Global Attributes.** Encapsulada (no ensucia la lista global). Desde 1.4.0 el bloque es el **dashboard Obsidian** (`TranslatorDashboard`): los attributes se declaran como decoradores en su C# y se editan **desde el propio dashboard** (acción `SaveSettings`; API key write-only, vacío = conservar). El REST las lee por el Guid fijo del bloque vía `BlockCache` (`SettingsBlockGuid` = el bloque que crea la migración 004, que copió los valores del bloque WebForms viejo).
 6. **Degradación con gracia en todo el pipeline.** Config falla → arranca con defaults (`es`). IA falla/timeout/respuesta parcial → deja originales (no envenena caché). localStorage lleno → purga y reintenta. Selector de config inválido → se descarta. Excepción en cualquier punto → nunca rompe la página.
 7. **Performance del observer.** El `MutationObserver` recolecta solo los subárboles añadidos/mutados (no re-barre todo `document.body` en cada mutación); las pasadas completas quedan para carga/late-render/navegación.
 

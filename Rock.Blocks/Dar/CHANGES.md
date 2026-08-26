@@ -631,6 +631,7 @@ atributos de workflow:
 | `NitName` | Nombre fiscal validado por la API |
 | `NitAddress` | Dirección fiscal validada por la API |
 | `DonorEmail` | Email del donante |
+| `Note` | Nota escrita por el donante en el formulario (max 250 chars) |
 | `RockTransactionId` | ID del `FinancialTransaction` creado |
 | `ExternalId` | `ROCK-{transactionId}` |
 | `ReferenceNumber` | ID de la transacción en Cybersource |
@@ -663,23 +664,57 @@ envía al donante desde el workflow.
 | `{{ donorName }}` | Atributo de workflow `DonorName` |
 | `{{ donorEmail }}` | Atributo de workflow `DonorEmail` |
 | `{{ donationType }}` | Atributo de workflow `DonationType` (fila "Tipo de donación", condicional) |
+| `{{ note }}` | Atributo de workflow `Note` — nota del donante, va en la caja "Notas" (condicional, `NewlineToBr`) |
 
 **Cuándo se envía:** el template en sí no se envía directamente; es el
 workflow el que lo usa como cuerpo de un paso `Send Email`. El workflow de
 donación lo envía siempre; el workflow de recibo lo envía solo si el donante
 solicitó recibo y tiene NIT validado.
 
-**Diseño (rediseño 2026-07-08):** header `#272b31` con logo VidaReal, check
-verde y monto grande; card blanca con detalles de transacción (incluye la fila
-condicional "Tipo de donación"); sección de facturación condicional (solo si
-hay NIT); caja de notas; footer `#272b31` con logo e íconos sociales
-(Instagram/Facebook/YouTube vía Global Attributes). Fuente Montserrat.
-Diseñado para clientes de email sin CSS moderno (usa tablas HTML).
+**Diseño (rediseño 2026-08-19):** header navy `#0e364c` con logo VidaReal,
+título "¡Gracias Por Tu Generosidad!" y monto grande con moneda; card blanca
+con detalles de transacción (incluye la fila condicional "Tipo de donación");
+sección de facturación condicional (solo si hay NIT); caja "Notas" con la nota
+escrita por el donante; banda gris `#e3e3e3` con el mensaje de cierre; footer
+navy `#0e364c` con logo e íconos sociales (Instagram/Facebook/YouTube vía
+Global Attributes). Fuente Montserrat. Diseñado para clientes de email sin CSS
+moderno (usa tablas HTML con estilos inline).
 
-> **Requiere config en el workflow:** para que aparezca la fila "Tipo de
-> donación" hay que agregar el atributo de workflow `DonationType` y pegar
-> este HTML en el paso `Send Email`. Si el atributo no existe, la fila
-> simplemente no se renderiza (es condicional).
+**Caja "Notas":** muestra `{{ note }}` (la nota que el donante escribió en el
+formulario, con saltos de línea convertidos a `<br>` por `NewlineToBr`). Si el
+donante no escribió nota y sí pidió recibo con NIT, cae al texto genérico
+"Agradecemos tu donación. Tu recibo llegará en breve."; si no hay nota ni NIT,
+la caja no se renderiza.
+
+**Modo claro / oscuro:** la plantilla define su paleta en estilos inline (modo
+claro, que es el fallback de Outlook de escritorio y de cualquier cliente que
+ignore `<style>`) y la sobreescribe por clase en el bloque
+`@media (prefers-color-scheme: dark)` — Apple Mail, iOS Mail, Outlook para Mac
+— y con los prefijos `[data-ogsc]` / `[data-ogsb]` de Outlook.com y Outlook
+móvil. Cada elemento con color lleva la clase que le corresponde:
+
+| Clase | Rol | Claro | Oscuro |
+|---|---|---|---|
+| `bg-page` | fondo de la página | `#ececec` | `#14181c` |
+| `bg-card` | fondo de las cards | `#ffffff` | `#1b2126` |
+| `bg-row` | fila destacada del monto | `#f9fafb` | `#242b31` |
+| `bg-graybox` | banda gris de cierre | `#e3e3e3` | `#3c4b54` |
+| `bg-navy` | header y footer | `#0e364c` | `#0b2c3e` |
+| `txt-navy` | texto principal | `#0e364c` | `#e6eef5` |
+| `txt-label` | etiquetas en mayúsculas | `#0e364c` | `#9dbdd4` |
+| `txt-white` / `txt-soft` | texto sobre navy | `#ffffff` / `#d9d9d9` | `#ffffff` / `#c2cfd9` |
+| `txt-footer` | texto del footer | `#b7b7b7` | `#9aa7b2` |
+| `divider` / `divider-strong` | bordes y separadores | `#f3f3f3` / `#d7d7d7` | `#2b3238` / `#39434b` |
+
+Gmail (app Android/iOS) no respeta `prefers-color-scheme`: invierte los colores
+por su cuenta. No hay forma de controlarlo desde la plantilla; el diseño se
+mantiene legible porque todos los fondos son explícitos (nunca transparentes).
+
+> **Requiere config en el workflow:** para que aparezcan la fila "Tipo de
+> donación" y la caja "Notas" hay que agregar los atributos de workflow
+> `DonationType` y `Note` (tipo Text, mismos nombres exactos) y pegar este
+> HTML en el paso `Send Email`. Si un atributo no existe, su fila simplemente
+> no se renderiza (todas son condicionales).
 
 ---
 

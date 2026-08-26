@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VidaReal Translator — Architecture and how it works</title>
+<style>
+:root{
+  --indigo:#3B42F5; --navy:#1D2978; --navy-deep:#212D88;
+  --ink:#1F2937; --ink-soft:#4B5563; --muted:#7A8699;
+  --line:#E6EAF2; --stripe:#F7FAFD; --lav:#EEF0FE;
+  --green:#27894B; --green-bg:#ECFDF5; --code-bg:#0E1729;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+     color:var(--ink);font-size:11pt;line-height:1.5;-webkit-font-smoothing:antialiased;
+     -webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:letter;margin:0}
+.page{width:8.5in;height:11in;padding:0.72in 0.75in 0.5in;display:flex;flex-direction:column;
+      overflow:hidden;background:#fff;break-after:page}
+.page:last-of-type{break-after:auto}
+.body{flex:1 1 auto}
+.foot{margin-top:auto;padding-top:9px;border-top:1px solid var(--line);display:flex;
+      justify-content:space-between;font-size:8pt;color:var(--muted)}
+
+.hero{background:linear-gradient(100deg,var(--navy-deep) 0%,#3039C6 52%,#444CF6 100%);
+      border-radius:14px;padding:30px 32px 26px;color:#fff;margin-bottom:24px}
+.hero .eyebrow{font-size:8.5pt;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.82)}
+.hero h1{margin:14px 0 12px;font-size:30pt;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.hero .lede{margin:0;font-size:12pt;line-height:1.45;color:rgba(255,255,255,.94);max-width:46em}
+.hero .meta{margin:16px 0 0;font-size:9pt;color:rgba(255,255,255,.78)}
+
+h2{display:flex;align-items:center;gap:11px;margin:22px 0 10px;font-size:15.5pt;font-weight:700;
+   color:var(--navy);letter-spacing:-.01em}
+h2:first-child{margin-top:0}
+h2 .n{flex:none;width:21px;height:21px;border-radius:5px;background:var(--indigo);color:#fff;
+      font-size:9.5pt;font-weight:700;display:flex;align-items:center;justify-content:center}
+h3{margin:20px 0 8px;font-size:11.5pt;font-weight:700;color:var(--navy)}
+p{margin:0 0 10px}
+strong{font-weight:700;color:#111827}
+ul{margin:0 0 10px;padding-left:20px}
+li{margin-bottom:7px}
+li::marker{color:var(--indigo)}
+
+.callout{background:var(--lav);border-left:4px solid var(--indigo);border-radius:0 8px 8px 0;
+         padding:14px 18px;margin:14px 0 16px}
+.callout p:last-child{margin-bottom:0}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin:16px 0 4px}
+.kpi{border:1px solid var(--line);border-top:3px solid var(--indigo);border-radius:7px;padding:12px 13px 13px}
+.kpi .big{font-size:15pt;font-weight:700;color:var(--indigo);line-height:1.15;margin-bottom:6px}
+.kpi .sm{font-size:8.5pt;line-height:1.35;color:var(--ink-soft)}
+
+table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:10pt}
+thead th{background:var(--navy);color:#fff;text-align:left;font-weight:600;padding:9px 13px}
+tbody td{border:1px solid var(--line);padding:9px 13px;vertical-align:top;line-height:1.45}
+tbody tr:nth-child(odd){background:var(--stripe)}
+td.k{font-weight:700;color:#111827}
+
+.cap{font-size:8.5pt;color:var(--muted);text-align:center;line-height:1.45;margin:12px auto 14px;max-width:44em}
+.note{font-size:9pt;color:var(--ink-soft);line-height:1.5;margin:12px 0 4px}
+
+.arch{display:flex;align-items:stretch;margin:16px 0 0}
+.archcol{display:flex;flex-direction:column;flex:none}
+.archcol--az{justify-content:center}
+.zcap{text-align:center;font-size:8pt;color:var(--muted);margin-top:9px}
+.box{border-radius:9px;padding:12px;flex:1 1 auto}
+.box .bt{text-align:center;font-weight:700;font-size:10.5pt;margin-bottom:2px}
+.box .bs{text-align:center;font-size:8pt;color:var(--ink-soft);margin-bottom:9px}
+.box--browser{width:214px;border:1.6px solid #8E94FA;background:#F6F7FF}
+.box--browser .bt{color:var(--navy)}
+.box--server{width:248px;border:1.6px solid #CBD5E1;background:#FAFCFE}
+.box--server .bt{color:#111827}
+.box--azure{width:168px;flex:0 0 auto;align-self:center;border:1.6px solid #86D3A6;background:var(--green-bg)}
+.box--azure .bt{color:var(--green)}
+.chip{border:1px solid #DDE3F0;background:#fff;border-radius:6px;padding:7px 9px;margin-bottom:7px;
+      text-align:center;font-size:8pt;line-height:1.3;color:var(--ink-soft)}
+.chip:last-child{margin-bottom:0}
+.chip .ct{font-weight:700;color:var(--navy);font-size:9pt;display:block;margin-bottom:3px}
+.azline{font-size:8pt;line-height:1.4;color:var(--ink-soft);text-align:center}
+.azline.b{font-weight:700;color:var(--green);margin-top:8px}
+.arrows{width:104px;display:flex;flex-direction:column;justify-content:space-around;padding:26px 0 6px}
+.ar{text-align:center}
+.ar .badge{width:17px;height:17px;border-radius:50%;background:var(--indigo);color:#fff;font-size:8pt;
+           font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-bottom:3px}
+.ar .badge--g{background:var(--green)}
+.ar .line{height:1.6px;background:#94A3B8;position:relative;margin:0 6px 4px}
+.ar .line::after{content:"";position:absolute;right:-1px;top:-3px;border-left:6px solid #94A3B8;
+                 border-top:4px solid transparent;border-bottom:4px solid transparent}
+.ar .line--l::after{right:auto;left:-1px;border-left:0;border-right:6px solid #94A3B8}
+.ar .line--g{background:var(--green)}
+.ar .line--g::after{border-left-color:var(--green)}
+.ar .line--gl{background:var(--green)}
+.ar .line--gl::after{border-right-color:var(--green)}
+.ar .lbl{font-size:7.5pt;color:var(--ink-soft);line-height:1.3}
+.midlbl{display:flex;align-items:center;justify-content:center;gap:7px;margin:7px 0;font-size:8pt;color:var(--ink-soft)}
+.midlbl .badge{width:17px;height:17px;border-radius:50%;background:var(--navy);color:#fff;font-size:8pt;
+               font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin:16px 0 0}
+.step{border:1.6px solid #B8BDFC;border-radius:9px;padding:11px 9px 12px;text-align:center;background:#F8F9FF}
+.step .st{font-weight:700;font-size:9.5pt;color:var(--navy);margin-bottom:6px}
+.step .sd{font-size:7.8pt;line-height:1.4;color:var(--ink-soft)}
+.step--2{border-color:#F5B97A;background:#FFF8F0}
+.step--2 .st{color:#B45309}
+.step--3{border-color:#B7C0D6;background:#F7F9FC}
+.step--3 .st{color:#334155}
+.step--4{border-color:#7E86D9;background:#F5F6FE}
+.step--5{border-color:#8AD8AE;background:var(--green-bg)}
+.step--5 .st{color:var(--green)}
+
+.code{background:var(--code-bg);border-radius:10px;padding:18px 20px;margin:12px 0 0;
+      font-family:"Cascadia Mono",Consolas,"Courier New",monospace;font-size:8.5pt;line-height:2.05;color:#CBD5E1}
+.ind{padding-left:2.2em;display:inline-block}
+.ind2{padding-left:4.4em;display:inline-block}
+.tag{color:#7DD3FC}
+.attr{color:#FBBF24}
+.val{color:#86EFAC}
+.txt{color:#E5E7EB}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:7.8pt;font-weight:700;
+      font-family:"Segoe UI",system-ui,sans-serif;margin:0 6px;vertical-align:1px}
+.pill--y{background:#15803D;color:#fff}
+.pill--n{background:#B91C1C;color:#fff}
+.ann{font-family:"Segoe UI",system-ui,sans-serif;font-size:8pt;color:#94A3B8}
+
+.funhead{font-size:9pt;font-weight:700;color:#111827;margin:16px 0 0}
+.funhead span{display:block;font-weight:400;font-size:8pt;color:var(--muted)}
+.funnel{display:flex;align-items:center;margin:8px 0 0}
+.lvl{border-radius:9px;padding:14px 12px;text-align:center;color:#fff;flex:none}
+.lvl .lt{font-weight:700;font-size:10pt;margin-bottom:2px}
+.lvl .ls{font-size:8pt;opacity:.85;margin-bottom:8px}
+.lvl .lr{font-weight:700;font-size:9pt;margin-bottom:2px}
+.lvl .lc{font-size:8pt;opacity:.85}
+.lvl--1{background:#5A60F5;width:238px;padding-top:20px;padding-bottom:20px}
+.lvl--2{background:#243063;width:220px;padding-top:16px;padding-bottom:16px}
+.lvl--3{background:var(--green);width:206px}
+.farrow{flex:1 1 auto;height:1.6px;background:#94A3B8;position:relative;margin:0 10px}
+.farrow::after{content:"";position:absolute;right:-1px;top:-3px;border-left:6px solid #94A3B8;
+               border-top:4px solid transparent;border-bottom:4px solid transparent}
+.funnote{font-size:7.8pt;color:var(--muted);margin:10px 0 0;line-height:1.45}
+thead th.y{color:#8AF0B4}
+thead th.n{color:#FFB4A8}
+</style>
+</head>
+<body>
+
+<!-- ============================ PAGE 1 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <div class="hero">
+      <div class="eyebrow">Iglesia Vida Real &middot; Technology &middot; Rock RMS</div>
+      <h1>VidaReal Translator</h1>
+      <p class="lede">Automatic AI translation of the Rock RMS interface with permanent caching &mdash; built in-house, without modifying Rock&rsquo;s core.</p>
+      <p class="meta">Executive brief &middot; August 2026 &middot; Plugin version 1.2.0</p>
+    </div>
+
+    <h2><span class="n">1</span>Executive summary</h2>
+    <p>Rock RMS &mdash; the platform that manages the people, groups, events and check-in of the church &mdash; ships <strong>in English only</strong>. That slows adoption among staff and volunteers. <strong>VidaReal Translator</strong> translates the entire interface into Spanish (or any language) automatically and transparently for the user.</p>
+
+    <div class="callout">
+      <p><strong>The core idea:</strong> every interface string is translated by AI <strong>once</strong> and is then stored in our own database. From the second user onward, the translation comes out of the cache &mdash; instant and free. AI spend trends to zero as usage grows.</p>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="big">Once</div><div class="sm">each string&rsquo;s translation is paid for a single time; after that it is permanently cached</div></div>
+      <div class="kpi"><div class="big">Zero changes</div><div class="sm">to Rock&rsquo;s code: a standalone plugin, updatable and reversible</div></div>
+      <div class="kpi"><div class="big">Interface only</div><div class="sm">sending member data to the AI is blocked by design</div></div>
+      <div class="kpi"><div class="big">One click</div><div class="sm">to switch it on, or remove it from every Rock site at once</div></div>
+    </div>
+
+    <h2><span class="n">2</span>What the user sees</h2>
+    <ul>
+      <li><strong>The whole interface in Spanish</strong>: menus, buttons, forms, validation messages and help text &mdash; on the intranet, the public site and check-in.</li>
+      <li><strong>Optional language switcher</strong> (Weglot-style): a discreet tab to switch between Spanish, English or other languages. The preference is remembered per device.</li>
+      <li><strong>Zero friction</strong>: nothing to install, no change to their workflow. If anything fails, the page simply shows in English &mdash; it never breaks.</li>
+    </ul>
+
+  </div>
+  <div class="foot"><span>VidaReal Translator &middot; Executive brief</span><span>Page 1 of 6</span></div>
+</section>
+
+<!-- ============================ PAGE 2 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <h2><span class="n">3</span>Architecture</h2>
+    <p>Four pieces, each with one clear responsibility. The numbered arrows follow the journey of a new string:</p>
+
+    <div class="arch">
+      <div class="archcol">
+        <div class="box box--browser">
+          <div class="bt">User&rsquo;s browser</div>
+          <div class="bs">translator.js (lightweight JavaScript)</div>
+          <div class="chip">Detects interface strings</div>
+          <div class="chip">Filters out data (never sends names, amounts, emails)</div>
+          <div class="chip">Local device cache (localStorage)</div>
+          <div class="chip">Applies the translations</div>
+        </div>
+        <div class="zcap">On each device</div>
+      </div>
+
+      <div class="arrows">
+        <div class="ar">
+          <div class="badge">1</div>
+          <div class="line"></div>
+          <div class="lbl">batch of strings</div>
+        </div>
+        <div class="ar">
+          <div class="badge">4</div>
+          <div class="line line--l"></div>
+          <div class="lbl">translations</div>
+        </div>
+      </div>
+
+      <div class="archcol">
+        <div class="box box--server">
+          <div class="bt">Rock RMS server</div>
+          <div class="bs">Plugin com.vidareal.Translator (C#)</div>
+          <div class="chip">
+            <span class="ct">REST API</span>
+            Requires an authenticated user<br>
+            Validates and sanitizes everything<br>
+            Cost caps per request and per hour
+          </div>
+          <div class="midlbl"><span>already cached?</span><span class="badge">2</span></div>
+          <div class="chip">
+            <span class="ct">Database cache</span>
+            1 table: string + language + translation<br>
+            Unique index: one translation per string, forever<br>
+            (editable from the admin)
+          </div>
+        </div>
+        <div class="zcap">Our own infrastructure</div>
+      </div>
+
+      <div class="arrows">
+        <div class="ar">
+          <div class="badge badge--g">3</div>
+          <div class="line line--g"></div>
+          <div class="lbl">only what is new</div>
+        </div>
+        <div class="ar">
+          <div class="line line--l line--gl"></div>
+          <div class="lbl">translation<br>(stored)</div>
+        </div>
+      </div>
+
+      <div class="archcol archcol--az">
+        <div class="box box--azure">
+          <div class="bt">Azure OpenAI</div>
+          <div class="azline">Natural, idiomatic translation, in batches</div>
+          <div class="azline b">Only receives NEW interface strings</div>
+        </div>
+        <div class="zcap">Cloud (pay per use)</div>
+      </div>
+    </div>
+
+    <p class="cap">Fig. 1 &mdash; Architecture. The browser never talks to Azure directly; everything goes through the Rock server, which validates, applies caps and caches.</p>
+
+    <h3>Components</h3>
+    <table>
+      <thead><tr><th style="width:30%">Component</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr><td class="k">translator.js (browser)</td><td>Detects the visible interface strings live &mdash; including classic screens (WebForms), modern ones (Obsidian/Vue) and AJAX-loaded content &mdash; and applies the translations without reloading. Includes the language switcher.</td></tr>
+        <tr><td class="k">REST API (C# plugin)</td><td>Receives batches of strings, resolves them against the database cache and only sends the AI what has never been translated. Requires an authenticated user; sanitizes the AI output; enforces cost limits.</td></tr>
+        <tr><td class="k">Database</td><td>A single translations table with a unique index on (string, language). It is the permanent memory of the system and is managed from within Rock.</td></tr>
+        <tr><td class="k">Azure OpenAI</td><td>Translates software vocabulary (buttons, menus, messages) with human-level quality, under strict instructions: never touch proper names, codes or variables.</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+  <div class="foot"><span>VidaReal Translator &middot; Executive brief</span><span>Page 2 of 6</span></div>
+</section>
+
+<!-- ============================ PAGE 3 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <h2><span class="n">4</span>How it works at the DOM level</h2>
+    <p>The translator touches no server-side HTML or templates: it operates on the <strong>already-rendered DOM</strong> in the browser, as a visual layer. Every string goes through a 5-step pipeline:</p>
+
+    <div class="pipe">
+      <div class="step step--1"><div class="st">1 &middot; Collect</div><div class="sd">walks text nodes, visible attributes and button labels</div></div>
+      <div class="step step--2"><div class="st">2 &middot; Filter</div><div class="sd">exclusions + heuristics: anything that looks like data never leaves the browser</div></div>
+      <div class="step step--3"><div class="st">3 &middot; Normalize</div><div class="sd">collapsed whitespace &rarr; identical canonical key on client and server</div></div>
+      <div class="step step--4"><div class="st">4 &middot; Resolve</div><div class="sd">local cache &rarr; DB &rarr; AI, in batches of up to 200 strings per request</div></div>
+      <div class="step step--5"><div class="st">5 &middot; Apply</div><div class="sd">text and attributes only; never innerHTML &rarr; HTML injection is impossible</div></div>
+    </div>
+
+    <p class="cap">Fig. 2 &mdash; Pipeline in the browser. Steps 1&ndash;3 and 5 are local; only step 4 can touch the network.</p>
+
+    <h3>Anatomy of a page: what it touches and what it does not</h3>
+    <div class="code">
+      <div><span class="tag">&lt;label&gt;</span><span class="txt">First Name</span><span class="tag">&lt;/label&gt;</span><span class="pill pill--y">&check; translates</span><span class="ann">interface text</span></div>
+      <div><span class="tag">&lt;input</span> <span class="attr">value</span>=<span class="val">"Juan P&eacute;rez"</span><span class="tag">&gt;</span><span class="pill pill--n">&times; untouched</span><span class="ann">form value: whatever is typed or saved is never touched</span></div>
+      <div><span class="tag">&lt;input</span> <span class="attr">type</span>=<span class="val">"submit"</span> <span class="attr">value</span>=<span class="val">"Save"</span><span class="tag">&gt;</span><span class="pill pill--y">&check; translates</span><span class="ann">here value is the visible button label, not data</span></div>
+      <div><span class="tag">&lt;div</span> <span class="attr">title</span>=<span class="val">"Print this page"</span><span class="tag">&gt;</span><span class="pill pill--y">&check; translates</span><span class="ann">visible attributes: title, placeholder, aria-label, alt</span></div>
+      <div><span class="tag">&lt;table</span> <span class="attr">class</span>=<span class="val">"grid-table"</span><span class="tag">&gt;</span></div>
+      <div><span class="ind"></span><span class="tag">&lt;th&gt;</span><span class="txt">Email Address</span><span class="tag">&lt;/th&gt;</span><span class="pill pill--y">&check; translates</span><span class="ann">column header = interface</span></div>
+      <div><span class="ind2"></span><span class="tag">&lt;td&gt;</span><span class="txt">juan@vidareal.tv</span><span class="tag">&lt;/td&gt;</span><span class="pill pill--n">&times; untouched</span><span class="ann">data cell: excluded wholesale, never even sent</span></div>
+      <div><span class="tag">&lt;span&gt;</span><span class="txt">{{ Person.NickName }}</span><span class="tag">&lt;/span&gt;</span><span class="pill pill--n">&times; untouched</span><span class="ann">Lava token / variable</span></div>
+      <div><span class="tag">&lt;textarea&gt;</span><span class="txt">...</span><span class="tag">&lt;/textarea&gt;</span><span class="txt">,</span> <span class="tag">&lt;pre&gt;</span><span class="txt">,</span> <span class="tag">&lt;code&gt;</span><span class="txt">,</span> <span class="attr">contenteditable</span><span class="pill pill--n">&times; untouched</span><span class="ann">editable or technical content, excluded wholesale</span></div>
+    </div>
+
+    <p class="note">In addition, any element can be excluded individually with the class <strong>notranslate</strong> or the attribute <strong>data-no-translate</strong>, and there are selector lists configurable from the admin without recompiling.</p>
+
+    <ul>
+      <li><strong>Idempotent and efficient:</strong> nodes that have already been translated are marked and never reprocessed; strings already known come out of the cache without touching the network.</li>
+      <li><strong>Safe application:</strong> text is replaced node by node, preserving edge whitespace; innerHTML is never used, so the AI cannot introduce HTML or scripts.</li>
+      <li><strong>Fail-safe:</strong> every step runs inside error guards; an invalid selector or an odd response is discarded without affecting the page.</li>
+    </ul>
+
+
+  </div>
+  <div class="foot"><span>VidaReal Translator &middot; Executive brief</span><span>Page 3 of 6</span></div>
+</section>
+
+<!-- ============================ PAGE 4 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <h3 style="margin-top:0">Coverage of dynamic content</h3>
+    <p>Rock builds its pages from blocks that arrive at different moments. The translator covers all four paths:</p>
+
+    <table>
+      <thead><tr><th style="width:38%">Scenario</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Initial load and late render</td><td>Staggered passes (0 / 600 / 1500 ms) over the whole page.</td></tr>
+        <tr><td>Content injected by AJAX / modern blocks (Obsidian)</td><td><strong>MutationObserver</strong>: watches the DOM and processes <em>only the new subtrees</em> (it does not re-sweep the page), grouping changes with a small debounce.</td></tr>
+        <tr><td>Partial postbacks (classic WebForms screens)</td><td>Hook into the ASP.NET AJAX lifecycle (PageRequestManager): re-scans when each postback finishes.</td></tr>
+        <tr><td>Navigation without reload (SPA)</td><td>Hook into the History API (pushState / popstate): re-scans on route change.</td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="n">5</span>The cache funnel: why the cost trends to zero</h2>
+    <p>Every string on the page passes through three levels. Only the last one costs money, and each string crosses it <strong>once in the lifetime of the system</strong>:</p>
+
+    <div class="funhead">100% of the strings on the page<span>every visit</span></div>
+    <div class="funnel">
+      <div class="lvl lvl--1">
+        <div class="lt">Level 1 &middot; Browser</div>
+        <div class="ls">local device cache</div>
+        <div class="lr">Resolves the vast majority</div>
+        <div class="lc">instant &middot; zero cost</div>
+      </div>
+      <div class="farrow"></div>
+      <div class="lvl lvl--2">
+        <div class="lt">Level 2 &middot; Database</div>
+        <div class="ls">shared memory of the church</div>
+        <div class="lr">Resolves almost all the rest</div>
+        <div class="lc">milliseconds &middot; zero cost</div>
+      </div>
+      <div class="farrow"></div>
+      <div class="lvl lvl--3">
+        <div class="lt">Level 3 &middot; Azure OpenAI</div>
+        <div class="lr">Only strings never seen before</div>
+        <div class="lc">the only level with a cost &middot; once per string</div>
+      </div>
+    </div>
+    <p class="funnote">With use, levels 1 and 2 absorb practically everything: the Rock interface is finite, and once it is translated, level 3 is barely visited.</p>
+    <p class="cap">Fig. 3 &mdash; Resolution funnel. Cost lives only at level 3, and each string pays it exactly once.</p>
+
+  </div>
+  <div class="foot"><span>VidaReal Translator &middot; Executive brief</span><span>Page 4 of 6</span></div>
+</section>
+
+<!-- ============================ PAGE 5 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <h3 style="margin-top:0">Built-in cost controls</h3>
+    <table>
+      <thead><tr><th style="width:34%">Control</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Permanent cache (DB + browser)</td><td>Each string is paid for once in the lifetime of the system.</td></tr>
+        <tr><td>Per-request and hourly limits</td><td>A maximum number of strings per request and a global cap on new translations per hour: an uncontrolled spending spike is impossible.</td></tr>
+        <tr><td>Deduplication and anti-repetition</td><td>Strings repeated on the page and simultaneous requests are consolidated: the same thing is never paid for twice.</td></tr>
+        <tr><td>No credentials &rarr; no spend</td><td>If Azure is not configured, the plugin simply does not translate. It never generates accidental spend.</td></tr>
+        <tr><td>Authenticated access</td><td>Only users with a Rock session can invoke the service: no outsider can consume the budget.</td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="n">6</span>Protection of member data</h2>
+
+    <div class="callout">
+      <p>A non-negotiable design rule: <strong>&laquo;interface yes, data no&raquo;</strong>. The filter runs in the browser <em>before</em> anything is sent: whatever looks like data never leaves the device.</p>
+    </div>
+
+    <table>
+      <thead><tr><th class="y" style="width:50%">&check; Translated</th><th class="n">&times; Never sent, never touched</th></tr></thead>
+      <tbody>
+        <tr><td>Buttons, menus, titles, form labels, validation messages, help text</td><td>People&rsquo;s names, emails, phone numbers, amounts, dates, the contents of data tables, fields that are typed in or saved, editable content</td></tr>
+      </tbody>
+    </table>
+
+    <ul>
+      <li>The values that travel to the server are excluded by design: a translation <strong>cannot corrupt</strong> what gets stored in the database.</li>
+      <li>The AI response is sanitized (any code or markup is stripped) before being stored or displayed.</li>
+      <li>Aligned with the Responsible AI Use Policy: only software vocabulary ever reaches the AI, never member information.</li>
+    </ul>
+
+  </div>
+  <div class="foot"><span>VidaReal Translator &middot; Executive brief</span><span>Page 5 of 6</span></div>
+</section>
+
+<!-- ============================ PAGE 6 ============================ -->
+<section class="page">
+  <div class="body">
+
+    <h2><span class="n">7</span>Administration (inside Rock itself)</h2>
+    <p>Everything is managed from a single admin page: <em>Admin Tools &rarr; Installed Plugins &rarr; VidaReal Translator</em>. No need to touch servers or databases.</p>
+
+    <table>
+      <thead><tr><th style="width:30%">Function</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td class="k">On / off</td><td>A single toggle activates the translator on <strong>every Rock site at once</strong>; switching it off removes it just as cleanly. Fully reversible.</td></tr>
+        <tr><td class="k">Editorial control</td><td>A listing lets you search any translation and <strong>correct it by hand</strong> (the correction is locked in: the AI will not touch it again), <strong>exclude</strong> strings that must never be translated, or delete them to regenerate.</td></tr>
+        <tr><td class="k">Cache purge</td><td>Regenerates every translation (e.g. after improving the AI style instructions). Administrators only.</td></tr>
+        <tr><td class="k">Configuration</td><td>Target language, Azure credentials (stored <strong>encrypted</strong>), the languages in the switcher and fine-grained scope settings &mdash; all through the standard Rock form.</td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="n">8</span>Quality and robustness</h2>
+    <ul>
+      <li><strong>Graceful degradation:</strong> in the face of any failure (AI down, network, configuration), the page is shown in English. The translator never breaks a screen or a save.</li>
+      <li><strong>Professional translation:</strong> the AI is instructed to use standard software terminology in Spanish, a consistent tone and a similar length (so the layout does not break).</li>
+      <li><strong>Verified integrity:</strong> automated tests cover the data safeguards and the exact parity between the browser code and the server code.</li>
+      <li><strong>Built to grow:</strong> it supports several languages in parallel (each with its own cache) and the architecture allows switching AI provider without rewriting the system.</li>
+    </ul>
+
+
+    <h2>In summary</h2>
+    <div class="callout">
+      <p><strong>A one-time development investment</strong> that makes Rock accessible in Spanish for the whole team, with a marginal and decreasing operating cost (trending to zero), full editorial control and zero risk to the data of the congregation.</p>
+    </div>
+
+    <p>The same architecture works for any target language: each one keeps its own permanent cache, and adding one does not change a single line of Rock.</p>
+
+  </div>
+  <div class="foot"><span>Iglesia Vida Real &middot; Technology &middot; Prepared with AI assistance and reviewed by IT &middot; August 2026</span><span>Page 6 of 6</span></div>
+</section>
+
+
+</body>
+</html>

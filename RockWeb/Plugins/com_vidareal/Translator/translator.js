@@ -30,10 +30,22 @@
     var BATCH = 200;                  // items por request (<= tope del server)
     var DEBOUNCE_MS = 400;
 
-    // Defaults de exclusion. Configurables via Global Attributes (Config endpoint).
+    // Defaults de exclusion. Ampliables via el block attribute ExcludeSelectors (Config endpoint).
+    // #cms-admin-footer: barra admin de Rock (Page Load Time / ViewState / HTML Size). Ademas de ser
+    // chrome, el load time CAMBIA en cada carga -> cada pagina generaria un string unico pagado a Azure.
+    // Check-in: se excluyen SOLO los contenedores que llevan nombres de personas/familias (ninos
+    // incluidos) usando los ganchos del markup STOCK de Rock — no el .btn-checkin-select completo,
+    // para que los botones de accion (Check Out/Save/Cancel...) SI se traduzcan tras un upgrade de
+    // Rock que revierta las traducciones hechas a mano en los .ascx del fork.
+    // Clasico: .js-person-select/.checkin-person/.checkin-person-list (Multi/CheckOut PersonSelect),
+    // .js-family-select (FamilySelect). Next-gen: family/attendee buttons + banner.
+    // GAP conocido: PersonSelect.ascx (modo individual) no tiene clase distintiva en stock; si se usa
+    // ese modo, agregar .btn-checkin-select en Exclude Selectors del panel (config, no codigo).
     var EXCLUDE_CONTAINERS =
         "script,style,code,pre,kbd,samp,textarea,svg,[contenteditable]," +
-        "[data-no-translate],.notranslate,.vrtr-skip";
+        "[data-no-translate],.notranslate,.vrtr-skip,#cms-admin-footer," +
+        ".js-person-select,.checkin-person,.checkin-person-list,.js-family-select," +
+        ".family-button,.attendee-button,.attendee-banner";
     // Interior de grids de datos: NO traducir (solo encabezados th, que no son td).
     var DATA_CELLS = ".grid-table td, .grid-table .grid-actions, .js-grid-table td";
     // <select> de UI cuyas <option> SI se traducen aunque la heuristica dude.
@@ -45,7 +57,10 @@
     var inFlight = new Set();         // normText con request en vuelo: los bursts (0/600/1500ms) se
                                       // solapan con la latencia de la IA; sin este guard, un string
                                       // NUEVO se re-pediria 2-3 veces y Azure se pagaria 2-3 veces
-    var seenText = new WeakSet();     // text nodes ya procesados (evita re-traducir)
+    var processedText = new WeakMap(); // text node -> nodeValue YA procesado. Se compara contra el
+                                       // valor actual: si la app cambia el texto del nodo despues,
+                                       // difiere y se re-traduce. Ademas evita el bucle "texto ya
+                                       // traducido se re-recolecta y se paga a Azure como identidad".
 
     /* ---------- util ---------- */
 
@@ -96,12 +111,16 @@
 
     // Regex de "esto parece DATO, no UI" -> no traducir.
     var RE_LAVA = /\{\{|\}\}|\{%|%\}/;
-    var RE_EMAIL = /^\S+@\S+\.\S+$/;
+    // SIN anclas: un email INCRUSTADO en texto ("... | Email: x@y.com | NIT ...") tambien es dato
+    // sensible (regresion 2026-08-14: se tradujo un string con email+NIT de un donante).
+    var RE_EMAIL = /\S+@\S+\.\S+/;
     var RE_URL = /^(https?:\/\/|www\.|\/)\S+$/i;
     var RE_GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     var RE_HASLETTER = /[A-Za-zÀ-ÿ]/;
     // Solo numeros/moneda/fecha/puntuacion (sin palabras): Q1,234.50  $10  12/05/2026  (555) 123-4567
     var RE_DATALIKE = /^[\sQ$€¥.,:;%#@()\/\-+0-9]+$/;
+    // SENSIBLE: enmascarado de secretos (tarjetas/cuentas): "•••• 4242", "****1071", "xxxx", "9x00".
+    var RE_MASKED = /[•*]{2,}|\b[xX]{2,}\b|\d[xX]\d/;
 
     function translatable(norm) {
         if (!norm) return false;
@@ -112,6 +131,10 @@
         if (RE_URL.test(norm)) return false;
         if (RE_GUID.test(norm)) return false;
         if (RE_DATALIKE.test(norm)) return false;
+        if (RE_MASKED.test(norm)) return false;          // secretos enmascarados -> dato sensible
+        // 8+ digitos en total = numero de tarjeta/cuenta/telefono incrustado en texto
+        // ("Visa 4487 9x00 xxxx 1071"). Ningun label de UI real trae tantos digitos.
+        if ((norm.match(/\d/g) || []).length >= 8) return false;
         return true;
     }
 
@@ -161,6 +184,10 @@
         return function (t) {
             var m = original.match(/^(\s*)([\s\S]*?)(\s*)$/);
             node.nodeValue = (m ? m[1] : "") + t + (m ? m[3] : "");
+            // Registrar el valor APLICADO: el nodo ya esta en el idioma destino;
+            // sin esto, el siguiente rescan lo recolectaria como string "nuevo" y
+            // se pagaria a Azure una traduccion identidad (es->es) por cada string.
+            processedText.set(node, node.nodeValue);
         };
     }
 
@@ -185,7 +212,7 @@
         // 1) Text nodes
         var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
             acceptNode: function (n) {
-                if (seenText.has(n)) return NodeFilter.FILTER_REJECT;
+                if (processedText.get(n) === n.nodeValue) return NodeFilter.FILTER_REJECT; // sin cambios desde que se proceso
                 if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
                 var p = n.parentElement;
                 if (!p) return NodeFilter.FILTER_REJECT;
@@ -202,10 +229,12 @@
             var original = n.nodeValue;
             var norm = normalize(original);
             register(map, norm, applyTextNode(n, original));
-            // Marcar "visto" SOLO si ya esta resuelto (en cache). Un nodo aun no
-            // traducido queda recolectable -> se reintenta en el proximo run (hasta
-            // MAX_MISS_RETRIES) en vez de quedar en ingles para siempre.
-            if (cacheGet(norm) !== null) seenText.add(n);
+            // Marcar procesado (con SU texto actual) SOLO si ya esta resuelto (en
+            // cache). Un nodo aun no traducido queda recolectable -> se reintenta
+            // en el proximo run (hasta MAX_MISS_RETRIES) en vez de quedar en ingles
+            // para siempre. Si despues cambia el texto, difiere del valor guardado
+            // y se vuelve a procesar/traducir.
+            if (cacheGet(norm) !== null) processedText.set(n, n.nodeValue);
         }
 
         // 2) Atributos visibles (incluye el root si el mismo los tiene)
@@ -325,7 +354,7 @@
 
     // Re-escaneo ESCALONADO de TODO el body: cubre contenido que renderiza TARDE
     // (bloques Obsidian/Vue y AJAX), carga inicial y navegacion. Poco frecuente.
-    // run() es idempotente: seenText + cache evitan retrabajo y refetch.
+    // run() es idempotente: processedText + cache evitan retrabajo y refetch.
     var burstTimers = [];
     function rescanBurst() {
         burstTimers.forEach(clearTimeout);
@@ -417,30 +446,41 @@
         window.addEventListener("popstate", fire);
     }
 
-    // Estilos del switcher (pills EN/ES), replicando el .re-language-switcher de
-    // registrationEntry.obs (que es <style scoped>, no aplica fuera). z-index 1030
-    // = debajo del backdrop de modales de Rock (1040) para NO taparlos.
-    function injectSwitcherStyles(expandedWidth) {
+    // Estilos del switcher. FLOTANTE = "pestañita" discreta abajo-derecha: colapsada
+    // muestra solo el idioma activo (36px) y se ATENUA tras unos segundos; al tocarla
+    // despliega la lista en columna hacia arriba. La expansion es por TAP/CLICK
+    // explicito: en iOS los botones no reciben focus al tocarlos, asi que
+    // hover/:focus-within no son fiables en touch. safe-area = barra de home iOS.
+    // INLINE (SwitcherContainer) = pills en flujo, sin tab ni atenuado.
+    // z-index 1030 = debajo del backdrop de modales de Rock (1040) para NO taparlos.
+    function injectSwitcherStyles() {
         if (document.getElementById("vrtr-switcher-style")) return;
         var st = document.createElement("style");
         st.id = "vrtr-switcher-style";
         st.textContent =
-            "#vrtr-switcher{position:fixed;right:0;bottom:22px;height:54px;display:flex;justify-content:flex-end;" +
-            "overflow:hidden;border-radius:8px 0 0 8px;box-shadow:0 12px 24px rgba(15,23,42,.22);z-index:1030;" +
-            "transition:width .18s ease;width:54px;}" +
-            "#vrtr-switcher:hover,#vrtr-switcher:focus-within{width:" + expandedWidth + "px;}" +
-            "#vrtr-switcher.vrtr-inline{position:static;width:auto;height:auto;overflow:visible;box-shadow:none;" +
-            "border-radius:6px;display:inline-flex;vertical-align:middle;}" +
-            "#vrtr-switcher .vrtr-btn{width:54px;height:54px;border:0;border-left:1px solid rgba(255,255,255,.35);" +
-            "background:#b7b8f6;color:#fff;font-weight:800;font-size:18px;line-height:1;letter-spacing:.02em;cursor:pointer;}" +
-            "#vrtr-switcher.vrtr-inline .vrtr-btn{width:auto;height:auto;padding:5px 12px;font-size:13px;}" +
-            "#vrtr-switcher .vrtr-btn.is-active{background:#3b43f6;}";
+            "#vrtr-switcher{position:fixed;right:0;bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:1030;" +
+            "display:flex;flex-direction:column;align-items:flex-end;gap:6px;transition:opacity .25s ease;}" +
+            "#vrtr-switcher.vrtr-dim{opacity:.5;}" +
+            "#vrtr-switcher .vrtr-tab{border:0;border-radius:8px 0 0 8px;background:#3b43f6;color:#fff;" +
+            "font-weight:800;font-size:12px;letter-spacing:.04em;line-height:1;width:44px;height:36px;" +
+            "cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,.25);}" +
+            "#vrtr-switcher .vrtr-menu{display:none;flex-direction:column;align-items:flex-end;gap:4px;}" +
+            "#vrtr-switcher.vrtr-open .vrtr-menu{display:flex;}" +
+            "#vrtr-switcher .vrtr-btn{border:0;border-radius:8px 0 0 8px;background:#fff;color:#1f2937;" +
+            "font-size:13px;line-height:1;padding:10px 14px;min-width:112px;text-align:right;cursor:pointer;" +
+            "box-shadow:0 4px 12px rgba(15,23,42,.18);}" +
+            "#vrtr-switcher .vrtr-btn.is-active{background:#3b43f6;color:#fff;font-weight:700;}" +
+            "#vrtr-switcher.vrtr-inline{position:static;flex-direction:row;gap:0;display:inline-flex;vertical-align:middle;}" +
+            "#vrtr-switcher.vrtr-inline .vrtr-btn{border-radius:0;min-width:0;box-shadow:none;padding:5px 12px;" +
+            "text-align:center;background:#b7b8f6;color:#fff;}" +
+            "#vrtr-switcher.vrtr-inline .vrtr-btn.is-active{background:#3b43f6;}" +
+            "#vrtr-switcher.vrtr-inline .vrtr-btn:first-child{border-radius:6px 0 0 6px;}" +
+            "#vrtr-switcher.vrtr-inline .vrtr-btn:last-child{border-radius:0 6px 6px 0;}";
         document.head.appendChild(st);
     }
 
-    // Switcher de idioma: pill deslizante (colapsado muestra el idioma activo, se
-    // expande en hover). El idioma elegido se persiste y se recarga (cada idioma
-    // tiene su cache). Con SwitcherContainer se monta en flujo (no flotante).
+    // Switcher de idioma. El idioma elegido se persiste (localStorage) y se
+    // recarga la pagina (cada idioma tiene su cache).
     function renderSwitcher() {
         if (!cfg.showSwitcher) return;
         if (window.self !== window.top) return;                 // no en iframes (modales de Rock)
@@ -450,37 +490,103 @@
         if (!langs.length) return;
 
         var container = cfg.switcherContainer ? safeQuery(cfg.switcherContainer) : null;
-        injectSwitcherStyles(54 * langs.length);
+        injectSwitcherStyles();
 
         var wrap = document.createElement("div");
         wrap.id = "vrtr-switcher";
         wrap.className = "notranslate" + (container ? " vrtr-inline" : "");
         wrap.setAttribute("data-no-translate", "1");
 
-        // Flotante colapsado muestra el boton del idioma activo -> lo ponemos al
-        // final (justify-content:flex-end + overflow). En contenedor: todos.
-        var ordered = langs.slice();
-        if (!container) {
-            ordered.sort(function (a, b) {
-                return (a.code === cfg.targetLanguage ? 1 : 0) - (b.code === cfg.targetLanguage ? 1 : 0);
-            });
+        function pick(l) {
+            if (l.code === cfg.targetLanguage) return false;    // ya activo
+            try { localStorage.setItem(LANG_KEY, l.code); } catch (e) {}
+            location.reload();
+            return true;
         }
 
-        ordered.forEach(function (l) {
+        function makeBtn(l) {
             var b = document.createElement("button");
             b.type = "button";
             b.className = "vrtr-btn" + (l.code === cfg.targetLanguage ? " is-active" : "");
-            b.textContent = container ? (l.label || l.code) : l.code.toUpperCase();
+            b.textContent = l.label || l.code;
             b.title = l.label || l.code;
-            b.addEventListener("click", function () {
-                if (l.code === cfg.targetLanguage) return;
-                try { localStorage.setItem(LANG_KEY, l.code); } catch (e) {}
-                location.reload();
+            return b;
+        }
+
+        // --- modo inline (dentro de un contenedor del theme): pills, sin tab ---
+        if (container) {
+            langs.forEach(function (l) {
+                var b = makeBtn(l);
+                b.addEventListener("click", function () { pick(l); });
+                wrap.appendChild(b);
             });
-            wrap.appendChild(b);
+            container.appendChild(wrap);
+            return;
+        }
+
+        // --- modo flotante: pestañita colapsada + menu vertical al tocar ---
+        var menu = document.createElement("div");
+        menu.className = "vrtr-menu";
+
+        var tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "vrtr-tab";
+        tab.textContent = (cfg.targetLanguage || "").toUpperCase();
+        tab.title = "Change language";
+        tab.setAttribute("aria-haspopup", "true");
+        tab.setAttribute("aria-expanded", "false");
+
+        // Atenuado en reposo: presente pero sin competir con el contenido.
+        var dimTimer = null;
+        function scheduleDim(ms) {
+            clearTimeout(dimTimer);
+            dimTimer = setTimeout(function () {
+                if (!wrap.classList.contains("vrtr-open")) wrap.classList.add("vrtr-dim");
+            }, ms);
+        }
+        function setOpen(open) {
+            wrap.classList.toggle("vrtr-open", open);
+            tab.setAttribute("aria-expanded", open ? "true" : "false");
+            if (open) { clearTimeout(dimTimer); wrap.classList.remove("vrtr-dim"); }
+            else scheduleDim(1500);
+        }
+
+        langs.forEach(function (l) {
+            var b = makeBtn(l);
+            b.addEventListener("click", function () {
+                if (!pick(l)) setOpen(false);                   // mismo idioma: solo cerrar
+            });
+            menu.appendChild(b);
         });
 
-        (container || document.body).appendChild(wrap);
+        tab.addEventListener("click", function () {
+            setOpen(!wrap.classList.contains("vrtr-open"));
+        });
+        wrap.addEventListener("mouseenter", function () {
+            clearTimeout(dimTimer);
+            wrap.classList.remove("vrtr-dim");
+        });
+        wrap.addEventListener("mouseleave", function () {
+            if (!wrap.classList.contains("vrtr-open")) scheduleDim(1500);
+        });
+        wrap.addEventListener("touchstart", function () {
+            wrap.classList.remove("vrtr-dim");
+        }, { passive: true });
+
+        // Tap/click FUERA cierra el menu (capture: sobrevive a stopPropagation de la pagina).
+        document.addEventListener("click", function (e) {
+            if (wrap.classList.contains("vrtr-open") && !wrap.contains(e.target)) setOpen(false);
+        }, true);
+
+        wrap.appendChild(menu);
+        wrap.appendChild(tab);
+        document.body.appendChild(wrap);
+
+        // Primera visita (sin idioma elegido aun): visible unos segundos para que
+        // el visitante descubra que puede cambiar idioma; despues, atenuado rapido.
+        var firstVisit = true;
+        try { firstVisit = !localStorage.getItem(LANG_KEY); } catch (e) {}
+        scheduleDim(firstVisit ? 4000 : 1500);
     }
 
     var started = false;

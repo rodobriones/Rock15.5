@@ -1,6 +1,8 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
 <template>
-    <Panel type="block" title="Donation Dashboard">
+    <!-- notranslate (en el Panel, cae al div raiz via fallthrough): dashboard de donaciones —
+         nombres de donantes, montos y tarjetas enmascaradas no deben viajar al traductor IA. -->
+    <Panel type="block" title="Donation Dashboard" class="notranslate" data-no-translate="1">
         <!-- ======================================
              FILTER PANEL
              ====================================== -->

@@ -5,6 +5,14 @@
  Fuente canonica del esquema de proteccion y de los 5 stored procedures del
  modulo SundayServiceRegistration. Idempotente: se puede re-ejecutar.
 
+ v3 (2026-08-24):
+   - Se agrega sp_SundayServiceCheckIn: mueve el check-in del escaner desde un
+     UPDATE suelto en ReservationScanner.cs a un SP que respeta el orden de
+     locks Slot -> Reservation. Antes era el unico acceso a Reservation que no
+     lockeaba el Slot primero, y hacia deadlock contra Confirm (el escaner
+     siempre era la victima). Medido: 94 de 100 check-ins fallaban con 200
+     confirmaciones concurrentes; con el SP, 100 de 100 y sin deadlocks.
+
  v2 (2026-07-04):
    - Recalculo de contadores (data fix) antes de validar/crear constraints.
    - Se agrega sp_SundayServiceReservationConfirm (antes solo vivia en la BD).
@@ -768,6 +776,162 @@ BEGIN
             ErrorNumber = ERROR_NUMBER();
 
         THROW;
+    END CATCH;
+END;
+GO
+
+/* ============================================================================
+   sp_SundayServiceCheckIn
+   Marca la asistencia de una reserva a partir de su codigo QR.
+   Orden de locks: Slot -> Reservation (la reserva se localiza primero sin
+   lock solo para conocer el SlotId y se revalida bajo lock, por PK).
+
+   Motivo de este SP: el check-in vivia como UPDATE suelto en el bloque
+   (ReservationScanner.cs) y era el unico acceso a SundayServiceReservation
+   que no tomaba primero el lock del Slot. Entraba por PK_...Reservation y
+   necesitaba X en IX_...SlotPersonStatus (cambia Status, columna clave de ese
+   indice), mientras sp_SundayServiceReservationConfirm entra por ese indice
+   con UPDLOCK/HOLDLOCK y necesita S en la clustered: orden inverso, ciclo,
+   deadlock, y el escaner siempre elegido victima. Medido con 200 confirmando
+   y 100 escaneando en paralelo: 94 de 100 check-ins fallaban.
+
+   ResultCodes:
+     1  = check-in registrado
+     0  = ya tenia check-in (idempotente, no vuelve a contar asistencia)
+    -1  = el codigo no existe
+    -2  = la reserva no pertenece al slot activo del escaner
+    -3  = reserva cancelada (2) o no-show (4)
+   -99  = error inesperado
+============================================================================ */
+CREATE OR ALTER PROCEDURE dbo.sp_SundayServiceCheckIn
+    @ReservationCode VARCHAR(80),
+    @ActiveSlotId    INT,
+    @ScannerAliasId  INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Now DATETIME = GETDATE();
+
+    DECLARE @Id INT;
+    DECLARE @ResSlotId INT;
+    DECLARE @Status INT;
+    DECLARE @Qty INT;
+    DECLARE @PersonId INT;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        /* 1) Localizar la reserva SIN lock, solo para conocer el SlotId */
+        SELECT TOP ( 1 )
+            @Id = r.Id,
+            @ResSlotId = r.SlotId
+        FROM dbo.SundayServiceReservation r
+        WHERE r.ReservationCode = @ReservationCode;
+
+        IF ( @Id IS NULL )
+        BEGIN
+            ROLLBACK TRANSACTION;
+
+            SELECT
+                ResultCode = -1,
+                Quantity = CAST( NULL AS INT ),
+                PersonId = CAST( NULL AS INT );
+            RETURN;
+        END;
+
+        /* 2) Lock del slot PRIMERO (mismo orden que HoldUpsert/Confirm/Cancel) */
+        DECLARE @LockedSlotId INT;
+
+        SELECT TOP ( 1 )
+            @LockedSlotId = s.Id
+        FROM dbo.SundayServiceSlot s WITH ( UPDLOCK, HOLDLOCK, ROWLOCK )
+        WHERE s.Id = @ResSlotId;
+
+        /* 3) Revalidar la reserva bajo lock, entrando por la PK */
+        SELECT TOP ( 1 )
+            @Status = CAST( r.Status AS INT ),
+            @Qty = r.Quantity,
+            @PersonId = r.PersonId,
+            @ResSlotId = r.SlotId
+        FROM dbo.SundayServiceReservation r WITH ( UPDLOCK, HOLDLOCK, ROWLOCK )
+        WHERE r.Id = @Id;
+
+        IF ( @Status IS NULL )
+        BEGIN
+            ROLLBACK TRANSACTION;
+
+            SELECT
+                ResultCode = -1,
+                Quantity = CAST( NULL AS INT ),
+                PersonId = CAST( NULL AS INT );
+            RETURN;
+        END;
+
+        /* 4) La reserva debe corresponder al slot que el escaner tiene activo */
+        IF ( @ResSlotId <> @ActiveSlotId )
+        BEGIN
+            ROLLBACK TRANSACTION;
+
+            SELECT
+                ResultCode = -2,
+                Quantity = @Qty,
+                PersonId = @PersonId;
+            RETURN;
+        END;
+
+        /* 5) Idempotencia: ya tenia check-in */
+        IF ( @Status = 3 )
+        BEGIN
+            ROLLBACK TRANSACTION;
+
+            SELECT
+                ResultCode = 0,
+                Quantity = @Qty,
+                PersonId = @PersonId;
+            RETURN;
+        END;
+
+        /* 6) Cancelada (2) o no-show (4): no se admite el ingreso */
+        IF ( @Status <> 1 )
+        BEGIN
+            ROLLBACK TRANSACTION;
+
+            SELECT
+                ResultCode = -3,
+                Quantity = @Qty,
+                PersonId = @PersonId;
+            RETURN;
+        END;
+
+        UPDATE dbo.SundayServiceReservation
+        SET
+            Status = 3,
+            CheckedInDateTime = @Now,
+            CheckedInByPersonAliasId = @ScannerAliasId,
+            ModifiedDateTime = @Now
+        WHERE Id = @Id
+            AND Status = 1;
+
+        COMMIT TRANSACTION;
+
+        SELECT
+            ResultCode = 1,
+            Quantity = @Qty,
+            PersonId = @PersonId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+        END;
+
+        SELECT
+            ResultCode = -99,
+            Quantity = CAST( NULL AS INT ),
+            PersonId = CAST( NULL AS INT ),
+            ErrorMessage = ERROR_MESSAGE();
     END CATCH;
 END;
 GO

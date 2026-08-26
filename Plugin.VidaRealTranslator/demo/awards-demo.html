@@ -1,0 +1,861 @@
+<title>Watch Rock Translate Itself</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+
+<!--
+  VidaReal DOM Translator — live demo block.
+  Paste into a Rock HTML Content block (source/code view, not WYSIWYG).
+
+  This block is NOT excluded from translation: the real translator rewrites it,
+  and the block watches itself being rewritten (MutationObserver + a pass-through
+  fetch wrapper) to show real timings. Only the ledger carries notranslate —
+  its lines contain millisecond counts, so they'd be a new unique string on every
+  page load, which is exactly the cost leak the 1.4.3 hotfix closed.
+
+  No Lava braces anywhere in this file, on purpose.
+-->
+
+<style>
+.vrd{
+  /* light — the complete palette */
+  --vrd-ground:#F1F4F2;
+  --vrd-surface:#FFFFFF;
+  --vrd-sunken:#E7ECE9;
+  --vrd-ink:#0F1A17;
+  --vrd-ink-2:#4C5F59;
+  --vrd-ink-3:#7C8D87;
+  --vrd-line:#D3DCD7;
+  --vrd-accent:#00786A;
+  --vrd-on-accent:#FFFFFF;
+  --vrd-accent-ink:#005247;
+  --vrd-accent-soft:#D8EDE7;
+  --vrd-ai:#9A5B06;
+  --vrd-ai-soft:#F8E7CD;
+  --vrd-block:#9E2338;
+  --vrd-block-soft:#F7DCE1;
+  --vrd-shadow:0 1px 2px rgba(15,26,23,.06), 0 12px 32px -18px rgba(15,26,23,.35);
+
+  --vrd-display:"Bricolage Grotesque","Noto Sans SC","Helvetica Neue",Arial,sans-serif;
+  --vrd-body:"IBM Plex Sans","Noto Sans SC","Segoe UI",Helvetica,Arial,sans-serif;
+  --vrd-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+
+  color:var(--vrd-ink);
+  background:var(--vrd-ground);
+  font-family:var(--vrd-body);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .vrd{
+    --vrd-ground:#0A1211;
+    --vrd-surface:#111C1A;
+    --vrd-sunken:#162523;
+    --vrd-ink:#E7EFEC;
+    --vrd-ink-2:#9DB0AA;
+    --vrd-ink-3:#71857F;
+    --vrd-line:#22322F;
+    --vrd-accent:#43CFB4;
+    --vrd-on-accent:#06211C;
+    --vrd-accent-ink:#8FE6D3;
+    --vrd-accent-soft:#0D2C27;
+    --vrd-ai:#E5AC63;
+    --vrd-ai-soft:#2C2013;
+    --vrd-block:#F2909F;
+    --vrd-block-soft:#31161C;
+    --vrd-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"] .vrd{
+  --vrd-ground:#0A1211;
+  --vrd-surface:#111C1A;
+  --vrd-sunken:#162523;
+  --vrd-ink:#E7EFEC;
+  --vrd-ink-2:#9DB0AA;
+  --vrd-ink-3:#71857F;
+  --vrd-line:#22322F;
+  --vrd-accent:#43CFB4;
+  --vrd-on-accent:#06211C;
+  --vrd-accent-ink:#8FE6D3;
+  --vrd-accent-soft:#0D2C27;
+  --vrd-ai:#E5AC63;
+  --vrd-ai-soft:#2C2013;
+  --vrd-block:#F2909F;
+  --vrd-block-soft:#31161C;
+  --vrd-shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -20px rgba(0,0,0,.9);
+}
+
+.vrd *,.vrd *::before,.vrd *::after{box-sizing:border-box}
+.vrd p,.vrd h1,.vrd h2,.vrd h3,.vrd h4,.vrd ul,.vrd ol,.vrd figure{margin:0;padding:0}
+.vrd ul,.vrd ol{list-style:none}
+.vrd code{font-family:var(--vrd-mono);font-size:.92em}
+.vrd :focus-visible{outline:2px solid var(--vrd-accent);outline-offset:3px;border-radius:3px}
+
+.vrd-shell{max-width:1160px;margin:0 auto;padding:0 24px}
+.vrd-band{padding:82px 0;border-top:1px solid var(--vrd-line)}
+
+/* ---------- type ---------- */
+.vrd-eyebrow{
+  font-family:var(--vrd-mono);font-size:11.5px;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--vrd-accent-ink);
+}
+.vrd-h1{
+  font-family:var(--vrd-display);font-weight:800;
+  font-size:clamp(38px,6.2vw,72px);line-height:.98;letter-spacing:-.025em;
+  text-wrap:balance;margin-top:18px;
+}
+.vrd-h2{
+  font-family:var(--vrd-display);font-weight:700;
+  font-size:clamp(27px,3.4vw,40px);line-height:1.05;letter-spacing:-.02em;
+  text-wrap:balance;margin-top:14px;
+}
+.vrd-h3{font-family:var(--vrd-display);font-weight:600;font-size:19px;letter-spacing:-.01em}
+.vrd-lede{font-size:19px;line-height:1.6;color:var(--vrd-ink-2);max-width:63ch;margin-top:22px}
+.vrd-note{font-size:14.5px;color:var(--vrd-ink-3);max-width:72ch}
+.vrd-strong{color:var(--vrd-ink);font-weight:600}
+
+/* ---------- hero ---------- */
+.vrd-hero{padding:72px 0 60px}
+.vrd-hero-grid{display:grid;grid-template-columns:1.35fr .95fr;gap:56px;align-items:end}
+.vrd-facts{display:flex;flex-direction:column;gap:2px;border-left:2px solid var(--vrd-accent);padding-left:20px}
+.vrd-fact{display:flex;flex-direction:column;padding:11px 0}
+.vrd-fact + .vrd-fact{border-top:1px solid var(--vrd-line)}
+.vrd-fact-n{font-family:var(--vrd-display);font-weight:700;font-size:28px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.vrd-fact-l{font-size:13.5px;color:var(--vrd-ink-2);margin-top:5px}
+
+/* ---------- the click panel ---------- */
+.vrd-cta{
+  margin-top:32px;border:2px solid var(--vrd-accent);border-radius:16px;
+  background:var(--vrd-surface);box-shadow:var(--vrd-shadow);overflow:hidden;
+}
+.vrd-cta-top{
+  display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between;
+  padding:20px 22px;
+}
+.vrd-cta-label{font-family:var(--vrd-display);font-weight:700;font-size:21px;letter-spacing:-.015em}
+.vrd-cta-sub{font-size:14px;color:var(--vrd-ink-2);margin-top:3px;max-width:46ch}
+.vrd-picks{display:flex;flex-wrap:wrap;gap:9px}
+.vrd-pick{
+  font:600 16px/1 var(--vrd-body);padding:15px 22px;border-radius:11px;
+  border:1px solid var(--vrd-accent);background:var(--vrd-accent);color:var(--vrd-on-accent);
+  cursor:pointer;transition:transform .12s ease,filter .18s ease;
+}
+.vrd-pick:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.vrd-pick.vrd-pick-quiet{background:transparent;color:var(--vrd-accent-ink);border-color:var(--vrd-line)}
+.vrd-pick.vrd-pick-quiet:hover{border-color:var(--vrd-accent);background:var(--vrd-accent-soft)}
+.vrd-pick[disabled]{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+.vrd-cta-foot{
+  display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+  padding:12px 22px;border-top:1px solid var(--vrd-line);background:var(--vrd-sunken);
+  font-size:13px;color:var(--vrd-ink-2);
+}
+.vrd-status{display:inline-flex;align-items:center;gap:7px;font-family:var(--vrd-mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase}
+.vrd-pip{width:8px;height:8px;border-radius:50%;background:var(--vrd-ink-3)}
+.vrd-live .vrd-pip{background:var(--vrd-accent);box-shadow:0 0 0 4px var(--vrd-accent-soft)}
+.vrd-live{color:var(--vrd-accent-ink)}
+.vrd-sim-mode{color:var(--vrd-ai)}
+.vrd-sim-mode .vrd-pip{background:var(--vrd-ai)}
+
+/* ---------- stage ---------- */
+.vrd-stage{display:grid;grid-template-columns:1.5fr 1fr;gap:22px;margin-top:26px;align-items:start}
+
+.vrd-app{border:1px solid var(--vrd-line);border-radius:14px;background:var(--vrd-surface);box-shadow:var(--vrd-shadow)}
+.vrd-app-bar{
+  display:flex;align-items:center;gap:9px;padding:12px 16px;
+  background:var(--vrd-sunken);border-bottom:1px solid var(--vrd-line);
+  border-radius:13px 13px 0 0;font-size:13px;color:var(--vrd-ink-2);
+}
+.vrd-dot{width:9px;height:9px;border-radius:50%;background:var(--vrd-line)}
+.vrd-app-body{padding:22px}
+.vrd-app-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+.vrd-app-title{font-family:var(--vrd-display);font-weight:700;font-size:23px;letter-spacing:-.015em}
+.vrd-alert{
+  margin-top:16px;padding:11px 14px;border-radius:9px;font-size:14px;
+  background:var(--vrd-ai-soft);color:var(--vrd-ai);
+}
+.vrd-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.vrd-field{display:flex;flex-direction:column;gap:6px}
+.vrd-field.vrd-wide{grid-column:1 / -1}
+.vrd-label{font-size:12.5px;font-weight:600;color:var(--vrd-ink-2)}
+.vrd-input{
+  font:400 14px/1.2 var(--vrd-body);color:var(--vrd-ink);
+  padding:10px 12px;border:1px solid var(--vrd-line);border-radius:8px;background:var(--vrd-ground);width:100%;
+}
+.vrd-input::placeholder{color:var(--vrd-ink-3)}
+.vrd-actions{display:flex;gap:9px;margin-top:18px;padding-top:16px;border-top:1px solid var(--vrd-line)}
+.vrd-primary{font:600 14px/1 var(--vrd-body);padding:11px 20px;border-radius:8px;border:0;background:var(--vrd-accent);color:var(--vrd-on-accent);cursor:default}
+.vrd-ghost{font:500 14px/1 var(--vrd-body);padding:11px 18px;border-radius:8px;border:1px solid var(--vrd-line);background:transparent;color:var(--vrd-ink-2);cursor:default}
+
+.vrd-rows{margin-top:22px;border:1px solid var(--vrd-line);border-radius:11px}
+.vrd-rows-head{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:10px 14px;background:var(--vrd-sunken);border-bottom:1px solid var(--vrd-line);
+  border-radius:10px 10px 0 0;font-size:12.5px;font-weight:600;color:var(--vrd-ink-2);
+}
+.vrd-row{display:grid;grid-template-columns:1.4fr 1fr auto;gap:12px;align-items:center;padding:11px 14px;font-size:14px}
+.vrd-row + .vrd-row{border-top:1px solid var(--vrd-line)}
+.vrd-row-sub{font-size:12.5px;color:var(--vrd-ink-3);font-family:var(--vrd-mono)}
+.vrd-amount{font-family:var(--vrd-mono);font-size:13.5px;font-variant-numeric:tabular-nums;text-align:right}
+
+/* the flash the translator triggers */
+.vrd-hit{animation:vrd-mark 1.5s ease-out;border-radius:4px}
+@keyframes vrd-mark{
+  0%{background:var(--vrd-accent);color:var(--vrd-on-accent);box-shadow:0 0 0 4px var(--vrd-accent)}
+  22%{background:var(--vrd-accent);color:var(--vrd-on-accent);box-shadow:0 0 0 4px var(--vrd-accent)}
+  100%{background:transparent;box-shadow:0 0 0 4px transparent}
+}
+@media (prefers-reduced-motion: reduce){ .vrd-hit{animation:none;outline:2px solid var(--vrd-accent)} }
+
+/* protected data */
+.vrd-guard{
+  position:relative;cursor:help;
+  border-bottom:1px dashed var(--vrd-block);
+}
+.vrd-guard::after{
+  content:attr(data-why);
+  position:absolute;left:0;top:calc(100% + 8px);z-index:20;
+  width:max-content;max-width:240px;padding:7px 10px;
+  font:500 12px/1.35 var(--vrd-body);
+  color:var(--vrd-block);background:var(--vrd-block-soft);
+  border:1px solid var(--vrd-block);border-radius:7px;
+  opacity:0;transform:translateY(-3px);pointer-events:none;transition:opacity .15s ease,transform .15s ease;
+}
+.vrd-guard:hover::after,.vrd-guard:focus-visible::after{opacity:1;transform:translateY(0)}
+.vrd-verdict{
+  display:inline-block;margin-left:7px;padding:1px 6px;border-radius:5px;
+  font-family:var(--vrd-mono);font-size:10px;letter-spacing:.05em;vertical-align:middle;
+  background:var(--vrd-accent-soft);color:var(--vrd-accent-ink);opacity:0;transition:opacity .3s ease;
+}
+.vrd-verdict.vrd-on{opacity:1}
+.vrd-verdict.vrd-bad{background:var(--vrd-block-soft);color:var(--vrd-block)}
+
+/* ---------- ledger (notranslate) ---------- */
+.vrd-ledger{
+  border:1px solid var(--vrd-line);border-radius:14px;background:var(--vrd-surface);
+  box-shadow:var(--vrd-shadow);position:sticky;top:16px;
+}
+.vrd-ledger-head{
+  padding:13px 16px;border-bottom:1px solid var(--vrd-line);background:var(--vrd-sunken);
+  border-radius:13px 13px 0 0;display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.vrd-ledger-title{font-family:var(--vrd-mono);font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--vrd-ink-2)}
+.vrd-ledger-ms{font-family:var(--vrd-mono);font-size:11.5px;color:var(--vrd-ink-3);font-variant-numeric:tabular-nums}
+.vrd-meters{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--vrd-line)}
+.vrd-meter{padding:13px 8px;text-align:center;border-right:1px solid var(--vrd-line)}
+.vrd-meter:last-child{border-right:0}
+.vrd-meter-n{font-family:var(--vrd-display);font-weight:700;font-size:23px;line-height:1;font-variant-numeric:tabular-nums}
+.vrd-meter-l{font-size:10.5px;line-height:1.25;color:var(--vrd-ink-3);margin-top:5px;text-transform:uppercase;letter-spacing:.06em}
+.vrd-mk .vrd-meter-n{color:var(--vrd-accent)}
+.vrd-ma .vrd-meter-n{color:var(--vrd-ai)}
+.vrd-mb .vrd-meter-n{color:var(--vrd-block)}
+.vrd-log{height:404px;overflow-y:auto;padding:8px;font-family:var(--vrd-mono);font-size:12px}
+.vrd-log-empty{padding:20px 12px;color:var(--vrd-ink-3);font-family:var(--vrd-body);font-size:13.5px;line-height:1.5}
+.vrd-line{
+  display:grid;grid-template-columns:56px 1fr auto;gap:9px;align-items:baseline;
+  padding:5px 7px;border-radius:6px;animation:vrd-slide .2s ease-out;
+}
+@keyframes vrd-slide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.vrd-line{animation:none}}
+.vrd-line:nth-child(odd){background:var(--vrd-ground)}
+.vrd-tag{font-size:9.5px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;padding:3px 4px;border-radius:4px;text-align:center}
+.vrd-l-dom .vrd-tag{background:var(--vrd-accent-soft);color:var(--vrd-accent-ink)}
+.vrd-l-net .vrd-tag{background:var(--vrd-ai-soft);color:var(--vrd-ai)}
+.vrd-l-keep .vrd-tag{background:var(--vrd-block-soft);color:var(--vrd-block)}
+.vrd-l-note .vrd-tag{background:var(--vrd-sunken);color:var(--vrd-ink-3)}
+.vrd-line-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--vrd-ink-2)}
+.vrd-line-ms{color:var(--vrd-ink-3);font-variant-numeric:tabular-nums;font-size:11px}
+
+/* ---------- steps / cards / spec ---------- */
+.vrd-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:38px;background:var(--vrd-line);border:1px solid var(--vrd-line);border-radius:13px;overflow:hidden}
+.vrd-step{background:var(--vrd-surface);padding:22px}
+.vrd-step-n{font-family:var(--vrd-mono);font-size:12px;color:var(--vrd-accent);letter-spacing:.1em}
+.vrd-step h3{margin-top:9px}
+.vrd-step p{font-size:14px;color:var(--vrd-ink-2);margin-top:7px}
+
+.vrd-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}
+.vrd-card{padding:22px;border:1px solid var(--vrd-line);border-radius:13px;background:var(--vrd-surface);display:flex;flex-direction:column;gap:11px}
+.vrd-card-code{
+  font-family:var(--vrd-mono);font-size:12.5px;padding:9px 11px;border-radius:7px;
+  background:var(--vrd-block-soft);color:var(--vrd-block);word-break:break-word;display:block;
+}
+.vrd-card p{font-size:14.5px;color:var(--vrd-ink-2)}
+
+.vrd-spec{margin-top:34px;border-top:1px solid var(--vrd-line)}
+.vrd-spec li{display:grid;grid-template-columns:170px 1fr;gap:24px;padding:15px 0;border-bottom:1px solid var(--vrd-line);align-items:baseline}
+.vrd-spec .vrd-k{font-family:var(--vrd-mono);font-size:12.5px;color:var(--vrd-ink-3)}
+.vrd-spec .vrd-v{font-size:15px;color:var(--vrd-ink-2)}
+
+.vrd-foot{padding:40px 0 60px;font-size:13.5px;color:var(--vrd-ink-3);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;border-top:1px solid var(--vrd-line)}
+
+@media (max-width:960px){
+  .vrd-hero-grid{grid-template-columns:1fr;gap:34px;align-items:start}
+  .vrd-stage{grid-template-columns:1fr}
+  .vrd-ledger{position:static}
+  .vrd-cards,.vrd-steps{grid-template-columns:1fr}
+  .vrd-band{padding:58px 0}
+}
+@media (max-width:620px){
+  .vrd-form{grid-template-columns:1fr}
+  .vrd-spec li{grid-template-columns:1fr;gap:4px}
+  .vrd-pick{flex:1 1 auto}
+}
+</style>
+
+<div class="vrd" id="vrd-root">
+
+  <!-- ============ HERO ============ -->
+  <section class="vrd-shell vrd-hero">
+    <div class="vrd-hero-grid">
+      <div>
+        <p class="vrd-eyebrow">Iglesia Vida Real &middot; Guatemala City &middot; Rock RMS v18</p>
+        <h1 class="vrd-h1">Click a language.<br>Watch this page<br>translate itself.</h1>
+        <p class="vrd-lede">
+          Nothing below is a mockup. The translator is running on this page right now, and this page
+          is watching it work. Pick a language and every label, button and message you can see is
+          rewritten in your browser &mdash; while the names, amounts and card numbers beside them
+          are refused and left exactly as they are.
+        </p>
+      </div>
+      <div class="vrd-facts">
+        <div class="vrd-fact"><span class="vrd-fact-n">3</span><span class="vrd-fact-l">files to deploy &mdash; a DLL and two scripts</span></div>
+        <div class="vrd-fact"><span class="vrd-fact-n">0</span><span class="vrd-fact-l">Rock core files modified</span></div>
+        <div class="vrd-fact"><span class="vrd-fact-n">650</span><span class="vrd-fact-l">lines of JavaScript, no dependencies</span></div>
+        <div class="vrd-fact"><span class="vrd-fact-n">1</span><span class="vrd-fact-l">AI call per unique string, forever</span></div>
+      </div>
+    </div>
+
+    <!-- THE CLICK -->
+    <div class="vrd-cta">
+      <div class="vrd-cta-top">
+        <div>
+          <div class="vrd-cta-label">Start here</div>
+          <p class="vrd-cta-sub">
+            The page reloads once &mdash; each language keeps its own cache. Then watch the green
+            flashes: that is the translator rewriting text nodes, one at a time. Four languages,
+            two scripts, one script tag.
+          </p>
+        </div>
+        <div class="vrd-picks notranslate" data-no-translate>
+          <button class="vrd-pick" data-go="es" type="button">Espa&ntilde;ol</button>
+          <button class="vrd-pick" data-go="pt" type="button">Portugu&ecirc;s</button>
+          <button class="vrd-pick" data-go="zh" type="button">&#20013;&#25991;</button>
+          <button class="vrd-pick vrd-pick-quiet" data-go="en" type="button">English</button>
+        </div>
+      </div>
+      <div class="vrd-cta-foot">
+        <span class="vrd-status notranslate" data-no-translate id="vrd-status"><span class="vrd-pip"></span><span id="vrd-status-txt">checking</span></span>
+        <span id="vrd-hint">Prefer the real thing? Use the language tab at the right edge of the screen &mdash; same result, it is the switcher every visitor gets.</span>
+        <button class="vrd-pick vrd-pick-quiet" id="vrd-purge" type="button" style="font-size:13px;padding:9px 14px">Clear my cache and do it slowly</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE ============ -->
+  <section class="vrd-shell vrd-band">
+    <p class="vrd-eyebrow">Watch this</p>
+    <h2 class="vrd-h2">Two columns of text. Only one of them may move.</h2>
+    <p class="vrd-lede">
+      Everything underlined in red is data. It is in the same page, inside the same block, unmarked
+      and unprotected by anything except the rules. Hover any of it to see which rule catches it,
+      and check the badge that appears after the sweep finishes.
+    </p>
+
+    <div class="vrd-stage">
+
+      <!-- a Rock-looking screen; its labels are real translatable strings -->
+      <div class="vrd-app">
+        <div class="vrd-app-bar">
+          <span class="vrd-dot"></span><span class="vrd-dot"></span><span class="vrd-dot"></span>
+          <span style="margin-left:6px">Family Registration</span>
+        </div>
+
+        <div class="vrd-app-body">
+          <div class="vrd-app-head">
+            <div class="vrd-app-title">Add a family to this campus</div>
+            <div style="font-size:13px;color:var(--vrd-ink-3)">Edit this record</div>
+          </div>
+
+          <div class="vrd-alert">Your changes have not been saved yet.</div>
+
+          <div class="vrd-form">
+            <div class="vrd-field">
+              <label class="vrd-label">First Name</label>
+              <div class="vrd-input"><span class="vrd-guard" tabindex="0" data-guard data-why="Person name. Check-in containers are excluded by Rock's stock markup hooks.">Sof&iacute;a</span></div>
+            </div>
+            <div class="vrd-field">
+              <label class="vrd-label">Last Name</label>
+              <div class="vrd-input"><span class="vrd-guard" tabindex="0" data-guard data-why="Person name. Never sent to a model.">Ram&iacute;rez</span></div>
+            </div>
+            <div class="vrd-field vrd-wide">
+              <label class="vrd-label">Search for a family</label>
+              <input class="vrd-input" type="text" placeholder="Enter a name or phone number" readonly>
+            </div>
+            <div class="vrd-field vrd-wide">
+              <label class="vrd-label">Preferred Campus</label>
+              <div class="vrd-input" style="color:var(--vrd-ink-2)">
+                <span class="vrd-guard" tabindex="0" data-guard data-why="Database value, not interface. Options translate only from an explicit whitelist.">Vida Real Zona 15</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="vrd-actions">
+            <button class="vrd-primary" type="button">Save Family</button>
+            <button class="vrd-ghost" type="button">Cancel</button>
+          </div>
+
+          <div class="vrd-rows">
+            <div class="vrd-rows-head">
+              <span>Recent Contributions</span>
+              <span style="font-weight:500;color:var(--vrd-ink-3)">View all</span>
+            </div>
+            <div class="vrd-row">
+              <div>
+                <span class="vrd-guard" tabindex="0" data-guard data-why="Person name, including minors in check-in lists.">Sof&iacute;a Ram&iacute;rez</span>
+                <div class="vrd-row-sub"><span class="vrd-guard" tabindex="0" data-guard data-why="Contains an email address. Refused before the batch is built.">sofia.ramirez@example.org</span></div>
+              </div>
+              <div class="vrd-row-sub">
+                <span class="vrd-guard" tabindex="0" data-guard data-why="Masking characters and 8+ digits. This exact shape reached the cache once; the rule closed it.">Visa &bull;&bull;&bull;&bull; 9x00 xxxx 1071</span>
+              </div>
+              <div class="vrd-amount"><span class="vrd-guard" tabindex="0" data-guard data-why="Currency amount. Data, not interface.">Q&nbsp;250.00</span></div>
+            </div>
+            <div class="vrd-row">
+              <div>
+                Pledge toward
+                <span class="vrd-guard" tabindex="0" data-guard data-why="Lava token. Translating it would break the page it renders on.">&#123;&#123; Campaign.Name &#125;&#125;</span>
+              </div>
+              <div class="vrd-row-sub"><span class="vrd-guard" tabindex="0" data-guard data-why="Date value. Formats are locale-driven, not translated.">8/14/2026</span></div>
+              <div class="vrd-amount"><span class="vrd-guard" tabindex="0" data-guard data-why="Currency amount. Data, not interface.">Q&nbsp;1,000.00</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ledger: excluded on purpose — its lines carry millisecond counts -->
+      <div class="vrd-ledger notranslate" data-no-translate id="vrd-ledger">
+        <div class="vrd-ledger-head">
+          <span class="vrd-ledger-title">What is happening</span>
+          <span class="vrd-ledger-ms" id="vrd-clock">waiting</span>
+        </div>
+        <div class="vrd-meters">
+          <div class="vrd-meter vrd-mk"><div class="vrd-meter-n" id="vrd-m-dom">0</div><div class="vrd-meter-l">Strings rewritten</div></div>
+          <div class="vrd-meter vrd-ma"><div class="vrd-meter-n" id="vrd-m-net">0</div><div class="vrd-meter-l">Server requests</div></div>
+          <div class="vrd-meter vrd-mb"><div class="vrd-meter-n" id="vrd-m-keep">0</div><div class="vrd-meter-l">Left untouched</div></div>
+        </div>
+        <div class="vrd-log" id="vrd-log" aria-live="polite">
+          <p class="vrd-log-empty">Pick a language above. This panel is wired to the translator itself &mdash; every line below is a real DOM change or a real request, with real timings.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="vrd-note" style="margin-top:26px">
+      One block on this page <em>is</em> excluded: the panel on the right. Its lines contain
+      millisecond counts, so every reload would invent a brand-new string to pay for &mdash; the
+      same leak the admin footer caused until it was excluded in 1.4.3. Two attributes fix it,
+      and any staff member can use them.
+    </p>
+
+    <p class="vrd-note" style="margin-top:14px">
+      Chinese is in the demo on purpose. Nothing in the plugin knows anything about Latin script:
+      a language is an ISO code typed into a text box, the model does the rest, and the layout has
+      to survive strings that come back half as wide. Adding it took no code &mdash; one line in
+      Available Languages, and the switcher grew a fourth option.
+    </p>
+  </section>
+
+  <!-- ============ WHAT YOU JUST SAW ============ -->
+  <section class="vrd-shell vrd-band">
+    <p class="vrd-eyebrow">What you just saw</p>
+    <h2 class="vrd-h2">Six gates, and the model is the last one.</h2>
+    <p class="vrd-lede">
+      Each step exists to make the next one smaller. By the time Azure is involved, almost nothing
+      is left &mdash; which is the whole economic argument, and the reason the second click felt
+      instant.
+    </p>
+
+    <div class="vrd-steps">
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 01</div>
+        <h3 class="vrd-h3">Collect</h3>
+        <p>A MutationObserver walks only the subtrees that actually changed &mdash; text nodes, plus visible attributes like placeholder, title and aria-label. Full sweeps are kept for load, postback and client-side navigation.</p>
+      </div>
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 02</div>
+        <h3 class="vrd-h3">Refuse</h3>
+        <p>Every candidate runs the safeguards. Interface passes; data, secrets, names and grid contents are dropped here and never reach any later stage. This is where the red column stopped.</p>
+      </div>
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 03</div>
+        <h3 class="vrd-h3">Ask the browser</h3>
+        <p>localStorage answers in microseconds, keyed by language and normalized text. On a returning device this is where the story ends for nearly every string on the page.</p>
+      </div>
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 04</div>
+        <h3 class="vrd-h3">Batch</h3>
+        <p>Misses are normalized identically on both sides &mdash; with a hand-built whitespace class, because .NET's idea of whitespace is not JavaScript's &mdash; deduplicated, and posted up to 250 at a time.</p>
+      </div>
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 05</div>
+        <h3 class="vrd-h3">Ask the database</h3>
+        <p>A SHA-256 lookup against a unique index on hash plus language. One translation per string per language is enforced by the schema, not by hope. Rows marked Excluded resolve to the original, permanently.</p>
+      </div>
+      <div class="vrd-step">
+        <div class="vrd-step-n">STEP 06</div>
+        <h3 class="vrd-h3">Ask the model</h3>
+        <p>Whatever survives goes to Azure OpenAI in chunks of 50, four in parallel. A partial or non-JSON answer is discarded rather than cached: a poisoned cache is worse than an untranslated label.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SAFEGUARDS ============ -->
+  <section class="vrd-shell vrd-band">
+    <p class="vrd-eyebrow">Safeguards</p>
+    <h2 class="vrd-h2">The hard part was teaching it what not to translate.</h2>
+    <p class="vrd-lede">
+      A church database is mostly the things you must never hand to a model: members, children,
+      giving, card numbers. So the collector is a whitelist of interface, and anything shaped like
+      data is dropped before a request is ever built.
+    </p>
+
+    <div class="vrd-cards">
+      <div class="vrd-card">
+        <h3 class="vrd-h3">Anything shaped like a secret</h3>
+        <code class="vrd-card-code">Visa 4487 9x00 xxxx 1071</code>
+        <p>One masked card once reached the cache. The fix was not a selector, it was a rule: any string carrying masking characters, or eight or more digits, is refused site-wide. No interface label has that many digits.</p>
+      </div>
+      <div class="vrd-card">
+        <h3 class="vrd-h3">Names, children first</h3>
+        <code class="vrd-card-code">.js-person-select .checkin-person .family-button</code>
+        <p>Check-in person lists, family selects and attendee banners are excluded through Rock's stock markup hooks, so an upgrade cannot silently reopen the hole. The Check Out and Save buttons beside them still translate.</p>
+      </div>
+      <div class="vrd-card">
+        <h3 class="vrd-h3">Nothing you typed</h3>
+        <code class="vrd-card-code">value &nbsp;contenteditable&nbsp; iframe</code>
+        <p>The script never reads the value of a data input, never enters editable content, and never crosses into an iframe &mdash; which puts passwords and the hosted card form structurally out of reach, not merely out of policy.</p>
+      </div>
+      <div class="vrd-card">
+        <h3 class="vrd-h3">Never innerHTML</h3>
+        <code class="vrd-card-code">node.nodeValue &nbsp;setAttribute</code>
+        <p>Translations are written through text nodes and attributes only, and model output is stripped of markup on the server. A creative answer from a language model cannot become an element on a page used by staff.</p>
+      </div>
+      <div class="vrd-card">
+        <h3 class="vrd-h3">Data has a shape</h3>
+        <code class="vrd-card-code">emails &nbsp;GUIDs&nbsp; amounts &nbsp;dates&nbsp; lava</code>
+        <p>Grid interiors are skipped wholesale and the rest is caught by shape. A dropdown's options translate only when an administrator has whitelisted that select by name, and the value sent back to the server is never touched.</p>
+      </div>
+      <div class="vrd-card">
+        <h3 class="vrd-h3">When in doubt, English wins</h3>
+        <code class="vrd-card-code">catch &rarr; keep the original</code>
+        <p>Missing configuration, a model outage, a truncated response, a broken selector, a full localStorage: every failure path ends the same way. The translator can go down; the church's software cannot.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ OPERATIONS ============ -->
+  <section class="vrd-shell vrd-band">
+    <p class="vrd-eyebrow">Operations</p>
+    <h2 class="vrd-h2">One screen, one toggle, no SQL.</h2>
+    <p class="vrd-lede">
+      Turning it on writes the script tag into the page header of every site in the installation.
+      Turning it off removes it. Everything else lives on one dashboard under Installed Plugins.
+    </p>
+
+    <ul class="vrd-spec">
+      <li><span class="vrd-k">Install</span><span class="vrd-v">One DLL and two scripts, then restart Rock. Plugin migrations create the table, the page and the dashboard block.</span></li>
+      <li><span class="vrd-k">Correct</span><span class="vrd-v">A searchable grid to edit any translation or mark it Excluded. Every write bumps a cache epoch, so browsers holding the old wording drop it on their next page load.</span></li>
+      <li><span class="vrd-k">Budget</span><span class="vrd-v">250 strings per request, 2,000 characters per string, and a ceiling of 5,000 new translations per hour. The counter only counts what was really produced, so an outage cannot lock the site out for an hour.</span></li>
+      <li><span class="vrd-k">Verify</span><span class="vrd-v">A Test Connection button that performs a real translation and shows the actual failure reason, plus cards for cached rows, throttle usage, and which sites still run an outdated script version.</span></li>
+      <li><span class="vrd-k">Switch</span><span class="vrd-v">The language tab visitors tap, floating or mounted inside any element you name with a CSS selector. Languages are lines of text &mdash; add zh and a label, and Chinese appears in the tab. Choosing the source language shows the original, untouched.</span></li>
+      <li><span class="vrd-k">Extend</span><span class="vrd-v">A provider interface with exactly one implementation. Adding another model is a class and a case statement, deliberately not four half-tested integrations nobody asked for.</span></li>
+    </ul>
+  </section>
+
+  <footer class="vrd-shell vrd-foot">
+    <span>VidaReal DOM Translator &mdash; com.vidareal.Translator &middot; Rock RMS v18</span>
+    <span>Built in-house at Iglesia Vida Real, Guatemala</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('vrd-root');
+  if (!root || root.dataset.vrdBooted) { return; }
+  root.dataset.vrdBooted = '1';
+
+  var LANG_KEY = 'vrtr:lang';     // the switcher's own key — we drive the real thing
+  var PREFIX   = 'vrtr:';
+  var EPOCH    = 'vrtr:epoch';
+
+  var log     = document.getElementById('vrd-log');
+  var clock   = document.getElementById('vrd-clock');
+  var mDom    = document.getElementById('vrd-m-dom');
+  var mNet    = document.getElementById('vrd-m-net');
+  var mKeep   = document.getElementById('vrd-m-keep');
+  var status  = document.getElementById('vrd-status');
+  var statusT = document.getElementById('vrd-status-txt');
+  var hint    = document.getElementById('vrd-hint');
+  var picks   = [].slice.call(root.querySelectorAll('[data-go]'));
+  var guards  = [].slice.call(root.querySelectorAll('[data-guard]'));
+
+  var now = function () { return (window.performance && performance.now) ? performance.now() : Date.now(); };
+  var t0 = now();
+  var counts = { dom: 0, net: 0, keep: 0 };
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Is the real translator on this page? (In a Rock site the toggle injects it site-wide.)
+  var live = !!document.querySelector('script[src*="com_vidareal/Translator/translator.js"]');
+
+  /* ---------- ledger ---------- */
+  function line(kind, tag, text, ms) {
+    var empty = log.querySelector('.vrd-log-empty');
+    if (empty) { empty.parentNode.removeChild(empty); }
+    if (log.childNodes.length > 240) { log.removeChild(log.firstChild); }
+    var row = document.createElement('div');
+    row.className = 'vrd-line vrd-l-' + kind;
+    var a = document.createElement('span'); a.className = 'vrd-tag';      a.textContent = tag;
+    var b = document.createElement('span'); b.className = 'vrd-line-txt'; b.textContent = text;
+    var c = document.createElement('span'); c.className = 'vrd-line-ms';  c.textContent = ms || '';
+    row.appendChild(a); row.appendChild(b); row.appendChild(c);
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+  function meters() {
+    mDom.textContent = counts.dom;
+    mNet.textContent = counts.net;
+    mKeep.textContent = counts.keep;
+  }
+  function stamp() { return Math.round(now() - t0) + ' ms'; }
+  function trim(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+  function flash(el) {
+    if (!el || el.nodeType !== 1) { return; }
+    el.classList.remove('vrd-hit');
+    void el.offsetWidth;                       // restart the animation
+    el.classList.add('vrd-hit');
+    setTimeout(function () { el.classList.remove('vrd-hit'); }, 1600);
+  }
+
+  /* ---------- watch the real translator rewrite the page ---------- */
+  function watchDom() {
+    if (!window.MutationObserver) { return; }
+    var obs = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i], el = null, was = null, is = null, what = 'text';
+        if (m.type === 'characterData') {
+          el = m.target.parentElement; was = m.oldValue; is = m.target.nodeValue;
+        } else if (m.type === 'attributes') {
+          el = m.target; was = m.oldValue; is = el.getAttribute(m.attributeName); what = m.attributeName;
+        }
+        if (!el || was === null || is === null) { continue; }
+        was = trim(was); is = trim(is);
+        if (!was || !is || was === is) { continue; }
+        if (el.closest && (el.closest('#vrd-ledger') || el.closest('#cms-admin-footer'))) { continue; }
+        counts.dom++;
+        line('dom', what === 'text' ? 'rewrote' : what.slice(0, 6),
+             '"' + was + '"  ->  "' + is + '"', stamp());
+        meters();
+        flash(el);
+      }
+    });
+    try {
+      obs.observe(document.documentElement, {
+        subtree: true,
+        characterData: true, characterDataOldValue: true,
+        attributes: true, attributeOldValue: true,
+        attributeFilter: ['placeholder', 'title', 'aria-label', 'alt']
+      });
+    } catch (e) { /* never break the page for a demo */ }
+  }
+
+  /* ---------- watch the real requests (pass-through, never alters them) ---------- */
+  function watchNet() {
+    if (!window.fetch) { return; }
+    var original = window.fetch;
+    window.fetch = function (input, init) {
+      var promise = original.apply(this, arguments);
+      try {
+        var url = (typeof input === 'string') ? input : (input && input.url) || '';
+        if (url.indexOf('/api/com_vidareal/Translator/') !== -1) {
+          var started = now();
+          var asked = 0;
+          try {
+            if (init && init.body && url.indexOf('Resolve') !== -1) {
+              asked = (JSON.parse(init.body).items || []).length;
+            }
+          } catch (e) {}
+          promise.then(function (res) {
+            var ms = Math.round(now() - started) + ' ms';
+            if (url.indexOf('Resolve') === -1) { line('note', 'config', 'GET /Config', ms); return; }
+            counts.net++; meters();
+            res.clone().json().then(function (j) {
+              var got = (j && j.results) ? Object.keys(j.results).length : 0;
+              line('net', 'server', asked + ' asked, ' + got + ' resolved  (db, then Azure for the rest)', ms);
+            }).catch(function () {
+              line('net', 'server', asked + ' asked', ms);
+            });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+      return promise;
+    };
+  }
+
+  /* ---------- verify, out loud, that the data never moved ---------- */
+  function verifyGuards() {
+    var before = guards.map(function (g) { return trim(g.textContent); });
+    setTimeout(function () {
+      var held = 0;
+      guards.forEach(function (g, i) {
+        var same = trim(g.textContent) === before[i];
+        var tag = document.createElement('span');
+        tag.className = 'vrd-verdict notranslate' + (same ? '' : ' vrd-bad');
+        tag.setAttribute('data-no-translate', '1');
+        tag.textContent = same ? 'untouched' : 'CHANGED';
+        g.parentNode.insertBefore(tag, g.nextSibling);
+        requestAnimationFrame(function () { tag.classList.add('vrd-on'); });
+        if (same) { held++; }
+      });
+      counts.keep = held; meters();
+      line('keep', 'held', held + ' of ' + guards.length + ' protected strings untouched after the full sweep', stamp());
+      if (live && counts.net === 0 && counts.dom > 0) {
+        line('note', 'free', 'Zero requests: the whole page came out of this browser. No tokens, no cost.', stamp());
+      }
+      clock.textContent = counts.dom + ' rewritten in ' + stamp();
+    }, 5500);   // after the translator's 0 / 600 / 1500 ms bursts and its round trip
+  }
+
+  /* ---------- preview mode: same panel, no Rock ---------- */
+  var DICT = {
+    es: {
+      'Family Registration': 'Registro de familia',
+      'Add a family to this campus': 'Agregar una familia a este campus',
+      'Edit this record': 'Editar este registro',
+      'Your changes have not been saved yet.': 'Tus cambios aún no se han guardado.',
+      'First Name': 'Nombre', 'Last Name': 'Apellido',
+      'Search for a family': 'Buscar una familia',
+      'Enter a name or phone number': 'Escribe un nombre o número de teléfono',
+      'Preferred Campus': 'Campus preferido',
+      'Save Family': 'Guardar familia', 'Cancel': 'Cancelar',
+      'Recent Contributions': 'Contribuciones recientes',
+      'View all': 'Ver todas', 'Pledge toward': 'Compromiso para'
+    },
+    pt: {
+      'Family Registration': 'Cadastro de família',
+      'Add a family to this campus': 'Adicionar uma família a este campus',
+      'Edit this record': 'Editar este registro',
+      'Your changes have not been saved yet.': 'Suas alterações ainda não foram salvas.',
+      'First Name': 'Nome', 'Last Name': 'Sobrenome',
+      'Search for a family': 'Buscar uma família',
+      'Enter a name or phone number': 'Digite um nome ou número de telefone',
+      'Preferred Campus': 'Campus preferido',
+      'Save Family': 'Guardar família', 'Cancel': 'Cancelar',
+      'Recent Contributions': 'Contribuições recentes',
+      'View all': 'Ver todas', 'Pledge toward': 'Compromisso para'
+    },
+    zh: {
+      'Family Registration': '家庭登记',
+      'Add a family to this campus': '将家庭添加到本堂点',
+      'Edit this record': '编辑此记录',
+      'Your changes have not been saved yet.': '您的更改尚未保存。',
+      'First Name': '名字', 'Last Name': '姓氏',
+      'Search for a family': '搜索家庭',
+      'Enter a name or phone number': '请输入姓名或电话号码',
+      'Preferred Campus': '首选堂点',
+      'Save Family': '保存家庭', 'Cancel': '取消',
+      'Recent Contributions': '近期奉献',
+      'View all': '查看全部', 'Pledge toward': '认捐至'
+    }
+  };
+
+  function previewRun(code) {
+    var app = root.querySelector('.vrd-app');
+    var dict = DICT[code];
+    line('note', 'preview', 'No translator on this page. Replaying the same sweep locally.', stamp());
+    if (!dict) {
+      line('note', 'source', 'English is the source language. Nothing to translate.', stamp());
+      return;
+    }
+    // text nodes, exactly like the real collector: nodeValue only, never innerHTML
+    var walker = document.createTreeWalker(app, NodeFilter.SHOW_TEXT, null, false);
+    var jobs = [], n;
+    while ((n = walker.nextNode())) {
+      var key = trim(n.nodeValue);
+      if (!key || !dict[key]) { continue; }
+      if (n.parentElement && n.parentElement.closest('[data-guard]')) { continue; }
+      jobs.push({ node: n, key: key });
+    }
+    var ph = app.querySelector('input[placeholder]');
+    var delay = 0;
+    jobs.forEach(function (j) {
+      delay += 110;
+      setTimeout(function () {
+        var was = j.key, is = dict[j.key];
+        j.node.nodeValue = j.node.nodeValue.replace(was, is);
+        counts.dom++; meters();
+        line('dom', 'rewrote', '"' + was + '"  ->  "' + is + '"', stamp());
+        flash(j.node.parentElement);
+      }, delay);
+    });
+    if (ph && dict[ph.getAttribute('placeholder')]) {
+      delay += 110;
+      setTimeout(function () {
+        var was = ph.getAttribute('placeholder');
+        ph.setAttribute('placeholder', dict[was]);
+        counts.dom++; meters();
+        line('dom', 'placeh', '"' + was + '"  ->  "' + dict[was] + '"', stamp());
+        flash(ph);
+      }, delay);
+    }
+  }
+
+  /* ---------- the click ---------- */
+  var PREVIEW_KEY = 'vrd:preview-lang';
+
+  function previewGo(code) {
+    var stored = false;
+    try {
+      if (code === 'en') { sessionStorage.removeItem(PREVIEW_KEY); }
+      else { sessionStorage.setItem(PREVIEW_KEY, code); }
+      stored = true;
+    } catch (e) {}
+    if (stored) { location.reload(); return; }  // same shape as the real switcher
+    previewRun(code);                           // sandboxed storage: sweep in place
+  }
+
+  picks.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var code = b.getAttribute('data-go');
+      if (!live) { previewGo(code); return; }
+      try { localStorage.setItem(LANG_KEY, code); } catch (e) {}
+      location.reload();                       // exactly what the switcher does
+    });
+  });
+
+  document.getElementById('vrd-purge').addEventListener('click', function () {
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf(PREFIX) === 0 && k !== LANG_KEY && k !== EPOCH) { localStorage.removeItem(k); }
+      });
+    } catch (e) {}
+    if (!live) { line('note', 'purge', 'Local cache cleared.', stamp()); return; }
+    location.reload();
+  });
+
+  /* ---------- boot ---------- */
+  if (live) {
+    watchNet();                                 // before the translator's first fetch
+    watchDom();
+    status.className = 'vrd-status vrd-live notranslate';
+    var current = 'es';
+    try { current = localStorage.getItem(LANG_KEY) || 'default'; } catch (e) {}
+    statusT.textContent = 'live · translator running · ' + current;
+    line('note', 'ready', 'Instrumented. Every line below is a real DOM change or a real request.', stamp());
+  } else {
+    status.className = 'vrd-status vrd-sim-mode notranslate';
+    var pending = null;
+    try { pending = sessionStorage.getItem(PREVIEW_KEY); } catch (e) {}
+    statusT.textContent = 'preview · no translator here' + (pending ? ' · ' + pending : '');
+    if (hint) { hint.textContent = 'Outside Rock the buttons replay the sweep locally. Inside Rock they drive the real switcher and the page reloads.'; }
+    if (pending) { setTimeout(function () { previewRun(pending); }, 550); }
+  }
+  meters();
+  verifyGuards();
+})();
+</script>

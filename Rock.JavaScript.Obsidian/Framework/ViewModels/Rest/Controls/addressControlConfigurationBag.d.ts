@@ -50,8 +50,17 @@ export type AddressControlConfigurationBag = {
     /** If no other state is set, this should be the default one selected */
     defaultState?: string | null;
 
+    /** [VidaReal] List of cities/municipios for the city picker, filtered by the selected state (if any) */
+    cities?: ListItemBag[] | null;
+
+    /** [VidaReal] Whether there are any cities/municipios for the picker. If not, use a text field */
+    hasCityList: boolean;
+
     /** Whether there are any states for the picker. If not, use a text field */
     hasStateList: boolean;
+
+    /** [VidaReal] Whether the selected country uses the state -> city (Departamento -> Municipio) cascade */
+    supportsCityList: boolean;
 
     /** Configured label for the locality/county field (based on country's configuration) */
     localityLabel?: string | null;
