@@ -42,6 +42,18 @@ namespace Rock.Blocks.QREVENT
 
     public class ReservationScanner : RockBlockType
     {
+        // Ventana de check-in. Decision de negocio, fija a proposito y no
+        // configurable: abre 10 minutos ANTES de la hora de inicio del servicio y
+        // cierra 60 minutos DESPUES de esa misma hora de inicio.
+        //
+        // Deliberadamente ya no se usa el DTEND del iCal para cerrar: el servicio
+        // dura ~2 h, asi que la ventana del servicio anterior seguia abierta cuando
+        // la del siguiente ya habia abierto y habia dos slots vigentes a la vez.
+        // Como sp_SundayServiceCheckIn exige que la reserva sea exactamente del slot
+        // activo, ese solapamiento rechazaba en la puerta a gente con reserva valida.
+        private const int CheckInOpensMinutesBeforeStart = 10;
+        private const int CheckInClosesMinutesAfterStart = 60;
+
         private const int InvalidScanThrottleWindowSeconds = 10;
         private const int InvalidScanThrottleLimit = 60;
         private static readonly ObjectCache ScanThrottleCache = MemoryCache.Default;
@@ -187,9 +199,20 @@ EXEC dbo.sp_SundayServiceCheckIn
                             return ActionOk( BuildResult( "error", "", "Error al procesar el codigo.", null, 0 ) );
                         }
 
-                        // -1 codigo inexistente, -2 no pertenece al slot activo,
-                        // -3 cancelada/no-show: mismo mensaje generico, sin revelar el motivo.
+                        // Cuenta como intento fallido para el throttle en todos los casos.
                         RegisterInvalidScanAttempt();
+
+                        // -2 = la reserva existe pero pertenece a otro horario. El
+                        // operador necesita distinguirla de un QR inventado para poder
+                        // resolverlo en la puerta; no se revela de que horario es ni de
+                        // quien, solo que el codigo no corresponde a este servicio.
+                        if ( row.ResultCode == -2 )
+                        {
+                            return ActionOk( BuildResult( "other_schedule", "", "Esta reserva es de otro horario.", null, 0 ) );
+                        }
+
+                        // -1 codigo inexistente, -3 cancelada/no-show: mensaje generico,
+                        // sin revelar el motivo.
                         return ActionOk( BuildGenericDeniedResult() );
                     }
 
@@ -322,9 +345,7 @@ SELECT TOP 10
     slot.ScheduleId,
     slot.OccurrenceDate,
     sch.Name AS ScheduleName,
-    sch.iCalendarContent,
-    sch.CheckInStartOffsetMinutes,
-    sch.CheckInEndOffsetMinutes
+    sch.iCalendarContent
 FROM dbo.SundayServiceSlot slot
 INNER JOIN dbo.Schedule sch ON sch.Id = slot.ScheduleId
 WHERE slot.CampusId = @CampusId
@@ -340,6 +361,13 @@ ORDER BY sch.Id
                     new SqlParameter( "@Today", today )
                 ).ToList();
 
+                // Si dos ventanas llegaran a solaparse gana la del horario cuya hora
+                // de inicio esta mas cerca de "ahora". Antes ganaba el primero que
+                // devolvia el ORDER BY sch.Id, que no tiene relacion con el orden
+                // cronologico de los horarios.
+                ActiveSlotBag bestSlot = null;
+                var bestDistanceTicks = long.MaxValue;
+
                 foreach ( var slot in slots )
                 {
                     var serviceTime = ExtractTimeFromICal( slot.iCalendarContent );
@@ -349,28 +377,37 @@ ORDER BY sch.Id
                     }
 
                     var serviceDateTime = today.Add( serviceTime.Value );
-                    var endTime = ExtractEndTimeFromICal( slot.iCalendarContent );
+                    var checkInStart = serviceDateTime.AddMinutes( -CheckInOpensMinutesBeforeStart );
+                    var checkInEnd = serviceDateTime.AddMinutes( CheckInClosesMinutesAfterStart );
 
-                    // Business rule: opens 10 minutes before service start.
-                    var checkInStart = serviceDateTime.AddMinutes( -10 );
-                    var checkInEnd = endTime.HasValue
-                        ? today.Add( endTime.Value )
-                        : serviceDateTime.AddMinutes( slot.CheckInEndOffsetMinutes ?? 0 );
-
-                    if ( now >= checkInStart && now <= checkInEnd )
+                    if ( now < checkInStart || now > checkInEnd )
                     {
-                        return new ActiveSlotResult
-                        {
-                            Slot = new ActiveSlotBag
-                            {
-                                slotId = slot.SlotId,
-                                scheduleId = slot.ScheduleId,
-                                scheduleName = slot.ScheduleName,
-                                occurrenceTime = serviceDateTime.ToString( "HH:mm" )
-                            },
-                            NextScheduleInfo = null
-                        };
+                        continue;
                     }
+
+                    var distanceTicks = Math.Abs( ( now - serviceDateTime ).Ticks );
+                    if ( distanceTicks >= bestDistanceTicks )
+                    {
+                        continue;
+                    }
+
+                    bestDistanceTicks = distanceTicks;
+                    bestSlot = new ActiveSlotBag
+                    {
+                        slotId = slot.SlotId,
+                        scheduleId = slot.ScheduleId,
+                        scheduleName = slot.ScheduleName,
+                        occurrenceTime = serviceDateTime.ToString( "HH:mm" )
+                    };
+                }
+
+                if ( bestSlot != null )
+                {
+                    return new ActiveSlotResult
+                    {
+                        Slot = bestSlot,
+                        NextScheduleInfo = null
+                    };
                 }
 
                 var nextResult = GetNextScheduleInfo( rockContext, campusId, allowedScheduleIds, now, today );
@@ -396,8 +433,7 @@ ORDER BY sch.Id
 SELECT TOP 10
     sch.Name AS ScheduleName,
     slot.OccurrenceDate,
-    sch.iCalendarContent,
-    sch.CheckInStartOffsetMinutes
+    sch.iCalendarContent
 FROM dbo.SundayServiceSlot slot
 INNER JOIN dbo.Schedule sch ON sch.Id = slot.ScheduleId
 WHERE slot.CampusId = @CampusId
@@ -413,27 +449,38 @@ ORDER BY slot.OccurrenceDate, sch.Id
                 new SqlParameter( "@Today", today )
             ).ToList();
 
-            foreach ( var slot in nextSlots )
+            // El ORDER BY de SQL es por (OccurrenceDate, sch.Id) y la hora real vive
+            // dentro del iCalendar, no en una columna: ordenar por Id anunciaba como
+            // "proximo" un horario posterior cuando los ScheduleIds no seguian el
+            // orden cronologico. Se ordena aqui, ya con la hora resuelta.
+            var upcoming = nextSlots
+                .Select( slot => new
+                {
+                    slot.ScheduleName,
+                    slot.OccurrenceDate,
+                    ServiceTime = ExtractTimeFromICal( slot.iCalendarContent )
+                } )
+                .Where( x => x.ServiceTime.HasValue )
+                .Select( x => new
+                {
+                    x.ScheduleName,
+                    ServiceDateTime = x.OccurrenceDate.Add( x.ServiceTime.Value )
+                } )
+                .Where( x => x.ServiceDateTime.AddMinutes( -CheckInOpensMinutesBeforeStart ) > now )
+                .OrderBy( x => x.ServiceDateTime )
+                .FirstOrDefault();
+
+            if ( upcoming != null )
             {
-                var serviceTime = ExtractTimeFromICal( slot.iCalendarContent );
-                if ( !serviceTime.HasValue )
-                {
-                    continue;
-                }
+                var esGt = new CultureInfo( "es-GT" );
+                var checkInStart = upcoming.ServiceDateTime.AddMinutes( -CheckInOpensMinutesBeforeStart );
 
-                var serviceDateTime = slot.OccurrenceDate.Add( serviceTime.Value );
-                var checkInStart = serviceDateTime.AddMinutes( -10 );
-
-                if ( checkInStart > now )
+                return new NextScheduleResult
                 {
-                    var esGt = new CultureInfo( "es-GT" );
-                    return new NextScheduleResult
-                    {
-                        Info = string.Format( "Proximo: {0} - {1}",
-                            slot.ScheduleName, serviceDateTime.ToString( "dddd dd/MM HH:mm", esGt ) ),
-                        CheckInStartIso = checkInStart.ToString( "yyyy-MM-ddTHH:mm:ss" )
-                    };
-                }
+                    Info = string.Format( "Proximo: {0} - {1}",
+                        upcoming.ScheduleName, upcoming.ServiceDateTime.ToString( "dddd dd/MM HH:mm", esGt ) ),
+                    CheckInStartIso = checkInStart.ToString( "yyyy-MM-ddTHH:mm:ss" )
+                };
             }
 
             return new NextScheduleResult
@@ -446,11 +493,6 @@ ORDER BY slot.OccurrenceDate, sch.Id
         private static TimeSpan? ExtractTimeFromICal( string iCal )
         {
             return ExtractICalProperty( iCal, "DTSTART:" );
-        }
-
-        private static TimeSpan? ExtractEndTimeFromICal( string iCal )
-        {
-            return ExtractICalProperty( iCal, "DTEND:" );
         }
 
         private static TimeSpan? ExtractICalProperty( string iCal, string property )
@@ -600,8 +642,6 @@ ORDER BY slot.OccurrenceDate, sch.Id
             public DateTime OccurrenceDate { get; set; }
             public string ScheduleName { get; set; }
             public string iCalendarContent { get; set; }
-            public int? CheckInStartOffsetMinutes { get; set; }
-            public int? CheckInEndOffsetMinutes { get; set; }
         }
 
         /// <summary>

@@ -64,9 +64,11 @@ El modulo cubre dos casos de uso distintos:
 **Proposito:** Escaner QR para el ingreso al servicio dominical. Lee codigos de reservacion de la tabla `SundayServiceReservation` y marca asistencia.
 
 **Como funciona:**
-- Detecta automaticamente el slot activo del dia segun el horario del campus configurado.
-- La ventana de check-in se abre **10 minutos antes** del inicio del servicio.
-- Extrae hora de inicio/fin del iCalendar (`DTSTART`/`DTEND`) del Schedule de Rock.
+- Detecta automaticamente el slot activo del dia segun el horario del campus configurado. El operador nunca elige el horario a mano.
+- La ventana de check-in se abre **10 minutos antes** de la hora de inicio del servicio y cierra **60 minutos despues** de esa misma hora de inicio. Ambos valores son decision de negocio y estan fijos en el codigo (`CheckInOpensMinutesBeforeStart` / `CheckInClosesMinutesAfterStart`), no son configurables.
+- El cierre **no** usa el `DTEND` del iCalendar. El servicio dura ~2 h, asi que con `DTEND` la ventana del servicio anterior seguia abierta cuando la del siguiente ya habia abierto: habia dos slots vigentes al mismo tiempo y `sp_SundayServiceCheckIn` exige que la reserva sea exactamente del slot activo, asi que el solapamiento rechazaba en la puerta a gente con reserva valida.
+- Si aun asi dos ventanas se solaparan, gana el horario cuya **hora de inicio esta mas cerca de "ahora"**. El `ORDER BY sch.Id` del query no guarda relacion con el orden cronologico y no sirve como desempate.
+- Extrae la hora de inicio del iCalendar (`DTSTART`) del Schedule de Rock.
 - Usa throttling en memoria para bloquear escaneos invalidos excesivos (60 intentos en 10 segundos).
 - Requiere que el operador tenga permiso `EDIT` sobre el bloque.
 - Actualiza el `Status` de la reservacion a `3` (asistio) via SQL directo con `UPDATE ... WHERE Status = 1`.
@@ -76,8 +78,17 @@ El modulo cubre dos casos de uso distintos:
 - `AllowedScheduleIds`: Lista CSV de ScheduleIds permitidos (ej: `7,9,11,13,18`).
 
 **Block Actions:**
-- `GetActiveSlot()`: Devuelve el slot activo o informacion del proximo horario.
+- `GetActiveSlot()`: Devuelve el slot activo o informacion del proximo horario. El "Proximo: ..." se ordena por la hora real resuelta del iCalendar, no por `ScheduleId`.
 - `ProcessScan(reservationCode)`: Valida el codigo de reservacion y marca asistencia.
+
+**Estados que devuelve `ProcessScan` (campo `status`):**
+- `checked_in`: asistencia registrada.
+- `already_used`: la reserva ya tenia check-in (idempotente, no vuelve a contar).
+- `other_schedule`: el codigo existe pero pertenece a **otro horario** (ResultCode `-2`). Se separo del mensaje generico porque el operador necesita distinguirlo de un QR inventado para poder resolverlo en la puerta. No revela de que horario es ni de quien.
+- `invalid_qr`: codigo inexistente (`-1`) o reserva cancelada / no-show (`-3`). Mismo mensaje para ambos, sin revelar el motivo.
+- `error`: fallo inesperado (`-99`) o sin horario activo.
+
+Los cuatro casos de rechazo cuentan para el throttle de escaneos invalidos.
 
 **Soporte para kiosko nativo Rock:**
 - Detecta `KioskId` via QueryString para integracion con el sistema de kiosko de Rock Check-in.
@@ -133,6 +144,11 @@ El modulo cubre dos casos de uso distintos:
 **Tabla SundayServiceSlot:** Campos clave: `Capacity`, `ReservedCount`, `HoldCount`, `OccurrenceDate`, `ScheduleId`, `CampusId`, `IsActive`.
 
 **Disponibilidad calculada:** `available = Capacity - ReservedCount - HoldCount`
+
+> **`available` si se muestra al usuario final.** El 2026-08-26 se oculto por unas horas y se
+> revirtio: el asistente ve "Cupo: N" en cada horario. `GetWeekSlots` lo envia y
+> ademas alimenta el filtro del front (`s.isAvailable && s.available >= quantity`), que descarta
+> los horarios que no alcanzan para la cantidad pedida.
 
 **Imagen de campus:** El bloque consulta `AttributeId 8543` en la tabla `AttributeValue` para obtener el GUID de la imagen del campus. La URL se construye como `/GetImage.ashx?guid={guid}`.
 

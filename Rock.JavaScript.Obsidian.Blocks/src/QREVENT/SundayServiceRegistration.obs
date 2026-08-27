@@ -2,11 +2,9 @@
     <Panel type="block" title="Registro Servicio Dominical" :hasNoBodyPadding="true">
         <template #default>
             <!-- ===== Blank Layout: página implícita ===== -->
-            <div class="vrPage">
-                <div class="vrTopBar">
-                    <div class="vrBrand">VidaReal.tv</div>
-
-                </div>
+            <div ref="pageEl" class="vrPage">
+                <!-- Banda institucional: navy sin contenido (la marca se quito el 2026-08-26) -->
+                <div class="vrTopBar"></div>
 
                 <div class="vrContainer">
                     <div class="sswrap">
@@ -175,7 +173,7 @@
                                         </div>
 
                                         <div v-if="!weekBusy && !weekError && availableDays.length === 0" class="text-muted ssSmall">
-                                            No hay horarios con cupo disponible para este campus en la semana.
+                                            No hay horarios con cupo disponible para esta sede esta semana. Prob&aacute; con otra sede o volv&eacute; a intentar m&aacute;s tarde.
                                         </div>
 
                                         <div v-if="availableDays.length > 0" class="ssSlots">
@@ -188,11 +186,13 @@
                                                     type="button"
                                                     class="ssSlotBtn"
                                                     :class="{ isSelected: s.slotId === selectedSlotId }"
+                                                    :aria-pressed="s.slotId === selectedSlotId"
                                                     :disabled="busy"
                                                     @click="selectSlot(s)">
                                                     <div class="ssSlotTop">
                                                         <div class="ssSlotName">{{ s.scheduleName }}</div>
-                                                        <div class="ssSlotCap">Cupos disponibles: {{ s.available }}</div>
+                                                        <div class="ssSlotCap">Cupo: {{ s.available }}</div>
+                                                        <div class="ssSlotCheck" aria-hidden="true"></div>
                                                     </div>
                                                 </button>
                                             </div>
@@ -239,7 +239,7 @@
                                         </div>
 
                                         <div v-else-if="!holdToken && !holdError" class="ssSmall text-muted">
-                                            Hold: {{ holdStatusText }}
+                                            {{ holdStatusText }}
                                         </div>
 
                                         <div v-if="holdError" class="ssAlert">
@@ -263,7 +263,7 @@
                             <div class="ssModalCard">
                                 <div class="ssModalTitle">Cancelar reserva</div>
                                 <div class="ssModalText">
-                                    ¿Seguro que deseas cancelar tu reserva? Esta acción libera tu cupo.
+                                    ¿Seguro que deseas cancelar tu reserva? Se liberar&aacute; tu lugar y tendr&aacute;s que registrarte de nuevo.
                                 </div>
 
                                 <div class="ssModalSummary" v-if="activeReservation">
@@ -323,7 +323,7 @@
                         <!-- Modal Tiempo Expirado -->
                         <div v-if="showExpiredModal" class="ssModalOverlay" @click.self="closeExpiredModal">
                             <div class="ssModalCard">
-                                <div class="ssModalTitle">⏱️ Tiempo expirado</div>
+                                <div class="ssModalTitle">Tiempo expirado</div>
                                 <div class="ssModalText">
                                     El tiempo de reserva ha expirado. Por favor, intenta seleccionar tu horario nuevamente.
                                 </div>
@@ -453,6 +453,7 @@ const showExpiredModal = ref<boolean>(false);
 
 // Guardado del comprobante con QR
 const qrImgEl = ref<HTMLImageElement | null>(null);
+const pageEl = ref<HTMLElement | null>(null);
 const downloadBusy = ref<boolean>(false);
 const showSaveModal = ref<boolean>(false);
 const savedImageUrl = ref<string>("");
@@ -968,7 +969,7 @@ async function doHoldUpsertLatest() {
         if (mySeq !== holdInFlightSeq) return;
 
         if (!res.isSuccess) {
-            holdError.value = res.errorMessage || "No se pudo crear el hold.";
+            holdError.value = res.errorMessage || "No pudimos apartar tu lugar. Reintentá en unos segundos.";
             holdToken.value = "";
             return;
         }
@@ -977,10 +978,10 @@ async function doHoldUpsertLatest() {
 
         if (data.resultCode !== 1) {
             holdError.value = data.resultCode === 0
-                ? "Ya no hay cupo suficiente para esa cantidad."
+                ? "Ese horario ya no tiene lugar para esa cantidad. Probá con menos personas o elegí otro horario."
                 : data.resultCode === -1
                     ? "El horario ya no existe o no está activo."
-                    : "No se pudo apartar el cupo. Intenta de nuevo.";
+                    : "No pudimos apartar tu lugar. Reintentá en unos segundos.";
             holdToken.value = "";
             void refreshWeekSilent();
             return;
@@ -1062,12 +1063,12 @@ const holdProgressPercent = computed<number>(() => {
 });
 
 const holdStatusText = computed<string>(() => {
-    if (!selectedSlotId.value) return "—";
-    if (holdError.value) return "Falló";
-    if (holdUpdating.value) return "Actualizando…";
-    if (!holdToken.value) return "—";
-    if (holdTimeRemaining.value > 0) return `Reservado (${holdCountdownText.value})`;
-    return "Activo";
+    if (!selectedSlotId.value) return "Elegí un horario para apartar tu lugar.";
+    if (holdError.value) return "No pudimos apartar tu lugar.";
+    if (holdUpdating.value) return "Apartando tu lugar…";
+    if (!holdToken.value) return "Apartando tu lugar…";
+    if (holdTimeRemaining.value > 0) return `Lugar apartado (${holdCountdownText.value})`;
+    return "Lugar apartado.";
 });
 
 const selectedSummary = computed<null | { campusName: string; occurrenceDateText: string; scheduleName: string }>(() => {
@@ -1139,10 +1140,10 @@ async function confirm() {
             }
 
             holdError.value = data.resultCode === 0 || data.resultCode === -1
-                ? "No se pudo confirmar: el hold venció o ya no está disponible."
+                ? "Se venció el tiempo para confirmar. Elegí tu horario de nuevo."
                 : data.resultCode === -2 || data.resultCode === -3
                     ? "Ya existe otra reserva activa para esta persona."
-                    : "No se pudo confirmar. Intenta de nuevo.";
+                    : "No pudimos confirmar tu reserva. Reintentá en unos segundos.";
             void refreshWeekSilent();
             resetHold();
             return;
@@ -1251,7 +1252,32 @@ async function confirmCancelReservation() {
 }
 
 // Auto-selección de campus si solo hay uno disponible
+/**
+ * Full-bleed: el bloque vive dentro de los contenedores de Rock (page-content,
+ * container, panel-body...), que aportan padding lateral propio. En vez de
+ * adivinar cuanto es, se mide el ancho real del viewport SIN la barra de scroll
+ * (clientWidth) y se expone como --vr-viewport; el CSS lo usa para estirarse con
+ * margenes negativos. El fallback del CSS es 100vw, que en escritorio incluiria
+ * el ancho de la barra y provocaria scroll horizontal.
+ */
+function applyFullBleed(): void {
+    const el = pageEl.value;
+    if (!el) return;
+    const w = document.documentElement.clientWidth;
+    el.style.setProperty("--vr-viewport", `${w}px`);
+}
+
+/** Evita el zoom por doble tap sin bloquear el pinch-zoom (accesibilidad). */
+function onDoubleClick(e: Event): void {
+    e.preventDefault();
+}
+
 onMounted(() => {
+    applyFullBleed();
+    window.addEventListener("resize", applyFullBleed);
+    window.addEventListener("orientationchange", applyFullBleed);
+    pageEl.value?.addEventListener("dblclick", onDoubleClick);
+
     // Si no hay reserva activa y solo hay 1 campus, seleccionarlo automáticamente
     if (!activeReservation.value && !replacing.value && campusOptions.value.length === 1) {
         const singleCampus = campusOptions.value[0];
@@ -1267,8 +1293,12 @@ watch(replacing, (newVal) => {
     }
 });
 
-// Limpiar timers al desmontar el bloque
+// Limpiar timers y listeners al desmontar el bloque
 onBeforeUnmount(() => {
+    window.removeEventListener("resize", applyFullBleed);
+    window.removeEventListener("orientationchange", applyFullBleed);
+    pageEl.value?.removeEventListener("dblclick", onDoubleClick);
+
     if (holdCountdownTimer != null) {
         window.clearInterval(holdCountdownTimer);
         holdCountdownTimer = null;
@@ -1285,302 +1315,390 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
-/* ===== Paleta y tipografía (estilo captura VidaReal.tv) ===== */
-/* Opcional (si CSP lo permite):
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800&display=swap");
-*/
+/* ============================================================
+   Registro Servicio Dominical — Vida Real
+   Design system: Brújula VR (tokens de colors.css / base.css).
+   Tipografía: Montserrat (servida por RockWeb, ver más abajo).
+   Todo el CSS vive bajo .vrPage para no filtrarse a otros bloques.
+   ============================================================ */
 
-:root{
-    --vr-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-
-    --vr-bg: #F4F6FB;
-    --vr-surface: #FFFFFF;
-    --vr-text: #111827;
-    --vr-muted: #6B7280;
-    --vr-border: rgba(17,24,39,.10);
-
-    --vr-shadow: 0 10px 30px rgba(17,24,39,.10);
-    --vr-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
-
-    --vr-radius-xl: 18px;
-    --vr-radius-lg: 14px;
-    --vr-radius-md: 12px;
-
-    --vr-accent: #2563EB;
+/* Montserrat servida por RockWeb (ver /Assets/Fonts/Montserrat/montserrat.css).
+   Se declara aquí porque el tema aún no enlaza ese CSS; si el tema lo agrega,
+   estas reglas duplicadas son inocuas. Montserrat © Julieta Ulanovsky (SIL OFL 1.1). */
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
 }
 
-/* ===== Página implícita (Blank Layout) ===== */
+/* ===== Chrome del panel y contenedores de Rock: solo para este bloque =====
+   El bloque se dibuja a sangre completa, asi que se neutraliza el padding y el
+   margen que aportan los envoltorios de la pagina. Todos los selectores estan
+   condicionados con :has(.vrPage), asi que no tocan otros bloques. */
+.panel-block:has(.vrPage) > .panel-heading,
+.panel-block:has(.vrPage) > .panel-header { display: none !important; }
+.panel-block:has(.vrPage) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.vrPage) > .panel-body { padding: 0 !important; }
+
+:is(.page-content, .container, .container-fluid, .row, .block-instance,
+    .zone, .zone-content, .block-content, [class*="col-"]):has(.vrPage) {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* ===== Tokens Brújula VR — tema claro ===== */
 .vrPage {
-    font-family: var(--vr-font);
-    background: var(--vr-bg);
+    --vr-navy: #0F334B;
+    --vr-navy-800: #143E5A;
+    --vr-navy-600: #2B577A;
+    --vr-red: #E74133;
+    --vr-red-hover: #C93225;
+    --vr-steel: #A2BACA;
+
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-strong: #0F334B;
+    --ink-soft: #5A6E7C;
+    --ink-faint: #8296A6;
+    --rule: #E1E7EC;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --action-line: #CFE0EC;
+
+    --ok-fill: #39B396;  --ok-text: #1E7A64;  --ok-bg: #E9F6F2;
+    --err-fill: #E74133; --err-text: #B02E22; --err-bg: #FCEAE8;
+    --neu-text: #5A6E7C; --neu-bg: #EFF3F6;
+
+    --btn-primary: #0F334B;
+    --btn-primary-hover: #143E5A;
+    --btn-primary-ink: #FFFFFF;
+    --focus-ring: rgba(30,91,135,.28);
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --shadow-pop: 0 8px 28px rgba(15,51,75,.18), 0 0 0 1px rgba(15,51,75,.05);
+
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-4-5: 18px; --sp-5: 20px; --sp-6: 24px;
+
+    --font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.45;
+    background: var(--bg);
+    color: var(--ink);
     min-height: 100vh;
-    padding-bottom: 18px;
-    color: var(--vr-text);
-    /* Prevenir zoom en móvil al hacer doble click */
+    padding-bottom: var(--sp-4-5);
+    -webkit-font-smoothing: antialiased;
+    /* Sin zoom por doble tap (el pinch-zoom sigue disponible) */
     touch-action: manipulation;
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
+
+    /* Full-bleed: anula el padding lateral de los contenedores de Rock.
+       --vr-viewport lo fija onMounted con el clientWidth real; 100vw es el
+       fallback si el script no llega a correr. */
+    --vr-viewport: 100vw;
+    width: var(--vr-viewport);
+    max-width: var(--vr-viewport);
+    margin-left: calc(50% - var(--vr-viewport) / 2);
+    margin-right: calc(50% - var(--vr-viewport) / 2);
 }
+
+/* El double-tap zoom se dispara en el elemento tocado, no solo en el contenedor */
+.vrPage * { touch-action: manipulation; }
+
+/* ===== Tokens Brújula VR — tema oscuro ===== */
+[data-theme="dark"] .vrPage {
+    --bg: #0B1D2B;
+    --paper: #112A3D;
+    --paper-alt: #0E2434;
+    --ink: #DEE9F0;
+    --ink-strong: #EAF2F7;
+    --ink-soft: #A7BBC8;
+    --ink-faint: #7D93A3;
+    --rule: #1F3D53;
+    --rule-strong: #2C5069;
+    --action: #7FB4D9;
+    --action-soft: #16324A;
+    --action-line: #2A506C;
+
+    --ok-fill: #4FC7A9;  --ok-text: #63D3B6; --ok-bg: #0F3B32;
+    --err-fill: #F0685C; --err-text: #F58C81; --err-bg: #46201C;
+    --neu-text: #A7BBC8; --neu-bg: #16303F;
+
+    --btn-primary: #A8CCE4;
+    --btn-primary-hover: #BFDAEC;
+    --btn-primary-ink: #0B1D2B;
+    --focus-ring: rgba(127,180,217,.4);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 2px 10px rgba(0,0,0,.3);
+    --shadow-pop: 0 10px 32px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.vrPage *, .vrPage *::before, .vrPage *::after { box-sizing: border-box; }
 
 /* Permitir selección de texto en campos de entrada y texto informativo */
 .vrPage input,
 .vrPage textarea,
 .vrPage .ssCode,
 .vrPage .ssModalText,
+.vrPage .ssQrInfoText,
 .vrPage .ssScreenSub {
     -webkit-user-select: text;
     -moz-user-select: text;
     user-select: text;
 }
 
+/* Foco visible en ambos temas (guía 6) */
+.vrPage a:focus-visible,
+.vrPage button:focus-visible,
+.vrPage [role="button"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* ===== Banda institucional (navy 56px, guía 5) =====
+   Sin contenido: la marca "VidaReal.tv" se quito el 2026-08-26. Se conserva la
+   franja como cabecera de color; con ella se van .vrBrand, .vrTopActions y
+   .vrIconBtn, que ya no tienen markup que estilizar. */
 .vrTopBar {
-    height: 54px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px;
-    background: var(--vr-bg);
+    height: 56px;
+    background: var(--vr-navy);
     position: sticky;
     top: 0;
     z-index: 50;
-    border-bottom: 1px solid rgba(17,24,39,.06);
-}
-
-.vrBrand {
-    font-weight: 800;
-    letter-spacing: .2px;
-    color: var(--vr-text);
-    font-size: 18px;
-}
-
-.vrTopActions {
-    display: flex;
-    gap: 10px;
-}
-
-.vrIconBtn {
-    width: 26px;
-    height: 26px;
-    border-radius: 999px;
-    background: rgba(17,24,39,.06);
-    border: 1px solid rgba(17,24,39,.06);
 }
 
 .vrContainer {
     max-width: 980px;
     margin: 0 auto;
-    padding: 10px 10px 22px;
+    padding: var(--sp-4) var(--sp-4) var(--sp-6);
 }
 
-/* ===== Compat: text-muted estable aunque el theme cambie ===== */
-.text-muted { color: var(--vr-muted) !important; }
+/* Compat: text-muted estable aunque el theme de Rock cambie */
+.vrPage .text-muted { color: var(--ink-soft) !important; }
 
-/* ===== Wrapper interno ===== */
 .sswrap {
     max-width: 980px;
     margin: 0 auto;
-    padding: 6px 6px;
-    font-family: var(--vr-font);
-    color: var(--vr-text);
-}
-
-/* ===== Opcional: ocultar header del Panel si estorba ===== */
-.panel-block .panel-heading,
-.panel-block .panel-header {
-    display: none !important;
-}
-.panel-block {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    font-family: var(--font-body);
+    color: var(--ink);
 }
 
 /* ===== Stepper ===== */
 .ssStepper {
     position: sticky;
-    top: 54px; /* debajo de vrTopBar */
+    top: 56px;
     z-index: 10;
-    background: var(--vr-bg);
-    padding: 10px 8px 12px;
-    border-bottom: 1px solid rgba(17,24,39,.06);
+    background: var(--bg);
+    padding: var(--sp-3) var(--sp-1);
+    border-bottom: 1px solid var(--rule);
     display: grid;
     /* 4 steps = 4 autos + 3 frs lines */
     grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
 }
 
 .ssStep {
     display: grid;
     grid-template-columns: 26px 1fr;
-    gap: 8px;
+    gap: var(--sp-2);
     align-items: center;
     min-width: 0;
 }
 
 @media (max-width: 576px) {
     .ssStepText { display: none; }
-    .ssStepper { gap: 4px; }
+    .ssStepper { gap: var(--sp-1); }
 }
 
 .ssDot {
     width: 26px;
     height: 26px;
-    border-radius: 999px;
-    border: 1px solid rgba(17,24,39,.22);
+    border-radius: 50%;
+    border: 1px solid var(--rule-strong);
     display: grid;
     place-items: center;
     font-size: 12px;
-    font-weight: 800;
-    background: var(--vr-surface);
+    font-weight: 600;
+    color: var(--ink-faint);
+    background: var(--paper);
+    transition: background 150ms, border-color 150ms, color 150ms;
 }
 
 .ssStepText {
-    font-size: 12px;
-    font-weight: 800;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--vr-muted);
+    color: var(--ink-faint);
+    transition: color 150ms;
 }
 
 .ssLine {
     height: 2px;
-    background: rgba(17,24,39,.12);
-    border-radius: 999px;
+    background: var(--rule);
+    border-radius: 50%;
+    transition: background 150ms;
 }
 
+/* Paso activo = acento rojo (guía 2: tick activo de nav) */
 .ssStep.active .ssDot {
-    border-color: rgba(17,24,39,.45);
-    box-shadow: 0 6px 14px rgba(17,24,39,.10);
+    border-color: var(--vr-red);
+    color: var(--vr-red);
 }
-
-.ssStep.active .ssStepText {
-    color: var(--vr-text);
-}
+.ssStep.active .ssStepText { color: var(--ink-strong); }
 
 .ssStep.done .ssDot {
-    background: #272B32;
-    border-color: #272B32;
+    background: var(--vr-navy);
+    border-color: var(--vr-navy);
     color: #FFFFFF;
 }
-
-.ssLine.done {
-    background: rgba(17,24,39,.28);
+[data-theme="dark"] .ssStep.done .ssDot {
+    background: var(--btn-primary);
+    border-color: var(--btn-primary);
+    color: var(--btn-primary-ink);
 }
+.ssStep.done .ssStepText { color: var(--ink-soft); }
+.ssLine.done { background: var(--rule-strong); }
 
-/* ===== Cards ===== */
+/* ===== Cards (guía 5: fondo paper, radio 10, shadow-card, sin borde) ===== */
 .ssCard {
-    margin-top: 12px;
-    background: var(--vr-surface);
-    border: 1px solid var(--vr-border);
-    border-radius: var(--vr-radius-xl);
-    box-shadow: var(--vr-shadow-soft);
+    margin-top: var(--sp-3);
+    background: var(--paper);
+    border: none;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
     overflow: hidden;
 }
 
-.ssCard .card-body {
-    padding: 14px 14px;
-}
+.ssCard .card-body { padding: var(--sp-5); }
 
-/* Screens */
+/* ===== Screens ===== */
 .ssScreenTitle {
-    font-size: 16px;
-    font-weight: 900;
-    margin-bottom: 4px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-1);
 }
 
 .ssScreenSub {
-    font-size: 12px;
-    margin-bottom: 12px;
+    font-size: 13px;
+    margin-bottom: var(--sp-4);
 }
 
 .ssFormGrid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: var(--sp-3);
 }
 
+/* ===== Selector de sede ===== */
 .ssCampusGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--sp-4);
     justify-content: center;
 }
 
 @media (max-width: 576px) {
-    .ssCampusGrid {
-        /* Tarjetas mas grandes en movil (casi full width si solo hay una) */
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    }
-
-    .ssCampusImg {
-        height: 170px;
-        flex: 0 0 170px;
-    }
+    /* Tarjetas más grandes en móvil (casi full width si solo hay una) */
+    .ssCampusGrid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .ssCampusImg { height: 170px; flex: 0 0 170px; }
 }
 
 .ssCampusCard {
     display: flex;
     flex-direction: column;
-    gap: 0; /* Controlamos espacio con margin/padding */
     align-items: stretch;
     text-align: left;
-    padding: 0; 
-    border: 1px solid var(--vr-border);
-    background: var(--vr-surface);
-    border-radius: var(--vr-radius-lg);
-    box-shadow: var(--vr-shadow-soft);
+    padding: 0 0 var(--sp-3);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
     cursor: pointer;
-    overflow: hidden; 
-    padding-bottom: 12px; 
-    transition: transform 0.2s, box-shadow 0.2s;
-    height: auto !important; /* Force auto height to avoid button constraints */
+    overflow: hidden;
+    transition: border-color 150ms, box-shadow 150ms;
+    height: auto !important; /* evita restricciones de altura del botón */
 }
 
-.ssCampusCard:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 28px rgba(17,24,39,.12);
-}
+.ssCampusCard:hover { border-color: var(--action-line); }
 
 .ssCampusCard.isDisabled {
-    opacity: 0.6;
+    opacity: .6;
     cursor: not-allowed;
-    transform: none;
     pointer-events: none;
 }
 
 .ssCampusCard.isSelected {
-    border-color: rgba(37,99,235,.55);
-    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+    border-color: var(--action);
+    box-shadow: 0 0 0 1px var(--action), var(--shadow-card);
 }
 
+/* Superficie plana, sin gradiente decorativo (guía 5) */
 .ssCampusImg {
     width: 100%;
-    /* Altura fija para uniformidad, o aspect-ratio si el navegador lo soporta bien */
-    height: 140px; 
-    flex: 0 0 140px; /* Prevent flexing */
-    background: linear-gradient(135deg, rgba(37,99,235,.10), rgba(17,24,39,.04));
+    height: 140px;
+    flex: 0 0 140px;
+    background: var(--paper-alt);
     display: grid;
     place-items: center;
-    border-bottom: 1px solid rgba(17,24,39,.06);
+    border-bottom: 1px solid var(--rule);
     overflow: hidden;
 }
 
 .ssCampusInitials {
-    font-weight: 900;
+    font-weight: 600;
     font-size: 24px;
-    color: var(--vr-text);
+    color: var(--ink-faint);
     letter-spacing: 1px;
 }
 
 .ssCampusName {
-    padding: 10px 12px;
-    color: var(--vr-text);
-    margin-top: 0;
-    background: var(--vr-surface);
-    line-height: 1.2;
+    padding: var(--sp-3) var(--sp-3) 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-strong);
+    background: var(--paper);
+    line-height: 1.3;
 }
 
 .ssCampusRealImg {
@@ -1590,157 +1708,243 @@ onBeforeUnmount(() => {
     display: block;
 }
 
+.ssCampusHeading {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-4);
+    text-align: center;
+}
+
+/* ===== Navegación entre pasos ===== */
 .ssNav {
-    margin-top: 14px;
+    margin-top: var(--sp-5);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: var(--sp-3);
     align-items: center;
 }
 
-.ssNavSingle {
-    grid-template-columns: 1fr;
+.ssNavSingle { grid-template-columns: 1fr; }
+
+/* ===== Resumen (label/valor) ===== */
+.ssSummaryCard {
+    background: var(--paper-alt);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-3);
+}
+
+.ssSummaryRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--sp-3);
+    padding: var(--sp-1) 0;
+}
+
+.ssLabel {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    line-height: 1.35;
+    color: var(--ink-faint);
+}
+
+.ssVal {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-strong);
+    text-align: right;
 }
 
 .ssSummaryPill {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 10px;
+    gap: var(--sp-3);
     align-items: center;
-    padding: 10px 10px;
-    border-radius: var(--vr-radius-lg);
-    background: rgba(17,24,39,.04);
-    border: 1px solid rgba(17,24,39,.06);
-    margin-bottom: 10px;
+    padding: var(--sp-3);
+    border-radius: var(--radius);
+    background: var(--paper-alt);
+    border: 1px solid var(--rule);
+    margin-bottom: var(--sp-3);
 }
 
 .ssPillLabel {
     font-size: 11px;
-    font-weight: 900;
-    color: var(--vr-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
 }
 
 .ssPillValue {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--vr-text);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-strong);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* Step 3 header */
 .ssStep3Header {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
 }
 
-.ssStep3Row {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
+.ssStep3Row { display: flex; flex-direction: column; gap: 2px; }
 
 .ssStep3Label {
     font-size: 11px;
     font-weight: 600;
-    color: var(--vr-muted);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
 }
 
 .ssStep3Value {
     font-size: 14px;
-    font-weight: 700;
-    color: var(--vr-text);
+    font-weight: 500;
+    color: var(--ink-strong);
 }
 
-/* Slots */
-.ssSlots { margin-top: 6px; }
-.ssDayBlock { margin-bottom: 14px; }
+/* ===== Horarios ===== */
+.ssSlots { margin-top: var(--sp-2); }
+.ssDayBlock { margin-bottom: var(--sp-4); }
 
 .ssDayTitle {
-    font-weight: 900;
-    font-size: 13px;
-    margin: 10px 0 8px;
-    color: var(--vr-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
+    margin: var(--sp-4) 0 var(--sp-2);
 }
 
 .ssSlotBtn {
     width: 100%;
     text-align: left;
-    border: 1px solid var(--vr-border);
-    background: var(--vr-surface);
-    border-radius: var(--vr-radius-lg);
-    padding: 12px 12px;
-    margin-bottom: 10px;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    border-radius: var(--radius);
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-2);
     cursor: pointer;
-    box-shadow: 0 6px 14px rgba(17,24,39,.06);
+    transition: background 150ms, border-color 150ms;
 }
+
+.ssSlotBtn:hover { background: var(--action-soft); }
 
 .ssSlotBtn.isSelected {
-    border-color: rgba(37,99,235,.35);
-    box-shadow: 0 12px 22px rgba(37,99,235,.10);
+    border-color: var(--action);
+    background: var(--action-soft);
 }
 
-.ssSlotBtn.isDisabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-}
+.ssSlotBtn.isDisabled { opacity: .55; cursor: not-allowed; }
 
 .ssSlotTop {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--sp-3);
 }
 
 .ssSlotName {
-    font-weight: 600;
-    color: var(--vr-text);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-strong);
     flex: 1;
     min-width: 0;
+    /* Si el nombre no cabe, se recorta el nombre — nunca se rompe la fila */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
+/* Cupo disponible del horario.
+   El tracking de los eyebrows (.12em) ensanchaba demasiado esta fila en movil y
+   partia el renglon, asi que aqui va reducido. */
 .ssSlotCap {
+    flex: none;
     font-size: 11px;
-    font-weight: 800;
-    color: var(--vr-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
     text-align: right;
     white-space: nowrap;
 }
 
-/* Qty + Confirm */
-.ssQtyWrap {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(17,24,39,.06);
+.ssSlotBtn.isSelected .ssSlotCap { color: var(--ink-soft); }
+
+@media (max-width: 400px) {
+    /* En pantallas angostas se recupera todo el ancho posible */
+    .ssSlotTop { gap: var(--sp-2); }
+    .ssSlotCap { letter-spacing: 0; }
+    .ssSlotBtn { padding: var(--sp-3); }
 }
 
-.ssCampusHeading {
-    font-size: 20px;
-    font-weight: 400;
-    color: var(--vr-text);
-    margin-bottom: 12px;
-    text-align: center;
+/* Indicador de selección del horario */
+.ssSlotCheck {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+    position: relative;
+    transition: background 150ms, border-color 150ms;
+}
+
+.ssSlotBtn.isSelected .ssSlotCheck {
+    background: var(--action);
+    border-color: var(--action);
+}
+
+/* Palomita dibujada en CSS (sin icon font, guía 7) */
+.ssSlotBtn.isSelected .ssSlotCheck::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 3px;
+    width: 5px;
+    height: 9px;
+    border: solid var(--paper);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+[data-theme="dark"] .ssSlotBtn.isSelected .ssSlotCheck::after { border-color: var(--bg); }
+
+/* ===== Cantidad ===== */
+.ssQtyWrap {
+    margin-top: var(--sp-3);
+    padding-top: var(--sp-4);
+    border-top: 1px solid var(--rule);
 }
 
 .ssQtyTitle {
-    font-weight: 900;
-    margin-bottom: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-1);
     text-align: center;
 }
 
 .ssQtySub {
-    font-size: 12px;
+    font-size: 13px;
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: var(--sp-4);
 }
 
 .ssQtyRow {
     display: grid;
     grid-template-columns: 44px 1fr 44px;
-    gap: 10px;
+    gap: var(--sp-3);
     align-items: center;
     max-width: 280px;
     margin: 0 auto;
@@ -1748,38 +1952,48 @@ onBeforeUnmount(() => {
 
 .ssQtyBtn {
     height: 44px;
-    border-radius: var(--vr-radius-lg);
-    border: 1px solid var(--vr-border);
-    background: var(--vr-surface);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+    color: var(--ink-strong);
+    font-family: var(--font-body);
     font-size: 18px;
-    font-weight: 900;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms;
 }
+
+.ssQtyBtn:hover:not(:disabled) { background: var(--action-soft); border-color: var(--action-line); }
+.ssQtyBtn:disabled { opacity: .45; cursor: not-allowed; }
 
 .ssQtyVal {
     height: 44px;
-    border-radius: var(--vr-radius-lg);
-    border: 1px solid var(--vr-border);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--rule);
+    background: var(--paper-alt);
     display: grid;
     place-items: center;
-    font-weight: 900;
-    font-size: 16px;
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    color: var(--ink-strong);
     text-align: center;
 }
 
+/* ===== Confirmación ===== */
 .ssConfirmRow {
-    margin-top: 12px;
+    margin-top: var(--sp-4);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: var(--sp-4);
 }
 
-.ssConfirmRow .btn-primary {
-    width: 100%;
-}
+.ssConfirmRow .btn-primary { width: 100%; }
 
 .ssBackLink {
-    color: #272B32 !important;
+    color: var(--action) !important;
     text-decoration: underline !important;
     font-size: 14px;
     font-weight: 500;
@@ -1789,106 +2003,82 @@ onBeforeUnmount(() => {
     padding: 0;
 }
 
-.ssAlert { margin-top: 10px; }
-.ssSmall { font-size: 12px; margin-top: 8px; }
+.ssBackLink:hover { color: var(--ink-strong) !important; }
 
-/* Barra de progreso del hold */
-.ssHoldProgress {
-    margin-top: 12px;
-    margin-bottom: 12px;
-}
+.ssAlert { margin-top: var(--sp-3); }
+.ssSmall { font-size: 13px; margin-top: var(--sp-2); }
+
+/* ===== Tiempo para confirmar ===== */
+.ssHoldProgress { margin: var(--sp-4) 0; }
 
 .ssHoldProgressLabel {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--vr-text);
+    align-items: baseline;
+    margin-bottom: var(--sp-2);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
 }
 
 .ssHoldTime {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 14px;
-    font-weight: 900;
-    color: var(--vr-accent);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    text-transform: none;
+    color: var(--action);
 }
 
 .ssHoldProgressBar {
     width: 100%;
     height: 8px;
-    background: rgba(17,24,39,.08);
-    border-radius: 999px;
+    background: var(--neu-bg);
+    border-radius: 50%;
     overflow: hidden;
     position: relative;
 }
 
+/* Relleno plano — sin gradientes decorativos ni glow (guía 5) */
 .ssHoldProgressFill {
     height: 100%;
-    background: linear-gradient(90deg, #10B981 0%, #3B82F6 50%, #2563EB 100%);
-    border-radius: 999px;
-    transition: width 0.5s linear;
-    box-shadow: 0 0 8px rgba(37,99,235,.35);
+    background: var(--action);
+    border-radius: 50%;
+    transition: width 500ms linear;
 }
 
-/* Summary card in step 3 */
-.ssSummaryCard {
-    border: 1px solid rgba(17,24,39,.08);
-    background: rgba(17,24,39,.03);
-    border-radius: var(--vr-radius-lg);
-    padding: 10px 10px;
-    margin-bottom: 10px;
-}
-
-.ssSummaryRow {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 6px 0;
-}
-
-.ssLabel {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--vr-muted);
-}
-
-.ssVal {
-    font-size: 13px;
-    font-weight: 900;
-}
-
-/* Active reservation */
+/* ===== Reserva activa ===== */
 .ssCardTitle {
-    font-weight: 900;
-    font-size: 14px;
-    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-4);
 }
 
 .ssInfoGrid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
 }
 
 .ssQrWrap {
-    margin-top: 12px;
+    margin-top: var(--sp-4);
     display: grid;
     place-items: center;
-    gap: 8px;
-    padding: 30px 20px;
-    background: #4A4A4A;
-    border-radius: var(--vr-radius-xl);
-    box-shadow: 0 4px 12px rgba(17,24,39,.12);
+    gap: var(--sp-2);
+    padding: var(--sp-6) var(--sp-5);
+    background: var(--vr-navy);
+    border-radius: var(--radius);
 }
 
 .ssQrInfoText {
-    font-size: 12px;
+    font-size: 13px;
     text-align: left;
-    margin-top: 10px;
-    margin-bottom: 4px;
+    margin-top: var(--sp-3);
+    margin-bottom: var(--sp-1);
     line-height: 1.5;
 }
 
@@ -1899,7 +2089,7 @@ onBeforeUnmount(() => {
     background: none;
     box-shadow: none;
     padding: 0;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     object-fit: cover;
 }
 
@@ -1907,31 +2097,32 @@ onBeforeUnmount(() => {
     width: 220px;
     height: 220px;
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .ssCode {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-size: 12px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
     word-break: break-all;
     text-align: center;
-    padding: 0 8px;
+    padding: 0 var(--sp-2);
 }
 
 .ssDownloadWrap {
-    margin-top: 16px;
+    margin-top: var(--sp-4);
     display: grid;
     place-items: center;
 }
 
 .ssActions {
-    margin-top: 12px;
+    margin-top: var(--sp-3);
     display: grid;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: var(--sp-3);
 }
 
 @media (min-width: 576px) {
@@ -1941,179 +2132,216 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 576px) {
-    .vrContainer { padding: 8px 2px 18px; }
-    .ssCard { margin-top: 8px; }
-    .ssCard .card-body { padding: 12px 10px; }
-    .sswrap { padding: 4px 0; }
+    .vrContainer { padding: var(--sp-3) var(--sp-2) var(--sp-4-5); }
+    .ssCard { margin-top: var(--sp-2); }
+    .ssCard .card-body { padding: var(--sp-4); }
     .ssInfoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 768px) {
     .ssInfoGrid--active {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        column-gap: 12px;
-        row-gap: 12px;
+        column-gap: var(--sp-3);
+        row-gap: var(--sp-3);
     }
-
-    .ssInfoGrid--active > div {
-        min-width: 0;
-    }
+    .ssInfoGrid--active > div { min-width: 0; }
 }
 
-/* Modal */
+/* ===== Modales (shadow-pop + borde rule, guía 4) ===== */
 .ssModalOverlay {
     position: fixed;
     inset: 0;
-    background: rgba(17,24,39,.45);
+    background: rgba(15,51,75,.45);
     display: grid;
     place-items: center;
     z-index: 9999;
-    padding: 14px;
+    padding: var(--sp-4);
 }
+
+[data-theme="dark"] .ssModalOverlay { background: rgba(0,0,0,.6); }
 
 .ssModalCard {
     width: 100%;
     max-width: 420px;
-    background: var(--vr-surface);
-    border-radius: var(--vr-radius-xl);
-    padding: 14px 14px;
-    box-shadow: 0 20px 50px rgba(17,24,39,.25);
-    border: 1px solid rgba(17,24,39,.10);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--sp-5);
+    box-shadow: var(--shadow-pop);
+    font-family: var(--font-body);
+    color: var(--ink);
 }
 
 .ssModalTitle {
-    font-size: 16px;
-    font-weight: 900;
-    margin-bottom: 6px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-2);
 }
 
 .ssModalText {
     font-size: 13px;
-    color: rgba(17,24,39,.70);
-    line-height: 1.35;
+    color: var(--ink-soft);
+    line-height: 1.45;
 }
 
 .ssModalSummary {
-    margin-top: 10px;
-    border: 1px solid rgba(17,24,39,.08);
-    background: rgba(17,24,39,.03);
-    border-radius: var(--vr-radius-lg);
-    padding: 10px 10px;
+    margin-top: var(--sp-3);
+    background: var(--paper-alt);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--sp-3) var(--sp-4);
 }
 
 .ssModalRow {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    padding: 5px 0;
+    align-items: baseline;
+    gap: var(--sp-3);
+    padding: var(--sp-1) 0;
 }
 
 .ssModalLabel {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--vr-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
 }
 
 .ssModalVal {
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--vr-text);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-strong);
     text-align: right;
 }
 
 .ssSaveImgWrap {
     display: flex;
     justify-content: center;
-    margin: 14px 0 4px;
+    margin: var(--sp-4) 0 var(--sp-1);
 }
 
 .ssSaveImg {
     max-width: 100%;
     width: 260px;
     height: auto;
-    border: 1px solid #E5E7EB;
-    border-radius: 10px;
-    /* Permite el menu contextual de iOS para "Guardar en Fotos" */
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    /* Permite el menú contextual de iOS para "Guardar en Fotos" */
     -webkit-touch-callout: default;
     -webkit-user-select: auto;
     user-select: auto;
 }
 
 .ssModalActions {
-    margin-top: 12px;
+    margin-top: var(--sp-4);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: var(--sp-3);
 }
 
-/* Toast */
+/* ===== Toast (semáforo, guía 2) ===== */
 .ssToast {
     position: fixed;
     left: 50%;
-    bottom: 16px;
+    bottom: var(--sp-4);
     transform: translateX(-50%);
     z-index: 10000;
     width: calc(100% - 24px);
     max-width: 420px;
-    border-radius: var(--vr-radius-lg);
-    padding: 12px 12px;
-    box-shadow: 0 18px 40px rgba(17,24,39,.18);
-    border: 1px solid rgba(17,24,39,.10);
-    background: var(--vr-surface);
+    border-radius: var(--radius);
+    padding: var(--sp-3) var(--sp-4);
+    box-shadow: var(--shadow-pop);
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    font-family: var(--font-body);
 }
 
-.ssToast.success { border-left: 6px solid rgba(16,185,129,.55); }
-.ssToast.danger  { border-left: 6px solid rgba(239,68,68,.55); }
-.ssToast.info    { border-left: 6px solid rgba(17,24,39,.35); }
+.ssToast.success { border-left: 3px solid var(--ok-fill); }
+.ssToast.danger  { border-left: 3px solid var(--err-fill); }
+.ssToast.info    { border-left: 3px solid var(--vr-steel); }
 
 .ssToastText {
     font-size: 13px;
-    font-weight: 900;
-    color: var(--vr-text);
+    font-weight: 500;
+    color: var(--ink-strong);
 }
 
-/* ===== Botones estilo VidaReal ===== */
+/* ===== Botones (guía 2: primario navy; rojo solo como danger) ===== */
+.vrPage .btn,
+.vrPage .rock-button {
+    font-family: var(--font-body);
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+    padding: 10px var(--sp-4);
+    transition: background-color 150ms, border-color 150ms, color 150ms;
+}
 
-/* Botón principal (Siguiente, Confirmar) */
 .vrPage .btn-primary,
 .vrPage .rock-button.btn-primary {
-    background-color: #272B32 !important;
-    border-color: #272B32 !important;
-    color: #FFFFFF !important;
-    font-weight: 700;
-}
-
-/* Hover */
-.vrPage .btn-primary:hover,
-.vrPage .rock-button.btn-primary:hover {
-    background-color: #1a1d22 !important;
-    border-color: #1a1d22 !important;
-}
-
-/* Disabled */
-.vrPage .btn-primary:disabled,
-.vrPage .rock-button.btn-primary:disabled {
-    background-color: #272B32 !important;
-    border-color: #272B32 !important;
-    color: rgba(255,255,255,.45) !important;
-    opacity: 0.6;
-}
-
-/* Botón secundario (Atrás, Cancelar) */
-.vrPage .btn-default,
-.vrPage .rock-button.btn-default {
-    background-color: #F3F4F6 !important;
-    border-color: #E5E7EB !important;
-    color: #374151 !important;
+    background-color: var(--btn-primary) !important;
+    border-color: var(--btn-primary) !important;
+    color: var(--btn-primary-ink) !important;
     font-weight: 600;
 }
 
-/* Danger (cancelar reserva rojo → gris suave opcional) */
-.vrPage .btn-danger,
-.vrPage .rock-button.btn-danger {
-    background-color: #F3F4F6 !important;
-    border-color: #E5E7EB !important;
-    color: #6B7280 !important;
+.vrPage .btn-primary:hover,
+.vrPage .rock-button.btn-primary:hover {
+    background-color: var(--btn-primary-hover) !important;
+    border-color: var(--btn-primary-hover) !important;
 }
 
+.vrPage .btn-primary:disabled,
+.vrPage .rock-button.btn-primary:disabled {
+    background-color: var(--btn-primary) !important;
+    border-color: var(--btn-primary) !important;
+    opacity: .5;
+}
+
+.vrPage .btn-default,
+.vrPage .rock-button.btn-default {
+    background-color: var(--paper) !important;
+    border-color: var(--rule-strong) !important;
+    color: var(--ink-strong) !important;
+    font-weight: 500;
+}
+
+.vrPage .btn-default:hover,
+.vrPage .rock-button.btn-default:hover {
+    background-color: var(--action-soft) !important;
+    border-color: var(--action-line) !important;
+}
+
+.vrPage .btn-danger,
+.vrPage .rock-button.btn-danger {
+    background-color: var(--vr-red) !important;
+    border-color: var(--vr-red) !important;
+    color: #FFFFFF !important;
+    font-weight: 600;
+}
+
+.vrPage .btn-danger:hover,
+.vrPage .rock-button.btn-danger:hover {
+    background-color: var(--vr-red-hover) !important;
+    border-color: var(--vr-red-hover) !important;
+}
+
+/* NotificationBox de Rock alineado a los tokens */
+.vrPage .alert {
+    border-radius: var(--radius);
+    border: 1px solid var(--rule);
+    font-size: 13px;
+    padding: var(--sp-3) var(--sp-4);
+}
+.vrPage .alert-danger {
+    background: var(--err-bg) !important;
+    border-color: var(--err-bg) !important;
+    color: var(--err-text) !important;
+}
+.vrPage .alert-warning {
+    background: var(--neu-bg) !important;
+    border-color: var(--neu-bg) !important;
+    color: var(--neu-text) !important;
+}
 </style>

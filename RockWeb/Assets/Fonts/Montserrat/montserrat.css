@@ -1,0 +1,43 @@
+/*
+   Montserrat — tipografía de los bloques de cara al usuario final (Vida Real)
+   --------------------------------------------------------------------------
+   Montserrat © Julieta Ulanovsky et al., SIL OFL 1.1 (ver LICENSE-Montserrat-OFL.txt).
+   Los .woff2 se generaron con fontTools a partir de los .ttf estáticos oficiales
+   de google/fonts; el .ttf queda como fallback para navegadores sin woff2.
+
+   Solo los pesos que usa el design system Brújula VR: 400 / 500 / 600 / 700.
+
+   Este archivo puede enlazarse desde un tema de Rock
+   (<link href="/Assets/Fonts/Montserrat/montserrat.css">) para dar la fuente a
+   todos los bloques. Los bloques .obs individuales pueden declarar estas mismas
+   reglas en su <style> si el tema aún no lo incluye (duplicarlas es inocuo).
+*/
+
+@font-face {
+    font-family: "Montserrat";
+    src: url("Montserrat-Regular.woff2") format("woff2"), url("Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("Montserrat-Medium.woff2") format("woff2"), url("Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("Montserrat-SemiBold.woff2") format("woff2"), url("Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("Montserrat-Bold.woff2") format("woff2"), url("Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}

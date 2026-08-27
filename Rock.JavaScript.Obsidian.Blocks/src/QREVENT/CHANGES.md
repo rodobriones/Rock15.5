@@ -187,7 +187,11 @@ function onSearchKeyup() {
 
 ### 3. ReservationScanner.obs
 
-**Proposito:** Escaner de kiosko para ingreso al servicio dominical. Diseñado para uso en tablet/iPad fijo en la entrada de un campus. Es el bloque mas complejo del modulo.
+**Proposito:** Escaner para el ingreso al servicio dominical, operado en la puerta del campus. Es el bloque mas complejo del modulo.
+
+**Se usa en el navegador** (Safari de iPhone/iPad y Chrome de Android), no dentro de la app nativa de iPad de Rock Check-in: esa app, al tomar la pantalla, saca al operador del bloque. El puente `RockCheckinNative` se conserva por compatibilidad pero su deteccion al arrancar se limita a ~300 ms (2 intentos x 150 ms); antes eran 5 x 200 ms y toda carga en navegador pagaba un segundo entero de pantalla muerta antes de encender la camara.
+
+**El horario nunca se elige a mano:** el bloque pregunta al servidor cual es el slot activo (al montar y luego cada 30 s) y cambia solo entre "sin horario" y "escaneando".
 
 **Modos de operacion:**
 
@@ -246,10 +250,31 @@ nativeBridge.SetKioskId(kioskId);
 **Polling de cambios de camara:**
 - Escucha evento `storage` para cambios entre pestanas.
 - Tambien hace polling de `localStorage` cada 1500ms para cambios en la misma pestana.
+- Un cambio solo cuenta si el `deviceId` guardado **existe de verdad** entre los dispositivos enumerados y difiere del `deviceId` del track en uso (`activeTrackDeviceId`, leido del propio track). Ver "Un solo permiso de camara" mas abajo.
+
+**Preferencia de camara frontal/trasera:**
+- `localStorage["RS_UseRearCamera"]` = `"1"` / `"0"`, escrita por el boton de alternar camara.
+- Sin preferencia guardada el default depende del dispositivo: trasera en telefono o tablet de mano (`pointer: coarse` + `maxTouchPoints > 0`), frontal en equipo de escritorio, donde la unica camara suele ser esa.
+
+**Un solo permiso de camara:**
+
+El bloque llamaba a `getUserMedia()` muchas veces por carga y cada llamada podia reabrir el dialogo de permisos. Las cuatro causas, corregidas:
+
+1. **Reintento eterno cada 30 s.** El poll de slot hacia `startScan()` en cada vuelta si `scanning` era `false`. Tras un permiso denegado eso era un dialogo nuevo cada 30 segundos, para siempre. Ahora `cameraBlocked` corta el reintento automatico: solo se reintenta si el operador toca el boton.
+2. **Bucle de reinicio cada 1.5 s.** El poll comparaba `localStorage["CameraDeviceId"]` contra `currentDeviceId`. Cuando el id guardado no aparecia entre los dispositivos enumerados, `resolveCameraDeviceIdFromSettings()` devolvia `null` pero **dejaba el id en localStorage**: los dos valores nunca coincidian y la camara se reiniciaba cada vuelta del poll. Ahora el id huerfano se borra y la comparacion es contra el `deviceId` del track en uso.
+3. **Dialogo doble al arrancar.** El fallback probaba `facingMode: { exact }` y, en el `catch`, `facingMode: { ideal }`. Ese `catch` vacio se tragaba tambien el `NotAllowedError`, asi que denegar el permiso disparaba **un segundo dialogo** en el acto. Ahora un error de permiso se relanza y no se reintenta.
+4. **Llamadas que ya se sabian condenadas.** Antes de tocar `getUserMedia` se consulta `navigator.permissions.query({ name: "camera" })`: si el estado es `denied` no se llama, y un `onchange` a `granted` reanuda el escaneo solo cuando el operador concede el permiso desde la barra del navegador. Safari no soporta ese nombre en la Permissions API y devuelve `null`; ahi simplemente no aplica.
+
+**Limite de plataforma que el codigo no puede evitar:** iOS Safari no persiste el permiso de camara entre cargas de pagina. Concedido una vez, vale para esa carga; al recargar vuelve a preguntar. Para que sea permanente hay que fijarlo en **Ajustes > Safari > Sitios web > Camara > [dominio] > Permitir**, o instalar la pagina en la pantalla de inicio. En Chrome de Android el permiso si persiste por origen, siempre que el operador elija "Permitir" y no "Permitir esta vez".
 
 **Cookie de permiso de camara:**
 - Guarda `RS_CameraPermission=granted|denied` por 30 dias.
-- Permite saber si el usuario previamente otorgo o denego permisos.
+- Es solo informativa (permite saber si el usuario previamente otorgo o denego permisos); la decision de reintentar la toma `cameraBlocked` + la Permissions API.
+
+**Estados de camara en el overlay del video:**
+- `cameraStarting` / `cameraBootstrapping` → "Iniciando camara...". La condicion anterior era `!scanning && !cameraStarting`, o sea que el cartel aparecia justo cuando la camara **no** estaba arrancando y desaparecia mientras arrancaba.
+- `scanning` → pista "Apunta al QR de la reservacion".
+- Ninguno de los dos → "Camara detenida" / "Camara bloqueada" con un boton para encenderla. Antes este estado no tenia salida: si la camara fallaba, el operador se quedaba sin forma de reintentar salvo recargar.
 
 **Optimizacion de camara (si el hardware lo soporta):**
 ```typescript
@@ -260,6 +285,72 @@ await track.applyConstraints({ advanced: [{
     whiteBalanceMode: "continuous"
 }] });
 ```
+
+**Estilo: design system Brujula VR + Montserrat (2026-08-27):**
+
+El `<style>` se reescribio siguiendo `Guia de Estilos - Brujula VR`, el mismo sistema que ya usan
+`SundayServiceRegistration.obs` y `Eventos/miPaseDigital.obs`. Salieron los tokens `--rs-*` (Roboto,
+`--rs-bg`, `--rs-surface`, `--rs-radius-xl`) y el `:root`; los tokens ahora se declaran sobre
+`.rsPage`. El chrome del Panel y de los contenedores de Rock pasa de selectores globales a
+`.panel-block:has(.rsPage)` / `:is(...):has(.rsPage)`, y hasta el `overflow: hidden` de kiosko queda
+condicionado con `html:has(.rsPage), body:has(.rsPage)` para no volver inmovil cualquier otra pagina.
+
+- **Tipografia:** Montserrat 400/500/600/700 desde `/Assets/Fonts/Montserrat/`. Los pesos 800/900
+  previos bajaron a 500/600.
+- **Radios:** `--radius-sm` 6px (botones) / `--radius` 10px (banner, meta) / `--radius-lg` 14px
+  (modal, recuadro de escaneo). Antes eran 18/14/12 sueltos.
+- **Superficies planas:** fuera el gradiente azul de la barra de progreso y los tres gradientes del
+  modal (franja, icono). Fuera tambien el `backdrop-filter` del modal y del boton de camara: la guia
+  solo admite `white/α` sobre navy, sin glassmorphism.
+- **Animacion:** el modal entraba con `translateY` + `scale`; ahora es un fade de 150 ms. La linea de
+  barrido se conserva porque es la unica senal de que el escaner esta vivo, y ambas respetan
+  `prefers-reduced-motion`.
+- **Iconos:** el icono de Font Awesome del estado vacio pasa al glifo `◌` que la guia prescribe para
+  EmptyState, y el boton de cambiar camara usa el SVG de Lucide `refresh-cw` en vez de `fa-sync-alt`.
+  Los tres iconos del modal reusan el glifo del banner (`✓` `!` `×`), asi que el bloque ya no depende
+  del icon font.
+
+**Tres desviaciones deliberadas de la guia.** Esta no es una vista del asistente: es la pantalla de
+un operador en la puerta, mirada a un brazo de distancia, con poca luz y a veces con guantes.
+
+1. **Tema oscuro fijo, sin bloque `[data-theme]`.** El 70% de la pantalla es el video, que es negro;
+   el tema claro dejaba un marco blanco encandilante alrededor de ese rectangulo. Los valores son
+   exactamente los del tema oscuro de la guia, solo que no dependen del tema de Rock.
+2. **El semaforo se pinta con los `-fill` saturados, no con los `-bg` palidos.** Los `-bg` estan
+   calculados para filas de tabla en una oficina; a un metro y de reojo, `#E9F6F2` y `#FCEAE8` son
+   los dos "casi blanco". La paleta no cambia: cambia el rol del token. Como tinta sobre cada fill se
+   usa el `-bg` oscuro de ese mismo estado, que da el contraste necesario sin inventar un color:
+
+   | Estado | Fondo | Tinta | Contraste |
+   |---|---|---|---|
+   | ok | `#39B396` | `#0F3B32` | 4.7:1 |
+   | warn | `#F09E30` | `#3E2F10` | 5.9:1 |
+   | err | `#E74133` | `#FFFFFF` | 4.0:1 — AA para texto grande; todo el texto sobre rojo va >=16px y peso 600 |
+
+3. **Objetivos tactiles de 48px** (`--tap`) y cuerpo de 15px en vez de 14px. La guia no fija altura de
+   control; 48px es el minimo que se acierta con guantes puestos, y 14px no se lee a un brazo de
+   distancia. Afecta al boton de cambiar camara (era 40px), a `.rsBtn` y a la altura minima del banner.
+
+**Horario detectado, visible (2026-08-27):**
+
+`.rsScheduleBar` y `.rsScheduleDot` existian en el CSS pero nunca tuvieron markup, y `activeSlot`
+traia `scheduleName` y `occurrenceTime` sin que se dibujaran en ningun lado: el operador no tenia
+como saber que horario habia elegido el bloque. Ahora la banda navy de 56px lleva el horario activo
+(`activeSlotLabel`, "Primer Servicio · 09:00") y un chip de estado (`statusText` + `statusClass`:
+En espera / Iniciando / Escaneando / Camara detenida / Sin permiso). El color del punto nunca es el
+unico canal: siempre va con su texto al lado, como pide la guia. En pantallas de menos de 400px se
+oculta el texto del chip y queda solo el punto, para que el nombre del horario no se parta.
+
+Con esto se fueron `.rsBrand`, `.rsTopActions` y `.rsIconBtn` (sin markup desde hacia tiempo) y los
+computed `modalIconClass`, `modalIconFa`, `modalStripClass`, `modalTitleColor` y `modalMetaClass`:
+el modal completo se pinta del color del resultado, asi que sus partes heredan del contenedor.
+
+**Tono del resultado (`resultTone`):**
+- Verde: `checked_in`.
+- Ambar: `already_used` y `other_schedule` — son QR legitimos que simplemente no dan ingreso ahora.
+- Rojo: `invalid_qr` y `error` — el QR no sirve.
+
+Banner y modal derivan sus siete clases de este unico computed; antes cada una repetia la misma cadena de `if` y habia que acordarse de tocar las siete al agregar un estado.
 
 **Modal de resultado (mas elaborado que los otros bloques):**
 - Franja de color en la parte superior del modal (verde/amarillo/rojo).
@@ -303,7 +394,7 @@ html, body { overflow: hidden !important; height: 100vh !important; }
 ```
 Paso 1: Sede         → Selecciona campus (con imagen o iniciales)
 Paso 2: Cantidad     → Cuantas personas vienen (1-8)
-Paso 3: Horario      → Selecciona dia y hora disponible
+Paso 3: Horario      → Selecciona dia y hora disponible (sin mostrar cupos)
 Paso 4: Confirmar    → Confirma la reserva (con barra de hold activo)
 ```
 
@@ -324,7 +415,7 @@ const holdTimeRemaining = ref<number>(0);   // Segundos restantes
 ```
 - El hold dura 2 minutos (configurable, max 3 en backend).
 - Barra de progreso visual que se vacia en tiempo real.
-- Display tipo cronometro: `MM:SS` en monospace.
+- Display tipo cronometro: `MM:SS` con `font-variant-numeric: tabular-nums`.
 - Si expira antes de confirmar: modal "Tiempo expirado" y vuelta al paso de seleccion.
 
 **Prevension de race conditions en holds:**
@@ -379,7 +470,7 @@ function parseTimeFromScheduleName(name: string): number {
 - Soporte de teclado con `@keydown.enter`.
 
 **Diseno del QR en pantalla:**
-- Fondo oscuro (`#4A4A4A`) para contraste con el codigo QR.
+- Fondo navy (`--vr-navy`, `#0F334B`) para contraste con el codigo QR.
 - Imagen via `/GetQRCode.ashx?data={code}&size=240`.
 - Texto instruccional debajo del QR.
 - Boton "Descargar" para guardar el QR como imagen.
@@ -387,16 +478,95 @@ function parseTimeFromScheduleName(name: string): number {
 - Link "Cancelar reserva" para abrir modal de cancelacion.
 
 **UX responsiva:**
-- Tarjetas de campus con `grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))`.
+- Tarjetas de campus con `grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))`.
 - En movil (< 576px): tarjetas mas grandes (`minmax(240px, 1fr)`), se esconde texto del stepper.
 - `touch-action: manipulation` para prevenir zoom no deseado en movil.
 - `user-select: none` en la pagina para evitar seleccion accidental, pero `user-select: text` en inputs y textos informativos.
 
-**Estilo de botones VidaReal (overrides sobre Bootstrap Rock):**
+**Cupos: ocultados y luego restaurados (2026-08-26):**
+
+Durante unas horas de ese dia el contador de cupos estuvo oculto al usuario final. **Se revirtio
+por decision del usuario: el asistente si debe ver cuantos lugares quedan.** El estado final es:
+
+- `<div class="ssSlotCap">Cupo: {{ s.available }}</div>` **sigue en el selector de horario**,
+  reestilizado con los tokens de Brujula (11px, uppercase, `tabular-nums`, `--ink-faint`).
+- El texto se acorto de "Cupos disponibles: N" a **"Cupo: N"** porque en movil partia el renglon.
+  El tracking de eyebrow (`.12em`) se bajo a `.06em` — y a `0` bajo 400px, donde ademas se reduce
+  el `gap` de `.ssSlotTop` y el padding del boton. `.ssSlotName` recorta con ellipsis, de modo que
+  **cuando falta espacio se acorta el nombre del horario, nunca se rompe la fila**.
+- Del intento quedaron dos mejoras que se conservaron a proposito:
+  - **Indicador de seleccion** (`.ssSlotCheck`, palomita dibujada en CSS) mas `aria-pressed` en el boton.
+    Antes la seleccion solo se notaba por el borde; ahora hay una senal explicita y accesible.
+  - **Textos sin jerga:** se quito el "Hold: ..." de la vista (`holdStatusText` devuelve frases como
+    "Apartando tu lugar...", "Lugar apartado (01:47)") y los mensajes de error siguen el patron
+    causa + accion de la guia ("Ese horario ya no tiene lugar para esa cantidad. Proba con menos
+    personas o elegi otro horario.").
+- `available` viene de `GetWeekSlots` y ademas alimenta el filtro del computed `availableDays`
+  (`s.isAvailable && s.available >= quantity`), que descarta los horarios que no alcanzan para la
+  cantidad pedida.
+
+**Estilo: design system Brujula VR + Montserrat (2026-08-26):**
+
+El `<style>` se reescribio siguiendo `Guia de Estilos - Brujula VR`, el mismo sistema que usa
+`Eventos/miPaseDigital.obs`. Tokens declarados sobre `.vrPage` (tema claro) y `[data-theme="dark"] .vrPage`
+(tema oscuro), nunca colores de superficie hardcodeados.
+
+- **Tipografia:** Montserrat 400/500/600/700, self-host desde `/Assets/Fonts/Montserrat/`
+  (`@font-face` duplicado en el bloque porque el tema aun no enlaza `montserrat.css`; ver
+  `RockWeb/Assets/Fonts/Montserrat/`). Sustituye a Roboto y a los pesos 800/900 previos.
+- **Color:** primario navy `#0F334B`; rojo `#E74133` solo como acento (paso activo del stepper) y
+  como `danger` real en "Si, cancelar"; azul `--action` `#1E5B87` para links, hover y seleccion.
+- **Radios y espaciado:** `--radius-sm` 6px (botones) / `--radius` 10px (cards, slots); escala `--sp-*`
+  de 4 a 24px.
+- **Superficies planas:** se eliminaron los gradientes decorativos del placeholder de campus y de la
+  barra de hold (la guia solo permite gradiente en el shimmer del skeleton).
+- **Sin emoji:** el modal de hold vencido dice "Tiempo expirado" sin el reloj.
+- **Scoping:** las reglas que ocultan el chrome del Panel pasaron de `.panel-block` global a
+  `.panel-block:has(.vrPage)`, para no afectar a otros bloques de la misma pagina.
+- **Marca fuera de la cabecera (2026-08-26):** se quito el texto "VidaReal.tv" de `.vrTopBar`; la
+  franja navy de 56px se conserva como banda institucional, ahora vacia. Con ella se eliminaron
+  `.vrBrand`, `.vrTopActions` y `.vrIconBtn`, que quedaron sin markup. **La imagen JPEG descargable
+  del QR sigue rotulada "VidaReal.tv"** (`ctx.fillText` en `buildReservationDataUrl`): es un
+  comprobante que la persona guarda fuera de la app y ahi la marca identifica el documento.
+- **Foco:** ring de 3px `--focus-ring` en links, botones y tarjetas con `role="button"`.
+
+**Full-bleed y doble tap (2026-08-26):**
+
+El bloque se dibuja a sangre completa: los contenedores de Rock (`page-content`, `container`,
+`panel-body`, `col-*`...) aportaban padding lateral y dejaban un margen blanco alrededor.
+
 ```css
-.vrPage .btn-primary { background-color: #272B32 !important; color: #FFFFFF !important; }
-.vrPage .btn-default { background-color: #F3F4F6 !important; color: #374151 !important; }
-.vrPage .btn-danger  { background-color: #F3F4F6 !important; color: #6B7280 !important; }
+.vrPage {
+    --vr-viewport: 100vw;                              /* fallback si el script no corre */
+    width: var(--vr-viewport);
+    margin-left:  calc(50% - var(--vr-viewport) / 2);
+    margin-right: calc(50% - var(--vr-viewport) / 2);
+}
+```
+
+```typescript
+function applyFullBleed(): void {
+    // clientWidth EXCLUYE la barra de scroll; con 100vw a secas, en escritorio
+    // sobrarian ~15px y apareceria scroll horizontal.
+    pageEl.value?.style.setProperty("--vr-viewport", `${document.documentElement.clientWidth}px`);
+}
+```
+
+- `applyFullBleed()` corre en `onMounted` y se re-ejecuta en `resize` y `orientationchange`.
+- Los listeners (`resize`, `orientationchange`, `dblclick`) se remueven en `onBeforeUnmount`.
+- El padding y el margen vertical de los envoltorios se anulan con
+  `:is(.page-content, .container, .row, .block-instance, .zone, .zone-content, [class*="col-"]):has(.vrPage)`,
+  condicionado siempre a `:has(.vrPage)` para no afectar otros bloques de la misma pagina.
+
+**Zoom por doble tap:** `touch-action: manipulation` estaba solo en `.vrPage`, pero el gesto se
+dispara sobre el elemento tocado; ahora aplica tambien a `.vrPage *`, mas un handler `dblclick`
+con `preventDefault()`. **No** se toca el meta viewport con `user-scalable=no`: eso desactivaria
+tambien el pinch-zoom, que es una ayuda de accesibilidad legitima.
+
+```css
+.vrPage .btn-primary { background-color: var(--btn-primary) !important; color: var(--btn-primary-ink) !important; }
+.vrPage .btn-default { background-color: var(--paper) !important;       color: var(--ink-strong) !important; }
+.vrPage .btn-danger  { background-color: var(--vr-red) !important;      color: #FFFFFF !important; }
 ```
 
 ---

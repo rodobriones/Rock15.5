@@ -2,19 +2,28 @@
     <Panel type="block" title="Reservation Scanner">
         <template #default>
             <div class="rsPage">
+                <!-- Banda institucional navy. Lleva el horario que el bloque detecto
+                     solo: el operador nunca lo elige, asi que necesita verlo. -->
                 <div class="rsTopBar">
-                    <div class="rsBrand">Sistema de Registro Vida Real.tv</div>
+                    <div class="rsTopSlot">
+                        <div class="rsEyebrow">Ingreso al servicio</div>
+                        <div class="rsTopTitle">{{ activeSlotLabel }}</div>
+                    </div>
+                    <div class="rsStatus" :class="statusClass">
+                        <span class="rsStatusDot"></span>
+                        <span class="rsStatusText">{{ statusText }}</span>
+                    </div>
                 </div>
 
-                <!-- No active slot -->
+                <!-- Sin horario activo -->
                 <div v-if="!activeSlot" class="rsNoSlot">
                     <div class="rsNoSlotInner">
-                        <div class="rsNoSlotIcon"><i class="fa fa-clock"></i></div>
-                        <div class="rsNoSlotTitle">Sin Horario Activo</div>
-                        <div class="rsNoSlotSub">No hay ningún horario de servicio activo en este momento.</div>
+                        <div class="rsNoSlotIcon">◌</div>
+                        <div class="rsNoSlotTitle">Sin horario activo</div>
+                        <div class="rsNoSlotSub">Ningún horario de servicio está abierto en este momento.</div>
                         <div v-if="nextScheduleInfo" class="rsNoSlotNext">{{ nextScheduleInfo }}</div>
                         <div v-if="countdownText" class="rsCountdown">
-                            <div class="rsCountdownLabel">Abre en: <strong>{{ countdownText }}</strong></div>
+                            <div class="rsCountdownLabel">Abre en <strong class="rsNum">{{ countdownText }}</strong></div>
                             <div class="rsProgressTrack">
                                 <div class="rsProgressBar" :style="{ width: progressPercent + '%' }"></div>
                             </div>
@@ -25,7 +34,7 @@
                     </div>
                 </div>
 
-                <!-- Active slot: scanner -->
+                <!-- Horario activo: escáner -->
                 <div v-else class="rsBody">
                     <div class="rsCameraWrap">
                         <video
@@ -43,16 +52,26 @@
                                 <div class="rsScanLine"></div>
                             </div>
                         </div>
-                        <div v-if="!scanning && !cameraStarting" class="rsOverlayText">
+                        <div v-if="cameraStarting || cameraBootstrapping" class="rsOverlayText">
                             <div class="rsOverlayTitle">Iniciando cámara...</div>
                         </div>
-                        <div v-else-if="scanning" class="rsOverlayHint">Apunta al QR de la reservación</div>
-                        <button v-if="scanning" class="rsCameraToggle" @click="toggleCamera" title="Cambiar cámara">
-                            <i class="fa fa-sync-alt"></i>
-                        </button>
+                        <div v-else-if="scanning" class="rsOverlayHint">Apuntá al QR de la reservación</div>
+                        <div v-else class="rsOverlayText">
+                            <div class="rsOverlayTitle">{{ cameraBlocked ? "Cámara bloqueada" : "Cámara detenida" }}</div>
+                            <div class="rsOverlaySub">{{ cameraHint }}</div>
+                            <button class="rsBtn rsBtnPrimary rsOverlayBtn" @click="startScan(true)">
+                                {{ cameraBlocked ? "Ya di permiso, reintentar" : "Activar cámara" }}
+                            </button>
+                        </div>
+                        <button
+                            v-if="scanning"
+                            class="rsCameraToggle"
+                            @click="toggleCamera"
+                            title="Cambiar cámara"
+                            aria-label="Cambiar cámara"><svg class="rsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg></button>
                     </div>
 
-                    <!-- Result banner -->
+                    <!-- Resultado del último escaneo -->
                     <div class="rsBanner" :class="bannerClass">
                         <div class="rsBannerTop">
                             <div class="rsBannerIcon">{{ bannerIcon }}</div>
@@ -70,22 +89,25 @@
                 </div>
             </div>
 
-            <!-- Success / Result modal -->
+            <!-- Resultado a pantalla completa -->
             <div v-if="modalOpen" class="rsModalBack" @click="closeModal">
                 <div class="rsModal" :class="modalColorClass" @click.stop>
-                    <div class="rsModalStrip" :class="modalStripClass"></div>
                     <div class="rsModalBody">
-                        <div class="rsModalIcon" :class="modalIconClass">
-                            <i :class="modalIconFa"></i>
-                        </div>
-                        <div class="rsModalTitle" :class="modalTitleColor">{{ modalTitle }}</div>
+                        <div class="rsModalIcon">{{ bannerIcon }}</div>
+                        <div class="rsModalTitle">{{ modalTitle }}</div>
                         <div v-if="modalName" class="rsModalPerson">{{ modalName }}</div>
                         <div class="rsModalMsg">{{ modalMessage }}</div>
-                        <div v-if="modalQuantity > 0" class="rsModalMeta" :class="modalMetaClass">
-                            <span><strong>Cantidad:</strong> {{ modalQuantity }}</span>
-                            <span v-if="modalSchedule"><strong>Horario:</strong> {{ modalSchedule }}</span>
+                        <div v-if="modalQuantity > 0" class="rsModalMeta">
+                            <span class="rsModalMetaItem">
+                                <span class="rsEyebrow">Personas</span>
+                                <strong class="rsNum">{{ modalQuantity }}</strong>
+                            </span>
+                            <span v-if="modalSchedule" class="rsModalMetaItem">
+                                <span class="rsEyebrow">Horario</span>
+                                <strong>{{ modalSchedule }}</strong>
+                            </span>
                         </div>
-                        <div class="rsModalFoot">Se cerrará automáticamente...</div>
+                        <div class="rsModalFoot">Se cierra automáticamente</div>
                     </div>
                 </div>
             </div>
@@ -133,6 +155,7 @@ const countdownText = ref("");
 const progressPercent = ref(0);
 let countdownInterval: number | null = null;
 let countdownTotalSeconds: number | null = null;
+let countdownTargetIso: string | null = null;
 
 const scanning = ref(false);
 const cameraStarting = ref(false);
@@ -146,8 +169,25 @@ let zxingReader: any = null;
 let currentDeviceId: string | null = null;
 const cameraPermissionCookieName = "RS_CameraPermission";
 const cameraPermissionCookieDays = 30;
-const usingRearCamera = ref(false);
+const rearCameraPrefKey = "RS_UseRearCamera";
+const usingRearCamera = ref(loadRearCameraPreference());
 const useNativeRockCheckinCamera = ref(false);
+
+// El permiso de camara quedo denegado en este dispositivo. Sin esta bandera el
+// poll de slot (cada 30 s) volvia a llamar a getUserMedia indefinidamente y el
+// navegador reabria el dialogo de permisos una y otra vez: esa era la causa
+// principal del "siempre pide permisos". Ahora solo se reintenta si el operador
+// lo pide con el boton.
+const cameraBlocked = ref(false);
+
+// Evita el parpadeo de "Cámara detenida" durante los ~300 ms que tarda el
+// arranque en decidir si hay puente nativo.
+const cameraBootstrapping = ref(true);
+
+// deviceId del track que esta REALMENTE en uso, leido del propio track. Es la
+// unica referencia fiable para decidir si el operador cambio de camara.
+let activeTrackDeviceId: string | null = null;
+let cameraPermissionStatus: any = null;
 
 const bannerStatus = ref("");
 const bannerName = ref("");
@@ -166,54 +206,70 @@ const modalQuantity = ref(0);
 const modalSchedule = ref("");
 let modalTimer: number | null = null;
 
+// Tono unico del resultado: antes cada computed repetia la misma cadena de ifs y
+// habia que acordarse de tocar las siete al agregar un estado.
+// "already_used" y "other_schedule" son QR legitimos que simplemente no dan
+// ingreso ahora: ambar. El rojo queda para el QR que no sirve.
+const resultTone = computed<"idle" | "ok" | "warn" | "bad">(() => {
+    if (!bannerStatus.value) return "idle";
+    if (bannerStatus.value === "checked_in") return "ok";
+    if (bannerStatus.value === "already_used" || bannerStatus.value === "other_schedule") return "warn";
+    return "bad";
+});
+
+const toneSuffix = computed(() => {
+    if (resultTone.value === "ok") return "success";
+    if (resultTone.value === "warn") return "warning";
+    return "danger";
+});
+
 const bannerClass = computed(() => {
-    if (!bannerStatus.value) return "rsBanner--idle";
-    if (bannerStatus.value === "checked_in") return "rsBanner--ok";
-    if (bannerStatus.value === "already_used") return "rsBanner--warn";
+    if (resultTone.value === "idle") return "rsBanner--idle";
+    if (resultTone.value === "ok") return "rsBanner--ok";
+    if (resultTone.value === "warn") return "rsBanner--warn";
     return "rsBanner--bad";
 });
 
 const bannerIcon = computed(() => {
-    if (!bannerStatus.value) return "\u25CE";
-    if (bannerStatus.value === "checked_in") return "\u2713";
-    if (bannerStatus.value === "already_used") return "!";
+    if (resultTone.value === "idle") return "\u25CE";
+    if (resultTone.value === "ok") return "\u2713";
+    if (resultTone.value === "warn") return "!";
     return "\u00D7";
 });
 
-const modalIconClass = computed(() => {
-    if (bannerStatus.value === "checked_in") return "rsModalIcon--success";
-    if (bannerStatus.value === "already_used") return "rsModalIcon--warning";
-    return "rsModalIcon--danger";
+// El modal entero se pinta del color del resultado, asi que ya no hacen falta
+// clases por tono para franja, titulo, icono ni meta: heredan del contenedor.
+const modalColorClass = computed(() => `rsModal--${toneSuffix.value}`);
+
+// El operador nunca elige el horario: el bloque lo detecta solo. Mostrarlo es
+// lo que le permite confiar en que detecto el correcto.
+const activeSlotLabel = computed(() => {
+    if (!activeSlot.value) return "Sin horario activo";
+
+    const name = activeSlot.value.scheduleName || "Servicio";
+    const time = activeSlot.value.occurrenceTime;
+    return time ? `${name} · ${time}` : name;
 });
 
-const modalIconFa = computed(() => {
-    if (bannerStatus.value === "checked_in") return "fa fa-check";
-    if (bannerStatus.value === "already_used") return "fa fa-exclamation";
-    return "fa fa-times";
+const statusClass = computed(() => {
+    if (!activeSlot.value) return "rsStatus--neu";
+    if (scanning.value) return "rsStatus--ok";
+    if (cameraBlocked.value) return "rsStatus--bad";
+    return "rsStatus--warn";
 });
 
-const modalColorClass = computed(() => {
-    if (bannerStatus.value === "checked_in") return "rsModal--success";
-    if (bannerStatus.value === "already_used") return "rsModal--warning";
-    return "rsModal--danger";
+const statusText = computed(() => {
+    if (!activeSlot.value) return "En espera";
+    if (scanning.value) return "Escaneando";
+    if (cameraBlocked.value) return "Sin permiso";
+    if (cameraStarting.value || cameraBootstrapping.value) return "Iniciando";
+    return "Cámara detenida";
 });
 
-const modalStripClass = computed(() => {
-    if (bannerStatus.value === "checked_in") return "rsModalStrip--success";
-    if (bannerStatus.value === "already_used") return "rsModalStrip--warning";
-    return "rsModalStrip--danger";
-});
-
-const modalTitleColor = computed(() => {
-    if (bannerStatus.value === "checked_in") return "rsModalTitle--success";
-    if (bannerStatus.value === "already_used") return "rsModalTitle--warning";
-    return "rsModalTitle--danger";
-});
-
-const modalMetaClass = computed(() => {
-    if (bannerStatus.value === "checked_in") return "rsModalMeta--success";
-    if (bannerStatus.value === "already_used") return "rsModalMeta--warning";
-    return "rsModalMeta--danger";
+const cameraHint = computed(() => {
+    if (err.value) return err.value;
+    if (cameraBlocked.value) return "Permite el acceso a la cámara en el navegador.";
+    return "Toca el botón para encender la cámara.";
 });
 
 function sleep(ms: number): Promise<void> {
@@ -253,6 +309,8 @@ function startCountdown() {
     stopCountdown();
     if (!nextCheckInStartIso.value) return;
 
+    countdownTargetIso = nextCheckInStartIso.value;
+
     const targetMs = new Date(nextCheckInStartIso.value).getTime();
     const nowMs = Date.now();
     const diffMs = targetMs - nowMs;
@@ -269,11 +327,12 @@ function startCountdown() {
         const remainingSec = Math.ceil(remaining / 1000);
 
         if (remainingSec <= 0) {
+            // stopCountdown limpia el texto: hay que pintarlo DESPUES o el
+            // "Abriendo..." desaparecia en el mismo tick en que se escribia.
+            stopCountdown();
             progressPercent.value = 100;
             countdownText.value = "Abriendo...";
-            stopCountdown();
-            // Auto-refresh to detect active slot
-            refreshSlot();
+            void refreshSlot();
             return;
         }
 
@@ -302,6 +361,8 @@ function stopCountdown() {
         window.clearInterval(countdownInterval);
         countdownInterval = null;
     }
+    countdownTotalSeconds = null;
+    countdownTargetIso = null;
     countdownText.value = "";
     progressPercent.value = 0;
 }
@@ -330,8 +391,11 @@ async function refreshSlot() {
         await stopScan();
     }
 
-    // Start countdown if waiting for next slot (only if target changed or not running)
-    if (!activeSlot.value && nextCheckInStartIso.value && !countdownInterval) {
+    // Reinicia la cuenta regresiva tambien cuando cambio el horario objetivo: con
+    // la condicion anterior (solo !countdownInterval) el contador seguia corriendo
+    // hacia un horario que ya habia dejado de ser el proximo.
+    if (!activeSlot.value && nextCheckInStartIso.value
+        && (!countdownInterval || countdownTargetIso !== nextCheckInStartIso.value)) {
         startCountdown();
     }
 }
@@ -363,6 +427,93 @@ function setCameraPermissionCookie(state: "granted" | "denied"): void {
     try {
         setCookie(cameraPermissionCookieName, state, cameraPermissionCookieDays);
     } catch { /* ignore */ }
+}
+
+function isPermissionError(e: any): boolean {
+    const name = String(e?.name || "");
+    const message = String(e?.message || "");
+    return name === "NotAllowedError"
+        || name === "SecurityError"
+        || message.includes("NotAllowedError")
+        || message.includes("Permission");
+}
+
+async function getCameraPermissionStatus(): Promise<any | null> {
+    try {
+        const perms = (navigator as any).permissions;
+        if (!perms?.query) return null;
+        return await perms.query({ name: "camera" });
+    } catch {
+        // Safari lanza TypeError para el nombre "camera": ahi no hay forma de
+        // consultar el estado sin provocar el dialogo.
+        return null;
+    }
+}
+
+async function isCameraPermissionDenied(): Promise<boolean> {
+    const status = await getCameraPermissionStatus();
+    return status?.state === "denied";
+}
+
+// Reintenta solo cuando el operador concede el permiso desde la barra del
+// navegador, en lugar de sondear con getUserMedia (que es lo que abria el
+// dialogo repetidamente).
+async function watchCameraPermission(): Promise<void> {
+    const status = await getCameraPermissionStatus();
+    if (!status) return;
+
+    cameraPermissionStatus = status;
+    cameraBlocked.value = status.state === "denied";
+
+    status.onchange = () => {
+        if (status.state === "granted") {
+            cameraBlocked.value = false;
+            if (activeSlot.value && !scanning.value && !cameraStarting.value) {
+                void startScan(true);
+            }
+        } else if (status.state === "denied") {
+            cameraBlocked.value = true;
+            void stopScan();
+        }
+    };
+}
+
+function isHandheldDevice(): boolean {
+    try {
+        const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches === true;
+        return coarsePointer && (navigator.maxTouchPoints || 0) > 0;
+    } catch {
+        return false;
+    }
+}
+
+function loadRearCameraPreference(): boolean {
+    try {
+        const saved = localStorage.getItem(rearCameraPrefKey);
+        if (saved === "1") return true;
+        if (saved === "0") return false;
+    } catch { /* ignore */ }
+
+    // Sin preferencia guardada: en telefono o tablet de mano la camara util para
+    // escanear es la trasera; en un equipo de escritorio la unica suele ser la
+    // frontal. En cuanto el operador toca el boton de cambiar camara su eleccion
+    // manda y se recuerda en ese dispositivo.
+    return isHandheldDevice();
+}
+
+function saveRearCameraPreference(useRear: boolean): void {
+    try {
+        localStorage.setItem(rearCameraPrefKey, useRear ? "1" : "0");
+    } catch { /* ignore */ }
+}
+
+function readTrackDeviceId(stream: MediaStream): string | null {
+    try {
+        const id = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+        return id && String(id).trim() ? String(id).trim() : null;
+    } catch {
+        return null;
+    }
 }
 
 function getPositiveInt(raw: unknown): number | null {
@@ -592,6 +743,12 @@ function getCameraIndexFromUrl(): number | null {
     return null;
 }
 
+// enumerateDevices solo revela los deviceId cuando ya hay permiso de camara
+// concedido; antes de eso vienen todos vacios.
+function deviceIdsAreVisible(devices: MediaDeviceInfo[]): boolean {
+    return devices.some(d => !!d.deviceId);
+}
+
 async function getVideoInputDevices(): Promise<MediaDeviceInfo[]> {
     if (!navigator.mediaDevices?.enumerateDevices) {
         return [];
@@ -652,28 +809,74 @@ async function resolveCameraDeviceIdFromSettings(): Promise<string | null> {
         }
     }
 
+    // Mientras no hay permiso concedido el navegador devuelve la lista con los
+    // deviceId en blanco. Ahi no se puede concluir nada sobre el id guardado, y
+    // menos borrarlo: seria tirar la camara que dejo configurada la app de
+    // check-in de Rock justo en el primer arranque.
+    if (!deviceIdsAreVisible(devices)) {
+        return selectedId;
+    }
+
     if (selectedId && devices.some(d => d.deviceId === selectedId)) {
         return selectedId;
+    }
+
+    // El id guardado ya no corresponde a ninguna camara de este equipo (se guardo
+    // en otro dispositivo, o el navegador rotó los deviceId al limpiar datos del
+    // sitio). Hay que BORRARLO: mientras se quedaba, el poll de mas abajo lo leia
+    // de localStorage, lo comparaba contra el que estaba en uso, los veia
+    // distintos y reiniciaba la camara cada 1.5 s — un getUserMedia sin fin, con
+    // su dialogo de permisos encima.
+    if (selectedId) {
+        saveSelectedCameraDeviceId(null);
     }
 
     // No explicit device was selected, so let facingMode choose the camera.
     return null;
 }
 
+// Lo unico que justifica reiniciar la camara es que la app de check-in de Rock
+// haya guardado OTRO deviceId y que ese deviceId exista de verdad en este equipo.
+// Se compara contra el deviceId del track en uso — dato que reporta el propio
+// navegador — y no contra el que se pidio, que puede no coincidir.
+async function selectedCameraChanged(): Promise<boolean> {
+    const savedId = getSelectedCameraDeviceId();
+    if (!savedId) return false;
+    if (savedId === activeTrackDeviceId) return false;
+    if (savedId === currentDeviceId) return false;
+
+    const devices = await getVideoInputDevices();
+    if (!deviceIdsAreVisible(devices)) {
+        return false;
+    }
+
+    if (!devices.some(d => d.deviceId === savedId)) {
+        saveSelectedCameraDeviceId(null);
+        return false;
+    }
+
+    return true;
+}
+
 function onStorageChange(e: StorageEvent) {
     if (useNativeRockCheckinCamera.value) return;
     if (e.key !== "CameraDeviceId") return;
-    const newId = (e.newValue || "").trim();
-    if (newId !== (currentDeviceId || "")) {
-        // Camera was changed in Rock check-in app, restart with new device
-        restartWithNewCamera();
-    }
+    if (!scanning.value || cameraStarting.value) return;
+
+    void selectedCameraChanged().then(changed => {
+        if (changed) {
+            // Camera was changed in Rock check-in app, restart with new device
+            void restartWithNewCamera();
+        }
+    });
 }
 
 async function toggleCamera() {
     usingRearCamera.value = !usingRearCamera.value;
+    saveRearCameraPreference(usingRearCamera.value);
     saveSelectedCameraDeviceId(null);
     currentDeviceId = null;
+    activeTrackDeviceId = null;
     await restartWithNewCamera();
 }
 
@@ -681,7 +884,9 @@ async function restartWithNewCamera() {
     if (!activeSlot.value) return;
     await stopScanInternal(false);
     await sleep(300);
-    startScan();
+    // Reinicio pedido por el operador (o por la app de check-in): cuenta como
+    // accion explicita, no como reintento automatico.
+    await startScan(true);
 }
 
 // Poll localStorage for same-window changes (storage event only fires cross-tab)
@@ -691,10 +896,13 @@ function startCameraChangePolling() {
     if (useNativeRockCheckinCamera.value) return;
     if (cameraCheckInterval) return;
     cameraCheckInterval = window.setInterval(() => {
-        const newId = getSelectedCameraDeviceId();
-        if ((newId || "") !== (currentDeviceId || "") && scanning.value) {
-            restartWithNewCamera();
-        }
+        if (!scanning.value || cameraStarting.value) return;
+
+        void selectedCameraChanged().then(changed => {
+            if (changed) {
+                void restartWithNewCamera();
+            }
+        });
     }, 1500);
 }
 
@@ -713,10 +921,15 @@ async function getZxingModule(): Promise<any> {
     return await systemJs.import("/Obsidian/Blocks/QREVENT/vendor/zxing.lib.js");
 }
 
-async function startScan() {
+async function startScan(userInitiated = false) {
     // Guard de re-entrada: dos startScan solapados (poll de slot + countdown, o
     // "Verificar de nuevo") obtienen dos streams y fugan el primero.
-    if (cameraStarting.value) return;
+    if (cameraStarting.value || scanning.value) return;
+
+    // Permiso denegado: solo se reintenta si el operador toca el boton. El poll de
+    // slot corre cada 30 s y, sin esta guarda, cada vuelta era otro getUserMedia y
+    // otro dialogo de permisos — el escaner preguntaba para siempre.
+    if (cameraBlocked.value && !userInitiated) return;
 
     err.value = "";
     cameraStarting.value = true;
@@ -749,6 +962,18 @@ async function startScan() {
     if (!navigator.mediaDevices?.getUserMedia) {
         err.value = "Tu navegador no soporta cámara.";
         cameraStarting.value = false;
+        return;
+    }
+
+    // Si el navegador ya sabe que el permiso esta denegado (Chrome lo expone;
+    // Safari no) ni siquiera se llama a getUserMedia: no habria dialogo, solo un
+    // fallo silencioso y otra vuelta del bucle. Va despues del camino nativo, que
+    // usa la camara de la app de iPad y no depende del permiso del navegador.
+    if (await isCameraPermissionDenied()) {
+        cameraBlocked.value = true;
+        cameraStarting.value = false;
+        setCameraPermissionCookie("denied");
+        err.value = "Permiso de cámara bloqueado para este sitio. Habilítalo en el navegador y toca «Ya di permiso, reintentar».";
         return;
     }
 
@@ -795,7 +1020,14 @@ async function startScan() {
                     video: { facingMode: { exact: mode }, ...qrResolution },
                     audio: false
                 });
-            } catch {
+            } catch (e: any) {
+                // Solo se reintenta si el fallo fue por el constraint. Antes este
+                // catch se tragaba tambien el NotAllowedError y volvia a llamar a
+                // getUserMedia: el operador veia DOS dialogos de permiso seguidos.
+                if (isPermissionError(e)) {
+                    throw e;
+                }
+
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: mode }, ...qrResolution },
                     audio: false
@@ -816,6 +1048,7 @@ async function startScan() {
         }
 
         videoRef.value.srcObject = stream;
+        activeTrackDeviceId = readTrackDeviceId(stream);
         mirrorPreview.value = shouldMirrorPreview(stream);
         await videoRef.value.play();
         setCameraPermissionCookie("granted");
@@ -859,10 +1092,12 @@ async function startScan() {
         // Liberar el stream ya asignado (falla en play()/carga de zxing dejaba la
         // cámara encendida con el mensaje de error en pantalla).
         await stopScanInternal(true);
-        const msg = String(e?.name || e?.message || "");
-        if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+        if (isPermissionError(e)) {
+            // Se marca bloqueada para que ningun reintento automatico vuelva a
+            // abrir el dialogo. El operador reintenta desde el boton.
+            cameraBlocked.value = true;
             setCameraPermissionCookie("denied");
-            err.value = "Permiso de cámara denegado.";
+            err.value = "Permiso de cámara denegado. Habilítalo en el navegador y toca «Ya di permiso, reintentar».";
         } else {
             err.value = "No se pudo iniciar la cámara.";
         }
@@ -876,6 +1111,7 @@ async function stopScan() {
 
 async function stopScanInternal(keepState: boolean) {
     zxingReader = null;
+    activeTrackDeviceId = null;
     stopDecodeWatchdog();
     try { scanControls?.stop(); } catch { /* ignore */ }
     scanControls = null;
@@ -1003,6 +1239,8 @@ async function submitQr(code: string) {
             showModal("Asistencia marcada", d.message, d.name, d.quantity, d.scheduleName);
         } else if (d.status === "already_used") {
             showModal("Reserva ya registrada", d.message, d.name, d.quantity, d.scheduleName);
+        } else if (d.status === "other_schedule") {
+            showModal("Otro horario", d.message, "", 0, "");
         } else if (d.status === "invalid_qr") {
             showModal("QR inválido", d.message, "", 0, "");
         } else {
@@ -1028,28 +1266,43 @@ async function detectNativeBridgeWithRetry(maxAttempts: number, delayMs: number)
 }
 
 onMounted(async () => {
-    // Give the native bridge a moment to be injected
-    const nativeAvailable = await detectNativeBridgeWithRetry(5, 200);
+    // El escaner se usa en el navegador, no dentro de la app de iPad. La deteccion
+    // del puente nativo se conserva por compatibilidad pero recortada a ~300 ms:
+    // con 5 x 200 ms toda carga en navegador pagaba un segundo entero de pantalla
+    // muerta antes de encender la camara.
+    const nativeAvailable = await detectNativeBridgeWithRetry(2, 150);
 
     useNativeRockCheckinCamera.value = nativeAvailable;
     if (nativeAvailable) {
         installNativeScanHandler();
     }
 
+    if (!nativeAvailable) {
+        await watchCameraPermission();
+    }
+
     window.addEventListener("storage", onStorageChange);
     startCameraChangePolling();
     startSlotPolling();
 
-    if (activeSlot.value) {
-        await nextTick();
-        startScan();
-    } else if (nextCheckInStartIso.value) {
-        startCountdown();
+    try {
+        if (activeSlot.value) {
+            await nextTick();
+            await startScan();
+        } else if (nextCheckInStartIso.value) {
+            startCountdown();
+        }
+    } finally {
+        cameraBootstrapping.value = false;
     }
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener("storage", onStorageChange);
+    if (cameraPermissionStatus) {
+        cameraPermissionStatus.onchange = null;
+        cameraPermissionStatus = null;
+    }
     stopCameraChangePolling();
     stopSlotPolling();
     stopCountdown();
@@ -1060,126 +1313,308 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
-:root {
-    --rs-font: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    --rs-bg: #F4F6FB;
-    --rs-surface: #FFFFFF;
-    --rs-text: #111827;
-    --rs-muted: #6B7280;
-    --rs-border: rgba(17,24,39,.10);
-    --rs-shadow-soft: 0 6px 18px rgba(17,24,39,.08);
-    --rs-radius-xl: 18px;
-    --rs-radius-lg: 14px;
-    --rs-accent: #2563EB;
-    --rs-success: #10B981;
-    --rs-warning: #F59E0B;
-    --rs-danger: #EF4444;
+/* ============================================================
+   Escáner de reservaciones — Servicio Dominical, Vida Real
+   Design system: Brújula VR (tokens de colors.css / base.css).
+   Tipografía: Montserrat, self-host desde /Assets/Fonts/Montserrat/.
+   Todo el CSS vive bajo .rsPage para no filtrarse a otros bloques.
+
+   TRES DESVIACIONES DELIBERADAS DE LA GUÍA. Esta no es una vista del
+   asistente: es la pantalla de un operador en la puerta, mirada a un brazo
+   de distancia, con poca luz y a veces con guantes.
+
+   1. Tema oscuro FIJO, sin bloque [data-theme]. El 70% de la pantalla es el
+      video, que es negro; el tema claro dejaría un marco blanco encandilante
+      alrededor de ese rectángulo. Los valores son EXACTAMENTE los del tema
+      oscuro de la guía (sección 2), solo que no dependen del tema de Rock.
+
+   2. El semáforo se pinta con los tonos -fill saturados, no con los -bg
+      pálidos. Los -bg están calculados para filas de tabla en una oficina; a
+      un metro y de reojo, #E9F6F2 y #FCEAE8 son los dos "casi blanco". La
+      paleta no cambia: cambia el rol del token. Como tinta sobre cada fill se
+      usa el -bg oscuro de ese mismo estado, que da el contraste que hace
+      falta y tampoco inventa un color:
+        ok   #39B396 sobre #0F3B32 → 4.7:1
+        warn #F09E30 sobre #3E2F10 → 5.9:1
+        err  #E74133 sobre #FFFFFF → 4.0:1 (AA para texto grande; todo el
+             texto sobre rojo va ≥16px y en peso 600)
+
+   3. Objetivos táctiles de 48px (--tap). La guía no fija altura de control;
+      48px es el mínimo que se acierta con guantes puestos.
+
+   Lo demás sigue la guía: sin gradientes decorativos, sin emoji, sin
+   glassmorphism, rojo #E74133 solo como acento y danger, pesos 500/600,
+   radios 6/10/14, espaciado --sp-* de 4 a 24px, foco de 3px.
+   ============================================================ */
+
+/* Montserrat servida por RockWeb (ver /Assets/Fonts/Montserrat/montserrat.css).
+   Se declara aquí porque el tema aún no enlaza ese CSS; si el tema lo agrega,
+   estas reglas duplicadas son inocuas. Montserrat © Julieta Ulanovsky (SIL OFL 1.1). */
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"), url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
 }
 
-.panel-block .panel-heading,
-.panel-block .panel-header { display: none !important; }
-.panel-block { background: transparent !important; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+/* ===== Chrome del panel y contenedores de Rock: solo para este bloque =====
+   Todos los selectores van condicionados con :has(.rsPage) para no tocar otros
+   bloques de la misma página. Antes eran globales. */
+.panel-block:has(.rsPage) > .panel-heading,
+.panel-block:has(.rsPage) > .panel-header { display: none !important; }
+.panel-block:has(.rsPage) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.rsPage) > .panel-body { padding: 0 !important; }
 
+:is(.page-content, .container, .container-fluid, .row, .block-instance,
+    .zone, .zone-content, .block-content, [class*="col-"]):has(.rsPage) {
+    padding: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Kiosco: la página no scrollea. Condicionado a que el escáner esté presente. */
+html:has(.rsPage), body:has(.rsPage) {
+    overflow: hidden !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* ===== Tokens Brújula VR — tema oscuro, fijo (ver desviación 1) ===== */
 .rsPage {
-    font-family: var(--rs-font);
-    background: var(--rs-bg);
+    /* Constantes de marca (iguales en ambos temas de la guía) */
+    --vr-navy: #0F334B;
+    --vr-navy-800: #143E5A;
+    --vr-red: #E74133;
+    --vr-steel: #A2BACA;
+
+    --bg: #0B1D2B;
+    --paper: #112A3D;
+    --paper-alt: #0E2434;
+    --ink: #DEE9F0;
+    --ink-strong: #EAF2F7;
+    --ink-soft: #A7BBC8;
+    --ink-faint: #7D93A3;
+    --rule: #1F3D53;
+    --rule-strong: #2C5069;
+    --action: #7FB4D9;
+    --action-soft: #16324A;
+    --action-line: #2A506C;
+
+    /* Semáforo: -fill como superficie, -bg como tinta (ver desviación 2) */
+    --ok-fill: #39B396;   --ok-ink: #0F3B32;   --ok-text: #63D3B6;
+    --warn-fill: #F09E30; --warn-ink: #3E2F10; --warn-text: #F2B75F;
+    --err-fill: #E74133;  --err-ink: #FFFFFF;  --err-text: #F58C81;
+    --neu-fill: #5E7B8E;  --neu-text: #A7BBC8;
+
+    --btn-primary: #A8CCE4;
+    --btn-primary-hover: #BFDAEC;
+    --btn-primary-ink: #0B1D2B;
+    --focus-ring: rgba(127,180,217,.4);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 2px 10px rgba(0,0,0,.3);
+    --shadow-pop: 0 10px 32px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-4-5: 18px; --sp-5: 20px; --sp-6: 24px;
+
+    /* Objetivo táctil mínimo con guantes (ver desviación 3) */
+    --tap: 48px;
+
+    --font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+
+    font-family: var(--font-body);
+    /* 15px, no los 14px de la guía: se lee a un brazo de distancia */
+    font-size: 15px;
+    line-height: 1.45;
+    background: var(--bg);
+    color: var(--ink);
     height: 100vh;
     overflow: hidden;
-    color: var(--rs-text);
     display: flex;
     flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+
+    /* Full-bleed. Aquí 100vw es exacto porque html/body van en overflow:hidden
+       y no hay barra de scroll que descontar (a diferencia de
+       SundayServiceRegistration, que sí necesita medir el clientWidth). */
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
 }
 
-html, body { overflow: hidden !important; height: 100vh !important; margin: 0 !important; padding: 0 !important; }
+.rsPage *, .rsPage *::before, .rsPage *::after { box-sizing: border-box; }
+.rsPage * { touch-action: manipulation; }
 
+/* Foco visible (guía 6) */
+.rsPage button:focus-visible,
+.rsPage [role="button"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* Cifras: tabular, para que el contador no baile al cambiar de dígito */
+.rsNum {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+/* Eyebrow (guía 3): 11px, 600, uppercase, tracking ancho */
+.rsEyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--ink-faint);
+}
+
+.rsIcon { width: 20px; height: 20px; display: block; }
+
+/* ===== Banda institucional navy 56px (guía 5) ===== */
 .rsTopBar {
-    height: 44px;
-    min-height: 44px;
+    height: 56px;
+    min-height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 14px;
-    background: var(--rs-bg);
+    gap: var(--sp-3);
+    padding: 0 var(--sp-4);
+    background: var(--vr-navy);
     z-index: 50;
-    border-bottom: 1px solid rgba(17,24,39,.06);
+}
+.rsTopSlot { min-width: 0; }
+.rsTopBar .rsEyebrow { color: var(--vr-steel); }
+.rsTopTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #FFFFFF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.rsBrand { font-weight: 800; letter-spacing: .2px; color: var(--rs-text); font-size: 18px; }
-.rsTopActions { display: flex; gap: 10px; }
-.rsIconBtn { width: 26px; height: 26px; border-radius: 999px; background: rgba(17,24,39,.06); border: 1px solid rgba(17,24,39,.06); }
+/* Estado del escáner. El color nunca es el único canal: siempre lleva
+   su texto al lado (guía 2). */
+.rsStatus {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px var(--sp-3);
+    border-radius: 999px;
+    background: rgba(255,255,255,.10);
+    color: #FFFFFF;
+}
+.rsStatusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--neu-fill);
+    flex-shrink: 0;
+}
+.rsStatus--neu .rsStatusDot { background: var(--neu-fill); }
+.rsStatus--ok .rsStatusDot { background: var(--ok-fill); }
+.rsStatus--warn .rsStatusDot { background: var(--warn-fill); }
+.rsStatus--bad .rsStatusDot { background: var(--err-fill); }
 
-/* No active slot */
+/* ===== Sin horario activo ===== */
 .rsNoSlot {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: var(--sp-6);
+    min-height: 0;
 }
-.rsNoSlotInner { text-align: center; max-width: 400px; }
-.rsNoSlotIcon { font-size: 48px; color: var(--rs-muted); margin-bottom: 12px; }
-.rsNoSlotTitle { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
-.rsNoSlotSub { font-size: 14px; color: var(--rs-muted); margin-bottom: 8px; }
-.rsNoSlotNext { font-size: 13px; color: var(--rs-muted); margin-bottom: 10px; }
+.rsNoSlotInner { text-align: center; max-width: 420px; }
+/* Glifo unicode de estado vacío (guía 7), en vez del icono de Font Awesome */
+.rsNoSlotIcon {
+    font-size: 44px;
+    line-height: 1;
+    color: var(--ink-faint);
+    margin-bottom: var(--sp-4);
+}
+.rsNoSlotTitle {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink-strong);
+    margin-bottom: var(--sp-2);
+}
+.rsNoSlotSub { font-size: 15px; color: var(--ink-soft); margin-bottom: var(--sp-2); }
+.rsNoSlotNext { font-size: 14px; color: var(--ink-faint); margin-bottom: var(--sp-4); }
 
 .rsCountdown {
-    margin-bottom: 16px;
+    margin: 0 auto var(--sp-5);
     width: 100%;
-    max-width: 300px;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 320px;
 }
 .rsCountdownLabel {
-    font-size: 13px;
-    color: var(--rs-text);
-    margin-bottom: 8px;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: var(--sp-2);
 }
+.rsCountdownLabel strong { font-weight: 600; color: var(--ink-strong); }
 .rsProgressTrack {
     width: 100%;
     height: 6px;
-    background: rgba(17,24,39,.08);
+    background: var(--rule);
     border-radius: 999px;
     overflow: hidden;
 }
+/* Barra plana: el gradiente azul anterior era decorativo (guía 5) */
 .rsProgressBar {
     height: 100%;
-    background: linear-gradient(90deg, var(--rs-accent), #60A5FA);
+    background: var(--action);
     border-radius: 999px;
     transition: width 1s linear;
 }
 
-/* Body with scanner */
+/* ===== Cuerpo con cámara ===== */
 .rsBody {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
 }
 
-.rsScheduleBar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: var(--rs-surface);
-    border-bottom: 1px solid rgba(17,24,39,.06);
-    font-size: 13px;
-    font-weight: 700;
-}
-.rsScheduleDot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--rs-success);
-    flex-shrink: 0;
-}
-
-/* Camera */
 .rsCameraWrap {
     flex: 1;
     background: #000;
     overflow: hidden;
     position: relative;
+    min-height: 0;
 }
 .rsVideo {
     width: 100%;
@@ -1187,9 +1622,7 @@ html, body { overflow: hidden !important; height: 100vh !important; margin: 0 !i
     object-fit: cover;
     display: block;
 }
-.rsVideo--mirrored {
-    transform: scaleX(-1);
-}
+.rsVideo--mirrored { transform: scaleX(-1); }
 
 .rsOverlay {
     position: absolute;
@@ -1201,61 +1634,66 @@ html, body { overflow: hidden !important; height: 100vh !important; margin: 0 !i
 }
 
 .rsScanBox {
-    width: 55%;
-    max-width: 250px;
+    width: 62%;
+    max-width: 280px;
     aspect-ratio: 1;
     position: relative;
-    border-radius: 18px;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 0 9999px rgba(11,29,43,.55);
 }
 
 .rsCorner {
     position: absolute;
     width: 30px;
     height: 30px;
-    border-color: #fff;
+    border-color: #FFFFFF;
     border-style: solid;
     border-width: 0;
 }
-.rsCorner--tl { top: -2px; left: -2px; border-top-width: 3.5px; border-left-width: 3.5px; border-radius: 14px 0 0 0; }
-.rsCorner--tr { top: -2px; right: -2px; border-top-width: 3.5px; border-right-width: 3.5px; border-radius: 0 14px 0 0; }
-.rsCorner--bl { bottom: -2px; left: -2px; border-bottom-width: 3.5px; border-left-width: 3.5px; border-radius: 0 0 0 14px; }
-.rsCorner--br { bottom: -2px; right: -2px; border-bottom-width: 3.5px; border-right-width: 3.5px; border-radius: 0 0 14px 0; }
+.rsCorner--tl { top: -2px; left: -2px; border-top-width: 3px; border-left-width: 3px; border-radius: var(--radius-lg) 0 0 0; }
+.rsCorner--tr { top: -2px; right: -2px; border-top-width: 3px; border-right-width: 3px; border-radius: 0 var(--radius-lg) 0 0; }
+.rsCorner--bl { bottom: -2px; left: -2px; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 var(--radius-lg); }
+.rsCorner--br { bottom: -2px; right: -2px; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 var(--radius-lg) 0; }
 
+/* La línea de barrido es la única señal de que el escáner está vivo: se
+   conserva. El degradado es el desvanecido de sus extremos, no una superficie
+   decorativa. Color --action, no el azul suelto de antes. */
 .rsScanLine {
     position: absolute;
     left: 8%; right: 8%;
     height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(37,99,235,.85), transparent);
+    background: linear-gradient(90deg, transparent, var(--action), transparent);
     border-radius: 2px;
     animation: rsScanAnim 2.2s ease-in-out infinite;
 }
-
 @keyframes rsScanAnim {
     0%, 100% { top: 12%; opacity: .6; }
     50% { top: 88%; opacity: 1; }
 }
+@media (prefers-reduced-motion: reduce) {
+    .rsScanLine { animation: none; top: 50%; }
+}
 
+/* Sin backdrop-filter: la guía no admite glassmorphism fuera de white/α
+   sobre navy (guía 5). */
 .rsCameraToggle {
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: var(--sp-3);
+    right: var(--sp-3);
     z-index: 10;
-    width: 40px;
-    height: 40px;
+    width: var(--tap);
+    height: var(--tap);
     border-radius: 50%;
-    background: rgba(0,0,0,.55);
-    border: none;
-    color: #fff;
-    font-size: 16px;
+    background: rgba(15,51,75,.72);
+    border: 1px solid rgba(255,255,255,.18);
+    color: #FFFFFF;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    backdrop-filter: blur(4px);
     transition: background .15s ease;
 }
-.rsCameraToggle:hover { background: rgba(0,0,0,.75); }
+.rsCameraToggle:hover { background: rgba(15,51,75,.92); }
 
 .rsOverlayText {
     position: absolute;
@@ -1264,149 +1702,173 @@ html, body { overflow: hidden !important; height: 100vh !important; margin: 0 !i
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #FFFFFF;
     text-align: center;
-    padding: 18px;
+    padding: var(--sp-5);
     z-index: 5;
+    background: rgba(11,29,43,.55);
 }
-.rsOverlayTitle { font-weight: 800; font-size: 16px; }
-.rsOverlaySub { margin-top: 4px; font-size: 12px; opacity: .85; }
+.rsOverlayTitle { font-weight: 600; font-size: 18px; }
+.rsOverlaySub {
+    margin-top: var(--sp-1);
+    font-size: 14px;
+    color: var(--vr-steel);
+    max-width: 340px;
+}
+.rsOverlayBtn { margin-top: var(--sp-4); }
 .rsOverlayHint {
     position: absolute;
     left: 50%;
-    bottom: 14px;
+    bottom: var(--sp-4);
     transform: translateX(-50%);
-    background: rgba(0,0,0,.55);
-    color: #fff;
-    font-size: 12px;
-    padding: 6px 10px;
+    background: rgba(15,51,75,.72);
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 500;
+    padding: var(--sp-2) var(--sp-3);
     border-radius: 999px;
     z-index: 5;
 }
 
-/* Banner */
+/* ===== Banner de resultado (ver desviación 2) ===== */
 .rsBanner {
-    margin: 8px 14px;
-    border-radius: 14px;
-    border: 1px solid #e7e7ea;
-    background: #fafafa;
-    padding: 12px;
+    margin: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius);
+    padding: var(--sp-3) var(--sp-4);
+    min-height: var(--tap);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+    transition: background .15s ease, color .15s ease;
 }
-.rsBannerTop { display: flex; gap: 10px; align-items: flex-start; }
+.rsBannerTop { display: flex; gap: var(--sp-3); align-items: center; }
 .rsBannerIcon {
-    width: 28px;
-    height: 28px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #fff;
-    border: 1px solid #e7e7ea;
-    font-weight: 900;
+    background: rgba(255,255,255,.16);
+    font-size: 18px;
+    font-weight: 600;
     flex-shrink: 0;
 }
-.rsBannerTitle { font-weight: 900; font-size: 14px; }
-.rsBannerSub { font-size: 12px; color: var(--rs-muted); margin-top: 2px; }
-.rsBannerBusy { margin-top: 6px; font-size: 12px; color: var(--rs-muted); }
-.rsBanner--ok { border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
-.rsBanner--warn { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.10); }
-.rsBanner--bad { border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+.rsBannerText { min-width: 0; }
+.rsBannerTitle { font-weight: 600; font-size: 17px; }
+.rsBannerSub { font-size: 14px; margin-top: 2px; opacity: .85; }
+.rsBannerBusy { margin-top: var(--sp-1); font-size: 13px; opacity: .85; }
 
+.rsBanner--idle { background: var(--paper); color: var(--ink-soft); }
+.rsBanner--idle .rsBannerIcon { background: var(--action-soft); color: var(--ink-faint); }
+.rsBanner--ok   { background: var(--ok-fill);   color: var(--ok-ink); }
+.rsBanner--warn { background: var(--warn-fill); color: var(--warn-ink); }
+.rsBanner--bad  { background: var(--err-fill);  color: var(--err-ink); }
+.rsBanner--bad .rsBannerIcon { background: rgba(0,0,0,.18); }
+
+.rsErr { padding: 0 var(--sp-4) var(--sp-3); }
+
+/* ===== Botones ===== */
 .rsBtn {
-    padding: 10px 18px;
-    border-radius: 12px;
-    font-family: var(--rs-font);
-    font-weight: 700;
-    font-size: 14px;
-    border: 1px solid var(--rs-border);
+    min-height: var(--tap);
+    padding: var(--sp-3) var(--sp-5);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 15px;
+    border: 1px solid transparent;
     cursor: pointer;
-    transition: all .15s ease;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .rsBtn:disabled { opacity: .5; cursor: default; }
-.rsBtnDefault { background: #F3F4F6; border-color: #E5E7EB; color: #374151; }
-.rsBtnDefault:hover:not(:disabled) { background: #E5E7EB; }
+.rsBtnDefault {
+    background: var(--paper);
+    border-color: var(--rule-strong);
+    color: var(--ink-strong);
+}
+.rsBtnDefault:hover:not(:disabled) { background: var(--action-soft); border-color: var(--action-line); }
+.rsBtnPrimary {
+    background: var(--btn-primary);
+    border-color: var(--btn-primary);
+    color: var(--btn-primary-ink);
+}
+.rsBtnPrimary:hover:not(:disabled) { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
 
-.rsErr { padding: 0 14px 8px; }
-
-/* Modal */
+/* ===== Resultado a pantalla completa ===== */
 .rsModalBack {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.45);
-    backdrop-filter: blur(4px);
+    background: rgba(11,29,43,.72);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: var(--sp-4);
     z-index: 9999;
-    animation: rsModalFadeIn .2s ease;
 }
-@keyframes rsModalFadeIn {
+/* Animación mínima y funcional (guía 6): un fade, sin slide ni escala */
+.rsModal {
+    width: min(520px, 92vw);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-pop);
+    overflow: hidden;
+    text-align: center;
+    font-family: var(--font-body);
+    animation: rsFadeIn .15s ease;
+}
+@keyframes rsFadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
-.rsModal {
-    width: min(520px, 92vw);
-    background: #fff;
-    border-radius: var(--rs-radius-xl);
-    box-shadow: 0 24px 64px rgba(0,0,0,.22);
-    overflow: hidden;
-    text-align: center;
-    animation: rsModalSlideUp .25s ease;
-    border: 2px solid transparent;
+@media (prefers-reduced-motion: reduce) {
+    .rsModal { animation: none; }
 }
-@keyframes rsModalSlideUp {
-    from { opacity: 0; transform: translateY(20px) scale(.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-}
-.rsModal--success { border-color: var(--rs-success); }
-.rsModal--warning { border-color: var(--rs-warning); }
-.rsModal--danger { border-color: var(--rs-danger); }
+.rsModal--success { background: var(--ok-fill);   color: var(--ok-ink); }
+.rsModal--warning { background: var(--warn-fill); color: var(--warn-ink); }
+.rsModal--danger  { background: var(--err-fill);  color: var(--err-ink); }
 
-.rsModalStrip { height: 6px; width: 100%; }
-.rsModalStrip--success { background: linear-gradient(90deg, #10B981, #34D399, #10B981); }
-.rsModalStrip--warning { background: linear-gradient(90deg, #F59E0B, #FBBF24, #F59E0B); }
-.rsModalStrip--danger { background: linear-gradient(90deg, #EF4444, #F87171, #EF4444); }
-
-.rsModalBody { padding: 24px 24px 20px; }
+.rsModalBody { padding: var(--sp-6); }
 
 .rsModalIcon {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 16px;
-    font-size: 28px;
-    box-shadow: 0 4px 16px rgba(0,0,0,.08);
+    margin: 0 auto var(--sp-4);
+    font-size: 34px;
+    font-weight: 600;
+    background: rgba(255,255,255,.20);
 }
-.rsModalIcon--success { background: linear-gradient(135deg, #10B981, #34D399); color: #fff; }
-.rsModalIcon--warning { background: linear-gradient(135deg, #F59E0B, #FBBF24); color: #fff; }
-.rsModalIcon--danger { background: linear-gradient(135deg, #EF4444, #F87171); color: #fff; }
+.rsModal--danger .rsModalIcon { background: rgba(0,0,0,.20); }
 
-.rsModalTitle { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
-.rsModalTitle--success { color: #059669; }
-.rsModalTitle--warning { color: #D97706; }
-.rsModalTitle--danger { color: #DC2626; }
-
-.rsModalPerson { font-size: 18px; font-weight: 800; margin-bottom: 6px; color: var(--rs-text); }
-.rsModalMsg { font-size: 14px; color: var(--rs-muted); line-height: 1.5; margin-bottom: 14px; }
+.rsModalTitle { font-size: 24px; font-weight: 600; margin-bottom: var(--sp-2); }
+.rsModalPerson { font-size: 20px; font-weight: 600; margin-bottom: var(--sp-2); }
+.rsModalMsg { font-size: 16px; line-height: 1.5; margin-bottom: var(--sp-4); opacity: .9; }
 
 .rsModalMeta {
     display: flex;
-    gap: 14px;
+    gap: var(--sp-5);
     flex-wrap: wrap;
     justify-content: center;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 14px;
-    padding: 14px 18px;
-    border-radius: var(--rs-radius-lg);
+    margin-bottom: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--radius);
+    background: rgba(255,255,255,.18);
 }
-.rsModalMeta--success { background: rgba(16,185,129,.08); color: #065F46; border: 1px solid rgba(16,185,129,.25); }
-.rsModalMeta--warning { background: rgba(245,158,11,.08); color: #92400E; border: 1px solid rgba(245,158,11,.25); }
-.rsModalMeta--danger { background: rgba(239,68,68,.08); color: #991B1B; border: 1px solid rgba(239,68,68,.25); }
+.rsModal--danger .rsModalMeta { background: rgba(0,0,0,.18); }
+.rsModalMetaItem { display: flex; flex-direction: column; gap: 2px; }
+.rsModalMetaItem .rsEyebrow { color: inherit; opacity: .75; }
+.rsModalMetaItem strong { font-size: 18px; font-weight: 600; }
 
-.rsModalFoot { font-size: 12px; color: var(--rs-muted); opacity: .7; }
+.rsModalFoot { font-size: 12px; opacity: .7; }
+
+@media (max-width: 400px) {
+    .rsTopTitle { font-size: 15px; }
+    .rsStatusText { display: none; }
+    .rsModalBody { padding: var(--sp-5) var(--sp-4); }
+}
 </style>
