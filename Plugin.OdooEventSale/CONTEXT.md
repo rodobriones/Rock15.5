@@ -11,7 +11,7 @@ Por cada **inscripción nueva pagada** del módulo de eventos de Rock (Event Reg
 
 | Pieza | Ubicación | Estado |
 |---|---|---|
-| Workflow action "Odoo: Registrar Venta de Evento" | `C:\Repos\Rock18.1\Plugin.OdooEventSale\OdooEventSale\PostEventSaleToOdoo.cs` | Compilada; DLL copiada a `RockWeb\Bin` |
+| Workflow action "Odoo: Registrar Venta de Evento" | `C:\repos\Rock15.5\Plugin.OdooEventSale\OdooEventSale\PostEventSaleToOdoo.cs` | Compilada; DLL copiada a `RockWeb\Bin` |
 | Addon Odoo 17 `custom_event_sale_api` (v17.0.1.2.0) | `C:\Repos\Iglesia1\custom_event_sale_api` | Modificado; **pendiente `-u` (upgrade) en la BD** |
 | Módulo FEL (referencia, no se tocó) | `C:\Repos\Iglesia1\fel_gt` + `fel_megaprint` | Certifica al postear la factura |
 | Configuración manual en Rock admin | `Plugin.OdooEventSale\README.md` | Documentada, **no aplicada aún** |

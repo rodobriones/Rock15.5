@@ -87,27 +87,27 @@
                         <NotificationBox alertType="danger">{{ err }}</NotificationBox>
                     </div>
                 </div>
-            </div>
 
-            <!-- Resultado a pantalla completa -->
-            <div v-if="modalOpen" class="rsModalBack" @click="closeModal">
-                <div class="rsModal" :class="modalColorClass" @click.stop>
-                    <div class="rsModalBody">
-                        <div class="rsModalIcon">{{ bannerIcon }}</div>
-                        <div class="rsModalTitle">{{ modalTitle }}</div>
-                        <div v-if="modalName" class="rsModalPerson">{{ modalName }}</div>
-                        <div class="rsModalMsg">{{ modalMessage }}</div>
-                        <div v-if="modalQuantity > 0" class="rsModalMeta">
-                            <span class="rsModalMetaItem">
-                                <span class="rsEyebrow">Personas</span>
-                                <strong class="rsNum">{{ modalQuantity }}</strong>
-                            </span>
-                            <span v-if="modalSchedule" class="rsModalMetaItem">
-                                <span class="rsEyebrow">Horario</span>
-                                <strong>{{ modalSchedule }}</strong>
-                            </span>
+                <!-- Resultado a pantalla completa -->
+                <div v-if="modalOpen" class="rsModalBack" @click="closeModal">
+                    <div class="rsModal" :class="modalColorClass" @click.stop>
+                        <div class="rsModalBody">
+                            <div class="rsModalIcon">{{ bannerIcon }}</div>
+                            <div class="rsModalTitle">{{ modalTitle }}</div>
+                            <div v-if="modalName" class="rsModalPerson">{{ modalName }}</div>
+                            <div class="rsModalMsg">{{ modalMessage }}</div>
+                            <div v-if="modalQuantity > 0" class="rsModalMeta">
+                                <span class="rsModalMetaItem">
+                                    <span class="rsEyebrow">Personas</span>
+                                    <strong class="rsNum">{{ modalQuantity }}</strong>
+                                </span>
+                                <span v-if="modalSchedule" class="rsModalMetaItem">
+                                    <span class="rsEyebrow">Horario</span>
+                                    <strong>{{ modalSchedule }}</strong>
+                                </span>
+                            </div>
+                            <div class="rsModalFoot">Se cierra automáticamente</div>
                         </div>
-                        <div class="rsModalFoot">Se cierra automáticamente</div>
                     </div>
                 </div>
             </div>
@@ -1797,11 +1797,21 @@ html:has(.rsPage), body:has(.rsPage) {
 }
 .rsBtnPrimary:hover:not(:disabled) { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
 
-/* ===== Resultado a pantalla completa ===== */
+/* ===== Resultado a pantalla completa =====
+   OJO: este modal TIENE que vivir dentro de .rsPage. Los tokens del design
+   system se declaran sobre .rsPage, asi que un modal hermano no los hereda:
+   cada var(--...) queda sin resolver y la declaracion entera se descarta. Se
+   veia fantasma sobre el video — sin fondo (var(--warn-fill) invalido), sin
+   padding, sin radio, con el texto en el color heredado y el icono pegado a la
+   izquierda (var(--sp-4) invalido tumba el `margin: 0 auto ...` completo).
+
+   Estar dentro no le quita nada al position: fixed: .rsPage mide exactamente
+   100vw x 100vh, asi que aunque un ancestro llegara a crear un containing
+   block, el inset: 0 cubre igual toda la pantalla. */
 .rsModalBack {
     position: fixed;
     inset: 0;
-    background: rgba(11,29,43,.72);
+    background: rgba(11,29,43,.88);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1811,11 +1821,15 @@ html:has(.rsPage), body:has(.rsPage) {
 /* Animación mínima y funcional (guía 6): un fade, sin slide ni escala */
 .rsModal {
     width: min(520px, 92vw);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-pop);
+    border-radius: var(--radius-lg, 14px);
+    box-shadow: var(--shadow-pop, 0 10px 32px rgba(0,0,0,.55));
     overflow: hidden;
     text-align: center;
-    font-family: var(--font-body);
+    font-family: var(--font-body, "Montserrat", "Segoe UI", system-ui, sans-serif);
+    /* Fondo base opaco: el modificador de color lo pisa enseguida, pero
+       garantiza que el modal jamas se dibuje transparente. */
+    background: var(--paper, #112A3D);
+    color: var(--ink, #DEE9F0);
     animation: rsFadeIn .15s ease;
 }
 @keyframes rsFadeIn {
@@ -1825,11 +1839,11 @@ html:has(.rsPage), body:has(.rsPage) {
 @media (prefers-reduced-motion: reduce) {
     .rsModal { animation: none; }
 }
-.rsModal--success { background: var(--ok-fill);   color: var(--ok-ink); }
-.rsModal--warning { background: var(--warn-fill); color: var(--warn-ink); }
-.rsModal--danger  { background: var(--err-fill);  color: var(--err-ink); }
+.rsModal--success { background: var(--ok-fill, #39B396);   color: var(--ok-ink, #0F3B32); }
+.rsModal--warning { background: var(--warn-fill, #F09E30); color: var(--warn-ink, #3E2F10); }
+.rsModal--danger  { background: var(--err-fill, #E74133);  color: var(--err-ink, #FFFFFF); }
 
-.rsModalBody { padding: var(--sp-6); }
+.rsModalBody { padding: var(--sp-6, 24px); }
 
 .rsModalIcon {
     width: 72px;
@@ -1838,7 +1852,7 @@ html:has(.rsPage), body:has(.rsPage) {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto var(--sp-4);
+    margin: 0 auto var(--sp-4, 16px);
     font-size: 34px;
     font-weight: 600;
     background: rgba(255,255,255,.20);

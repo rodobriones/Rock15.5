@@ -1,4 +1,4 @@
-# CONTEXT_INDEX.md — Indice Maestro de Contexto (Rock18.1 VidaReal)
+# CONTEXT_INDEX.md — Indice Maestro de Contexto (Rock 15.5 VidaReal)
 
 > **LEER ESTE ARCHIVO PRIMERO en cualquier sesion nueva de Claude Code.**
 > Contiene el mapa completo de toda la documentacion de contexto del repositorio,
@@ -21,8 +21,8 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\.claude\PROJECT_CONTEXT.md` | Contexto tecnico completo: stack, modulos, convenciones, areas delicadas, estructura de directorios | Al inicio de cualquier sesion. Referencia tecnica principal. |
-| `C:\Repos\Rock18.1\CHANGES.md` | Historia de commits VidaReal, lista de archivos nuevos vs modificados del upstream, instrucciones de build | Cuando necesitas saber que cambio, cuando se hizo, o que archivos son de VidaReal vs upstream. |
+| `C:\repos\Rock15.5\.claude\PROJECT_CONTEXT.md` | Contexto tecnico completo: stack, modulos, convenciones, areas delicadas, estructura de directorios | Al inicio de cualquier sesion. Referencia tecnica principal. |
+| `C:\repos\Rock15.5\CHANGES.md` | Historia de commits VidaReal, lista de archivos nuevos vs modificados del upstream, instrucciones de build | Cuando necesitas saber que cambio, cuando se hizo, o que archivos son de VidaReal vs upstream. |
 
 ---
 
@@ -30,10 +30,10 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\docs\eventos-custom\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo de boletería propio**: modelo de datos `_com_vidareal_Events_*` (7 entidades incl. `EventStaff`), arquitectura, decisiones locked, y el historial completo de sesiones en §9.x (checkout 2026, hold/timer, mutex Charging, FEL multilínea, NIT/SAT, entrega QR+PDF, reportería, permisos por-usuario, scanner continuo con contadores, preguntas al asistente con catálogo/plantillas, invitados como personas reales + known relationships, multi-sesión, calendario público + visibilidad, workflow launcher por evento/boleto, archivado, reenvío/corrección de correo desde reportería) | Al retomar CUALQUIER trabajo del módulo de eventos/boletería. Leer primero §9 (estado) y la sesión §9.x más reciente. |
-| `C:\Repos\Rock18.1\Plugin.VidaRealEvents\README.md` | **Migración consolidada `017_ProductionSetup`** (única del assembly; ejecuta los 17 pasos históricos — producción la corre de un golpe, dev la salta), tabla de pasos (001–021), modelo de permisos, deploy. ⚠️ Próxima migración = nº 22+ | Al agregar una migración nueva o desplegar el plugin (leer ANTES de numerar). |
-| `C:\Repos\Rock18.1\Rock\Model\Eventos\ARCHITECTURE.md` | **Mapa de capas de la arquitectura hexagonal** (adaptadores de entrada/núcleo/adaptadores de salida/dominio), convenciones (servicios estáticos sin interfaces, resultados de dominio, fronteras de concurrencia compartidas) y estructura del front en partials | Antes de tocar código del módulo — di dónde va cada cosa nueva. |
-| `C:\Repos\Rock18.1\docs\eventos-custom\SMOKE_TESTS.md` | Runbook de pruebas runtime: pago con tarjeta end-to-end, holds, gratis/promo, invitados/preguntas, permisos, job de mantenimiento — con qué verificar en BD/logs en cada una | Al probar en runtime después de un deploy o cambio del módulo. |
+| `C:\repos\Rock15.5\docs\eventos-custom\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo de boletería propio**: modelo de datos `_com_vidareal_Events_*` (7 entidades incl. `EventStaff`), arquitectura, decisiones locked, y el historial completo de sesiones en §9.x (checkout 2026, hold/timer, mutex Charging, FEL multilínea, NIT/SAT, entrega QR+PDF, reportería, permisos por-usuario, scanner continuo con contadores, preguntas al asistente con catálogo/plantillas, invitados como personas reales + known relationships, multi-sesión, calendario público + visibilidad, workflow launcher por evento/boleto, archivado, reenvío/corrección de correo desde reportería) | Al retomar CUALQUIER trabajo del módulo de eventos/boletería. Leer primero §9 (estado) y la sesión §9.x más reciente. |
+| `C:\repos\Rock15.5\Plugin.VidaRealEvents\README.md` | **Migración consolidada `017_ProductionSetup`** (única del assembly; ejecuta los 17 pasos históricos — producción la corre de un golpe, dev la salta), tabla de pasos (001–021), modelo de permisos, deploy. ⚠️ Próxima migración = nº 22+ | Al agregar una migración nueva o desplegar el plugin (leer ANTES de numerar). |
+| `C:\repos\Rock15.5\Rock\Model\Eventos\ARCHITECTURE.md` | **Mapa de capas de la arquitectura hexagonal** (adaptadores de entrada/núcleo/adaptadores de salida/dominio), convenciones (servicios estáticos sin interfaces, resultados de dominio, fronteras de concurrencia compartidas) y estructura del front en partials | Antes de tocar código del módulo — di dónde va cada cosa nueva. |
+| `C:\repos\Rock15.5\docs\eventos-custom\SMOKE_TESTS.md` | Runbook de pruebas runtime: pago con tarjeta end-to-end, holds, gratis/promo, invitados/preguntas, permisos, job de mantenimiento — con qué verificar en BD/logs en cada una | Al probar en runtime después de un deploy o cambio del módulo. |
 
 **Código:** entidades+servicios en `Rock/Model/Eventos/` (incl. `AttendeeQuestionService`), bloques en `Rock.Blocks/Eventos/` + `src/Eventos/*.obs` (EventAdmin, EventCheckout, MyTickets, TicketScanner, EventReport, QuestionCatalog, EventCalendar), bags en `Rock.ViewModels/Blocks/Eventos/`. NO reusa `Registration*`; supera a QREVENT para eventos con boleto. Preguntas al asistente = Person Attributes (categoría "Preguntas de Eventos"); plantillas en System Setting `com_vidareal_EventQuestionTemplates`.
 **Arquitectura (2026-07-02, hexagonal):** bloques = adaptadores delgados; lógica en servicios de `Rock/Model/Eventos/Services/` (`CheckoutService` cobro/finalize, `HoldService` reservas/cupo, `PricingService`, `CheckoutAttendeeService`, `NitLookupService`, `EventAccessService` visibilidad, `EventSessionService` sesiones, `EventWorkflowService` workflow launcher, `EventsRuntime` colas/reciclos, + adaptadores FelService/PaymentService/TicketEmail/TicketPdf/Qr). **Leer primero `Rock/Model/Eventos/ARCHITECTURE.md`.**
@@ -44,8 +44,8 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\docs\wallet-module\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo Wallet**: arquitectura (dominio `_com_vidareal_Wallet_*`, servicios, PassKit Web Service, APNs, Google), esquema, flujo de actualizaciones push, config, fases y estado | Al retomar CUALQUIER trabajo del módulo Wallet. Leer primero. |
-| `C:\Repos\Rock18.1\Plugin.VidaRealWallet\README.md` | Tabla de migraciones (001–016), deploy del plugin, ⚠️ numeración | Al agregar una migración o desplegar. |
+| `C:\repos\Rock15.5\docs\wallet-module\RESEARCH_Y_PLAN.md` | **Documento maestro del módulo Wallet**: arquitectura (dominio `_com_vidareal_Wallet_*`, servicios, PassKit Web Service, APNs, Google), esquema, flujo de actualizaciones push, config, fases y estado | Al retomar CUALQUIER trabajo del módulo Wallet. Leer primero. |
+| `C:\repos\Rock15.5\Plugin.VidaRealWallet\README.md` | Tabla de migraciones (001–016), deploy del plugin, ⚠️ numeración | Al agregar una migración o desplegar. |
 
 **Código:** entidades+servicios en `Rock/Model/Wallet/` (`WalletService` API pública, `ApplePassBuilder`, `ApplePushService`, `GoogleWalletService`, `PassTemplateResolver` con Lava), controller PassKit anónimo en `Rock.Rest/VidaReal/WalletPassKitController.cs` (`api/vidareal/wallet/v1`), bloque diseñador en `Rock.Blocks/Wallet/` + `src/Wallet/walletTemplateAdmin.obs` (página `wallet/plantillas`, menú Eventos→Boletería), y bloque **"Pase Digital"** (`Rock.Blocks/Wallet/PaseDigital.cs` + `src/Wallet/paseDigital.obs`, 2026-08-10): tarjeta web del pase (navy, QR = Alternate Id, "Asisto a" = campus) para colocar en cualquier página. **Módulo independiente y reutilizable**: Eventos es su primer consumidor vía `Rock/Model/Eventos/Services/TicketWalletService.cs` (botones en Mis Entradas, refresh+push al editar evento). Config: Global Attributes `AppleWalletPassP12(Password)` + `GoogleWalletIssuerId`/`GoogleWalletServiceAccountJson` (Google pendiente de cuenta emisor). Cert Apple vence 2027-08-05 (assets en `Documents\AppleWalletCert`).
 
@@ -55,8 +55,8 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\Plugin.OdooEventSale\CONTEXT.md` | **Contexto completo de la integración Rock eventos → Odoo FEL**: decisiones, flujo end-to-end, retry, NIT/SAT, cambios en el addon de Odoo, bugs corregidos, qué falta | Al retomar cualquier trabajo de facturación de eventos / Odoo / FEL. Leer primero. |
-| `C:\Repos\Rock18.1\Plugin.OdooEventSale\README.md` | Configuración manual en Rock admin (Global Attributes de NIT, workflow type con atributos `Nit`/`WantsInvoice`, activities), despliegue, estados, checklist de staging | Al configurar o probar la integración en un ambiente. |
+| `C:\repos\Rock15.5\Plugin.OdooEventSale\CONTEXT.md` | **Contexto completo de la integración Rock eventos → Odoo FEL**: decisiones, flujo end-to-end, retry, NIT/SAT, cambios en el addon de Odoo, bugs corregidos, qué falta | Al retomar cualquier trabajo de facturación de eventos / Odoo / FEL. Leer primero. |
+| `C:\repos\Rock15.5\Plugin.OdooEventSale\README.md` | Configuración manual en Rock admin (Global Attributes de NIT, workflow type con atributos `Nit`/`WantsInvoice`, activities), despliegue, estados, checklist de staging | Al configurar o probar la integración en un ambiente. |
 | `C:\Repos\Iglesia1\custom_event_sale_api\docs\API.md` | Contrato del endpoint POST /api/event/sell del addon Odoo (otro repo) | Al cambiar el payload o el manejo de respuestas. |
 
 **Componentes (referencia rapida):**
@@ -70,11 +70,13 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\QREVENT_QRScanner_Migration_Context.md` | Detalle de la migracion de `QRScanner` de Rock 15.5.1 a Rock 18.1: backend, frontend, integracion ZXing via vendor entry | Al trabajar en `QRScanner.cs` o `qrScanner.obs`, o al entender como funciona la build de ZXing. |
-| `C:\Repos\Rock18.1\QREVENT_CelebremosQrCheckIn_Migration_Context.md` | Migracion de `CelebremosQrCheckIn` de Rock 15.5.1 a Rock 18.1: tipo de bloque, imports, ZXing | Al trabajar en `CelebremosQrCheckIn.cs` o `CelebremosQrCheckIn.obs`. |
-| `C:\Repos\Rock18.1\Migration_Context_ReservationScanner_FamilyHub.md` | Migracion de `ReservationScanner` y `FamilyHub` de Rock 15.5.1 a Rock 18.1 en un mismo documento | Al trabajar en `ReservationScanner.obs` o al auditar las migraciones de estos dos bloques. |
-| `C:\Repos\Rock18.1\Rock.JavaScript.Obsidian.Blocks\src\QREVENT\vendor\CHANGES.md` | Que es ZXing, por que es vendor (no npm directo), version, y como se usa en los bloques QREVENT | Al entender el pipeline de build de ZXing, reportar warnings de sourcemap, o al agregar nuevos bloques que necesiten QR. |
-| `C:\Repos\Rock18.1\Dev Tools\Sql\CHANGES.md` | Que hace `QREVENT_SundayService_Hardening.sql`, cuando ejecutarlo, que tablas/constraints/procedures crea, si es idempotente | Antes de deployar QREVENT por primera vez, o al diagnosticar errores de integridad en tablas `SundayService*`. |
+| `C:\repos\Rock15.5\QREVENT_QRScanner_Migration_Context.md` | Detalle de la migracion de `QRScanner` de Rock 15.5.1 a Rock 18.1: backend, frontend, integracion ZXing via vendor entry | Al trabajar en `QRScanner.cs` o `qrScanner.obs`, o al entender como funciona la build de ZXing. |
+| `C:\repos\Rock15.5\QREVENT_CelebremosQrCheckIn_Migration_Context.md` | Migracion de `CelebremosQrCheckIn` de Rock 15.5.1 a Rock 18.1: tipo de bloque, imports, ZXing | Al trabajar en `CelebremosQrCheckIn.cs` o `CelebremosQrCheckIn.obs`. |
+| `C:\repos\Rock15.5\Migration_Context_ReservationScanner_FamilyHub.md` | Migracion de `ReservationScanner` y `FamilyHub` de Rock 15.5.1 a Rock 18.1 en un mismo documento | Al trabajar en `ReservationScanner.obs` o al auditar las migraciones de estos dos bloques. |
+| `C:\repos\Rock15.5\Rock.JavaScript.Obsidian.Blocks\src\QREVENT\vendor\CHANGES.md` | Que es ZXing, por que es vendor (no npm directo), version, y como se usa en los bloques QREVENT | Al entender el pipeline de build de ZXing, reportar warnings de sourcemap, o al agregar nuevos bloques que necesiten QR. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\CHANGES.md` | Que hace `QREVENT_SundayService_Hardening.sql`, cuando ejecutarlo, que tablas/constraints/procedures crea, si es idempotente | Antes de deployar QREVENT por primera vez, o al diagnosticar errores de integridad en tablas `SundayService*`. |
+| `C:\repos\Rock15.5\Rock.Blocks\QREVENT\CHANGES.md` | **Documentacion descriptiva del backend por bloque** (no changelog): que hace cada uno, atributos de bloque, BlockActions, estados y codigos de resultado, SPs que usa, ventana de check-in del escaner | Antes de tocar CUALQUIER `.cs` de QREVENT. |
+| `C:\repos\Rock15.5\Rock.JavaScript.Obsidian.Blocks\src\QREVENT\CHANGES.md` | **Documentacion descriptiva del frontend por bloque**: estados reactivos, flujo de camara y permisos, patrones comunes (banner, cooldown de escaneo), design system Brujula VR y sus desviaciones | Antes de tocar CUALQUIER `.obs` de QREVENT. |
 
 **Bloques QREVENT (referencia rapida):**
 - `Rock.Blocks/QREVENT/QRScanner.cs` + `src/QREVENT/qrScanner.obs` — Lista de eventos y escaneo QR
@@ -85,12 +87,29 @@
 
 ---
 
+### Direcciones Guatemala (cascada Departamento -> Municipio)
+
+Parche al **core** de Rock: hay que re-aplicarlo en cada upgrade. Funcionando en produccion
+desde 2026-08-27.
+
+| Archivo | Proposito | Cuando leerlo |
+|---|---|---|
+| `C:\repos\Rock15.5\CHANGES.md` (fila "Direcciones Guatemala" + seccion "Archivos modificados del upstream") | Lista completa de archivos parchados y por que cada uno | Antes de un upgrade de Rock, o al tocar el control de direccion. |
+| `C:\repos\Rock15.5\Rock.JavaScript.Obsidian\Framework\Controls\CHANGES.md` (seccion 6) | Detalle del parche a `addressControl.obs`: cascada, orden invertido del DOM, la trampa de `dropDownList.obs` que borra valores legados | Al tocar el control Obsidian de direccion. |
+| `C:\repos\Rock15.5\Scripts\VidaReal\direcciones-gt.sql` | Seed idempotente: config del pais GT, 22 departamentos, 340 municipios | Al montar la cascada en una BD nueva o restaurada. Correr con `sqlcmd -f 65001` (el archivo es UTF-8 con acentos). |
+
+**Regla del modulo:** la logica vive en **un solo lugar**, `Rock/Model/Core/Location/AddressCascade.cs`
+(archivo nuevo). WebForms y Obsidian solo la consumen. Todo bloque VidaReal dentro de archivos
+upstream esta marcado con `[VidaReal]` — tras un merge se localizan con `grep -rn "\[VidaReal\]"`.
+
+---
+
 ### Modulo FamilyHub (Portal Familiar)
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\FamilyHub_KnownRelationship_Fix_Context.md` | Bug y fix de `KnownRelationship` bidireccional en FamilyHub: logica de roles inversos, escenarios cubiertos, rediseno visual del bloque | Al trabajar en `FamilyHub.cs` o `FamilyHub.obs`, especialmente si hay problemas con relaciones bidireccionales. |
-| `C:\Repos\Rock18.1\Migration_Context_ReservationScanner_FamilyHub.md` | Migracion de FamilyHub de Rock 15.5.1 a Rock 18.1: tipo de bloque, imports, tsconfig wiring | Al entender como FamilyHub fue migrado o al revisar la configuracion de build del modulo. |
+| `C:\repos\Rock15.5\FamilyHub_KnownRelationship_Fix_Context.md` | Bug y fix de `KnownRelationship` bidireccional en FamilyHub: logica de roles inversos, escenarios cubiertos, rediseno visual del bloque | Al trabajar en `FamilyHub.cs` o `FamilyHub.obs`, especialmente si hay problemas con relaciones bidireccionales. |
+| `C:\repos\Rock15.5\Migration_Context_ReservationScanner_FamilyHub.md` | Migracion de FamilyHub de Rock 15.5.1 a Rock 18.1: tipo de bloque, imports, tsconfig wiring | Al entender como FamilyHub fue migrado o al revisar la configuracion de build del modulo. |
 
 **Bloque FamilyHub (referencia rapida):**
 - `Rock.Blocks/FamilyHub/FamilyHub.cs` + `src/FamilyHub/FamilyHub.obs`
@@ -102,7 +121,7 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\AI_HANDOFF_ROCK18_EVENT_CRM.md` | Contexto completo de i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration: reglas de idioma, decisiones de DatePicker, pitfalls Vue, template Lava recomendado para SuccessText. **+ Sección "Facturación FEL / NIT en la pantalla de pago" (2026-06-15)**: captura/validación de NIT en el paso de pago que alimenta la facturación Odoo. | Al trabajar en cualquier aspecto de registro de eventos, internacionalizacion ES/EN, DatePicker, o la captura de NIT/factura en la pantalla de pago. Contiene el prompt base para iniciar nueva IA en este modulo. |
+| `C:\repos\Rock15.5\AI_HANDOFF_ROCK18_EVENT_CRM.md` | Contexto completo de i18n en Event/RegistrationEntry y Crm/FamilyPreRegistration: reglas de idioma, decisiones de DatePicker, pitfalls Vue, template Lava recomendado para SuccessText. **+ Sección "Facturación FEL / NIT en la pantalla de pago" (2026-06-15)**: captura/validación de NIT en el paso de pago que alimenta la facturación Odoo. | Al trabajar en cualquier aspecto de registro de eventos, internacionalizacion ES/EN, DatePicker, o la captura de NIT/factura en la pantalla de pago. Contiene el prompt base para iniciar nueva IA en este modulo. |
 
 **Archivos clave (referencia rapida):**
 - `Rock.JavaScript.Obsidian.Blocks/src/Event/registrationEntry.obs` — Shell del flujo (+ state NIT y args)
@@ -121,7 +140,7 @@
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\EPAY_FLOW_SUMMARY.md` | Flujo completo de cobro ePay con cuotas y recargos: SOAP, `FeeCoverageAmount`, calculo de balance, checklist de despliegue | Al trabajar en el plugin ePay, en `RegistrationEntry.cs` (guardado de transacciones), o en `RegistrationService.cs` (calculo de pagos). |
+| `C:\repos\Rock15.5\EPAY_FLOW_SUMMARY.md` | Flujo completo de cobro ePay con cuotas y recargos: SOAP, `FeeCoverageAmount`, calculo de balance, checklist de despliegue | Al trabajar en el plugin ePay, en `RegistrationEntry.cs` (guardado de transacciones), o en `RegistrationService.cs` (calculo de pagos). |
 
 **Archivos clave (referencia rapida):**
 - `Rock.Blocks/Dar/CybersourceDonationEntry.cs` + `src/Dar/CybersourceDonationEntry.obs` — Formulario de donacion
@@ -149,8 +168,8 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\Dev Tools\Sql\CHANGES.md` | Descripcion de todos los scripts SQL de VidaReal en este directorio | Al necesitar ejecutar scripts SQL en un ambiente nuevo o diagnosticar problemas de integridad de datos. |
-| `C:\Repos\Rock18.1\Dev Tools\Sql\QREVENT_SundayService_Hardening.sql` | Script SQL real de hardening: constraints, indice unico y stored procedures para SundayService | Al deployar QREVENT por primera vez o al diagnosticar errores en reservaciones. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\CHANGES.md` | Descripcion de todos los scripts SQL de VidaReal en este directorio | Al necesitar ejecutar scripts SQL en un ambiente nuevo o diagnosticar problemas de integridad de datos. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_Hardening.sql` | Script SQL real de hardening: constraints, indice unico y stored procedures para SundayService | Al deployar QREVENT por primera vez o al diagnosticar errores en reservaciones. |
 
 ---
 
@@ -158,8 +177,8 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
-| `C:\Repos\Rock18.1\.claude\settings.json` | Permisos globales de Claude Code para este proyecto: `dotnet build`, directorio adicional de dependencias Cybersource | Si hay errores de permiso al ejecutar herramientas. |
-| `C:\Repos\Rock18.1\.claude\settings.local.json` | Permisos locales adicionales: MSBuild, python, grep, PowerShell GUIDs, WebFetch Facebook | Si hay errores de permiso con comandos especificos de la maquina local. |
+| `C:\repos\Rock15.5\.claude\settings.json` | Permisos globales de Claude Code para este proyecto: `dotnet build`, directorio adicional de dependencias Cybersource | Si hay errores de permiso al ejecutar herramientas. |
+| `C:\repos\Rock15.5\.claude\settings.local.json` | Permisos locales adicionales: MSBuild, python, grep, PowerShell GUIDs, WebFetch Facebook | Si hay errores de permiso con comandos especificos de la maquina local. |
 
 ---
 

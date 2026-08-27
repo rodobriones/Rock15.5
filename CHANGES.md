@@ -179,6 +179,28 @@ Estos archivos EXISTEN en SparkDevNetwork/Rock pero tienen modificaciones de Vid
 - `Rock/Communication/Medium/Sms.cs` — Overload nuevo de `ProcessResponse` con remitente pre-resuelto (`Person resolvedFromPerson`; null = comportamiento histórico, Twilio no cambia)
 - `Rock/Communication/SmsActions/SmsActionConversations.cs` — Pasa `message.FromPerson` al overload nuevo (antes re-resolvía por número y atribuía respuestas al perfil equivocado cuando varias personas comparten celular). Detalle en `Rock.WhatsApp/CHANGES.md` §"Atribución del remitente"
 
+### Direcciones Guatemala — cascada Departamento → Municipio (2026-08-12)
+
+Detalle y motivación en la fila "Direcciones Guatemala" de la tabla de arriba. Los archivos a
+re-aplicar tras un upgrade, todos marcados en el código con `[VidaReal]`:
+
+- `Rock/Model/Core/Location/AddressCascade.cs` — **archivo NUEVO**, no genera conflicto: aquí vive
+  toda la regla (`AddressCascade.Get(country, state)` → `IsSupported` / `Cities` / `HasCities`).
+  Los call sites son delgados a propósito.
+- `Rock/SystemGuid/DefinedType.cs` — `+LOCATION_ADDRESS_MUNICIPALITY`
+- `Rock/Web/UI/Controls/AddressControl.cs` — `_ddlCity`, `BindCities`, y `AutoPostBack` en el select
+  de estado **solo** si el país tiene cascada (si no, se agregaría un postback nuevo a todos los
+  formularios de EE.UU.)
+- `Rock.Rest/v2/ControlsController.cs` — municipios en `AddressControlGetConfiguration`
+- `Rock.ViewModels/Rest/Controls/AddressControlConfigurationBag.cs` — `+Cities`, `+HasCityList`,
+  `+SupportsCityList`
+- `Rock.ViewModels/Rest/Controls/AddressControlGetConfigurationOptionsBag.cs` — `+StateCode`
+- `Rock.JavaScript.Obsidian/Framework/Controls/addressControl.obs` — ver `Framework/Controls/CHANGES.md` §6
+- `Rock.JavaScript.Obsidian/Framework/ViewModels/Rest/Controls/addressControl*Bag.d.ts` — espejo de los bags
+
+**Datos (no son código):** `Scripts/VidaReal/direcciones-gt.sql`, seed idempotente. Un upgrade de
+Rock no lo borra, pero si se restaura la BD hay que volver a correrlo.
+
 ### CheckIn y asistencia
 - `RockWeb/Blocks/CheckIn/Admin.ascx` + `.cs` — Modificaciones al admin de CheckIn
 - Multiples bloques CheckIn con ajustes menores
@@ -191,9 +213,9 @@ Estos archivos EXISTEN en SparkDevNetwork/Rock pero tienen modificaciones de Vid
 
 Plugin C# independiente que implementa `IHostedGatewayComponent` de Rock para **Cybersource Inline REST API** (VISA/Mastercard/Amex). Proyecto separado de `Rock.Blocks` para poder desplegarse como plugin sin recompilar Rock.
 
-- `Plugin.CybersourceInlineRestGateway/CybersourceInlineRestGateway.cs` (~715 lineas) — gateway principal con tokenizacion, cobros, reembolsos, manejo de 3DS
-- `Plugin.CybersourceInlineRestGateway/CybersourceInlineRestGatewayTokenController.cs` — endpoint REST para captura del token del browser (Microform)
-- `Plugin.CybersourceInlineRestGateway/Deploy/cybersourceInlineRestGatewayControl.obs.js` — bundle del control Obsidian pre-compilado para despliegue sin build
+- `Plugin.CybersourceInlineRestGateway/CybersourceInlineRestGateway/CybersourceInlineRestGateway.cs` (~715 lineas) — gateway principal con tokenizacion, cobros, reembolsos, manejo de 3DS
+- `Plugin.CybersourceInlineRestGateway/CybersourceInlineRestGateway/CybersourceInlineRestGatewayTokenController.cs` — endpoint REST para captura del token del browser (Microform)
+- `Plugin.CybersourceInlineRestGateway/Deploy/Plugins/CybersourceInlineRestGateway/Obsidian/cybersourceInlineRestGatewayControl.obs.js` — bundle del control Obsidian pre-compilado para despliegue sin build
 - `Plugin.CybersourceInlineRestGateway/ObsidianSource/cybersourceInlineRestGatewayControl.obs` — fuente Vue/Obsidian del control de captura de tarjeta (Cybersource Microform v2)
 - Directorio `Dependencies/` — DLLs de Rock necesarios para compilar fuera del solucion principal
 
@@ -208,7 +230,7 @@ Plugin C# independiente que implementa `IHostedGatewayComponent` de Rock para **
 - `Plugin.EpayVisanetGateway/EpayVisanetGateway/EpayVisanetGateway.cs` (~1020 lineas) — gateway principal con tokenizacion SOAP, cobros, reembolsos
 - `Plugin.EpayVisanetGateway/EpayVisanetGateway/EpayVisanetGatewayTokenController.cs` — endpoint REST para el token del browser
 - `Plugin.EpayVisanetGateway/ObsidianSource/epayVisanetGatewayControl.obs` — fuente Vue/Obsidian del control de captura
-- `Plugin.EpayVisanetGateway/Obsidian/epayVisanetGatewayControl.obs.js` — bundle pre-compilado para despliegue
+- `Plugin.EpayVisanetGateway/Deploy/Plugins/EpayVisanetGateway/Obsidian/epayVisanetGatewayControl.obs.js` — bundle pre-compilado para despliegue
 
 ---
 
@@ -379,6 +401,7 @@ Ver `Rock.JavaScript.Obsidian/Framework/Controls/CHANGES.md` para detalle comple
 | `datePicker.obs` | Exposicion de props `format` y `language` | **MEDIO** — wrapper que pasa props a datePickerBase |
 | `rockValidation.obs` | Mensaje de error "Por favor corrige lo siguiente:" vs "Please correct the following:" segun idioma | **MEDIO** — afecta todos los formularios con validacion |
 | `RockWeb/Scripts/Rock/Controls/datePicker.js` | Locale española registrada en bootstrap-datepicker jQuery | **ALTO** — afecta todos los date pickers en bloques WebForms legacy |
+| `addressControl.obs` | Cascada Departamento → Municipio para Guatemala: dropdown de municipio, orden invertido del DOM, anchos `col-sm-4`/`col-sm-5` | **ALTO** — lo usan 12+ bloques con captura de dirección |
 
 Estos son controles **CORE del framework Obsidian**, usados por practicamente todos los bloques con fechas o formularios de validacion. La motivacion fue adaptar la UI de fechas al formato latinoamericano (DD/MM/YYYY) y al idioma espanol. **Al sincronizar con upstream, estos archivos generaran merge conflicts garantizados.**
 
@@ -469,28 +492,104 @@ Los mensajes de commit en este repo estan en **espanol** e informales. Ejemplos:
 
 ### Como construir
 
+**Usar MSBuild, no `dotnet build`:** RockWeb es ASP.NET WebForms y `dotnet build` no lo compila
+correctamente. Procedimiento verificado 2026-07-15.
+
 ```powershell
-# Compilar todo (desde C:\Repos\Rock18.1)
-dotnet build Rock.sln
+$msbuild = "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\amd64\MSBuild.exe"
 
-# Compilar solo bloques
-dotnet build Rock.Blocks/Rock.Blocks.csproj
+# 1) Solucion completa en Release -> deja ~273 DLLs en RockWeb\Bin\
+cd C:\repos\Rock15.5
+& $msbuild Rock.sln /p:Configuration=Release /v:m
 
-# Compilar frontend Obsidian
-cd Rock.JavaScript.Obsidian.Blocks
+# 2) Los 7 plugins externos, DESPUES (referencian por HintPath el Rock.dll recien generado)
+#    Plugin.VidaRealEvents, Plugin.VidaRealWallet, Plugin.VidaRealDupDetect,
+#    Plugin.VidaRealTranslator, Plugin.OdooEventSale, Plugin.EpayVisanetGateway,
+#    Plugin.CybersourceInlineRestGateway
+#    Cada uno: dotnet restore, msbuild /p:Configuration=Release, y copiar su DLL a RockWeb\Bin\
+```
+
+`Rock.WhatsApp` **no** es de los 7: vive dentro de `Rock.sln` con `CopyToRockWeb=True`, o sea que
+el paso 1 ya lo deja puesto.
+
+Para un cambio acotado alcanza con el proyecto solo (arrastra sus dependencias):
+
+```powershell
+& $msbuild Rock.Blocks\Rock.Blocks.csproj /p:Configuration=Release /v:m
+```
+
+**Frontend Obsidian** — son dos proyectos distintos y se compilan por separado:
+
+```powershell
+cd Rock.JavaScript.Obsidian.Blocks   # los BLOQUES -> RockWeb\Obsidian\Blocks\
+npm run build-fast                    # build-fast basta para iterar; `build` hace ademas los tipos
+
+cd Rock.JavaScript.Obsidian          # el FRAMEWORK (Controls, Utility, Enums...) -> RockWeb\Obsidian\
 npm run build
 ```
 
-### Archivos pendientes sin commit
+**Validar un `.obs` antes de compilar** (barato y atrapa errores de sintaxis):
 
-Al inicio de junio 2026 hay dos archivos nuevos sin seguimiento git:
-- `Rock.Blocks/Security/VRSimpleRegistration.cs`
-- `Rock.JavaScript.Obsidian.Blocks/src/Security/vrSimpleRegistration.obs`
+```powershell
+cd Rock.JavaScript.Obsidian.Blocks    # debe correr desde aqui para resolver node_modules
+node -e "const {parse,compileScript,compileTemplate}=require('@vue/compiler-sfc'); ..."
+```
 
-Estos son el bloque de registro simplificado post-passwordless que esta en desarrollo activo.
+Convenciones de los `.obs`: **CRLF y sin BOM**. Si se editan con Python, leer con
+`encoding='utf-8'` y escribir con `newline='\r\n'` — `utf-8-sig` mete BOM y rompe el archivo. Los
+`CHANGES.md`, en cambio, son LF. Tras editar en masa, verificar que no aparezcan bytes nulos (hubo
+un incidente de corrupcion por esa via).
+
+---
+
+## Despliegue a produccion
+
+`RockWeb\Bin\` y `RockWeb\Obsidian\` estan **en .gitignore**: no salen del repo, se generan
+compilando. Lo que se sube a prod es el resultado del build local.
+
+### Que se sube segun lo que se toco
+
+| Cambiaste | Subis | Reinicio |
+|---|---|---|
+| Un bloque `.cs` | `RockWeb\Bin\Rock.Blocks.dll` + `.pdb` | **Si**, completo |
+| Core (`Rock/`, `Rock.Rest/`, `Rock.ViewModels/`) | Los `.dll` + `.pdb` de cada proyecto tocado | **Si**, completo |
+| Un bloque `.obs` | `RockWeb\Obsidian\Blocks\<Area>\<bloque>.obs.js` | No, pero refresco fuerte del navegador |
+| Un control del framework `.obs` | **Toda** la carpeta `RockWeb\Obsidian\` — ver aviso abajo | No, pero refresco fuerte |
+| Un plugin | Su `.dll` en `RockWeb\Bin\` | **Si**, completo |
+| Datos (defined values, config) | Correr el `.sql` | Reinicio o Cache Manager |
+
+Copiar `.cs` de `App_Code` en caliente tumba el sitio: siempre reinicio completo del servidor.
+
+### Aviso: el framework Obsidian se despliega completo
+
+`RockWeb\Obsidian\Controls\` **no es autonomo**. Sus archivos hacen 589 imports a
+`@Obsidian/Utility/...`, y el importmap de `obsidian-core.js` los resuelve todos a un **bundle
+unico**, `/Obsidian/Utility.js`:
+
+```
+"@Obsidian/Utility/*" : "/Obsidian/Utility.js"
+"@Obsidian/Enums/*"   : "/Obsidian/Enums/*.js"
+"@Obsidian/Controls/*": "/Obsidian/Controls/*"
+```
+
+Ademas depende de `Enums/` (101 imports), `Core/` (29), `ValidationRules.js` (27), `SystemGuids/`
+(23), `Libs/` (10), `PageState.js` (8) y `Directives/` (4). Subir `Controls/` de un build y dejar
+el resto de otro deja el sitio con modulos que no enlazan, y el sintoma es un
+`SystemJS Error#3 — Error loading .../algo.obs.js` en un bloque que ni siquiera tocaste.
+
+**Regla: del framework Obsidian se sube todo del mismo build, o nada.** Los bloques
+(`Obsidian\Blocks\`) si se pueden subir sueltos: son hojas del arbol, nadie importa de ellos.
+
+**Al empaquetar en zip, cuidado con la raiz.** Un zip con raiz `Controls/` se extrae en
+`RockWeb\Obsidian\`; uno con raiz `Obsidian/` se extrae en `RockWeb\`. Extraerlo en el nivel
+equivocado deja `Obsidian\Controls\Controls\...` y los archivos no quedan donde Rock los busca
+— mismo sintoma que arriba.
+
+Tras subir, el cache-buster `?v=` de las URLs de Obsidian cambia con el reinicio; si el navegador
+del kiosco sigue con la version vieja, refresco fuerte.
 
 ### Contacto del proyecto
 
 - Email IT: serviciosit@vidareal.tv
-- Repo local: `C:\Repos\Rock18.1`
+- Repo local: `C:\repos\Rock15.5`
 - Branch: `hotfix-18.1`

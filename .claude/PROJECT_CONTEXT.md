@@ -219,7 +219,7 @@ Manejan dinero real. Cualquier cambio requiere pruebas exhaustivas en sandbox an
 ## Estructura de directorios relevantes
 
 ```
-C:\Repos\Rock18.1\
+C:\repos\Rock15.5\
 ├── Rock/                          # Core framework (upstream, modificar con cuidado)
 │   ├── Model/                     # Entidades EF
 │   ├── Security/Authentication/   # Proveedores de autenticacion (DELICADO)
@@ -260,7 +260,7 @@ C:\Repos\Rock18.1\
 ## Datos de contacto y acceso
 
 - **Email IT:** serviciosit@vidareal.tv
-- **Repositorio local:** `C:\Repos\Rock18.1`
+- **Repositorio local:** `C:\repos\Rock15.5`
 - **Branch activo:** `hotfix-18.1`
 - **Developer principal:** rodobriones (Rodolfo Rodriguez)
 

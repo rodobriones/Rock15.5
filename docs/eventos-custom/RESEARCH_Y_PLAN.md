@@ -243,7 +243,7 @@ Es lo único que replicamos del flujo nativo de Rock; todo lo demás es propio. 
 
 ### 9.4 Comandos de build
 ```bash
-# C# (desde C:\Repos\Rock18.1)
+# C# (desde C:\repos\Rock15.5)
 dotnet build Rock/Rock.csproj                              # entidades + servicios
 dotnet build Rock.Blocks/Rock.Blocks.csproj               # bloques (arrastra Rock + Rock.ViewModels)
 dotnet build Plugin.VidaRealEvents/VidaRealEvents/VidaRealEvents.csproj   # migración

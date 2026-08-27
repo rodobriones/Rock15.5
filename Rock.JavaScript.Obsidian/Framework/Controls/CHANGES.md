@@ -83,6 +83,43 @@ Este archivo afecta a **todos los bloques WebForms legacy** de Rock que usan el 
 
 ---
 
+### 6. `addressControl.obs` — cascada Departamento -> Municipio (mayor)
+
+**Que cambio:**
+
+- Dos ramas para el campo de estado: cuando el pais tiene cascada (`supportsCityList`) el
+  **departamento se renderiza ANTES** del municipio; sin cascada queda el orden nativo de Rock
+  (City -> State, convencion de EE.UU. "Phoenix, AZ"). Se invierte el orden **real del DOM**: el
+  `.form-row` de Rock usa el grid flotado de Bootstrap 3, donde `order` de flexbox no aplica.
+- El municipio pasa de `TextBox` a `DropDownList` (`hasCityList`), alimentado por `cityOptions`.
+- `cityOptions` es un **computed**, no un `ref`: agrega el valor legado de City como opcion extra
+  cuando no esta en la lista. Sin eso `dropDownList.obs` normaliza el valor desconocido y lo
+  **emite hacia arriba**, o sea borra el dato con solo abrir el formulario.
+- `watch` sobre `internalValue.state` que recarga los municipios al cambiar de departamento, con
+  guarda `currentVal === oldVal` para no entrar en un ciclo de peticiones.
+- Anchos con cascada: departamento `col-sm-4` (los nombres largos no caben en el `col-sm-3`
+  nativo) y municipio `col-sm-5`.
+- `showBlankItem: !supportsCityList` y opciones vacias rotuladas con el nombre del campo, porque
+  los `<select>` de HTML ignoran `placeholder`.
+
+**Por que se modifico:**
+En Guatemala el municipio es una subdivision fija del departamento, no texto libre. La regla de
+cascada NO vive aqui: esta en `Rock/Model/Core/Location/AddressCascade.cs` y este control solo la
+consume via el endpoint `AddressControlGetConfiguration` de `Rock.Rest/v2/ControlsController.cs`.
+Ver la fila "Direcciones Guatemala" del `CHANGES.md` raiz para el cuadro completo (seed SQL,
+defined types y los archivos C# que lo acompanan).
+
+**Por que es risky:**
+`addressControl.obs` lo usan 12+ bloques (familia, pre-registro familiar, check-in kiosk, registro
+de eventos, negocios, detalle de ubicacion). Un error aqui rompe la captura de direcciones en todo
+el sistema. La degradacion esta pensada para ser suave: si `State` no corresponde a ningun
+departamento (dato sucio, p. ej. `State='GT'`), el municipio cae a campo de texto libre.
+
+**Marcadores en el codigo:** todos los bloques VidaReal de este archivo estan comentados con
+`[VidaReal]`. Tras un merge se localizan con `grep -n "\[VidaReal\]" addressControl.obs`.
+
+---
+
 ## Bloques que dependen de estos controles
 
 Cualquier bloque Obsidian que importe `datePicker`, `datePickerBase`, `datePartsPicker` o `rockValidation` es afectado. Esto incluye (no exhaustivo):
@@ -95,6 +132,7 @@ Cualquier bloque Obsidian que importe `datePicker`, `datePickerBase`, `dateParts
 | `Rock.JavaScript.Obsidian.Blocks/src/FamilyHub/FamilyHub.obs` | Edicion de fecha de nacimiento de miembros |
 | `Rock.JavaScript.Obsidian.Blocks/src/Finance/financialAccountDetail.obs` | Formulario con validacion (rockValidation) |
 | Cualquier bloque con `<RockValidation>` | Mensaje de error de validacion en idioma del usuario |
+| `Crm/familyPreRegistration.obs`, `Core/LocationDetail/editPanel`, `CheckIn/CheckInKiosk/registrationEditFamilyScreen`, `Event/RegistrationEntry/registrant`, `Finance/BusinessDetail/editPanel`, `Group/GroupRegistration/editPanel` y los controles `locationPicker` / `locationList` / `locationAddressPicker` | Captura de direcciones (`addressControl`) |
 
 ---
 
@@ -109,6 +147,7 @@ Al ejecutar `git merge upstream/hotfix-18.1` o `git rebase`:
 - `datePicker.obs` — Conflicto probable si upstream agrega props.
 - `rockValidation.obs` — Conflicto probable si upstream cambia el template.
 - `datePicker.js` — Este archivo es JavaScript legado, menor probabilidad de conflicto upstream pero hay que verificar.
+- `addressControl.obs` — El upstream toca este control con frecuencia (autocomplete, validacion de direcciones, County). **Conflicto probable.** Al re-aplicar, lo unico que hay que preservar son los bloques marcados `[VidaReal]`; la regla de cascada vive en C# y no se toca desde aqui.
 
 **Estrategia recomendada para merge:**
 1. Antes del merge, hacer `git stash` o branch temporal con los cambios de estos archivos.

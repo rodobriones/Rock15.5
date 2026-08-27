@@ -283,7 +283,7 @@ El gateway incluye un catalogo completo de codigos de respuesta ePay:
 
 ## Referencia a EPAY_FLOW_SUMMARY.md
 
-El archivo `C:\Repos\Rock18.1\EPAY_FLOW_SUMMARY.md` documenta los cambios del ciclo de desarrollo de cuotas. Puntos clave:
+El archivo `C:\repos\Rock15.5\EPAY_FLOW_SUMMARY.md` documenta los cambios del ciclo de desarrollo de cuotas. Puntos clave:
 
 - **Namespace SOAP** fue corregido a `http://general_computing.com/paymentgw/types` (era incorrecto).
 - **SOAPAction header** debe ser `""` (cadena vacia entre comillas dobles).

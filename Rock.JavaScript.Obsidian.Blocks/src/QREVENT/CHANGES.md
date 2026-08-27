@@ -331,6 +331,33 @@ un operador en la puerta, mirada a un brazo de distancia, con poca luz y a veces
    control; 48px es el minimo que se acierta con guantes puestos, y 14px no se lee a un brazo de
    distancia. Afecta al boton de cambiar camara (era 40px), a `.rsBtn` y a la altura minima del banner.
 
+**Trampa: el modal fuera del wrapper de tokens (2026-08-27):**
+
+Al reescribir el estilo, el modal de resultado quedo como **hermano** de `.rsPage` en vez de hijo.
+Como los tokens del design system se declaran sobre `.rsPage` (y ya no en `:root`, que era lo que
+antes lo salvaba), ninguna `var(--...)` del modal resolvia. En CSS una declaracion con una custom
+property sin resolver **se descarta entera**, asi que el modal se dibujaba encima del video pero:
+
+- sin fondo (`background: var(--warn-fill)` invalido) — se veia el video a traves;
+- sin padding ni radio (`var(--sp-6)`, `var(--radius-lg)`);
+- con el texto en el color heredado, gris sobre gris, practicamente ilegible;
+- y con el icono pegado a la izquierda, porque `margin: 0 auto var(--sp-4)` cae completo cuando el
+  token falla, y con el se va tambien el `auto` que lo centraba.
+
+El fondo del backdrop si funcionaba, porque `rgba(11,29,43,.72)` es un valor literal — de ahi que la
+pantalla se viera oscurecida pero el modal fantasma.
+
+Arreglado moviendo el modal **dentro** de `.rsPage`. Estar dentro no afecta al `position: fixed`:
+`.rsPage` mide exactamente 100vw x 100vh, asi que aunque un ancestro llegara a crear un containing
+block, el `inset: 0` cubre igual toda la pantalla. Ademas, como defensa: `.rsModal` lleva un
+`background` base propio y **cada token del modal tiene fallback literal**
+(`var(--warn-fill, #F09E30)`), de modo que un modal sin tokens saldria con el color equivocado pero
+solido y legible, nunca transparente. El backdrop subio de `.72` a `.88`: el resultado del escaneo
+tiene que ganarle a la imagen de la camara.
+
+**Regla general para este bloque:** todo markup que use tokens tiene que colgar de `.rsPage`. Un
+elemento hermano no hereda las custom properties.
+
 **Horario detectado, visible (2026-08-27):**
 
 `.rsScheduleBar` y `.rsScheduleDot` existian en el CSS pero nunca tuvieron markup, y `activeSlot`
