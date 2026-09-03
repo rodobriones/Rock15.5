@@ -1,4 +1,4 @@
-// <copyright>
+﻿// <copyright>
 // Copyright by the Spark Development Network
 //
 // Licensed under the Rock Community License (the "License");
@@ -272,6 +272,14 @@ namespace Rock.Rest.VidaReal
                     || userAgent.IndexOf( "iPod", StringComparison.OrdinalIgnoreCase ) >= 0;
                 var isAndroid = userAgent.IndexOf( "Android", StringComparison.OrdinalIgnoreCase ) >= 0;
 
+                // Navegador embebido de una app (WhatsApp y compañía): NO sabe instalar un
+                // .pkpass — lo pinta como texto crudo. Se sirve un intersticial que saca al
+                // usuario al navegador de verdad.
+                if ( IsInAppBrowser( userAgent ) )
+                {
+                    return BuildOpenInBrowserPage( rockContext, pass, Request.RequestUri, isAndroid );
+                }
+
                 if ( isApple && appleAvailable )
                 {
                     return BuildPkpassResponse( rockContext, pass );
@@ -282,7 +290,7 @@ namespace Rock.Rest.VidaReal
                     return BuildGoogleRedirect( rockContext, pass );
                 }
 
-                return BuildLandingPage( pass, appleAvailable, googleAvailable );
+                return BuildLandingPage( rockContext, pass, appleAvailable, googleAvailable );
             }
         }
 
@@ -440,53 +448,204 @@ namespace Rock.Rest.VidaReal
         }
 
         /// <summary>
-        /// Mini landing (dispositivo ambiguo: PC, webview raro): botones Apple/Google según lo
-        /// configurado. Autocontenida, sin assets externos.
+        /// ¿La petición viene del navegador embebido de una app (WhatsApp, Facebook, Instagram)?
+        /// Esos WebViews no instalan un .pkpass: iOS lo pinta como texto crudo y Android lo
+        /// descarta en silencio. Hay que sacar al usuario al navegador del sistema.
         /// </summary>
-        private static HttpResponseMessage BuildLandingPage( WalletPass pass, bool appleAvailable, bool googleAvailable )
+        private static bool IsInAppBrowser( string userAgent )
+        {
+            if ( userAgent.IsNullOrWhiteSpace() )
+            {
+                return false;
+            }
+
+            foreach ( var marker in InAppBrowserMarkers )
+            {
+                if ( userAgent.IndexOf( marker, StringComparison.OrdinalIgnoreCase ) >= 0 )
+                {
+                    return true;
+                }
+            }
+
+            // Android marca su WebView con "; wv".
+            if ( userAgent.IndexOf( "; wv", StringComparison.OrdinalIgnoreCase ) >= 0 )
+            {
+                return true;
+            }
+
+            // iOS: Safari real siempre manda el token "Safari/"; un WKWebView embebido no.
+            // Es el único rastro fiable del navegador interno de WhatsApp en iPhone.
+            var isIos = userAgent.IndexOf( "iPhone", StringComparison.OrdinalIgnoreCase ) >= 0
+                || userAgent.IndexOf( "iPad", StringComparison.OrdinalIgnoreCase ) >= 0
+                || userAgent.IndexOf( "iPod", StringComparison.OrdinalIgnoreCase ) >= 0;
+            return isIos && userAgent.IndexOf( "Safari/", StringComparison.OrdinalIgnoreCase ) < 0;
+        }
+
+        /// <summary>
+        /// Apps cuyo navegador embebido no puede con un .pkpass.
+        /// OJO con WhatsApp: su WebView en iPhone SÍ manda el token "Safari/" (UA real visto
+        /// en prod 2026-08-28: "...Version/26.6 Mobile/15E148 Safari/604.1 [WAiOS/2.26.32...]"),
+        /// así que la heurística de "iOS sin Safari/" NO lo atrapa — hay que buscar "WAiOS".
+        /// </summary>
+        private static readonly string[] InAppBrowserMarkers =
+        {
+            "WhatsApp", "WAiOS", "WAAndroid", "WABrowser",
+            "FBAN", "FBAV", "FB_IAB", "Instagram", "Line/", "MicroMessenger"
+        };
+
+        /// <summary>
+        /// Intersticial para navegadores embebidos. En Android el esquema <c>intent://</c> abre
+        /// el navegador por defecto; en iOS no existe forma programática de salir del WebView
+        /// (Apple no lo permite), así que se da la instrucción explícita.
+        /// </summary>
+        private static HttpResponseMessage BuildOpenInBrowserPage( RockContext rockContext, WalletPass pass, Uri requestUri, bool isAndroid )
+        {
+            var intentUrl = "intent://" + requestUri.Host + requestUri.PathAndQuery
+                + "#Intent;scheme=https;action=android.intent.action.VIEW;end";
+
+            string cuerpo;
+            if ( isAndroid )
+            {
+                cuerpo = $@"<p class='vaLead'>Para guardar tu pase necesitas abrirlo fuera de esta app.</p>
+<a class='vaBtn' href='{intentUrl}'>Abrir en el navegador</a>";
+            }
+            else
+            {
+                cuerpo = @"<p class='vaLead'>Para guardar tu pase necesitas abrirlo fuera de esta app.</p>
+<ol class='vaSteps'>
+<li>Toca <b>&#183;&#183;&#183;</b> en la esquina superior derecha</li>
+<li>Elige <b>Abrir en Safari</b></li>
+<li>Toca <b>Agregar a Apple Wallet</b></li>
+</ol>";
+            }
+
+            return VidaRealPage( rockContext, pass, cuerpo );
+        }
+
+        /// <summary>URL pública de un BinaryFile del diseño de la plantilla (logo / foto).</summary>
+        private static string TemplateImageUrl( RockContext rockContext, int? binaryFileId )
+        {
+            if ( !binaryFileId.HasValue )
+            {
+                return null;
+            }
+
+            var file = new BinaryFileService( rockContext ).Get( binaryFileId.Value );
+            return file != null ? "/GetImage.ashx?guid=" + file.Guid : null;
+        }
+
+        /// <summary>
+        /// Envoltura visual compartida de las páginas públicas del pase: misma identidad que el
+        /// bloque "Pase Digital" (navy #0e3a5c, logo + VidaReal.tv, foto de la plantilla,
+        /// etiquetas celestes, botón píldora blanca). El logo y la foto salen de la propia
+        /// WalletTemplate, así que web y wallet siempre lucen igual. Autocontenida salvo las
+        /// imágenes, que van por GetImage.ashx del mismo dominio.
+        /// </summary>
+        private static HttpResponseMessage VidaRealPage( RockContext rockContext, WalletPass pass, string cuerpoHtml )
+        {
+            var template = pass?.WalletTemplate;
+            var logoUrl = TemplateImageUrl( rockContext, template?.LogoBinaryFileId );
+            var bannerUrl = TemplateImageUrl( rockContext, template?.StripBinaryFileId );
+
+            var logo = logoUrl.IsNotNullOrWhiteSpace()
+                ? $"<img class='vaLogoImg' src='{logoUrl}' alt='' />"
+                : string.Empty;
+            var banner = bannerUrl.IsNotNullOrWhiteSpace()
+                ? $"<div class='vaBanner'><img class='vaBannerImg' src='{bannerUrl}' alt='' /></div>"
+                : string.Empty;
+
+            var html = $@"<!DOCTYPE html>
+<html lang='es'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>
+<meta name='theme-color' content='#0e364c'>
+<title>Tu pase digital</title>
+<style>
+:root{{
+  --va-navy:#0e3a5c; --va-navy-deep:#0e364c; --va-label:#a9c2d6; --va-ink:#fff;
+  --va-font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}}
+*,*::before,*::after{{box-sizing:border-box}}
+body{{
+  margin:0;background:var(--va-navy-deep);color:var(--va-ink);font-family:var(--va-font);
+  -webkit-font-smoothing:antialiased;min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}}
+.vaCard{{width:100%;max-width:420px;background:var(--va-navy);overflow:hidden}}
+.vaLogo{{display:flex;align-items:center;justify-content:center;gap:10px;padding:22px 16px 14px}}
+.vaLogoImg{{width:34px;height:34px;object-fit:contain;display:block}}
+.vaLogoText{{font-size:22px;font-weight:700;letter-spacing:.01em}}
+.vaBanner{{width:100%;height:150px;overflow:hidden;background:var(--va-navy-deep)}}
+.vaBannerImg{{width:100%;height:100%;object-fit:cover;display:block}}
+.vaBody{{padding:22px 22px 28px}}
+.vaLabel{{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--va-label);margin-bottom:6px}}
+.vaTitle{{font-size:26px;font-weight:800;line-height:1.15;margin:0 0 18px;text-wrap:balance}}
+.vaLead{{font-size:15px;line-height:1.5;color:var(--va-label);margin:0 0 20px}}
+.vaSteps{{margin:0;padding-left:20px;font-size:15px;line-height:1.9}}
+.vaSteps b{{color:var(--va-ink)}}
+.vaBtn{{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  margin-top:6px;padding:14px 22px;border-radius:999px;background:#fff;color:var(--va-navy);
+  text-decoration:none;font-weight:600;font-size:16px;
+}}
+.vaBtn+.vaBtn{{margin-top:12px}}
+.vaBtn--ghost{{background:transparent;color:var(--va-ink);border:1px solid rgba(255,255,255,.35)}}
+.vaFoot{{margin:22px 0 0;font-size:13px;line-height:1.5;color:var(--va-label);text-align:center}}
+@media (min-width:480px){{
+  .vaCard{{border-radius:22px;box-shadow:0 18px 50px rgba(0,0,0,.35)}}
+}}
+</style></head>
+<body>
+<div class='vaCard'>
+  <div class='vaLogo'>{logo}<span class='vaLogoText'>VidaReal.tv</span></div>
+  {banner}
+  <div class='vaBody'>
+    <div class='vaLabel'>Iglesia Vida Real</div>
+    <h1 class='vaTitle'>Tu pase digital</h1>
+    {cuerpoHtml}
+  </div>
+</div>
+</body></html>";
+
+            return new HttpResponseMessage( HttpStatusCode.OK )
+            {
+                Content = new StringContent( html, Encoding.UTF8, "text/html" )
+            };
+        }
+
+        /// <summary>
+        /// Mini landing (dispositivo ambiguo: PC, webview raro): botones Apple/Google según lo
+        /// configurado, con la identidad del bloque "Pase Digital" (ver VidaRealPage).
+        /// </summary>
+        private static HttpResponseMessage BuildLandingPage( RockContext rockContext, WalletPass pass, bool appleAvailable, bool googleAvailable )
         {
             var serial = Uri.EscapeDataString( pass.SerialNumber );
             var token = Uri.EscapeDataString( pass.AuthenticationToken );
 
-            string buttons;
+            string cuerpo;
             if ( !appleAvailable && !googleAvailable )
             {
-                buttons = "<p class='muted'>El pase digital no está disponible por el momento.</p>";
+                cuerpo = "<p class='vaLead'>El pase digital no está disponible por el momento.</p>";
             }
             else
             {
-                buttons = string.Empty;
+                cuerpo = "<p class='vaLead'>Guárdalo en tu teléfono para mostrarlo al llegar.</p>";
+
                 if ( appleAvailable )
                 {
-                    buttons += $"<a class='btn' href='{serial}/apple?token={token}'>&#63743; Agregar a Apple Wallet</a>";
+                    cuerpo += $"<a class='vaBtn' href='{serial}/apple?token={token}'>&#63743;&nbsp; Agregar a Apple Wallet</a>";
                 }
 
                 if ( googleAvailable )
                 {
-                    buttons += $"<a class='btn btn--g' href='{serial}/google?token={token}'>Guardar en Google Wallet</a>";
+                    var clase = appleAvailable ? "vaBtn vaBtn--ghost" : "vaBtn";
+                    cuerpo += $"<a class='{clase}' href='{serial}/google?token={token}'>Guardar en Google Wallet</a>";
                 }
 
-                buttons += "<p class='muted'>Abre este enlace en tu teléfono para agregar el pase a tu wallet.</p>";
+                cuerpo += "<p class='vaFoot'>Abre este enlace en tu teléfono para agregar el pase a tu wallet.</p>";
             }
 
-            var html = $@"<!DOCTYPE html>
-<html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>Tu pase digital</title>
-<style>
-body{{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center}}
-.card{{text-align:center;padding:40px 24px;max-width:360px}}
-h1{{font-size:22px;margin:0 0 8px}}
-.muted{{color:#94a3b8;font-size:14px;margin-top:20px}}
-.btn{{display:block;margin:12px auto;padding:14px 22px;border-radius:12px;background:#000;color:#fff;text-decoration:none;font-weight:600;border:1px solid #334155}}
-.btn--g{{background:#fff;color:#0f172a}}
-</style></head>
-<body><div class='card'><h1>Tu pase digital</h1><p class='muted'>Iglesia Vida Real</p>{buttons}</div></body></html>";
-
-            var response = new HttpResponseMessage( HttpStatusCode.OK )
-            {
-                Content = new StringContent( html, Encoding.UTF8, "text/html" )
-            };
-            return response;
+            return VidaRealPage( rockContext, pass, cuerpo );
         }
 
         private static HttpResponseMessage PlainText( HttpStatusCode code, string message )

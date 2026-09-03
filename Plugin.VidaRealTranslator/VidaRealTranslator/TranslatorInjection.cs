@@ -18,7 +18,7 @@ namespace com.vidareal.Translator
     {
         // Subir al cambiar translator.js (cache-busting). El reemplazo es por
         // marcador, asi que al re-inyectar se actualiza la version sola.
-        public const string ScriptVersion = "18";
+        public const string ScriptVersion = "20";
 
         private const string ScriptPath = "/Plugins/com_vidareal/Translator/translator.js";
 
@@ -39,14 +39,31 @@ namespace com.vidareal.Translator
         /// </summary>
         public static void Apply( RockContext rockContext, bool enabled )
         {
+            Apply( rockContext, enabled, null );
+        }
+
+        /// <summary>
+        /// Igual que <see cref="Apply(RockContext, bool)"/>, pero deja FUERA los sitios
+        /// nombrados en <paramref name="excludedSites"/> (uno por linea: nombre o Id).
+        /// Un sitio excluido queda SIEMPRE sin el tag, aunque el plugin este activo.
+        /// Motivo: hay sitios que son 100% datos (p.ej. el Check-in Manager) donde el
+        /// traductor solo gasta tokens y expone PII; antes no habia forma de apagarlo
+        /// por sitio sin apagar el plugin entero.
+        /// </summary>
+        public static void Apply( RockContext rockContext, bool enabled, string excludedSites )
+        {
             var siteService = new SiteService( rockContext );
             var changed = false;
+            var excluded = ParseExcluded( excludedSites );
 
             foreach ( var site in siteService.Queryable() )
             {
+                var skip = excluded.Contains( site.Name ?? string.Empty )
+                    || excluded.Contains( site.Id.ToString() );
+
                 var current = site.PageHeaderContent ?? string.Empty;
                 var cleaned = ExistingTag.Replace( current, string.Empty ).Trim();
-                var updated = enabled
+                var updated = ( enabled && !skip )
                     ? ( string.IsNullOrWhiteSpace( cleaned ) ? Tag() : cleaned + Environment.NewLine + Tag() )
                     : cleaned;
 
@@ -62,6 +79,27 @@ namespace com.vidareal.Translator
                 rockContext.SaveChanges();
                 SiteCache.Clear(); // que los sitios relean el header sin reiniciar
             }
+        }
+
+        /// <summary>Nombres/Ids de sitio, uno por linea. Comparacion sin distinguir mayusculas.</summary>
+        public static HashSet<string> ParseExcluded( string excludedSites )
+        {
+            var set = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+            if ( string.IsNullOrWhiteSpace( excludedSites ) )
+            {
+                return set;
+            }
+
+            foreach ( var line in excludedSites.Split( new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries ) )
+            {
+                var t = line.Trim();
+                if ( t.Length > 0 )
+                {
+                    set.Add( t );
+                }
+            }
+
+            return set;
         }
 
         // ----- Estado de inyeccion para el panel de administracion -----

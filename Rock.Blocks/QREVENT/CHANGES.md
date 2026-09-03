@@ -65,7 +65,7 @@ El modulo cubre dos casos de uso distintos:
 
 **Como funciona:**
 - Detecta automaticamente el slot activo del dia segun el horario del campus configurado. El operador nunca elige el horario a mano.
-- La ventana de check-in se abre **10 minutos antes** de la hora de inicio del servicio y cierra **60 minutos despues** de esa misma hora de inicio. Ambos valores son decision de negocio y estan fijos en el codigo (`CheckInOpensMinutesBeforeStart` / `CheckInClosesMinutesAfterStart`), no son configurables.
+- La ventana de check-in se abre **10 minutos antes** de la hora de inicio del servicio y cierra **1 h 20 min despues** de esa misma hora de inicio. Ambos valores son decision de negocio y estan fijos en el codigo (`CheckInOpensMinutesBeforeStart` / `CheckInClosesMinutesAfterStart`), no son configurables. El cierre debe seguir igual a `ReservationClosesMinutesAfterStart` del bloque de reserva (ver seccion del corte horario, 2026-09-01).
 - El cierre **no** usa el `DTEND` del iCalendar. El servicio dura ~2 h, asi que con `DTEND` la ventana del servicio anterior seguia abierta cuando la del siguiente ya habia abierto: habia dos slots vigentes al mismo tiempo y `sp_SundayServiceCheckIn` exige que la reserva sea exactamente del slot activo, asi que el solapamiento rechazaba en la puerta a gente con reserva valida.
 - Si aun asi dos ventanas se solaparan, gana el horario cuya **hora de inicio esta mas cerca de "ahora"**. El `ORDER BY sch.Id` del query no guarda relacion con el orden cronologico y no sirve como desempate.
 - Extrae la hora de inicio del iCalendar (`DTSTART`) del Schedule de Rock.
@@ -139,6 +139,7 @@ Los cuatro casos de rechazo cuentan para el throttle de escaneos invalidos.
 - `-1`: Slot/hold no encontrado
 - `-2`: Ya existe reserva activa / reserva no pertenece al usuario
 - `-3`: No se pudo reemplazar reserva existente
+- `-4`: El horario ya cerro (lo devuelve el bloque, no el SP; ver seccion del corte horario)
 - `-99`: Error inesperado
 
 **Tabla SundayServiceSlot:** Campos clave: `Capacity`, `ReservedCount`, `HoldCount`, `OccurrenceDate`, `ScheduleId`, `CampusId`, `IsActive`.
@@ -470,3 +471,99 @@ Build validado con:
 | `Schedule` / `iCalendarContent` | Determinacion de ventana de check-in por horario |
 | `WorkflowType` | Workflow de confirmacion de reserva (opcional) |
 | `PersonAlias` | Identificacion de personas en todos los flujos |
+
+---
+
+## Cierre de horarios pasados en la reserva (2026-09-01)
+
+**Sintoma:** a las 12:00 de un domingo el horario de las 11:00 seguia apareciendo
+reservable, y la reserva que generaba era inutil: `ReservationScanner` ya no aceptaba
+ese QR en la puerta.
+
+**Causa:** el filtro existia (`HasScheduleEnded`) pero cortaba con el **`DTEND`** del
+iCalendar. El `DTEND` lo define cada Schedule por separado: el de las 11:00 dura 2 h y
+los demas 1.5 h, asi que el cierre salia desparejo y el de las 11:00 quedaba reservable
+hasta las 13:00. El escaner, en cambio, ya habia descartado el `DTEND` a proposito (ver
+`ReservationScanner.cs`, comentario sobre `CheckInClosesMinutesAfterStart`) y cierra su
+ventana a los 60 min de la hora de inicio.
+
+**Fix:** el corte de la reserva pasa a ser `DTSTART + ReservationClosesMinutesAfterStart`
+= **1 h 20 min (80 min)**, quemados en el codigo. El helper se renombro a
+`IsSlotClosedForReservation`. Con un offset fijo sobre el inicio todos los horarios
+cierran con la misma regla, sin depender de la duracion que traiga cada Schedule.
+
+| Horario | Inicio | Cerraba antes (DTEND) | Cierra ahora (inicio + 1:20) |
+|---------|--------|-----------------------|------------------------------|
+| Sabado 19:00 h  | 19:00 | 20:30 | 20:20 |
+| Domingo 7:00 h  | 07:00 | 08:30 | 08:20 |
+| Domingo 9:00 h  | 09:00 | 10:30 | 10:20 |
+| Domingo 11:00 h | 11:00 | **13:00** | **12:20** |
+| Domingo 13:00 h | 13:00 | 14:30 | 14:20 |
+| Domingo 18:00 h | 18:00 | 19:30 | 19:20 |
+
+**El escaner se movio al mismo numero.** `CheckInClosesMinutesAfterStart` paso de 60 a
+**80** en `ReservationScanner.cs`, asi que reserva y puerta cierran en el mismo instante
+y no se emite ningun QR que la puerta vaya a rechazar. Los dos valores tienen que
+moverse juntos; cada constante lo dice en su comentario.
+
+Ventanas resultantes de la puerta (servicios 7, 9, 11, 13, 18 + sabado 19:00):
+
+| Servicio | Puerta abre (-10) | Puerta cierra (+1:20) | Reserva cierra (+1:20) |
+|----------|-------------------|-----------------------|------------------------|
+| Sabado 19:00 h | 18:50 | 20:20 | 20:20 |
+| Domingo 7:00 h  | 06:50 | 08:20 | 08:20 |
+| Domingo 9:00 h  | 08:50 | 10:20 | 10:20 |
+| Domingo 11:00 h | 10:50 | 12:20 | 12:20 |
+| Domingo 13:00 h | 12:50 | 14:20 | 14:20 |
+| Domingo 18:00 h | 17:50 | 19:20 | 19:20 |
+
+**Sin cruces:** los servicios estan a 2 h de distancia, asi que cada ventana cierra 30
+min antes de que abra la siguiente. Nunca hay dos slots vigentes a la vez, que es lo que
+exige `sp_SundayServiceCheckIn`. El margen aguanta hasta 110 min de cierre; mas alla las
+ventanas se solaparian y volveria el problema que motivo descartar el DTEND.
+
+**El filtro ya no es solo cosmetico.** Antes se aplicaba unicamente al armar el listado
+(`GetWeekSlots` / `GetActiveReservation`); ni el C# ni `sp_SundayServiceHoldUpsert`
+revalidaban la hora, y el SP solo compara `OccurrenceDate` (fecha sin hora). Como el
+`.obs` no recarga los slots por su cuenta, una pantalla abierta desde temprano podia
+apartar y confirmar un horario ya cerrado. Ahora se revalida server-side en los dos
+puntos de escritura y ambos devuelven `-4`:
+
+- `HoldUpsert` -> `IsScheduleClosedForOccurrence` (resuelve el iCal por `ScheduleId`).
+- `ConfirmReservation` -> `IsHoldSlotClosedForReservation` (resuelve el slot via `HoldToken`).
+
+El front muestra en ambos casos *"Ese horario ya cerro. Elegi uno de los que siguen
+disponibles."* y refresca la semana.
+
+**Fail-open deliberado:** si el schedule no tiene `iCalendarContent` legible no hay hora
+con que comparar y el slot se deja abierto, en lugar de ocultarlo. Hoy los 7 schedules en
+uso traen `DTSTART:` plano (sin `TZID`), que es lo que el parser espera.
+
+**Zona horaria:** el corte usa `RockDateTime.Now`. El Global Attribute
+`OrganizationTimeZone` esta vacio, asi que Rock cae a la zona del servidor
+(`Central America Standard Time`, UTC-6). Si algun dia se fija ese atributo, revisar que
+coincida con la zona de la VM.
+
+---
+
+## ReservationScanner: hora del servidor para el contador (2026-09-03)
+
+`GetActiveSlot` y `GetObsidianBlockInitialization` ahora devuelven **`serverNowIso`**
+(`RockDateTime.Now`, formato `yyyy-MM-ddTHH:mm:ss`, el mismo sin zona que ya usaba
+`CheckInStartIso`).
+
+**Por que:** el contador de "Abre en ..." del `.obs` comparaba `nextCheckInStartIso`
+-calculado aca- contra el reloj del dispositivo. Cada escaner abria en un instante
+distinto segun como anduviera su reloj, y con el aparato adelantado la pantalla se quedaba
+en "Abriendo..." porque el servidor seguia respondiendo `activeSlot: null`. Con esta hora
+el cliente calcula el desfase y todos abren a la vez.
+
+Al venir los dos ISO con la misma convencion (sin zona), el offset que calcula el cliente
+absorbe tanto la deriva del reloj como una diferencia de zona horaria entre el dispositivo
+y el servidor.
+
+**Compatibilidad:** el `.obs` ignora el campo si no viene (`syncServerClock` sale temprano
+con `!iso`), asi que el JS nuevo funciona con el DLL viejo -sin corregir el desfase, con el
+comportamiento anterior-. Para que la correccion tenga efecto hay que subir el DLL.
+
+Detalle del lado del cliente en `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CHANGES.md`.

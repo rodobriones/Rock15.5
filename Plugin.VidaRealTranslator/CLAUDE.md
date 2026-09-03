@@ -24,6 +24,8 @@ Plugin de Rock RMS v18 que traduce la UI (inglés → idioma destino) en el DOM 
 - `<option>` se traduce **solo** si el `<select>` está en la whitelist de UI (`UiSelectWhitelist`). Por defecto NO.
 - Excluir: `script/style/code/pre/textarea/[contenteditable]/.notranslate/[data-no-translate]`, interior de grids (`.grid-table td`), y datos (emails, URLs, GUIDs, montos, fechas, Lava `{{}}`/`{%%}`).
 - Ante cualquier error/duda: dejar el texto original. Nunca romper la UI ni el guardado.
+- **Grids**: excluir SIEMPRE los dos markups — `.grid-table td` (WebForms) y `.grid-row`/`.grid-cell` (Obsidian v15+). Los encabezados (`th`, `.grid-column-header`) SÍ se traducen.
+- **Nada que cambie solo** (contadores, relojes, tiempos de carga): `sendBatch()` re-escanea el body al recibir traducciones, así que un texto que muta se autoalimenta y se paga por tick. Defensa genérica: `churning()` por ranura DOM. No la quites.
 
 ## Paridad de normalización (CRÍTICO)
 Cliente y servidor deben producir la MISMA clave normalizada. `TranslatorNormalization` (C#) NO usa `\s` ni `.Trim()` (el `\s` de .NET ≠ el de JS); construye el set explícito = `\s` de JavaScript. Si tocas la normalización, cámbiala en AMBOS lados y corre el test. El cliente nunca hashea; el server hashea (SHA-256) solo para el índice único de BD.

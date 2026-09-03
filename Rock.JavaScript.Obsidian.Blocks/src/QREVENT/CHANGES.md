@@ -739,3 +739,279 @@ URLs distintas: dos peticiones sin cache compartido, y el handler tampoco manda
 **Mejora futura:** si la app nativa expone un puente (como el `RockCheckinNative`
 que ya usa `ReservationScanner` para la camara), lo ideal seria pasarle el base64
 para que guarde en Fotos sin pasar por la hoja de compartir.
+
+---
+
+## Fallos de red / servidor: reintento y diagnostico (2026-09-02)
+
+**Sintoma reportado desde prod:** la tarjeta roja *"No se pudieron cargar los horarios."*
+en el paso 3, sin mas informacion y con "Atras" como unica salida.
+
+**Que significaba ese texto.** Era el fallback de una sola rama de `loadWeekSlots`:
+`res.errorMessage || "No se pudieron cargar los horarios."`. Eso descartaba dos cosas:
+no fue una excepcion del navegador (esa rama decia *"Error cargando horarios."*) y no
+fue un rechazo del bloque (`ActionBadRequest` viaja como `HttpError` -> `{"Message":...}`
+y `doApiCall` **si** lo lee, asi que se habria visto *"No autenticado."* o
+*"Campus invalido."*). Quedaba una sola explicacion: la respuesta llego sin cuerpo JSON
+-> conexion cortada, timeout, 401 del endpoint, o 502/503 de IIS reciclando.
+
+**El dato que se estaba tirando.** `doApiCall`
+(`Rock.JavaScript.Obsidian/Framework/Utility/http.ts`) devuelve `statusCode`
+(`e.response?.status ?? 0`) y el bloque solo leia `isSuccess` y `errorMessage`. Ese
+numero es lo unico que separa las tres causas.
+
+**Que se hizo:**
+
+| `statusCode` | Causa | Comportamiento nuevo |
+|--------------|-------|----------------------|
+| `0` | La respuesta nunca llego (red, WebView, timeout) | Reintenta; si `navigator.onLine` es false, mensaje de "sin conexion" |
+| `5xx` | IIS/Rock caido o reciclando | Reintenta con backoff |
+| `401` / `403` | Sesion vencida | Mensaje propio + boton **Iniciar sesion** |
+| `4xx` | El bloque rechazo con criterio | Muestra el texto del backend, sin reintentar |
+
+- `invokeIdempotentWithRetry`: 3 intentos (backoff 800 / 2500 ms) con **timeout propio de
+  10 s por intento**. Si el fallo es transitorio la persona no ve ningun error; el peor
+  caso antes de rendirse es ~33 s, y a partir del segundo intento el spinner dice
+  "Reintentando..." para que la espera no parezca la pantalla colgada.
+- El timeout no es opcional: axios va sin timeout, y sin el un socket colgado dejaba
+  `weekBusy` / `holdBusy` en true para siempre, con el spinner infinito y los botones
+  "Reintentar" (`:disabled="weekBusy"`) y "Confirmar reserva" (`:disabled="busy || holdBusy"`)
+  bloqueados sin otra salida que recargar. Es la misma trampa que tenia el escaner con
+  `polling`.
+- Boton **Reintentar** en las dos tarjetas de error (semana y hold). Antes, el error del
+  hold obligaba a cambiar la cantidad para redisparar el hold, y el de la semana a volver
+  al paso 2.
+- **El codigo se muestra al usuario a proposito**: *"No pudimos cargar los horarios (E0)"*.
+  Convierte una foto de WhatsApp en un dato de diagnostico sin instrumentar el backend.
+  `E0` = no llego la respuesta, `E503` = IIS reciclando, `E500` = excepcion del bloque
+  (el unico que deja rastro en `ExceptionLog`).
+
+**Solo se reintentan las acciones idempotentes:** `GetWeekSlots` (lectura) y `HoldUpsert`
+(upsert por persona+slot). `ConfirmReservation` y `CancelReservation` **no** pasan por el
+helper: si la primera llamada llego y solo se perdio la respuesta, un reintento
+confirmaria dos veces. Esas dos ya tienen su propio fallback (consultan
+`GetActiveReservation` y deciden segun el estado real).
+
+**Por que la sesion vencida no llevaba al login.** Dos razones, las dos siguen siendo
+ciertas para cualquier otro bloque Obsidian: (1) las block actions son llamadas AJAX, su
+401 lo consume el JS y no hay navegacion, y `doApiCall` no tiene ninguna rama para 401;
+(2) el `notLogged` del bloque se evalua una sola vez, en
+`GetObsidianBlockInitialization`, cuando la pagina carga. El boton "Iniciar sesion"
+recarga la pagina para que Rock haga la redireccion; no se recarga solo, para no
+descartar sin aviso lo que la persona ya eligio.
+
+**Sospecha operativa que acompana este cambio:** arranque en frio del app pool. Con el
+idle timeout por defecto (20 min) el primer request tras un rato de calma se come el
+arranque de Rock, que en la VM de prod (2 vCPU) no es rapido, y muere sin cuerpo JSON:
+exactamente el sintoma. Mitigacion sin codigo: `idleTimeout 0`, sin reciclado periodico,
+`startMode AlwaysRunning` y `preloadEnabled true`.
+
+**Nada de esto toca el backend:** el cambio es solo del `.obs`, asi que se despliega
+subiendo `SundayServiceRegistration.obs.js` sin recompilar ni reciclar el app pool.
+
+---
+
+## ReservationScanner: blindaje de red (2026-09-02)
+
+El escaner se usa en la puerta con fila y la pagina queda abierta horas. Se reviso
+buscando que no se trabe ni se caiga por problemas de red.
+
+### El bloqueo total (lo mas grave)
+
+`GetActiveSlot` se llamaba **sin timeout**, y axios tampoco pone uno por defecto (ver
+`doApiCallRaw` en `Rock.JavaScript.Obsidian/Framework/Utility/http.ts`). Con un socket
+colgado -wifi que se cae sin cerrar la conexion, WebView suspendido- el `await` no volvia
+nunca y `polling` quedaba en `true` **para siempre**.
+
+Ese unico flag gobierna las dos vias de recuperacion:
+
+- el intervalo de polling, que solo corre `if (!polling.value)`;
+- el boton **"Verificar de nuevo"**, que esta `:disabled="polling"`.
+
+Las dos morian juntas. El escaner quedaba congelado en el ultimo estado conocido -camara
+encendida, horario viejo en pantalla- con el boton en "Verificando..." permanente y sin
+ninguna salida salvo recargar la pagina.
+
+**Fix:** `withTimeout` de 10 s sobre `GetActiveSlot`, `polling.value = false` movido a un
+`finally` de verdad, y un guard propio al entrar (antes el unico freno era el `if` del
+intervalo, asi que el boton manual podia disparar una llamada en paralelo).
+
+### La falla silenciosa
+
+`refreshSlot` hacia `if (res.isSuccess && res.data) { ... }` **sin else**, mas un
+`catch { }` vacio. Si el polling fallaba, `activeSlot` conservaba el valor anterior y la
+pantalla seguia aparentando normalidad mientras cada escaneo se rechazaba. En la puerta
+eso es peor que un error visible: se le echa la culpa a los QR de la gente.
+
+**Fix:** se distingue "no contesto" de "contesto con error" y se cuenta la racha. A los 2
+fallos seguidos aparece un aviso arriba de las dos vistas (`rsNetWarn`) y el chip de la
+barra superior pasa a **"Sin conexion"** en rojo. El estado de red manda sobre el de la
+camara: una camara "Escaneando" con el servidor caido es la peor lectura posible.
+
+Un fallo aislado no se anuncia: el ciclo es de 30 s y avisar por uno solo llenaria la
+pantalla de alarmas falsas en una red intermitente.
+
+### Sesion vencida
+
+Es el bloque mas expuesto: el kiosco queda abierto horas. Al vencer la cookie,
+`IsAuthorizedToScan()` da false y el backend responde
+`ActionForbidden("No autorizado para usar este escaner.")`. El operador leia eso y creia
+que le habian quitado el permiso. Ahora un 401/403 se reconoce como sesion vencida, con
+su propio aviso y un boton **"Volver a iniciar sesion"** que recarga (las block actions
+son AJAX: su 401 lo consume el JS y nadie navega al login).
+
+### ProcessScan: 15 s y rendirse -> 7 s y un reintento
+
+El peor caso baja de 15 s a 14.4 s (7 s x 2 intentos + 400 ms de pausa), asi que el
+operador nunca espera mas que antes, y ademas se recupera solo de un corte breve en vez
+de tener que reescanear con la fila esperando.
+
+**Reintentar es seguro porque el check-in es idempotente:** `sp_SundayServiceCheckIn`
+hace `UPDATE ... WHERE Status = 1`, asi que un segundo intento del mismo codigo devuelve
+`already_used` sin volver a contar asistencia (verificado bajo 8 escaneos simultaneos del
+mismo QR, ver `Rock.Blocks/QREVENT/CHANGES.md`).
+
+**No dispara el throttle:** solo se reintenta cuando NO hubo respuesta (`statusCode` 0 o
+5xx), y esos intentos no llegan al backend, asi que no pasan por
+`RegisterInvalidScanAttempt`. El contador es por persona con limite de 60 en 10 s.
+
+### Recuperacion sin esperar el ciclo
+
+- **Watchdog del polling:** si pasan 3 ciclos (90 s) sin un refresh exitoso, se fuerza
+  `polling = false` y se reintenta. Cubre cualquier via -presente o futura- que deje el
+  flag colgado, sin depender de que el operador se de cuenta.
+- **`online`:** al volver la red, refresca de inmediato.
+- **`visibilitychange`:** al volver a foco, lo que hubiera en vuelo esta muerto (el
+  WebView suspende las peticiones al bloquear pantalla o cambiar de app), asi que se
+  libera el flag y se refresca.
+
+Los dos listeners se remueven en `onBeforeUnmount`, junto con el watchdog.
+
+### Lo que ya estaba bien y no se toco
+
+- `startDecodeSession` tenia `finally { startingSession = false }`, un `Promise.race` de
+  7 s contra la rama del vendor que no resuelve, y el watchdog de latido de 4 s.
+- El callback del decodificador dispara `submitQr` con fire-and-forget: la red nunca
+  detiene la camara.
+- `submitQr` ya liberaba `busy` en `finally`.
+
+**Solo cambia el `.obs`:** se despliega subiendo `ReservationScanner.obs.js`, sin
+recompilar el DLL ni reciclar el app pool.
+
+---
+
+## Repaso de regresiones de los dos cambios anteriores (2026-09-02)
+
+Revision propia del diff de `SundayServiceRegistration.obs` y `ReservationScanner.obs`.
+Tres cosas encontradas y corregidas antes de desplegar:
+
+1. **`loadWeekSlots` habia perdido su `catch`.** Al pasar de `try/catch` a
+   `try/finally`, una excepcion en el mapeo de la respuesta dejaba la pantalla sin
+   horarios, sin mensaje y sin spinner: caia en el `v-if` de *"No hay horarios con cupo
+   disponible para esta sede esta semana"*, que habria sido mentira. Catch restaurado.
+
+2. **El retry del registro no tenia timeout.** El escaner sí lo recibio, el registro no,
+   y es el mismo patron: `weekBusy` / `holdBusy` colgados bloqueaban el spinner y los dos
+   botones. Se agrego `withTimeout` de 10 s por intento y se bajaron los reintentos de 3
+   a 2 para que el peor caso quedara en ~33 s en vez de ~46 s.
+
+3. **`ProcessScan` empeoraba el peor caso.** Con 2 intentos de 8 s + 400 ms daba 16.4 s,
+   *mas* que los 15 s de un solo intento que habia antes. Bajado a 7 s -> 14.4 s.
+
+Verificado ademas: la cadena `v-if="!activeSlot"` / `v-else` del escaner sigue intacta
+(el aviso nuevo se inserto antes del `v-if`, no entre los dos); `stopSlotPolling` solo se
+llama en `onBeforeUnmount`, donde tambien se detiene el watchdog, asi que no quedan
+timers huerfanos; `ConfirmReservation` y `CancelReservation` siguen sin pasar por el
+retry; y los flags `busy` / `holdBusy` / `weekBusy` se liberan en `finally`.
+
+**Limitaciones conocidas, aceptadas:**
+
+- `isRetrying` es un solo ref compartido por la carga de semana y el hold. Si los dos
+  corrieran a la vez, uno apaga el aviso del otro. Es cosmetico.
+- El watchdog del escaner fuerza `polling = false` antes de reintentar, asi que puede
+  dejar dos peticiones en vuelo. La que sobra muere en su propio timeout; es el precio de
+  la recuperacion forzada.
+- `withTimeout` no cancela la peticion axios subyacente, solo deja de esperarla. Para
+  `HoldUpsert` no importa: el SP hace upsert por persona+slot, asi que si la primera
+  llega tarde el reintento la reemplaza.
+
+---
+
+## ReservationScanner: "Abriendo..." colgado, permisos y banner pegado (2026-09-03)
+
+Tres bugs reportados desde la puerta, los tres del mismo momento: cuando llega la hora.
+
+### 1. Se quedaba en "Abriendo..." y no abria la camara
+
+`"Abriendo..."` solo existe en la vista de espera (`v-if="!activeSlot"`), asi que verlo
+significa que para el bloque la ventana **todavia no abrio**.
+
+La causa era el reloj. El contador comparaba `nextCheckInStartIso` -que calcula el
+servidor- contra `Date.now()` **del dispositivo**. Con el reloj del aparato adelantado el
+contador llegaba a cero antes de que el servidor diera el horario por abierto, y ahi:
+
+1. `tick()` hacia `stopCountdown()` (mata el intervalo), pintaba "Abriendo..." y pedia un
+   `refreshSlot()`.
+2. El servidor respondia `activeSlot: null`, porque para el aun no era la hora.
+3. Al final de `refreshSlot` se volvia a llamar `startCountdown()`, que con `diffMs <= 0`
+   pintaba "Abriendo..." y hacia `return` **sin crear intervalo**.
+
+Resultado: "Abriendo..." fijo, sin contador corriendo, esperando el ciclo de 30 s -y
+repitiendo lo mismo en cada vuelta-. Con un minuto de desfase, dos minutos de pantalla
+estancada con gente en la puerta.
+
+**Fix:** el servidor manda su hora (`serverNowIso`, ver `Rock.Blocks/QREVENT/CHANGES.md`)
+y el cliente calcula el desfase una vez; el contador corre con `serverNow()`. Los dos ISO
+vienen sin zona horaria, asi que el offset absorbe tanto la deriva del reloj como una
+diferencia de zona. **Efecto buscado: todos los escaneres abren en el mismo instante**, no
+cuando cada aparato cree que es la hora.
+
+Ademas, si al llegar a cero el servidor todavia no confirma, se entra en un **ciclo corto
+de 5 s** (`startOpeningPoll`, tope de 3 min) en vez de esperar los 30 s del ciclo normal.
+
+### 2. El boton no podia pedir permiso de camara
+
+`refreshSlot` arrancaba la camara con `startScan()`, **sin argumento**, y `startScan`
+tiene esta guarda deliberada:
+
+```ts
+// Permiso denegado: solo se reintenta si el operador toca el boton.
+if (cameraBlocked.value && !userInitiated) return;
+```
+
+La guarda esta bien -evita un dialogo de permisos cada 30 s-, pero **la user activation se
+perdia en el camino**: el operador tocaba "Verificar de nuevo" (un gesto real, lo unico
+que permite abrir el dialogo del navegador) y el arranque viajaba como automatico, asi que
+retornaba sin preguntar nada. Habia que recargar la pagina.
+
+**Fix:** `refreshSlot(userInitiated = false)` propaga el flag hasta `startScan`. Los dos
+botones llaman `refreshSlot(true)`; el ciclo automatico, el watchdog y el opening poll
+siguen pasando `false`, asi que no vuelve el dialogo en bucle.
+
+Ojo al escribirlo: `@click="refreshSlot"` le pasa el objeto `Event` como primer argumento,
+que seria siempre truthy. Hay que usar los parentesis: `@click="refreshSlot(true)"`.
+
+### 3. El banner de resultado quedaba pegado
+
+`setBanner` no tenia caducidad: *"Este QR ya fue procesado."* seguia en pantalla mucho
+despues de que el modal se habia cerrado solo a los 2.5 s. Ahora los resultados caducan a
+los 5 s y el banner vuelve a "Escaneando..." o "Listo para escanear". Los estados de la
+camara no caducan: llegan con `status` vacio, y ese caso sale antes de armar el timer.
+
+### Regresion corregida en el mismo pase
+
+El guard `if (polling.value) return` que se habia agregado el 2026-09-02 **descartaba** el
+refresh que dispara el contador al llegar a cero si coincidia con un ciclo en vuelo (hasta
+10 s de ventana con el timeout nuevo), quitandole una oportunidad de recuperarse justo en
+el peor momento. Ahora **encola** en vez de descartar: `refreshQueued` mas
+`queuedUserInitiated`, que se atienden al terminar el que estaba corriendo.
+
+### Limitaciones aceptadas
+
+- El offset del reloj incluye la latencia de la respuesta (queda corrido ~medio viaje de
+  red). Despreciable para una ventana que se mide en minutos.
+- La cola reencola por recursion (`await refreshSlot(...)` al final). Con el opening poll
+  de 5 s y peticiones de hasta 10 s la profundidad maxima es de ~18 niveles en los 3 min
+  del tope; `refreshQueued` es un booleano, asi que nunca hay mas de uno pendiente.
+- El ciclo corto puede llegar a 36 llamadas a `GetActiveSlot` en 3 min. Es una query
+  ligera y solo ocurre en el minuto de la apertura.

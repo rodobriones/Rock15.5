@@ -45,9 +45,28 @@
         "script,style,code,pre,kbd,samp,textarea,svg,[contenteditable]," +
         "[data-no-translate],.notranslate,.vrtr-skip,#cms-admin-footer," +
         ".js-person-select,.checkin-person,.checkin-person-list,.js-family-select," +
-        ".family-button,.attendee-button,.attendee-banner";
-    // Interior de grids de datos: NO traducir (solo encabezados th, que no son td).
-    var DATA_CELLS = ".grid-table td, .grid-table .grid-actions, .js-grid-table td";
+        ".family-button,.attendee-button,.attendee-banner," +
+        // Next-gen (kiosk Obsidian): ranuras que pintan datos de persona/familia. Se
+        // excluye la RANURA, no la pantalla, para que labels y botones del kiosco SI se
+        // traduzcan (el objetivo: que un upgrade de Rock que revierta las traducciones
+        // hechas a mano en el fork no deje el kiosco en ingles).
+        //   .attendance-card       -> successScreen: fullName + grupo/ubicacion/horario
+        //   .achievement-card      -> "Congratulations <nickName>!"
+        //   .check-in-panel > .panel-header .subtitle -> "...check <nickName> into"
+        // Las dos ultimas mezclan UI y nombre en UN SOLO nodo de texto (interpolacion de
+        // Vue): son inseparables desde el DOM, asi que la frase completa se sacrifica.
+        // Traducirlas de verdad exige i18n en el .obs, no un traductor DOM.
+        ".attendance-card,.achievement-card,.check-in-panel > .panel-header .subtitle";
+    // Interior de grids de datos: NO traducir (solo los encabezados, que son UI).
+    // WebForms (<table class="grid-table">): las celdas son <td>; el <th> queda fuera.
+    // Obsidian (Rock v15+): el grid NO es una tabla, es div-based -> .grid-row / .grid-cell
+    // (grid-obsidian.less:311/329, Grid/dataRow|dataCell.partial.obs). El encabezado es
+    // .grid-column-header, que NO se excluye a proposito (es UI y debe traducirse).
+    // Sin esto, TODO el contenido de los grids nuevos (nombres, emails, direcciones) se
+    // enviaba a la IA: era la fuente principal de PII y de filas basura en el cache.
+    // El `title` de .grid-row/.grid-cell tambien es dato (tooltip con el contenido de la fila).
+    var DATA_CELLS = ".grid-table td, .grid-table .grid-actions, .js-grid-table td," +
+        ".grid-row, .grid-cell, [role='gridcell']";
     // <select> de UI cuyas <option> SI se traducen aunque la heuristica dude.
     var UI_SELECT_WHITELIST = [];
 
@@ -121,6 +140,19 @@
     var RE_DATALIKE = /^[\sQ$€¥.,:;%#@()\/\-+0-9]+$/;
     // SENSIBLE: enmascarado de secretos (tarjetas/cuentas): "•••• 4242", "****1071", "xxxx", "9x00".
     var RE_MASKED = /[•*]{2,}|\b[xX]{2,}\b|\d[xX]\d/;
+    // Contador EN VIVO: "104h 56m 42s", "3m 07s", "45s" (ReservationScanner.obs pinta uno
+    // cada segundo). Cada tick es un string unico -> una traduccion pagada por segundo.
+    var RE_TIMER = /^\d+\s*[dhms]([\s:]+\d+\s*[dhms])*$/i;
+    // Fecha numerica: la IA REORDENA dia/mes ("Added: 8/16/2026" -> "Agregado: 16/8/2026" y
+    // "Added: 1/9/2026" -> "Agregado: 9/1/2026"). Corrompe el dato a la vista del usuario.
+    var RE_DATE_NUM = /\b\d{1,4}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/;
+    // Mes + anio solos = dato (fecha de nacimiento en el kiosco), no UI: "October 1966".
+    var RE_MONTH_YEAR = /^(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t|tember)?|oct(ober)?|nov(ember)?|dec(ember)?)\s+\d{4}$/i;
+    // "<Apellido> Family" = como Rock nombra a una familia (dato), no un label de UI. Se
+    // exige que la palabra previa NO sea un verbo/determinante, para no bloquear botones
+    // reales ("Add Family", "Edit Family", "My Family").
+    var RE_FAMILY = /(\S+)\s+Family\b/i;
+    var UI_BEFORE_FAMILY = /^(add|edit|new|create|delete|remove|select|search|manage|update|view|print|my|the|this|a|no|one|per|each)$/i;
 
     function translatable(norm) {
         if (!norm) return false;
@@ -132,10 +164,91 @@
         if (RE_GUID.test(norm)) return false;
         if (RE_DATALIKE.test(norm)) return false;
         if (RE_MASKED.test(norm)) return false;          // secretos enmascarados -> dato sensible
+        if (RE_TIMER.test(norm)) return false;           // contador en vivo
+        if (RE_DATE_NUM.test(norm)) return false;        // fecha numerica: la IA la reordena
+        if (RE_MONTH_YEAR.test(norm)) return false;      // mes+anio suelto = dato
+        var fam = norm.match(RE_FAMILY);
+        if (fam && !UI_BEFORE_FAMILY.test(fam[1])) return false;   // "<Apellido> Family"
         // 8+ digitos en total = numero de tarjeta/cuenta/telefono incrustado en texto
         // ("Visa 4487 9x00 xxxx 1071"). Ningun label de UI real trae tantos digitos.
         if ((norm.match(/\d/g) || []).length >= 8) return false;
         return true;
+    }
+
+    /* ---------- guard de churn por ranura ---------- */
+
+    // Una "ranura" es la POSICION del DOM donde vive un texto, no el nodo: Vue/Obsidian
+    // reescriben el mismo nodo (interpolacion) y a veces lo recrean, asi que un WeakMap
+    // por nodo no sirve. La ranura se identifica por la cadena tag.clase de sus ancestros.
+    //
+    // Si una ranura reescribe texto DISTINTO varias veces en pocos segundos, no es UI:
+    // es un contador en vivo. Se apaga para el resto de la sesion.
+    //
+    // Por que hace falta ademas de RE_TIMER: sendBatch() hace run(document.body) cuando
+    // llega una traduccion nueva, asi que un contador se AUTOALIMENTA (tick -> traducir ->
+    // rescan -> nuevo tick...). En la primera medicion eso dejo 7,438 filas de cronometro
+    // en el cache. RE_TIMER cubre el formato conocido; esto cubre cualquier otro.
+    var SLOT_DEPTH = 4;             // ancestros que forman la identidad de la ranura
+    var SLOT_WINDOW_MS = 8000;      // ventana de observacion
+    var SLOT_MAX_CHANGES = 3;       // textos distintos tolerados dentro de la ventana
+    var slotChurn = new Map();      // slotKey -> { t, n, last }
+    var slotBlocked = new Set();    // ranuras apagadas
+
+    // Clases de ESTADO: cambian solas y ensuciarian la identidad de la ranura.
+    var RE_VOLATILE_CLASS = /^(is-|has-|js-|ng-|v-|active|open|show|hide|collapse|selected|disabled|focus|hover)/i;
+
+    function slotKey(node) {
+        var parts = [];
+        var el = node.parentElement;
+        for (var d = 0; el && d < SLOT_DEPTH; d++, el = el.parentElement) {
+            var cls = [];
+            if (el.classList) {
+                for (var i = 0; i < el.classList.length; i++) {
+                    if (!RE_VOLATILE_CLASS.test(el.classList[i])) cls.push(el.classList[i]);
+                }
+            }
+            parts.push(el.tagName + (cls.length ? "." + cls.sort().join(".") : ""));
+        }
+        return parts.join(">");
+    }
+
+    // REGRESION 1.4.6 (corregida en 1.4.7): contar textos distintos POR RANURA apagaba
+    // los menus. Las pestanas del perfil (<ul class="nav nav-tabs"><li><a>Profile|Groups|
+    // Documents...) son nodos HERMANOS: comparten slotKey, asi que la ranura parecia
+    // reescribirse 9 veces en un segundo y se apagaba a partir de la 4a. Solo se
+    // tradujeron 3 pestanas por tanda.
+    //
+    // La senal correcta de "contador" es EL MISMO NODO reescribiendose, no una ranura
+    // acumulando textos de nodos distintos. La deteccion es por nodo; la acumulacion
+    // sigue siendo por ranura como red de seguridad (si el framework recrea el nodo del
+    // contador, la ranura sigue sumando).
+    var nodeSeen = new WeakMap();   // text node -> ultimo texto que se le vio
+
+    function churning(node, norm) {
+        try {
+            var key = slotKey(node);
+            if (slotBlocked.has(key)) return true;
+
+            var prev = nodeSeen.get(node);
+            nodeSeen.set(node, norm);
+            // Nodo nuevo (una pestana mas de la lista) o sin cambios: NO es churn.
+            if (prev === undefined || prev === norm) return false;
+
+            // Este nodo cambio de texto: reescritura real -> cuenta para su ranura.
+            var now = Date.now();
+            var st = slotChurn.get(key);
+            if (!st || now - st.t > SLOT_WINDOW_MS) {
+                slotChurn.set(key, { t: now, n: 1 });               // ventana nueva
+                return false;
+            }
+            st.n++;
+            if (st.n > SLOT_MAX_CHANGES) {
+                slotBlocked.add(key);
+                slotChurn.delete(key);
+                return true;
+            }
+            return false;
+        } catch (e) { return false; }   // ante la duda: comportamiento previo
     }
 
     /* ---------- recoleccion ---------- */
@@ -221,7 +334,9 @@
                 // <option>: se maneja aparte (respetando value)
                 if (p.tagName === "OPTION") return NodeFilter.FILTER_REJECT;
                 var norm = normalize(n.nodeValue);
-                return translatable(norm) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                if (!translatable(norm)) return NodeFilter.FILTER_REJECT;
+                if (churning(n, norm)) return NodeFilter.FILTER_REJECT;  // ranura de contador en vivo
+                return NodeFilter.FILTER_ACCEPT;
             }
         });
         var n;
@@ -645,6 +760,6 @@
 
     // Exporta funciones puras para tests bajo Node (no afecta al navegador).
     if (typeof module !== "undefined" && module.exports) {
-        module.exports = { normalize: normalize, translatable: translatable };
+        module.exports = { normalize: normalize, translatable: translatable, churning: churning, slotKey: slotKey };
     }
 })();

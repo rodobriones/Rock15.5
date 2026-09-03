@@ -62,6 +62,18 @@ namespace Rock.Blocks.QREVENT
         /// </summary>
         private const int MaxHoldMinutes = 3;
 
+        /// <summary>
+        /// Minutos despues de la hora de inicio del servicio en que el horario deja de
+        /// poder reservarse: 1 h 20 min. Es decision de negocio y esta fijo en el codigo,
+        /// no es configurable.
+        ///
+        /// Debe seguir igual a CheckInClosesMinutesAfterStart de ReservationScanner
+        /// ( 80 ), que cierra la ventana de la puerta en el mismo instante: asi nunca se
+        /// emite una reserva cuyo QR el escaner vaya a rechazar. Si se mueve uno, mover
+        /// el otro.
+        /// </summary>
+        private const int ReservationClosesMinutesAfterStart = 80;
+
         #endregion
 
         #region Initialization
@@ -207,6 +219,7 @@ namespace Rock.Blocks.QREVENT
         /// - 1: Éxito, hold creado/actualizado.
         /// - 0: No hay suficiente capacidad.
         /// - -1: Slot no encontrado.
+        /// - -4: El horario ya cerró (pasó más de 1 h 20 min de su hora de inicio).
         /// - -99: Error inesperado.
         /// </returns>
         [BlockAction( "HoldUpsert" )]
@@ -249,6 +262,18 @@ namespace Rock.Blocks.QREVENT
 
             using ( var rockContext = new RockContext() )
             {
+                // El horario pudo cerrar mientras la pantalla estaba abierta.
+                if ( IsScheduleClosedForOccurrence( rockContext, bag.scheduleId, occ ) )
+                {
+                    return ActionOk( new HoldUpsertResponseBag
+                    {
+                        resultCode = -4,
+                        holdToken = "",
+                        availableAfter = 0,
+                        holdSeconds = holdMinutes * 60
+                    } );
+                }
+
                 var pCampus = new SqlParameter( "@CampusId", bag.campusId );
                 var pOcc = new SqlParameter( "@OccurrenceDate", occ );
                 var pSchedule = new SqlParameter( "@ScheduleId", bag.scheduleId );
@@ -302,6 +327,7 @@ EXEC dbo.sp_SundayServiceHoldUpsert
         /// - 0: Hold expirado o inválido.
         /// - -1: Hold no encontrado.
         /// - -2 / -3: Ya existe una reserva activa o no se pudo reemplazar la existente.
+        /// - -4: El horario ya cerró (pasó más de 1 h 20 min de su hora de inicio).
         /// - -99: Error inesperado.
         /// </returns>
         [BlockAction( "ConfirmReservation" )]
@@ -327,6 +353,17 @@ EXEC dbo.sp_SundayServiceHoldUpsert
 
             using ( var rockContext = new RockContext() )
             {
+                // El horario pudo cerrar entre el hold y la confirmacion.
+                if ( IsHoldSlotClosedForReservation( rockContext, holdGuid ) )
+                {
+                    return ActionOk( new ConfirmReservationResponseBag
+                    {
+                        resultCode = -4,
+                        reservationId = 0,
+                        reservationCode = ""
+                    } );
+                }
+
                 var pPerson = new SqlParameter( "@PersonId", currentPerson.Id );
                 var pHold = new SqlParameter( "@HoldToken", holdGuid );
                 var pForce = new SqlParameter( "@ForceReplaceExisting", bag.forceReplaceExisting ? 1 : 0 );
@@ -495,7 +532,7 @@ ORDER BY
 
             return rockContext.Database.SqlQuery<SlotRow>( sql, pCampus, pStart, pEnd )
                 .ToList()
-                .Where( r => !HasScheduleEnded( r.OccurrenceDate, r.ICalendarContent, now ) )
+                .Where( r => !IsSlotClosedForReservation( r.OccurrenceDate, r.ICalendarContent, now ) )
                 .ToList();
         }
 
@@ -537,7 +574,7 @@ ORDER BY
             var now = RockDateTime.Now;
             var row = rockContext.Database.SqlQuery<ActiveReservationRow>( sql, p )
                 .ToList()
-                .FirstOrDefault( r => !HasScheduleEnded( r.OccurrenceDate, r.ICalendarContent, now ) );
+                .FirstOrDefault( r => !IsSlotClosedForReservation( r.OccurrenceDate, r.ICalendarContent, now ) );
 
             if ( row == null )
             {
@@ -571,22 +608,83 @@ ORDER BY
         #region Helper Methods
 
         /// <summary>
-        /// Determina si un slot ya terminó según el DTEND definido en el schedule.
+        /// Determina si un slot ya cerró para reservar.
+        /// El corte es la hora de inicio del servicio ( DTSTART del schedule ) mas
+        /// <see cref="ReservationClosesMinutesAfterStart"/> minutos.
+        ///
+        /// Deliberadamente ya no se usa el DTEND del iCal: el DTEND lo define cada
+        /// Schedule por separado ( el de las 11:00 dura 2 h y los demas 1.5 h ), asi que
+        /// el cierre salia desparejo y el horario de las 11:00 seguia apareciendo
+        /// reservable hasta las 13:00. Con un offset fijo sobre el inicio, todos los
+        /// horarios cierran con la misma regla.
         /// </summary>
-        private static bool HasScheduleEnded( DateTime occurrenceDate, string iCalendarContent, DateTime now )
+        private static bool IsSlotClosedForReservation( DateTime occurrenceDate, string iCalendarContent, DateTime now )
         {
-            var endTime = ExtractEndTimeFromICal( iCalendarContent );
-            if ( !endTime.HasValue )
+            var startTime = ExtractStartTimeFromICal( iCalendarContent );
+            if ( !startTime.HasValue )
+            {
+                // Sin hora legible no hay con que comparar: se deja abierto para no ocultar
+                // slots cuyo schedule no tenga iCalendarContent.
+                return false;
+            }
+
+            var closesAt = occurrenceDate.Date
+                .Add( startTime.Value )
+                .AddMinutes( ReservationClosesMinutesAfterStart );
+
+            return closesAt <= now;
+        }
+
+        private static TimeSpan? ExtractStartTimeFromICal( string iCal )
+        {
+            return ExtractICalProperty( iCal, "DTSTART:" );
+        }
+
+        /// <summary>
+        /// Revalida el corte horario contra la BD al momento de apartar el lugar.
+        /// El listado se filtra al cargarlo, pero la pantalla puede quedar abierta y
+        /// llegar aqui con un horario que ya cerró.
+        /// </summary>
+        private static bool IsScheduleClosedForOccurrence( RockContext rockContext, int scheduleId, DateTime occurrenceDate )
+        {
+            if ( scheduleId <= 0 )
             {
                 return false;
             }
 
-            return occurrenceDate.Date.Add( endTime.Value ) <= now;
+            var pSchedule = new SqlParameter( "@ScheduleId", scheduleId );
+
+            var iCal = rockContext.Database
+                .SqlQuery<string>( "SELECT sch.iCalendarContent FROM dbo.[Schedule] sch WHERE sch.Id = @ScheduleId", pSchedule )
+                .FirstOrDefault();
+
+            return IsSlotClosedForReservation( occurrenceDate, iCal, RockDateTime.Now );
         }
 
-        private static TimeSpan? ExtractEndTimeFromICal( string iCal )
+        /// <summary>
+        /// Revalida el corte horario del slot al que apunta un hold, al confirmar.
+        /// Devuelve false si el hold no existe: de ese caso ya responde el stored procedure.
+        /// </summary>
+        private static bool IsHoldSlotClosedForReservation( RockContext rockContext, Guid holdToken )
         {
-            return ExtractICalProperty( iCal, "DTEND:" );
+            var sql = @"
+SELECT
+    sl.OccurrenceDate,
+    sch.iCalendarContent AS ICalendarContent
+FROM dbo.SundayServiceHold h
+INNER JOIN dbo.SundayServiceSlot sl ON sl.Id = h.SlotId
+LEFT JOIN dbo.[Schedule] sch ON sch.Id = sl.ScheduleId
+WHERE h.HoldToken = @HoldToken";
+
+            var pHold = new SqlParameter( "@HoldToken", holdToken );
+
+            var row = rockContext.Database.SqlQuery<SlotTimeRow>( sql, pHold ).FirstOrDefault();
+            if ( row == null )
+            {
+                return false;
+            }
+
+            return IsSlotClosedForReservation( row.OccurrenceDate, row.ICalendarContent, RockDateTime.Now );
         }
 
         private static TimeSpan? ExtractICalProperty( string iCal, string property )
@@ -1168,6 +1266,15 @@ ORDER BY
             public int Capacity { get; set; }
             public int ReservedCount { get; set; }
             public int HoldCount { get; set; }
+        }
+
+        /// <summary>
+        /// DTO interno para resolver la hora de un slot ( via hold ) al revalidar el corte.
+        /// </summary>
+        private class SlotTimeRow
+        {
+            public DateTime OccurrenceDate { get; set; }
+            public string ICalendarContent { get; set; }
         }
 
         /// <summary>

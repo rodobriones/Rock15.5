@@ -152,7 +152,7 @@ thead th.n{color:#FFB4A8}
       <div class="eyebrow">Iglesia Vida Real &middot; Technology &middot; Rock RMS</div>
       <h1>VidaReal Translator</h1>
       <p class="lede">Automatic AI translation of the Rock RMS interface with permanent caching &mdash; built in-house, without modifying Rock&rsquo;s core.</p>
-      <p class="meta">Executive brief &middot; August 2026 &middot; Plugin version 1.2.0</p>
+      <p class="meta">Executive brief &middot; September 2026 &middot; Plugin version 1.4.6</p>
     </div>
 
     <h2><span class="n">1</span>Executive summary</h2>
@@ -165,7 +165,7 @@ thead th.n{color:#FFB4A8}
     <div class="kpis">
       <div class="kpi"><div class="big">Once</div><div class="sm">each string&rsquo;s translation is paid for a single time; after that it is permanently cached</div></div>
       <div class="kpi"><div class="big">Zero changes</div><div class="sm">to Rock&rsquo;s code: a standalone plugin, updatable and reversible</div></div>
-      <div class="kpi"><div class="big">Interface only</div><div class="sm">sending member data to the AI is blocked by design</div></div>
+      <div class="kpi"><div class="big">Interface only</div><div class="sm">layered filters keep member data out of the AI; the exclusion rules are audited on every Rock upgrade</div></div>
       <div class="kpi"><div class="big">One click</div><div class="sm">to switch it on, or remove it from every Rock site at once</div></div>
     </div>
 
@@ -193,7 +193,7 @@ thead th.n{color:#FFB4A8}
           <div class="bt">User&rsquo;s browser</div>
           <div class="bs">translator.js (lightweight JavaScript)</div>
           <div class="chip">Detects interface strings</div>
-          <div class="chip">Filters out data (never sends names, amounts, emails)</div>
+          <div class="chip">Filters out data (names, amounts, emails, data tables)</div>
           <div class="chip">Local device cache (localStorage)</div>
           <div class="chip">Applies the translations</div>
         </div>
@@ -377,7 +377,7 @@ thead th.n{color:#FFB4A8}
         <tr><td>Per-request and hourly limits</td><td>A maximum number of strings per request and a global cap on new translations per hour: an uncontrolled spending spike is impossible.</td></tr>
         <tr><td>Deduplication and anti-repetition</td><td>Strings repeated on the page and simultaneous requests are consolidated: the same thing is never paid for twice.</td></tr>
         <tr><td>No credentials &rarr; no spend</td><td>If Azure is not configured, the plugin simply does not translate. It never generates accidental spend.</td></tr>
-        <tr><td>Authenticated access</td><td>Only users with a Rock session can invoke the service: no outsider can consume the budget.</td></tr>
+        <tr><td>Global hourly cap</td><td>The public sites must translate for visitors without a login, so the service is reachable without a Rock session. The defence against abuse is therefore the hourly cap on <em>new</em> translations, not authentication.</td></tr>
       </tbody>
     </table>
 
@@ -397,7 +397,8 @@ thead th.n{color:#FFB4A8}
     <ul>
       <li>The values that travel to the server are excluded by design: a translation <strong>cannot corrupt</strong> what gets stored in the database.</li>
       <li>The AI response is sanitized (any code or markup is stripped) before being stored or displayed.</li>
-      <li>Aligned with the Responsible AI Use Policy: only software vocabulary ever reaches the AI, never member information.</li>
+      <li>Aligned with the Responsible AI Use Policy: only software vocabulary is meant to reach the AI. The filter recognises data by how Rock <em>renders</em> it, so a Rock upgrade that changes the markup can open a gap &mdash; as happened in September 2026, when a redesigned data grid stopped matching the rule.</li>
+      <li><strong>Keeping the rule true:</strong> exclusions are re-verified on every Rock upgrade; the cache is audited periodically (a proper name in it means a rule has a gap); and self-changing text (counters, clocks) is blocked generically.</li>
     </ul>
 
   </div>
@@ -438,7 +439,7 @@ thead th.n{color:#FFB4A8}
     <p>The same architecture works for any target language: each one keeps its own permanent cache, and adding one does not change a single line of Rock.</p>
 
   </div>
-  <div class="foot"><span>Iglesia Vida Real &middot; Technology &middot; Prepared with AI assistance and reviewed by IT &middot; August 2026</span><span>Page 6 of 6</span></div>
+  <div class="foot"><span>Iglesia Vida Real &middot; Technology &middot; AI-assisted, IT-reviewed &middot; September 2026</span><span>Page 6 of 6</span></div>
 </section>
 
 

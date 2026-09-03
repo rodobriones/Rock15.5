@@ -46,6 +46,7 @@ namespace com.vidareal.Translator.Blocks
     [MemoField( "Available Languages", "Idiomas del switcher, uno por linea, formato: codigo|Etiqueta.", false, "", "", 12, AttributeKey.AvailableLanguages )]
     [TextField( "Switcher Container Selector", "Selector CSS donde montar el switcher en flujo. Vacio = flotante.", false, "", "", 13, AttributeKey.SwitcherContainer )]
     [TextField( "Cache Epoch", "INTERNO: marca de invalidacion del cache local de los navegadores.", false, "", "", 14, AttributeKey.CacheEpoch )]
+    [MemoField( "Excluded Sites", "Sitios donde NUNCA inyectar el traductor (nombre o Id, uno por linea). Util para sitios que son 100% datos.", false, "", "", 15, AttributeKey.ExcludedSites )]
 
     [Rock.SystemGuid.BlockTypeGuid( "A7B8C9D0-1E2F-4A3B-8C4D-6E7F8A9B0C1D" )]
     public class TranslatorDashboard : RockBlockType
@@ -67,6 +68,7 @@ namespace com.vidareal.Translator.Blocks
             public const string AvailableLanguages = "AvailableLanguages";
             public const string SwitcherContainer = "SwitcherContainer";
             public const string CacheEpoch = "CacheEpoch";
+            public const string ExcludedSites = "ExcludedSites";
         }
 
         // Servido desde la carpeta del PLUGIN (distribuible: DLL + archivos de
@@ -94,6 +96,7 @@ namespace com.vidareal.Translator.Blocks
             public bool showSwitcher { get; set; }
             public string availableLanguages { get; set; }
             public string switcherContainer { get; set; }
+            public string excludedSites { get; set; }
         }
 
         public class LangStatBag
@@ -168,7 +171,8 @@ namespace com.vidareal.Translator.Blocks
                         uiSelectWhitelist = GetAttributeValue( AttributeKey.UiSelectWhitelist ),
                         showSwitcher = GetAttributeValue( AttributeKey.ShowSwitcher ).AsBoolean(),
                         availableLanguages = GetAttributeValue( AttributeKey.AvailableLanguages ),
-                        switcherContainer = GetAttributeValue( AttributeKey.SwitcherContainer )
+                        switcherContainer = GetAttributeValue( AttributeKey.SwitcherContainer ),
+                        excludedSites = GetAttributeValue( AttributeKey.ExcludedSites )
                     }
                 };
                 FillStatus( rockContext, bag );
@@ -210,6 +214,7 @@ namespace com.vidareal.Translator.Blocks
                 block.SetAttributeValue( AttributeKey.ShowSwitcher, settings.showSwitcher.ToTrueFalse() );
                 block.SetAttributeValue( AttributeKey.AvailableLanguages, settings.availableLanguages ?? "" );
                 block.SetAttributeValue( AttributeKey.SwitcherContainer, ( settings.switcherContainer ?? "" ).Trim() );
+                block.SetAttributeValue( AttributeKey.ExcludedSites, settings.excludedSites ?? "" );
 
                 // API key: vacio = conservar la actual; con valor = re-encriptar.
                 if ( settings.newApiKey.IsNotNullOrWhiteSpace() )
@@ -218,6 +223,14 @@ namespace com.vidareal.Translator.Blocks
                 }
 
                 block.SaveAttributeValues( rockContext );
+
+                // Re-inyectar: si cambio Excluded Sites hay que quitar/poner el tag ahora
+                // mismo. Se usa el valor RECIEN guardado (GetAttributeValue leeria el
+                // BlockCache, que en esta misma request todavia tiene el valor viejo).
+                TranslatorInjection.Apply(
+                    rockContext,
+                    GetAttributeValue( AttributeKey.Enabled ).AsBoolean(),
+                    settings.excludedSites ?? "" );
             }
 
             return ActionOk();
@@ -238,7 +251,7 @@ namespace com.vidareal.Translator.Blocks
                 block.SetAttributeValue( AttributeKey.Enabled, enabled.ToTrueFalse() );
                 block.SaveAttributeValues( rockContext );
 
-                TranslatorInjection.Apply( rockContext, enabled );
+                TranslatorInjection.Apply( rockContext, enabled, GetAttributeValue( AttributeKey.ExcludedSites ) );
                 return ActionOk( BuildStatus( rockContext ) );
             }
         }
@@ -273,7 +286,7 @@ namespace com.vidareal.Translator.Blocks
 
             using ( var rockContext = new RockContext() )
             {
-                TranslatorInjection.Apply( rockContext, GetAttributeValue( AttributeKey.Enabled ).AsBoolean() );
+                TranslatorInjection.Apply( rockContext, GetAttributeValue( AttributeKey.Enabled ).AsBoolean(), GetAttributeValue( AttributeKey.ExcludedSites ) );
                 return ActionOk( BuildStatus( rockContext ) );
             }
         }

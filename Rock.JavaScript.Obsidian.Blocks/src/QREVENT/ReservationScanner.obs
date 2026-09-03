@@ -15,6 +15,27 @@
                     </div>
                 </div>
 
+                <!-- Perdida de contacto con el servidor. Va arriba de las dos vistas
+                     porque el operador tiene que verlo mientras escanea, no solo en
+                     la pantalla de espera. -->
+                <div v-if="sessionExpired || serverUnreachable" class="rsNetWarn">
+                    <NotificationBox :alertType="sessionExpired ? 'warning' : 'danger'">
+                        <template v-if="sessionExpired">
+                            La sesi&oacute;n del operador venci&oacute;. Los escaneos se van a rechazar hasta que vuelvas a entrar.
+                        </template>
+                        <template v-else>
+                            Sin conexi&oacute;n con el servidor. No escanees: el horario en pantalla puede estar desactualizado.
+                        </template>
+                    </NotificationBox>
+
+                    <button v-if="sessionExpired" class="rsBtn rsBtnDefault" @click="reloadForLogin">
+                        Volver a iniciar sesi&oacute;n
+                    </button>
+                    <button v-else class="rsBtn rsBtnDefault" :disabled="polling" @click="refreshSlot(true)">
+                        {{ polling ? "Reintentando..." : "Reintentar ahora" }}
+                    </button>
+                </div>
+
                 <!-- Sin horario activo -->
                 <div v-if="!activeSlot" class="rsNoSlot">
                     <div class="rsNoSlotInner">
@@ -28,7 +49,7 @@
                                 <div class="rsProgressBar" :style="{ width: progressPercent + '%' }"></div>
                             </div>
                         </div>
-                        <button class="rsBtn rsBtnDefault" @click="refreshSlot" :disabled="polling">
+                        <button class="rsBtn rsBtnDefault" @click="refreshSlot(true)" :disabled="polling">
                             {{ polling ? "Verificando..." : "Verificar de nuevo" }}
                         </button>
                     </div>
@@ -161,6 +182,17 @@ const scanning = ref(false);
 const cameraStarting = ref(false);
 let slotPollInterval: number | null = null;
 const slotPollIntervalMs = 30000; // check every 30 seconds
+
+// Ciclo corto para el momento de la apertura: 30 s de espera se notan cuando ya hay
+// gente en la puerta y la pantalla dice "Abriendo...".
+const openingPollMs = 5000;
+const openingPollMaxMs = 180000;
+let openingPoll: number | null = null;
+let openingSince = 0;
+
+// Refresh encolado (ver refreshSlot).
+let refreshQueued = false;
+let queuedUserInitiated = false;
 const busy = ref(false);
 const err = ref("");
 const videoRef = ref<HTMLVideoElement | null>(null);
@@ -252,6 +284,9 @@ const activeSlotLabel = computed(() => {
 });
 
 const statusClass = computed(() => {
+    // El estado de red manda sobre el de la camara: una camara "Escaneando" con el
+    // servidor caido es la peor lectura posible para el operador.
+    if (sessionExpired.value || serverUnreachable.value) return "rsStatus--bad";
     if (!activeSlot.value) return "rsStatus--neu";
     if (scanning.value) return "rsStatus--ok";
     if (cameraBlocked.value) return "rsStatus--bad";
@@ -259,6 +294,8 @@ const statusClass = computed(() => {
 });
 
 const statusText = computed(() => {
+    if (sessionExpired.value) return "Sesión vencida";
+    if (serverUnreachable.value) return "Sin conexión";
     if (!activeSlot.value) return "En espera";
     if (scanning.value) return "Escaneando";
     if (cameraBlocked.value) return "Sin permiso";
@@ -276,10 +313,150 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
+/*
+ * Blindaje de red.
+ *
+ * El escaner vive en la puerta con fila y la pagina queda abierta horas, asi que
+ * los fallos de red no se pueden tragar en silencio ni pueden dejar el bloque
+ * trabado. Dos problemas que este bloque tenia:
+ *
+ * 1) `GetActiveSlot` se llamaba sin timeout, y axios tampoco pone uno (ver
+ *    doApiCallRaw en Rock.JavaScript.Obsidian/Framework/Utility/http.ts). Con un
+ *    socket colgado -tipico en wifi que se cae sin cerrar la conexion- el `await`
+ *    no volvia nunca y `polling` quedaba en true para siempre. Eso mataba las dos
+ *    vias de recuperacion a la vez: el intervalo, que solo corre `if (!polling)`,
+ *    y el boton "Verificar de nuevo", que esta `:disabled="polling"`. El escaner
+ *    quedaba congelado en el ultimo estado conocido -camara encendida, horario
+ *    viejo- sin ninguna salida salvo recargar la pagina.
+ *
+ * 2) El fallo se ignoraba (`if (res.isSuccess && res.data)` sin else, mas un
+ *    `catch { }` vacio), asi que `activeSlot` conservaba el valor anterior y la
+ *    pantalla seguia aparentando normalidad mientras cada escaneo se rechazaba.
+ */
+
+const getActiveSlotTimeoutMs = 10000;
+// 7 s x 2 intentos + 400 ms de pausa = 14.4 s en el peor caso, por debajo de los
+// 15 s de un solo intento que habia antes: el operador nunca espera mas que antes.
+const processScanTimeoutMs = 7000;
+const slotFailuresBeforeWarning = 2;
+
+/** El servidor no contesta: el horario en pantalla puede estar desactualizado. */
+const serverUnreachable = ref(false);
+
+/** 401/403: vencio la cookie del operador y todo escaneo se va a rechazar. */
+const sessionExpired = ref(false);
+
+let slotFailureStreak = 0;
+let lastSlotOkAt = Date.now();
+let slotWatchdog: number | null = null;
+
+/** Resuelve a null si la promesa no contesta en `ms`. No rechaza: el llamador
+ *  distingue "no contesto" de "contesto con error" sin envolverse en try/catch. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+    return Promise.race([
+        promise,
+        new Promise<null>(resolve => window.setTimeout(() => resolve(null), ms))
+    ]);
+}
+
+function isAuthStatus(status: number): boolean {
+    return status === 401 || status === 403;
+}
+
+function isRetryableStatus(status: number): boolean {
+    // 0 = no llego respuesta. 5xx = IIS o Rock caido / reciclando.
+    return status === 0 || (status >= 500 && status <= 599);
+}
+
+function noteSlotSuccess(): void {
+    slotFailureStreak = 0;
+    lastSlotOkAt = Date.now();
+    serverUnreachable.value = false;
+    sessionExpired.value = false;
+}
+
+function noteSlotFailure(status: number): void {
+    if (isAuthStatus(status)) {
+        sessionExpired.value = true;
+        serverUnreachable.value = false;
+        return;
+    }
+
+    slotFailureStreak++;
+
+    // Un fallo aislado no se anuncia: el polling corre cada 30 s y avisar por uno
+    // solo llenaria la pantalla de alarmas falsas en una red intermitente.
+    if (slotFailureStreak >= slotFailuresBeforeWarning) {
+        serverUnreachable.value = true;
+    }
+}
+
+/* Las block actions son llamadas AJAX: su 401 lo consume el JS y nadie navega al
+ * login. Recargar deja que Rock haga la redireccion. */
+function reloadForLogin(): void {
+    window.location.reload();
+}
+
+/*
+ * Reloj del servidor.
+ *
+ * El contador de "Abre en ..." comparaba `nextCheckInStartIso` -calculado por el
+ * servidor- con `Date.now()` del dispositivo. Con el reloj del aparato adelantado, el
+ * contador llegaba a cero antes de que el servidor considerara abierta la ventana:
+ * `GetActiveSlot` seguia devolviendo `activeSlot: null` y la pantalla se quedaba en
+ * "Abriendo...". Y cada escaner abria en un instante distinto segun su propio reloj.
+ *
+ * Ahora el servidor manda su hora en cada respuesta y el cliente calcula el desfase.
+ * Los dos ISO vienen sin zona horaria, asi que el navegador los interpreta con la
+ * propia: el offset absorbe tanto la deriva del reloj como una diferencia de zona.
+ *
+ * El offset incluye la latencia de la respuesta (queda corrido ~medio viaje de red),
+ * despreciable para una ventana que se mide en minutos.
+ */
+let serverClockOffsetMs = 0;
+
+function serverNow(): number {
+    return Date.now() + serverClockOffsetMs;
+}
+
+function syncServerClock(iso: string | null | undefined): void {
+    if (!iso) return;
+
+    const parsed = Date.parse(iso);
+    if (!Number.isFinite(parsed)) return;
+
+    serverClockOffsetMs = parsed - Date.now();
+}
+
+/* Los resultados de un escaneo caducan: el banner quedaba con el ultimo resultado
+ * pegado hasta el escaneo siguiente ("Este QR ya fue procesado." en pantalla un rato
+ * largo despues de que el modal ya se habia cerrado). Los estados de la camara
+ * -"Escaneando...", "Listo para escanear"- no caducan: llegan con status vacio. */
+const bannerResetMs = 5000;
+let bannerTimer: number | null = null;
+
+function clearBannerTimer(): void {
+    if (bannerTimer) {
+        window.clearTimeout(bannerTimer);
+        bannerTimer = null;
+    }
+}
+
 function setBanner(status: string, title: string, name: string) {
+    clearBannerTimer();
+
     bannerStatus.value = status || "";
     bannerTitle.value = title || "Resultado";
     bannerName.value = name || "";
+
+    if (!status) return;
+
+    bannerTimer = window.setTimeout(() => {
+        bannerTimer = null;
+        bannerStatus.value = "";
+        bannerTitle.value = scanning.value ? "Escaneando..." : "Listo para escanear";
+        bannerName.value = "";
+    }, bannerResetMs);
 }
 
 function showModal(title: string, message: string, name: string, quantity: number, schedule: string) {
@@ -312,18 +489,21 @@ function startCountdown() {
     countdownTargetIso = nextCheckInStartIso.value;
 
     const targetMs = new Date(nextCheckInStartIso.value).getTime();
-    const nowMs = Date.now();
-    const diffMs = targetMs - nowMs;
+    const diffMs = targetMs - serverNow();
     if (diffMs <= 0) {
         progressPercent.value = 100;
         countdownText.value = "Abriendo...";
+
+        // Ya deberia estar abierto y no lo esta: en vez de esperar los 30 s del ciclo
+        // normal, se pregunta cada pocos segundos hasta que el servidor lo confirme.
+        startOpeningPoll();
         return;
     }
 
     countdownTotalSeconds = Math.ceil(diffMs / 1000);
 
     function tick() {
-        const remaining = Math.max(0, targetMs - Date.now());
+        const remaining = Math.max(0, targetMs - serverNow());
         const remainingSec = Math.ceil(remaining / 1000);
 
         if (remainingSec <= 0) {
@@ -333,6 +513,10 @@ function startCountdown() {
             progressPercent.value = 100;
             countdownText.value = "Abriendo...";
             void refreshSlot();
+
+            // Y se insiste en corto: un solo refresh aqui se perdia si el servidor
+            // todavia no daba el slot por abierto.
+            startOpeningPoll();
             return;
         }
 
@@ -367,23 +551,62 @@ function stopCountdown() {
     progressPercent.value = 0;
 }
 
-async function refreshSlot() {
+/**
+ * @param userInitiated true cuando el refresh nace de un clic del operador. Se
+ *   propaga hasta `startScan` porque el dialogo de permisos de camara solo se puede
+ *   abrir con user activation: sin esto, tocar "Verificar de nuevo" traia el horario
+ *   pero la camara no arrancaba ni preguntaba nada, y habia que recargar la pagina.
+ */
+async function refreshSlot(userInitiated = false) {
+    // Ya hay uno en vuelo: se encola en vez de descartarse. Descartarlo hacia perder
+    // el refresh que dispara el contador al llegar a cero si coincidia con el ciclo.
+    if (polling.value) {
+        refreshQueued = true;
+        queuedUserInitiated = queuedUserInitiated || userInitiated;
+        return;
+    }
+
     polling.value = true;
     try {
-        const res = await invokeBlockAction<any>("GetActiveSlot", {});
-        if (res.isSuccess && res.data) {
+        const res = await withTimeout(
+            invokeBlockAction<any>("GetActiveSlot", {}),
+            getActiveSlotTimeoutMs
+        );
+
+        if (res === null) {
+            // No contesto en 10 s. Se deja el estado anterior, pero avisando.
+            noteSlotFailure(0);
+        }
+        else if (res.isSuccess && res.data) {
+            noteSlotSuccess();
+            syncServerClock(res.data.serverNowIso);
             activeSlot.value = res.data.activeSlot || null;
             nextScheduleInfo.value = res.data.nextScheduleInfo || "";
             nextCheckInStartIso.value = res.data.nextCheckInStartIso || null;
         }
-    } catch { /* ignore */ }
-    polling.value = false;
+        else {
+            noteSlotFailure(Number(res.statusCode ?? 0));
+        }
+    }
+    catch {
+        noteSlotFailure(0);
+    }
+    finally {
+        // En finally a proposito: antes estaba despues del try/catch y bastaba una
+        // promesa que no resolviera para dejar el flag colgado.
+        polling.value = false;
+    }
+
+    // Ya abrio: no hace falta seguir insistiendo en corto.
+    if (activeSlot.value) {
+        stopOpeningPoll();
+    }
 
     // Auto-start camera if slot just became active
     if (activeSlot.value && !scanning.value && !cameraStarting.value) {
         stopCountdown();
         await nextTick();
-        startScan();
+        startScan(userInitiated);
     }
 
     // If slot ended, stop camera
@@ -398,6 +621,13 @@ async function refreshSlot() {
         && (!countdownInterval || countdownTargetIso !== nextCheckInStartIso.value)) {
         startCountdown();
     }
+
+    if (refreshQueued) {
+        refreshQueued = false;
+        const wasUserInitiated = queuedUserInitiated;
+        queuedUserInitiated = false;
+        await refreshSlot(wasUserInitiated);
+    }
 }
 
 function startSlotPolling() {
@@ -407,6 +637,69 @@ function startSlotPolling() {
             refreshSlot();
         }
     }, slotPollIntervalMs);
+
+    startSlotWatchdog();
+}
+
+/*
+ * Cinturon y tirantes: si pasan 3 ciclos sin un refresh exitoso, se fuerza la
+ * salida y se reintenta. Cubre cualquier via -presente o futura- que deje
+ * `polling` colgado o que mate el intervalo, sin depender de que el operador se
+ * de cuenta y recargue.
+ */
+function startSlotWatchdog(): void {
+    stopSlotWatchdog();
+    slotWatchdog = window.setInterval(() => {
+        if (Date.now() - lastSlotOkAt > slotPollIntervalMs * 3) {
+            polling.value = false;
+            void refreshSlot();
+        }
+    }, slotPollIntervalMs);
+}
+
+/** Insiste cada 5 s mientras el servidor todavia no da el horario por abierto. */
+function startOpeningPoll(): void {
+    if (openingPoll || activeSlot.value) return;
+
+    openingSince = serverNow();
+    openingPoll = window.setInterval(() => {
+        // Tope de 3 min: si no abrio, algo mas anda mal y el ciclo normal alcanza.
+        if (activeSlot.value || serverNow() - openingSince > openingPollMaxMs) {
+            stopOpeningPoll();
+            return;
+        }
+
+        void refreshSlot();
+    }, openingPollMs);
+}
+
+function stopOpeningPoll(): void {
+    if (openingPoll) {
+        window.clearInterval(openingPoll);
+        openingPoll = null;
+    }
+}
+
+function stopSlotWatchdog(): void {
+    if (slotWatchdog) {
+        window.clearInterval(slotWatchdog);
+        slotWatchdog = null;
+    }
+}
+
+/** Al recuperar la red o volver a foco, no esperar los 30 s del ciclo. */
+function onConnectivityRegained(): void {
+    if (document.visibilityState === "hidden") return;
+    void refreshSlot();
+}
+
+function onVisibilityChange(): void {
+    if (document.visibilityState === "visible") {
+        // El WebView suspende las peticiones al bloquear pantalla o cambiar de app:
+        // al volver, lo que hubiera en vuelo esta muerto.
+        polling.value = false;
+        void refreshSlot();
+    }
 }
 
 function stopSlotPolling() {
@@ -1219,20 +1512,80 @@ async function submitQr(code: string) {
 
     try {
         const bag = { reservationCode: code };
-        // Timeout propio: axios va sin timeout y un POST estancado dejaría
-        // busy=true para siempre (el escáner no volvería a enviar nada).
-        const res = await Promise.race([
-            invokeBlockAction<ScanResult>("ProcessScan", { bag }),
-            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15000))
-        ]);
 
-        if (!res.isSuccess || !res.data) {
-            setBanner("error", res.errorMessage || "Error al validar", "");
-            showModal("Error", res.errorMessage || "No se pudo procesar.", "", 0, "");
+        /*
+         * Timeout propio: axios va sin timeout y un POST estancado dejaria
+         * busy=true para siempre (el escaner no volveria a enviar nada).
+         *
+         * Ahora son 7 s y un reintento en lugar de 15 s y rendirse: el peor caso
+         * baja de 15 s a 14.4 s y ademas se recupera solo de un corte breve, en vez
+         * de obligar al operador a reescanear con la fila esperando.
+         *
+         * Reintentar es seguro porque el check-in es idempotente:
+         * sp_SundayServiceCheckIn hace UPDATE ... WHERE Status = 1, asi que un
+         * segundo intento del mismo codigo devuelve `already_used` sin volver a
+         * contar asistencia (verificado bajo 8 escaneos simultaneos del mismo QR,
+         * ver Rock.Blocks/QREVENT/CHANGES.md). Solo se reintenta cuando NO hubo
+         * respuesta, asi que esos intentos no llegan al backend y no cuentan para
+         * el throttle de escaneos invalidos.
+         */
+        let scanData: ScanResult | null = null;
+        let scanErrorMessage: string | null = null;
+        let lastStatus = 0;
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) {
+                await sleep(400);
+            }
+
+            const attemptRes = await withTimeout(
+                invokeBlockAction<ScanResult>("ProcessScan", { bag }),
+                processScanTimeoutMs
+            );
+
+            // null = no contesto en processScanTimeoutMs: se reintenta.
+            if (attemptRes === null) {
+                lastStatus = 0;
+                continue;
+            }
+
+            if (attemptRes.isSuccess && attemptRes.data) {
+                scanData = attemptRes.data;
+                break;
+            }
+
+            lastStatus = Number(attemptRes.statusCode ?? 0);
+            scanErrorMessage = attemptRes.errorMessage ?? null;
+
+            // Sesion vencida o rechazo con criterio del backend: reintentar da igual.
+            if (isAuthStatus(lastStatus) || !isRetryableStatus(lastStatus)) {
+                break;
+            }
+        }
+
+        if (scanData === null) {
+            if (isAuthStatus(lastStatus)) {
+                sessionExpired.value = true;
+                setBanner("error", "Sesión vencida", "");
+                showModal("Sesión vencida", "Volvé a iniciar sesión para seguir escaneando.", "", 0, "");
+                return;
+            }
+
+            // El codigo se muestra a proposito: convierte el reporte del operador
+            // en un dato de diagnostico. E0 = no llego respuesta, E5xx = servidor.
+            const detail = scanErrorMessage || `No se pudo procesar (E${lastStatus}).`;
+
+            if (isRetryableStatus(lastStatus)) {
+                noteSlotFailure(lastStatus);
+            }
+
+            setBanner("error", "Error al validar", "");
+            showModal("Error", detail, "", 0, "");
             return;
         }
 
-        const d = res.data;
+        noteSlotSuccess();
+        const d = scanData;
         setBanner(d.status, d.message || "Resultado", d.name);
 
         if (d.status === "checked_in") {
@@ -1266,6 +1619,10 @@ async function detectNativeBridgeWithRetry(maxAttempts: number, delayMs: number)
 }
 
 onMounted(async () => {
+    // La inicializacion del bloque ya trae la hora del servidor: se aprovecha para que
+    // el primer contador no corra con el reloj del dispositivo.
+    syncServerClock((config as { serverNowIso?: string }).serverNowIso);
+
     // El escaner se usa en el navegador, no dentro de la app de iPad. La deteccion
     // del puente nativo se conserva por compatibilidad pero recortada a ~300 ms:
     // con 5 x 200 ms toda carga en navegador pagaba un segundo entero de pantalla
@@ -1282,6 +1639,8 @@ onMounted(async () => {
     }
 
     window.addEventListener("storage", onStorageChange);
+    window.addEventListener("online", onConnectivityRegained);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     startCameraChangePolling();
     startSlotPolling();
 
@@ -1299,12 +1658,17 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     window.removeEventListener("storage", onStorageChange);
+    window.removeEventListener("online", onConnectivityRegained);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     if (cameraPermissionStatus) {
         cameraPermissionStatus.onchange = null;
         cameraPermissionStatus = null;
     }
     stopCameraChangePolling();
     stopSlotPolling();
+    stopSlotWatchdog();
+    stopOpeningPoll();
+    clearBannerTimer();
     stopCountdown();
     uninstallNativeScanHandler();
     stopScan();
@@ -1543,6 +1907,14 @@ html:has(.rsPage), body:has(.rsPage) {
     background: var(--neu-fill);
     flex-shrink: 0;
 }
+.rsNetWarn {
+    padding: 12px 16px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
 .rsStatus--neu .rsStatusDot { background: var(--neu-fill); }
 .rsStatus--ok .rsStatusDot { background: var(--ok-fill); }
 .rsStatus--warn .rsStatusDot { background: var(--warn-fill); }

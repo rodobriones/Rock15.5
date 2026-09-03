@@ -166,10 +166,21 @@
 
                                         <div class="ssScreenTitle" style="margin-top: 16px;">Selecciona horario</div>
 
-                                        <div v-if="weekBusy" class="text-muted ssSmall">Cargando horarios...</div>
+                                        <div v-if="weekBusy" class="text-muted ssSmall">
+                                            {{ isRetrying ? "Reintentando..." : "Cargando horarios..." }}
+                                        </div>
 
                                         <div v-if="weekError" class="ssAlert">
                                             <NotificationBox alertType="danger">{{ weekError }}</NotificationBox>
+
+                                            <div class="ssRetryRow">
+                                                <RockButton v-if="authExpired" btnType="primary" btnSize="sm" @click="reloadForLogin">
+                                                    Iniciar sesi&oacute;n
+                                                </RockButton>
+                                                <RockButton v-else btnType="primary" btnSize="sm" :disabled="weekBusy" @click="retryWeekSlots">
+                                                    {{ weekBusy ? "Reintentando..." : "Reintentar" }}
+                                                </RockButton>
+                                            </div>
                                         </div>
 
                                         <div v-if="!weekBusy && !weekError && availableDays.length === 0" class="text-muted ssSmall">
@@ -244,6 +255,15 @@
 
                                         <div v-if="holdError" class="ssAlert">
                                             <NotificationBox alertType="danger">{{ holdError }}</NotificationBox>
+
+                                            <div class="ssRetryRow">
+                                                <RockButton v-if="authExpired" btnType="primary" btnSize="sm" @click="reloadForLogin">
+                                                    Iniciar sesi&oacute;n
+                                                </RockButton>
+                                                <RockButton v-else-if="holdRetryable" btnType="primary" btnSize="sm" :disabled="holdBusy" @click="retryHold">
+                                                    {{ holdBusy ? "Reintentando..." : "Reintentar" }}
+                                                </RockButton>
+                                            </div>
                                         </div>
 
                                         <div class="ssConfirmRow">
@@ -432,6 +452,14 @@ const campusId = ref<number | null>(null);
 const days = ref<DaySlotsBag[]>([]);
 const weekBusy = ref<boolean>(false);
 const weekError = ref<string>("");
+
+// Sesion vencida: la tarjeta de error cambia "Reintentar" por "Iniciar sesion".
+const authExpired = ref<boolean>(false);
+
+// Solo se ofrece reintentar el hold cuando el fallo fue de transporte. Si el
+// backend respondio "ya no hay cupo" o "el horario cerro", reintentar no cambia
+// nada y el boton solo confunde.
+const holdRetryable = ref<boolean>(false);
 
 const selectedSlotId = ref<number | null>(null);
 const selectedScheduleId = ref<number | null>(null);
@@ -847,6 +875,146 @@ function sortDaysAndSlots(input: DaySlotsBag[]): DaySlotsBag[] {
     return daysCopy;
 }
 
+/*
+ * Manejo de fallos de transporte.
+ *
+ * invokeBlockAction devuelve statusCode (ver doApiCall en
+ * Rock.JavaScript.Obsidian/Framework/Utility/http.ts) y este bloque lo ignoraba:
+ * era el unico dato que separa "no llego la respuesta" de "sesion vencida" de
+ * "el bloque fallo". Sin el, las tres causas mostraban el mismo texto y no habia
+ * forma de saber cual fue sin reproducir el problema.
+ *
+ * doApiCall solo rellena errorMessage cuando la respuesta trae un cuerpo JSON con
+ * Message (lo que produce ActionBadRequest). Un 401 del endpoint, un 502 de IIS o
+ * una conexion cortada llegan con errorMessage null, y de ahi salia el mensaje
+ * generico. El codigo (E0, E502...) se muestra al usuario a proposito: convierte
+ * un reporte de WhatsApp en un dato de diagnostico sin tener que instrumentar nada.
+ */
+
+// 3 intentos (uno + 2 reintentos). Con el timeout de abajo el peor caso es
+// 3 x 10 s + 3.3 s de pausas = ~33 s antes de rendirse y mostrar el error.
+const retryDelaysMs = [800, 2500];
+
+/*
+ * Timeout propio, imprescindible: axios va sin timeout (ver doApiCallRaw en
+ * Rock.JavaScript.Obsidian/Framework/Utility/http.ts). Un socket colgado -wifi que
+ * se cae sin cerrar la conexion, WebView suspendido- dejaria el `await` sin volver
+ * nunca y con el los flags de carga en true para siempre: el spinner infinito, el
+ * boton "Reintentar" (:disabled="weekBusy") y el de "Confirmar reserva"
+ * (:disabled="busy || holdBusy") bloqueados sin otra salida que recargar.
+ */
+const actionTimeoutMs = 10000;
+
+/** Resuelve a null si la promesa no contesta en `ms`. No rechaza: el llamador
+ *  distingue "no contesto" de "contesto con error" sin envolverse en try/catch. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+    return Promise.race([
+        promise,
+        new Promise<null>(resolve => window.setTimeout(() => resolve(null), ms))
+    ]);
+}
+
+/** Se muestra en el spinner a partir del segundo intento, para que la espera no
+ *  parezca la pantalla colgada. */
+const isRetrying = ref<boolean>(false);
+
+type ActionOutcome<T> =
+    | { ok: true; data: T }
+    | { ok: false; status: number; message: string | null };
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+/** statusCode 0 = la respuesta nunca llego (red, WebView, timeout). 5xx = IIS o
+ * Rock caido/reciclando. Los dos casos suelen resolverse en el intento siguiente. */
+function isRetryableStatus(status: number): boolean {
+    return status === 0 || (status >= 500 && status <= 599);
+}
+
+function isAuthStatus(status: number): boolean {
+    return status === 401 || status === 403;
+}
+
+function describeFailure(status: number, fallback: string): string {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return "Parece que no tenés conexión. Revisá tu internet y volvé a intentar.";
+    }
+
+    return `${fallback} (E${status})`;
+}
+
+/**
+ * Invoca una accion reintentando los fallos de transporte. Usar SOLO con acciones
+ * idempotentes: GetWeekSlots (lectura) y HoldUpsert (upsert por persona+slot).
+ * ConfirmReservation y CancelReservation NO pasan por aca: si la primera llamada
+ * llego y solo se perdio la respuesta, un reintento confirmaria dos veces.
+ */
+async function invokeIdempotentWithRetry<T>(actionName: string, bag: unknown): Promise<ActionOutcome<T>> {
+    let lastStatus = 0;
+    let lastMessage: string | null = null;
+
+    for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+        if (attempt > 0) {
+            isRetrying.value = true;
+            await sleep(retryDelaysMs[attempt - 1]);
+        }
+
+        try {
+            const res = await withTimeout(invokeBlockAction<T>(actionName, { bag }), actionTimeoutMs);
+
+            // null = no contesto dentro del timeout: se trata como fallo de red.
+            if (res === null) {
+                lastStatus = 0;
+                lastMessage = null;
+                continue;
+            }
+
+            if (res.isSuccess) {
+                isRetrying.value = false;
+                return { ok: true, data: res.data as T };
+            }
+
+            lastStatus = Number(res.statusCode ?? 0);
+            lastMessage = res.errorMessage ?? null;
+
+            // Sesion vencida: reintentar da lo mismo, hay que ir al login.
+            // 4xx: el backend rechazo con criterio, su respuesta no va a cambiar.
+            if (isAuthStatus(lastStatus) || !isRetryableStatus(lastStatus)) {
+                break;
+            }
+        }
+        catch {
+            // Excepcion fuera de axios: se trata como fallo de transporte.
+            lastStatus = 0;
+            lastMessage = null;
+        }
+    }
+
+    isRetrying.value = false;
+    return { ok: false, status: lastStatus, message: lastMessage };
+}
+
+/*
+ * Las block actions son llamadas AJAX: su 401 lo consume el JS y nadie navega al
+ * login, asi que la pagina se queda con la tarjeta de error. Recargar deja que Rock
+ * haga la redireccion. No se recarga solo, para no descartar sin aviso lo que la
+ * persona ya eligio.
+ */
+function reloadForLogin(): void {
+    window.location.reload();
+}
+
+async function retryWeekSlots(): Promise<void> {
+    await loadWeekSlots(true);
+}
+
+async function retryHold(): Promise<void> {
+    holdError.value = "";
+    holdRetryable.value = false;
+    await doHoldUpsertLatest();
+}
+
 async function loadWeekSlots(force: boolean) {
     if (!campusId.value) return;
 
@@ -854,22 +1022,39 @@ async function loadWeekSlots(force: boolean) {
 
     weekBusy.value = true;
     weekError.value = "";
+    authExpired.value = false;
 
     try {
-        const res = await invokeBlockAction<any>("GetWeekSlots", { bag: { campusId: campusId.value } });
+        const out = await invokeIdempotentWithRetry<GetWeekSlotsResponse>(
+            "GetWeekSlots",
+            { campusId: campusId.value }
+        );
 
-        if (!res.isSuccess) {
-            weekError.value = res.errorMessage || "No se pudieron cargar los horarios.";
+        if (!out.ok) {
+            if (isAuthStatus(out.status)) {
+                authExpired.value = true;
+                weekError.value = "Tu sesión expiró. Iniciá sesión de nuevo para continuar.";
+            }
+            else {
+                weekError.value = out.message
+                    || describeFailure(out.status, "No pudimos cargar los horarios.");
+            }
+
             days.value = [];
             return;
         }
 
-        const data = res.data as GetWeekSlotsResponse;
-        days.value = sortDaysAndSlots(data?.days || []);
-    } catch {
-        weekError.value = "Error cargando horarios.";
+        days.value = sortDaysAndSlots(out.data?.days || []);
+    }
+    catch {
+        // invokeIdempotentWithRetry no propaga fallos de transporte, pero el mapeo
+        // de la respuesta si puede tirar. Sin este catch la pantalla quedaba sin
+        // horarios, sin error y sin spinner: el v-if de abajo mostraba "No hay
+        // horarios con cupo disponible", que seria mentira.
+        weekError.value = "No pudimos cargar los horarios. Volvé a intentar.";
         days.value = [];
-    } finally {
+    }
+    finally {
         weekBusy.value = false;
     }
 }
@@ -954,34 +1139,47 @@ async function doHoldUpsertLatest() {
     holdInFlightSeq = mySeq;
 
     holdBusy.value = true;
+    authExpired.value = false;
+    holdRetryable.value = false;
 
     try {
-        const res = await invokeBlockAction<any>("HoldUpsert", {
-            bag: {
-                campusId: campusId.value,
-                occurrenceDate: selectedOccurrenceDate.value,
-                scheduleId: selectedScheduleId.value,
-                quantity: quantity.value,
-                holdMinutes: 2
-            }
+        const out = await invokeIdempotentWithRetry<HoldUpsertResponse>("HoldUpsert", {
+            campusId: campusId.value,
+            occurrenceDate: selectedOccurrenceDate.value,
+            scheduleId: selectedScheduleId.value,
+            quantity: quantity.value,
+            holdMinutes: 2
         });
 
         if (mySeq !== holdInFlightSeq) return;
 
-        if (!res.isSuccess) {
-            holdError.value = res.errorMessage || "No pudimos apartar tu lugar. Reintentá en unos segundos.";
+        if (!out.ok) {
+            if (isAuthStatus(out.status)) {
+                authExpired.value = true;
+                holdError.value = "Tu sesión expiró. Iniciá sesión de nuevo para continuar.";
+            }
+            else {
+                // Ya se reintento solo: el boton queda para que la persona
+                // insista sin tener que cambiar la cantidad para redisparar el hold.
+                holdRetryable.value = true;
+                holdError.value = out.message
+                    || describeFailure(out.status, "No pudimos apartar tu lugar.");
+            }
+
             holdToken.value = "";
             return;
         }
 
-        const data = res.data as HoldUpsertResponse;
+        const data = out.data;
 
         if (data.resultCode !== 1) {
             holdError.value = data.resultCode === 0
                 ? "Ese horario ya no tiene lugar para esa cantidad. Probá con menos personas o elegí otro horario."
-                : data.resultCode === -1
-                    ? "El horario ya no existe o no está activo."
-                    : "No pudimos apartar tu lugar. Reintentá en unos segundos.";
+                : data.resultCode === -4
+                    ? "Ese horario ya cerró. Elegí uno de los que siguen disponibles."
+                    : data.resultCode === -1
+                        ? "El horario ya no existe o no está activo."
+                        : "No pudimos apartar tu lugar. Reintentá en unos segundos.";
             holdToken.value = "";
             void refreshWeekSilent();
             return;
@@ -1141,9 +1339,11 @@ async function confirm() {
 
             holdError.value = data.resultCode === 0 || data.resultCode === -1
                 ? "Se venció el tiempo para confirmar. Elegí tu horario de nuevo."
-                : data.resultCode === -2 || data.resultCode === -3
-                    ? "Ya existe otra reserva activa para esta persona."
-                    : "No pudimos confirmar tu reserva. Reintentá en unos segundos.";
+                : data.resultCode === -4
+                    ? "Ese horario ya cerró. Elegí uno de los que siguen disponibles."
+                    : data.resultCode === -2 || data.resultCode === -3
+                        ? "Ya existe otra reserva activa para esta persona."
+                        : "No pudimos confirmar tu reserva. Reintentá en unos segundos.";
             void refreshWeekSilent();
             resetHold();
             return;
@@ -2006,6 +2206,13 @@ onBeforeUnmount(() => {
 .ssBackLink:hover { color: var(--ink-strong) !important; }
 
 .ssAlert { margin-top: var(--sp-3); }
+
+.ssRetryRow {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: calc(-1 * var(--sp-2));
+    margin-bottom: var(--sp-2);
+}
 .ssSmall { font-size: 13px; margin-top: var(--sp-2); }
 
 /* ===== Tiempo para confirmar ===== */

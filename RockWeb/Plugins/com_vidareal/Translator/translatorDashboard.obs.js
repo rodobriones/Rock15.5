@@ -898,6 +898,13 @@ System.register(['vue', '@Obsidian/Controls/panel.obs', '@Obsidian/Controls/rock
                 label: "Whitelist de <select> de UI (uno por línea)",
                 textMode: "multiline",
                 rows: 2
+              }, null, 8, ["modelValue"]), createVNode(unref(TextBox), {
+                modelValue: settings.excludedSites,
+                "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => settings.excludedSites = $event),
+                label: "Sitios excluidos (nombre o Id, uno por línea)",
+                textMode: "multiline",
+                rows: 2,
+                help: "El traductor NUNCA se inyecta en estos sitios, aunque esté activo. Al guardar se aplica de inmediato."
               }, null, 8, ["modelValue"])])])]), createCommentVNode(" ===== Cache por idioma + mantenimiento ===== "), createElementVNode("section", _hoisted_59, [createElementVNode("div", _hoisted_60, [_hoisted_61, unref(canEdit) ? (openBlock(), createElementBlock("div", _hoisted_62, [createVNode(unref(RockButton), {
                 btnType: "default",
                 class: "vtGhost",
@@ -918,7 +925,7 @@ System.register(['vue', '@Obsidian/Controls/panel.obs', '@Obsidian/Controls/rock
                 btnType: "default",
                 class: "vtGhost vtGhost--danger",
                 disabled: busy.purge,
-                onClick: _cache[13] || (_cache[13] = $event => purge(''))
+                onClick: _cache[14] || (_cache[14] = $event => purge(''))
               }, {
                 default: withCtx(() => [_hoisted_65, createTextVNode(" Purgar todo ")]),
                 _: 1
@@ -937,20 +944,20 @@ System.register(['vue', '@Obsidian/Controls/panel.obs', '@Obsidian/Controls/rock
                 }, [createElementVNode("td", null, toDisplayString(s.name), 1), createElementVNode("td", null, [!s.isInjected ? (openBlock(), createElementBlock("span", _hoisted_89, "no inyectado")) : s.isStale ? (openBlock(), createElementBlock("span", _hoisted_90, "v" + toDisplayString(s.version) + " → desactualizado", 1)) : (openBlock(), createElementBlock("span", _hoisted_91, "v" + toDisplayString(s.version), 1))])]);
               }), 128))])])])]), createCommentVNode(" ===== Traducciones ===== "), createElementVNode("section", _hoisted_92, [createElementVNode("div", _hoisted_93, [_hoisted_94, createElementVNode("span", _hoisted_95, toDisplayString(grid.total.toLocaleString()) + " resultado" + toDisplayString(grid.total === 1 ? "" : "s"), 1)]), createElementVNode("div", _hoisted_96, [createElementVNode("div", _hoisted_97, [createVNode(unref(TextBox), {
                 modelValue: filter.search,
-                "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => filter.search = $event),
+                "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => filter.search = $event),
                 label: "",
                 placeholder: "Buscar en texto original o traducción…",
                 onKeyup: withKeys(search, ["enter"])
               }, null, 8, ["modelValue"])]), createVNode(unref(DropDownList), {
                 modelValue: filter.language,
-                "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => filter.language = $event),
+                "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => filter.language = $event),
                 label: "",
                 items: langItems.value,
                 showBlankItem: false,
                 class: "vtFilterSel"
               }, null, 8, ["modelValue", "items"]), createVNode(unref(DropDownList), {
                 modelValue: filter.status,
-                "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => filter.status = $event),
+                "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => filter.status = $event),
                 label: "",
                 items: statusItems,
                 showBlankItem: false,
@@ -975,15 +982,15 @@ System.register(['vue', '@Obsidian/Controls/panel.obs', '@Obsidian/Controls/rock
                 type: "button",
                 class: "vtPageBtn",
                 disabled: filter.page === 0 || busy.grid,
-                onClick: _cache[17] || (_cache[17] = $event => goPage(filter.page - 1))
+                onClick: _cache[18] || (_cache[18] = $event => goPage(filter.page - 1))
               }, [..._hoisted_118], 8, _hoisted_116), createElementVNode("span", _hoisted_119, "Página " + toDisplayString(filter.page + 1) + " de " + toDisplayString(pageCount.value), 1), createElementVNode("button", {
                 type: "button",
                 class: "vtPageBtn",
                 disabled: filter.page >= pageCount.value - 1 || busy.grid,
-                onClick: _cache[18] || (_cache[18] = $event => goPage(filter.page + 1))
+                onClick: _cache[19] || (_cache[19] = $event => goPage(filter.page + 1))
               }, [..._hoisted_122], 8, _hoisted_120)])) : createCommentVNode("v-if", true)]), createCommentVNode(" ===== Modal de edicion =====\n                     El Modal se teletransporta FUERA del arbol del bloque (al body), asi que el\n                     notranslate del vtWrap no lo cubre: se marca via modalWrapperClasses. "), createVNode(unref(Modal), {
                 modelValue: editOpen.value,
-                "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => editOpen.value = $event),
+                "onUpdate:modelValue": _cache[22] || (_cache[22] = $event => editOpen.value = $event),
                 title: "Editar traducción",
                 saveText: unref(canEdit) ? 'Guardar' : '',
                 modalWrapperClasses: "notranslate",
@@ -991,13 +998,13 @@ System.register(['vue', '@Obsidian/Controls/panel.obs', '@Obsidian/Controls/rock
               }, {
                 default: withCtx(() => [editRow.value ? (openBlock(), createElementBlock("div", _hoisted_123, [createElementVNode("div", _hoisted_124, [createElementVNode("span", _hoisted_125, "Texto original · se traduce a «" + toDisplayString(editRow.value.language) + "»", 1), createElementVNode("p", null, toDisplayString(editRow.value.sourceText), 1)]), createVNode(unref(TextBox), {
                   modelValue: editText.value,
-                  "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => editText.value = $event),
+                  "onUpdate:modelValue": _cache[20] || (_cache[20] = $event => editText.value = $event),
                   label: "Traducción",
                   textMode: "multiline",
                   rows: 3
                 }, null, 8, ["modelValue"]), createVNode(unref(DropDownList), {
                   modelValue: editStatus.value,
-                  "onUpdate:modelValue": _cache[20] || (_cache[20] = $event => editStatus.value = $event),
+                  "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => editStatus.value = $event),
                   label: "Status",
                   items: editStatusItems,
                   showBlankItem: false,

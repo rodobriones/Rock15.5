@@ -1,5 +1,30 @@
 # Changes
 
+## 1.4.7 — FIX de regresión: el guard de churn apagaba los menús
+- **Síntoma**: en el perfil de persona solo se traducían **3 pestañas** (`Perfil`, `Atributos extendidos`, `Pasos`); `Groups`, `Documents`, `Contributions`, `Benevolence`, `History` quedaban en inglés. Se reprodujo en `es` y en `zh`: exactamente 3 por tanda en la caché, que es el valor de `SLOT_MAX_CHANGES`.
+- **Causa**: el `churning()` de la 1.4.6 contaba textos distintos **por ranura**. Las pestañas son nodos HERMANOS (`<ul class="nav nav-tabs"><li><a>`) y comparten `slotKey`, así que la ranura parecía reescribirse 9 veces en un segundo — la firma de un contador — y se apagaba a partir de la cuarta. Afectaba a cualquier menú, tab o breadcrumb de más de 3 ítems, es decir al caso de uso central del plugin.
+- **Fix**: la señal de "contador" pasa a ser **el mismo nodo reescribiéndose** (`nodeSeen`, WeakMap nodo→último texto), no una ranura acumulando textos de nodos distintos. Un nodo visto por primera vez solo se registra; solo una reescritura real cuenta. La acumulación sigue siendo por ranura como red de seguridad, por si el framework recrea el nodo del contador.
+- **Test de regresión**: las 9 pestañas del perfil, como nodos distintos con la misma ranura, no deben apagarla. Es el test que faltaba en la 1.4.6.
+- **Sin basura que limpiar**: la regresión causaba traducciones *faltantes*, no de más. Al desplegar, los strings que se saltaron se piden con normalidad.
+- `ScriptVersion` → `20`.
+
+## 1.4.6 — HOTFIX: el 75% de la caché era dato, no UI (grids Obsidian, cronómetros y nombres)
+- **Incidente (2026-09-02)**: de **33,474** filas de caché, solo **8,312 (25%)** eran traducciones reales de UI. El resto: 7,438 cronómetros, ~8,400 nombres de personas/familias, 557 códigos QUIANT y 71 fechas. Cuatro causas independientes:
+
+**1. El grid de Obsidian nunca estuvo excluido.** `DATA_CELLS` solo cubría `.grid-table td` (WebForms). El grid de Rock v15+ no es una tabla: es div-based (`.grid-row` / `.grid-cell`, `Grid/dataRow|dataCell.partial.obs`). Ningún selector lo tocaba → **todo el contenido de todos los grids nuevos** (nombres, emails, direcciones) se enviaba a la IA. Agregados `.grid-row, .grid-cell, [role='gridcell']`; el encabezado (`.grid-column-header`) se deja fuera a propósito, es UI. Cubre también el `title` de fila/celda, que es un tooltip con el contenido de la fila.
+
+**2. Bucle de retroalimentación con contadores en vivo.** `sendBatch()` hace `run(document.body)` cuando llega una traducción nueva; el countdown de `ReservationScanner.obs` (`${h}h ${m}m ${s}s`, 1 tick/s) se autoalimentaba: tick → traducir → rescan → nuevo tick. **7,438 filas** y creciendo mientras el bloque estuviera abierto. Dos defensas: `RE_TIMER` en `translatable()` para el formato conocido, y un **guard de churn por ranura** genérico para cualquier otro (ver abajo).
+
+**3. Ranuras del kiosco next-gen sin cubrir.** La 1.4.4 excluyó `.family-button`/`.attendee-button`/`.attendee-banner`, pero no `.attendance-card` (successScreen: `fullName` + grupo/ubicación/horario) ni `.achievement-card`. De ahí salían los nombres de niños del domingo. Agregados junto con `.check-in-panel > .panel-header .subtitle`.
+  - **Límite estructural documentado**: el kiosco interpola UI y nombre en UN SOLO nodo de texto (`"Select the group you would like to check <nickName> into"`, `"Congratulations <nickName>!"`). Son inseparables desde el DOM: o se manda el nombre del niño a Azure, o se sacrifica la frase. Se sacrifica la frase. Traducir esas frases exige i18n en el `.obs`, no un traductor DOM.
+
+**4. La IA corrompía fechas.** `"Added: 8/16/2026"` → `"Agregado: 16/8/2026"` y `"Added: 1/9/2026"` → `"Agregado: 9/1/2026"`: reordena día/mes según le parece, y el usuario ve una fecha equivocada. `RE_DATE_NUM` las rechaza. También `RE_MONTH_YEAR` (`"October 1966"` = fecha de nacimiento en el kiosco, no UI) y `RE_FAMILY` (`"<Apellido> Family"` = cómo Rock nombra a una familia; se exige que la palabra previa no sea verbo/determinante para no romper `Add Family`/`Edit Family`/`My Family`).
+
+- **Guard de churn por ranura (nuevo, genérico)**: una "ranura" es la POSICIÓN del DOM donde vive un texto, identificada por la cadena `tag.clase` de 4 ancestros (ignorando clases de estado tipo `is-active`). No sirve un WeakMap por nodo: Vue reescribe el mismo nodo por interpolación y a veces lo recrea. Si una ranura escribe más de 3 textos DISTINTOS en 8 s, no es UI: es un contador en vivo → se apaga por el resto de la sesión. Repetir el mismo texto no cuenta, así que un label re-renderizado nunca se apaga. Tests con nodos falsos en `test_translator.js`.
+- **`Excluded Sites` (block attribute nuevo)**: sitios donde NUNCA inyectar el traductor, por nombre o Id, uno por línea. Antes `TranslatorInjection.Apply()` recorría *todos* los sitios sin excepción y la única forma de sacar el traductor de un sitio (p.ej. el Check-in Manager, que es 100% dato) era apagar el plugin entero. Se aplica al guardar, no solo al togglear.
+- **BD limpiada**: 15,634 filas purgadas (7,503 cronómetros, 4,987 nombres propios, 2,523 nombres de familia, 557 QUIANT, 64 fechas); quedan 17,841. Respaldo completo con el motivo de cada fila en `_com_vidareal_Translator_Translation_Bak20260902`. `CacheEpoch` actualizado para purgar las copias en localStorage.
+- `ScriptVersion` → `19`.
+
 ## 1.4.5 — HOTFIX: datos sensibles (tarjetas) jamás viajan a la IA
 - **Incidente**: llegó a traducirse "Visa 4487 9x00 xxxx 1071" — pasaba `translatable()` porque tiene letras y los dígitos van mezclados con enmascarado.
 - **Regla genérica en `translatable()`** (aplica en TODO el sitio): se rechaza cualquier string con enmascarado de secretos (`••`, `**`, `xxxx`, `9x00`) o con **8+ dígitos en total** (tarjetas/cuentas/teléfonos incrustados en texto). Ningún label de UI real trae tantos dígitos. Tests de regresión agregados (incluye el caso real del incidente).

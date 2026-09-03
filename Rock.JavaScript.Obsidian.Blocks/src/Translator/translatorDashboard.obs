@@ -125,6 +125,8 @@
                             <h3 class="vtSubHead">Selectores avanzados</h3>
                             <TextBox v-model="settings.excludeSelectors" label="Excluir (CSS, uno por l&iacute;nea)" textMode="multiline" :rows="2" />
                             <TextBox v-model="settings.uiSelectWhitelist" label="Whitelist de &lt;select&gt; de UI (uno por l&iacute;nea)" textMode="multiline" :rows="2" />
+                            <TextBox v-model="settings.excludedSites" label="Sitios excluidos (nombre o Id, uno por l&iacute;nea)" textMode="multiline" :rows="2"
+                                     help="El traductor NUNCA se inyecta en estos sitios, aunque est&eacute; activo. Al guardar se aplica de inmediato." />
                         </div>
                     </div>
                 </section>
@@ -423,6 +425,7 @@ th.vtNum { text-align: right; }
         newApiKey: string; hasApiKey: boolean;
         includeSelectors: string; excludeSelectors: string; uiSelectWhitelist: string;
         showSwitcher: boolean; availableLanguages: string; switcherContainer: string;
+        excludedSites: string;
     };
     type LangStat = { language: string; total: number; translated: number; excluded: number; lastActivity: string };
     type SiteInfo = { name: string; isInjected: boolean; version: string; isStale: boolean };

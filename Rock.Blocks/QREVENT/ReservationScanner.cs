@@ -44,15 +44,22 @@ namespace Rock.Blocks.QREVENT
     {
         // Ventana de check-in. Decision de negocio, fija a proposito y no
         // configurable: abre 10 minutos ANTES de la hora de inicio del servicio y
-        // cierra 60 minutos DESPUES de esa misma hora de inicio.
+        // cierra 1 h 20 min ( 80 minutos ) DESPUES de esa misma hora de inicio.
         //
         // Deliberadamente ya no se usa el DTEND del iCal para cerrar: el servicio
         // dura ~2 h, asi que la ventana del servicio anterior seguia abierta cuando
         // la del siguiente ya habia abierto y habia dos slots vigentes a la vez.
         // Como sp_SundayServiceCheckIn exige que la reserva sea exactamente del slot
         // activo, ese solapamiento rechazaba en la puerta a gente con reserva valida.
+        //
+        // El cierre debe seguir igual a ReservationClosesMinutesAfterStart de
+        // SundayServiceRegistration ( 80 ): asi todo lo que la app deja reservar sigue
+        // siendo escaneable en la puerta. Si se mueve uno, mover el otro.
+        // Con 80 min las ventanas siguen sin cruzarse ( los servicios estan a 2 h:
+        // 7, 9, 11, 13, 18 ), quedan 30 min de separacion entre el cierre de una y la
+        // apertura de la siguiente. Subirlo mas alla de 110 las haria solaparse.
         private const int CheckInOpensMinutesBeforeStart = 10;
-        private const int CheckInClosesMinutesAfterStart = 60;
+        private const int CheckInClosesMinutesAfterStart = 80;
 
         private const int InvalidScanThrottleWindowSeconds = 10;
         private const int InvalidScanThrottleLimit = 60;
@@ -71,6 +78,19 @@ namespace Rock.Blocks.QREVENT
 
         #region Block Initialization
 
+        /// <summary>
+        /// Hora del servidor en el mismo formato sin zona que <c>CheckInStartIso</c>.
+        /// El cliente calcula con ella el desfase de su propio reloj: el contador de
+        /// "Abre en ..." corria con la hora del dispositivo, asi que cada escaner abria
+        /// en un instante distinto segun como anduviera su reloj. Al venir los dos ISO
+        /// con la misma convencion, el offset absorbe tanto la deriva del reloj como una
+        /// diferencia de zona horaria.
+        /// </summary>
+        private static string ServerNowIso()
+        {
+            return RockDateTime.Now.ToString( "yyyy-MM-ddTHH:mm:ss" );
+        }
+
         public override object GetObsidianBlockInitialization()
         {
             var kioskId = PageParameter( "KioskId" ).AsIntegerOrNull()
@@ -85,6 +105,7 @@ namespace Rock.Blocks.QREVENT
                     activeSlot = null,
                     nextScheduleInfo = "No autorizado para usar este escaner.",
                     nextCheckInStartIso = null,
+                    serverNowIso = ServerNowIso(),
                     kioskId = kioskId
                 };
             }
@@ -96,6 +117,7 @@ namespace Rock.Blocks.QREVENT
                 activeSlot = slotResult.Slot,
                 nextScheduleInfo = slotResult.NextScheduleInfo,
                 nextCheckInStartIso = slotResult.NextCheckInStartIso,
+                serverNowIso = ServerNowIso(),
                 kioskId = kioskId
             };
         }
@@ -118,7 +140,8 @@ namespace Rock.Blocks.QREVENT
             {
                 activeSlot = slotResult.Slot,
                 nextScheduleInfo = slotResult.NextScheduleInfo,
-                nextCheckInStartIso = slotResult.NextCheckInStartIso
+                nextCheckInStartIso = slotResult.NextCheckInStartIso,
+                serverNowIso = ServerNowIso()
             } );
         }
 
@@ -612,6 +635,12 @@ ORDER BY slot.OccurrenceDate, sch.Id
             public ActiveSlotBag activeSlot { get; set; }
             public string nextScheduleInfo { get; set; }
             public string nextCheckInStartIso { get; set; }
+
+            /// <summary>
+            /// Hora del servidor al responder. El cliente la usa para corregir el
+            /// desfase de su reloj y que todos los escaneres abran a la vez.
+            /// </summary>
+            public string serverNowIso { get; set; }
             public int? kioskId { get; set; }
         }
 
