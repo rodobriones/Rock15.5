@@ -4,6 +4,19 @@
             <div class="caPage">
                 <div class="caTopBar">
                     <div class="caBrand">Disponibilidad · Servicios Dominicales</div>
+                    <!-- Segmentado propio: TabbedBar de Rock mide su ancho para decidir qué
+                         pestañas caben y, dentro de un flex que se encoge al contenido, concluía
+                         que no cabía ninguna y escondía «Métricas» bajo un menú «More». -->
+                    <div class="caSeg" role="tablist" aria-label="Vista">
+                        <button v-for="t in tabs"
+                                :key="t"
+                                type="button"
+                                role="tab"
+                                class="caSegBtn"
+                                :class="{ isActive: activeTab === t }"
+                                :aria-selected="activeTab === t"
+                                @click="activeTab = t">{{ t }}</button>
+                    </div>
                 </div>
 
                 <div class="caContainer">
@@ -28,15 +41,24 @@
 
                             <div class="caField">
                                 <label class="caLabel">Desde</label>
-                                <input type="date" v-model="startDate" class="caInput" />
+                                <input type="date" v-model="rangeStart" class="caInput" />
                             </div>
 
                             <div class="caField">
                                 <label class="caLabel">Hasta</label>
-                                <input type="date" v-model="endDate" class="caInput" />
+                                <input type="date" v-model="rangeEnd" class="caInput" />
                             </div>
 
-                            <div class="caPresets">
+                            <div v-if="activeTab === 'Métricas'" class="caPresets">
+                                <button type="button" class="caChip" @click="applyWeekPreset(0)">Esta semana</button>
+                                <button type="button" class="caChip" @click="applyWeekPreset(-1)">Semana pasada</button>
+                                <button type="button" class="caChip" @click="applyPastPreset(4)">Últimas 4 sem.</button>
+                                <button type="button" class="caChip" @click="applyPastPreset(12)">Últimas 12</button>
+                                <button type="button" class="caChip" @click="applyPastPreset(26)">Últimas 26</button>
+                            </div>
+                            <div v-else class="caPresets">
+                                <button type="button" class="caChip" @click="applyConfigWeekPreset(0)">Esta semana</button>
+                                <button type="button" class="caChip" @click="applyConfigWeekPreset(-1)">Semana pasada</button>
                                 <button type="button" class="caChip" @click="applyPreset(28)">4 semanas</button>
                                 <button type="button" class="caChip" @click="applyPreset(91)">3 meses</button>
                                 <button type="button" class="caChip" @click="applyPreset(182)">6 meses</button>
@@ -46,6 +68,122 @@
                         <div v-if="!campusId" class="caEmpty">
                             Selecciona una sede para ver y administrar su disponibilidad.
                         </div>
+
+                        <!-- ===== Pestaña: Métricas ===== -->
+                        <template v-else-if="activeTab === 'Métricas'">
+                            <div v-if="metricsBusy && metricsWeeks.length === 0" class="caMuted caSmall caEmpty">Cargando…</div>
+                            <div v-else-if="metricsError" class="caGenResult">
+                                <NotificationBox alertType="danger">{{ metricsError }}</NotificationBox>
+                            </div>
+                            <div v-else-if="metricsWeeks.length === 0" class="caEmpty">
+                                No hay servicios en este rango.
+                                <div class="caEmptyAction caPresets">
+                                    <button type="button" class="caChip" @click="applyWeekPreset(-1)">Ver semana pasada</button>
+                                    <button type="button" class="caChip" @click="applyPastPreset(12)">Ver últimas 12 semanas</button>
+                                </div>
+                            </div>
+
+                            <template v-else>
+                                <!-- Semana seleccionada: KPIs -->
+                                <div class="caCard">
+                                    <div class="caMetricsHead">
+                                        <div>
+                                            <div class="caCardTitle">Semana del {{ selectedWeek?.label ?? "—" }}</div>
+                                            <div class="caCardSub">
+                                                <template v-if="selectedWeek?.isPast">Servicio ya realizado: la diferencia entre reservados e ingresados son los que no vinieron.</template>
+                                                <template v-else>Servicio pendiente o en curso: todavía pueden ingresar.</template>
+                                            </div>
+                                        </div>
+                                        <label class="caWeekPick">
+                                            <span class="caLabel">Semana</span>
+                                            <select v-model="selectedWeekKey" class="caSelect caSelectSm">
+                                                <option v-for="w in metricsWeeks" :key="w.weekStart" :value="w.weekStart">{{ w.label }}</option>
+                                            </select>
+                                        </label>
+                                    </div>
+
+                                    <div v-if="selectedWeek" class="caKpis">
+                                        <div class="caKpi">
+                                            <div class="caKpiValue">{{ selectedWeek.reserved }}</div>
+                                            <div class="caKpiLabel">Reservados <span class="caKpiSub">de {{ selectedWeek.capacity }} cupos</span></div>
+                                        </div>
+                                        <div class="caKpi">
+                                            <div class="caKpiValue"><span class="caSwatch" :style="{ background: SERIES.checkedIn.color }"></span>{{ selectedWeek.checkedIn }}</div>
+                                            <div class="caKpiLabel">Ingresaron <span class="caKpiSub">{{ pct(selectedWeek.checkedIn, selectedWeek.reserved) }}</span></div>
+                                        </div>
+                                        <div v-if="selectedWeek.isPast" class="caKpi">
+                                            <div class="caKpiValue"><span class="caSwatch" :style="{ background: SERIES.noShow.color }"></span>{{ selectedWeek.noShow }}</div>
+                                            <div class="caKpiLabel">No vinieron <span class="caKpiSub">{{ pct(selectedWeek.noShow, selectedWeek.reserved) }}</span></div>
+                                        </div>
+                                        <div v-else class="caKpi">
+                                            <div class="caKpiValue"><span class="caSwatch" :style="{ background: SERIES.pending.color }"></span>{{ selectedWeek.pending }}</div>
+                                            <div class="caKpiLabel">Pendientes <span class="caKpiSub">{{ pct(selectedWeek.pending, selectedWeek.reserved) }}</span></div>
+                                        </div>
+                                        <div class="caKpi">
+                                            <div class="caKpiValue">{{ pct(selectedWeek.reserved, selectedWeek.capacity, true) }}</div>
+                                            <div class="caKpiLabel">Ocupación <span class="caKpiSub">reservados sobre cupos</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Por horario, semana seleccionada -->
+                                <div class="caCard">
+                                    <div class="caCardTitle">Por horario · {{ selectedWeek?.label ?? "" }}</div>
+                                    <div class="caCardSub">Personas por servicio. La altura total de cada barra son los reservados.</div>
+                                    <div class="caChartWrap caChartWrapShort">
+                                        <canvas ref="scheduleChartCanvas" role="img" aria-label="Barras apiladas por horario: ingresaron, no vinieron y pendientes"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Por semana -->
+                                <div class="caCard">
+                                    <div class="caCardTitle">Por semana</div>
+                                    <div class="caCardSub">Todos los horarios sumados. Toca una barra para ver esa semana arriba.</div>
+                                    <div class="caChartWrap">
+                                        <canvas ref="weekChartCanvas" role="img" aria-label="Barras apiladas por semana: ingresaron, no vinieron y pendientes"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Tabla (vista accesible y respaldo de las etiquetas) -->
+                                <div class="caCard" v-if="selectedWeek">
+                                    <div class="caCardTitle">Detalle · {{ selectedWeek.label }}</div>
+                                    <div class="caTableWrap">
+                                        <table class="caTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>Horario</th>
+                                                    <th class="num">Cupos</th>
+                                                    <th class="num">Reservados</th>
+                                                    <th class="num">Ingresaron</th>
+                                                    <th class="num">{{ selectedWeek.isPast ? "No vinieron" : "Pendientes" }}</th>
+                                                    <th class="num">Asistencia</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr v-for="m in selectedWeek.schedules" :key="m.scheduleId">
+                                                    <td>{{ m.scheduleName }}</td>
+                                                    <td class="num">{{ m.capacity }}</td>
+                                                    <td class="num">{{ m.reserved }}</td>
+                                                    <td class="num">{{ m.checkedIn }}</td>
+                                                    <td class="num">{{ m.isPast ? m.noShow : m.pending }}</td>
+                                                    <td class="num">{{ pct(m.checkedIn, m.reserved) }}</td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr>
+                                                    <td>Total</td>
+                                                    <td class="num">{{ selectedWeek.capacity }}</td>
+                                                    <td class="num">{{ selectedWeek.reserved }}</td>
+                                                    <td class="num">{{ selectedWeek.checkedIn }}</td>
+                                                    <td class="num">{{ selectedWeek.isPast ? selectedWeek.noShow : selectedWeek.pending }}</td>
+                                                    <td class="num">{{ pct(selectedWeek.checkedIn, selectedWeek.reserved) }}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
 
                         <template v-else>
                             <!-- ===== Zona 2: Plantilla ===== -->
@@ -122,6 +260,7 @@
                                             </div>
                                             <div class="caSlotStats">
                                                 <span>Reservados <b>{{ s.reservedCount }}</b></span>
+                                                <span>Ingresaron <b>{{ s.checkedInCount }}</b></span>
                                                 <span>Holds <b>{{ s.holdCount }}</b></span>
                                                 <span :class="s.available === 0 ? 'caStatDanger' : 'caStatOk'">Disponibles <b>{{ s.available }}</b></span>
                                             </div>
@@ -166,10 +305,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import Panel from "@Obsidian/Controls/panel.obs";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import RockButton from "@Obsidian/Controls/rockButton.obs";
+import { Chart } from "@Obsidian/Libs/chart";
+import type { ChartOptions } from "@Obsidian/Libs/chart";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
 
 type OptionBag = { value: number; text: string };
@@ -199,9 +340,34 @@ type SlotBag = {
     capacity: number;
     reservedCount: number;
     holdCount: number;
+    checkedInCount: number;
     available: number;
     isActive: boolean;
     draftCapacity: number;
+};
+
+type ScheduleMetricsBag = {
+    scheduleId: number;
+    scheduleName: string;
+    capacity: number;
+    reserved: number;
+    checkedIn: number;
+    noShow: number;
+    pending: number;
+    isPast: boolean;
+};
+
+type WeekMetricsBag = {
+    weekStart: string;
+    sundayDate: string;
+    label: string;
+    isPast: boolean;
+    capacity: number;
+    reserved: number;
+    checkedIn: number;
+    noShow: number;
+    pending: number;
+    schedules: ScheduleMetricsBag[];
 };
 
 type DaySlotsBag = {
@@ -224,8 +390,56 @@ const config = useConfigurationValues<InitBag>();
 const invokeBlockAction = useInvokeBlockAction();
 
 const campusId = ref<number>(config.defaultCampusId || 0);
-const startDate = ref<string>(config.startDate || "");
-const endDate = ref<string>(config.endDate || "");
+// Configuración abre en la semana en curso (lunes a domingo); ver applyConfigWeekPreset(0)
+// más abajo. El rango que manda el servidor (hoy → +3 meses) ya no se usa como inicial.
+const startDate = ref<string>("");
+const endDate = ref<string>("");
+
+// Métricas tiene su propio rango: por omisión la semana en curso (lunes a domingo).
+// Así entrar al dashboard no altera el rango de trabajo de Configuración ni al revés.
+const metricsStartDate = ref<string>("");
+const metricsEndDate = ref<string>("");
+
+/** Lunes de la semana de `d` (las semanas del dashboard van de lunes a domingo). */
+function mondayOf(d: Date): Date {
+    const m = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+    return m;
+}
+
+/** Rango [lunes, domingo] de la semana actual desplazada `offsetWeeks` (0 = esta, -1 = pasada). */
+function weekRange(offsetWeeks: number): { start: string; end: string } {
+    const mon = mondayOf(new Date());
+    mon.setDate(mon.getDate() + offsetWeeks * 7);
+    const sun = new Date(mon.getTime());
+    sun.setDate(sun.getDate() + 6);
+    return { start: toIso(mon), end: toIso(sun) };
+}
+
+function applyWeekPreset(offsetWeeks: number): void {
+    const r = weekRange(offsetWeeks);
+    metricsStartDate.value = r.start;
+    metricsEndDate.value = r.end;
+}
+
+function applyConfigWeekPreset(offsetWeeks: number): void {
+    const r = weekRange(offsetWeeks);
+    startDate.value = r.start;
+    endDate.value = r.end;
+}
+
+applyConfigWeekPreset(0);
+applyWeekPreset(0);
+
+/** Los inputs Desde/Hasta editan el rango de la pestaña activa. */
+const rangeStart = computed<string>({
+    get: () => activeTab.value === "Métricas" ? metricsStartDate.value : startDate.value,
+    set: v => { if (activeTab.value === "Métricas") metricsStartDate.value = v; else startDate.value = v; }
+});
+const rangeEnd = computed<string>({
+    get: () => activeTab.value === "Métricas" ? metricsEndDate.value : endDate.value,
+    set: v => { if (activeTab.value === "Métricas") metricsEndDate.value = v; else endDate.value = v; }
+});
 
 const templateRows = ref<TemplateRow[]>((config.schedules || []).map(s => ({
     scheduleId: s.id,
@@ -321,6 +535,308 @@ const previewText = computed<string>(() => {
         return "El rango de fechas no contiene días de los horarios seleccionados.";
     }
     return `Se aplicará a ${previewTotal.value} slots (${included.length} horario${included.length === 1 ? "" : "s"} en el rango).`;
+});
+
+// ---- Métricas (pestaña dashboard) ----
+const tabs = ["Configuración", "Métricas"];
+const activeTab = ref<string>("Configuración");
+
+const metricsWeeks = ref<WeekMetricsBag[]>([]);
+const metricsBusy = ref<boolean>(false);
+const metricsError = ref<string>("");
+const selectedWeekKey = ref<string>("");
+
+const selectedWeek = computed<WeekMetricsBag | null>(() =>
+    metricsWeeks.value.find(w => w.weekStart === selectedWeekKey.value) ?? null);
+
+const weekChartCanvas = ref<HTMLCanvasElement | null>(null);
+const scheduleChartCanvas = ref<HTMLCanvasElement | null>(null);
+let weekChart: Chart | null = null;
+let scheduleChart: Chart | null = null;
+
+// Paleta categórica validada (orden fijo, no se recicla). El texto nunca
+// lleva el color de la serie: identidad por swatch/segmento, valores en tinta.
+const SERIES = {
+    checkedIn: { label: "Ingresaron", color: "#2a78d6" },
+    noShow: { label: "No vinieron", color: "#eb6834" },
+    pending: { label: "Pendientes", color: "#1baf7a" }
+} as const;
+const INK = "#111827";
+const INK_MUTED = "#6B7280";
+const SURFACE = "#FFFFFF";
+const GRID = "rgba(17,24,39,.08)";
+const FONT = "Roboto, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Arial, sans-serif";
+
+function pct(part: number, whole: number, bare = false): string {
+    if (!whole || whole <= 0) {
+        return bare ? "—" : "";
+    }
+    const v = Math.round((part / whole) * 100);
+    return bare ? `${v}%` : `· ${v}%`;
+}
+
+function applyPastPreset(weeks: number): void {
+    const end = new Date();
+    const start = new Date(end.getTime());
+    start.setDate(start.getDate() - weeks * 7);
+    metricsStartDate.value = toIso(start);
+    metricsEndDate.value = toIso(end);
+}
+
+async function loadMetrics(): Promise<void> {
+    if (!campusId.value || !parseIso(metricsStartDate.value) || !parseIso(metricsEndDate.value)) {
+        return;
+    }
+    metricsBusy.value = true;
+    metricsError.value = "";
+    try {
+        const res = await invokeBlockAction<{ weeks: WeekMetricsBag[] }>("GetWeeklyMetrics", {
+            bag: { campusId: campusId.value, startDate: metricsStartDate.value, endDate: metricsEndDate.value }
+        });
+        if (!res.isSuccess || !res.data) {
+            metricsError.value = res.errorMessage || "No se pudieron cargar las métricas.";
+            metricsWeeks.value = [];
+            return;
+        }
+        metricsWeeks.value = res.data.weeks || [];
+
+        // Semana por omisión: la más reciente ya realizada; si no hay, la última.
+        if (!metricsWeeks.value.some(w => w.weekStart === selectedWeekKey.value)) {
+            const past = metricsWeeks.value.filter(w => w.isPast);
+            const def = past.length > 0 ? past[past.length - 1] : metricsWeeks.value[metricsWeeks.value.length - 1];
+            selectedWeekKey.value = def ? def.weekStart : "";
+        }
+    }
+    catch {
+        metricsError.value = "No se pudieron cargar las métricas.";
+        metricsWeeks.value = [];
+    }
+    finally {
+        metricsBusy.value = false;
+        await nextTick();
+        renderCharts();
+    }
+}
+
+type Stack = { labels: string[]; checkedIn: number[]; noShow: number[]; pending: number[] };
+
+function stackFromWeeks(weeks: WeekMetricsBag[]): Stack {
+    return {
+        labels: weeks.map(w => w.label),
+        checkedIn: weeks.map(w => w.checkedIn),
+        noShow: weeks.map(w => w.noShow),
+        pending: weeks.map(w => w.pending)
+    };
+}
+
+function stackFromSchedules(items: ScheduleMetricsBag[]): Stack {
+    return {
+        labels: items.map(m => m.scheduleName),
+        checkedIn: items.map(m => m.checkedIn),
+        noShow: items.map(m => m.noShow),
+        pending: items.map(m => m.pending)
+    };
+}
+
+/** Índice del dataset que queda arriba de la pila en la barra i (para redondear solo ese extremo). */
+function topDatasetIndex(st: Stack, i: number): number {
+    if ((st.pending[i] || 0) > 0) return 2;
+    if ((st.noShow[i] || 0) > 0) return 1;
+    if ((st.checkedIn[i] || 0) > 0) return 0;
+    return -1;
+}
+
+function buildDatasets(st: Stack): Array<Record<string, unknown>> {
+    const order: Array<{ key: keyof typeof SERIES; data: number[] }> = [
+        { key: "checkedIn", data: st.checkedIn },
+        { key: "noShow", data: st.noShow },
+        { key: "pending", data: st.pending }
+    ];
+    return order.map((s, idx) => ({
+        label: SERIES[s.key].label,
+        data: s.data,
+        backgroundColor: SERIES[s.key].color,
+        // Spec: 2px de superficie entre segmentos apilados (gap, no borde).
+        borderColor: SURFACE,
+        borderWidth: { top: 2, right: 0, bottom: 0, left: 0 },
+        borderSkipped: false,
+        maxBarThickness: 24,
+        // Spec: extremo de dato redondeado (4px), cuadrado en la base. Solo el
+        // segmento superior visible de cada pila lleva el redondeo.
+        borderRadius: (ctx: { dataIndex: number }) =>
+            topDatasetIndex(st, ctx.dataIndex) === idx
+                ? { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
+                : 0
+    }));
+}
+
+function baseOptions(showTotals: boolean, onBarClick?: (index: number) => void): ChartOptions<"bar"> {
+    const tick = { color: INK_MUTED, font: { family: FONT, size: 12 } };
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        interaction: { mode: "index", intersect: false },
+        onClick: (_evt, elements) => {
+            if (onBarClick && elements.length > 0) {
+                onBarClick(elements[0].index);
+            }
+        },
+        layout: { padding: { top: showTotals ? 20 : 8, right: 4, left: 0, bottom: 0 } },
+        scales: {
+            x: { stacked: true, grid: { display: false }, border: { color: GRID }, ticks: tick },
+            y: {
+                stacked: true,
+                beginAtZero: true,
+                grid: { color: GRID, drawTicks: false },
+                border: { display: false },
+                ticks: { ...tick, precision: 0, padding: 6 }
+            }
+        },
+        plugins: {
+            legend: {
+                position: "bottom",
+                labels: { color: INK, boxWidth: 10, boxHeight: 10, padding: 14, font: { family: FONT, size: 12 } }
+            },
+            tooltip: {
+                backgroundColor: INK,
+                titleColor: "#FFFFFF",
+                bodyColor: "#FFFFFF",
+                footerColor: "#FFFFFF",
+                titleFont: { family: FONT, weight: "bold" },
+                bodyFont: { family: FONT },
+                footerFont: { family: FONT, weight: "bold" },
+                padding: 10,
+                boxWidth: 8,
+                boxHeight: 8,
+                boxPadding: 4,
+                callbacks: {
+                    footer: items => "Reservados: " + items.reduce((sum, it) => sum + (Number(it.raw) || 0), 0)
+                }
+            }
+        }
+    };
+}
+
+/** Total de la pila sobre cada barra (solo en la gráfica corta, ≤ 6 barras). */
+const stackTotalsPlugin = {
+    id: "caStackTotals",
+    afterDatasetsDraw(chart: Chart): void {
+        const x = chart.scales.x;
+        const y = chart.scales.y;
+        if (!x || !y) {
+            return;
+        }
+        const n = chart.data.labels?.length ?? 0;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.fillStyle = INK;
+        ctx.font = `600 12px ${FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        for (let i = 0; i < n; i++) {
+            let total = 0;
+            chart.data.datasets.forEach((ds, di) => {
+                if (chart.isDatasetVisible(di)) {
+                    total += Number((ds.data as number[])[i]) || 0;
+                }
+            });
+            if (total > 0) {
+                ctx.fillText(String(total), x.getPixelForValue(i), y.getPixelForValue(total) - 4);
+            }
+        }
+        ctx.restore();
+    }
+};
+
+function upsertChart(
+    existing: Chart | null,
+    canvas: HTMLCanvasElement | null,
+    st: Stack,
+    options: ChartOptions<"bar">,
+    withTotals: boolean
+): Chart | null {
+    // El canvas se desmonta al cambiar de pestaña (v-if): si el chart apunta a
+    // uno viejo, se destruye y se crea de nuevo sobre el actual.
+    if (existing && existing.canvas !== canvas) {
+        existing.destroy();
+        existing = null;
+    }
+    if (!canvas) {
+        return existing;
+    }
+    const data = { labels: st.labels, datasets: buildDatasets(st) };
+    if (existing) {
+        // Chart.js tipa data/options con el tipo de gráfica genérico; el paso por
+        // unknown es el patrón que TS exige para asignar nuestro shape concreto.
+        existing.data = data as unknown as typeof existing.data;
+        existing.options = options as unknown as typeof existing.options;
+        existing.update();
+        return existing;
+    }
+    return new Chart(canvas, {
+        type: "bar",
+        data: data as never,
+        options,
+        plugins: withTotals ? [stackTotalsPlugin] : []
+    });
+}
+
+function renderCharts(): void {
+    if (activeTab.value !== "Métricas" || metricsWeeks.value.length === 0) {
+        return;
+    }
+    const weeks = metricsWeeks.value;
+    weekChart = upsertChart(
+        weekChart,
+        weekChartCanvas.value,
+        stackFromWeeks(weeks),
+        baseOptions(false, i => { selectedWeekKey.value = weeks[i]?.weekStart ?? selectedWeekKey.value; }),
+        false
+    );
+    const sched = selectedWeek.value?.schedules ?? [];
+    scheduleChart = upsertChart(
+        scheduleChart,
+        scheduleChartCanvas.value,
+        stackFromSchedules(sched),
+        baseOptions(true),
+        true
+    );
+}
+
+watch(activeTab, async tab => {
+    if (tab === "Métricas") {
+        if (metricsWeeks.value.length === 0) {
+            await loadMetrics();
+        }
+        else {
+            await nextTick();
+            renderCharts();
+        }
+    }
+});
+
+watch(selectedWeekKey, async () => {
+    await nextTick();
+    renderCharts();
+});
+
+watch([campusId, metricsStartDate, metricsEndDate], () => {
+    if (activeTab.value === "Métricas") {
+        loadMetrics();
+    }
+    else {
+        // Cambió la sede (o el rango de métricas) estando en Configuración: la próxima
+        // visita a Métricas recarga.
+        metricsWeeks.value = [];
+    }
+});
+
+onBeforeUnmount(() => {
+    weekChart?.destroy();
+    scheduleChart?.destroy();
+    weekChart = null;
+    scheduleChart = null;
 });
 
 // ---- Carga de slots ----
@@ -740,6 +1256,71 @@ onBeforeUnmount(() => {
 .caSlotStats b { color: var(--ca-text); }
 .caStatOk b { color: #047857; }
 .caStatDanger b { color: #B91C1C; }
+
+/* ===== Pestañas y métricas ===== */
+.caTopBar { justify-content: space-between; gap: 12px; }
+.caSeg {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    border-radius: 999px;
+    background: #EEF0F3;
+    border: 1px solid var(--ca-border);
+    flex: 0 0 auto;
+}
+.caSegBtn {
+    border: 0;
+    background: transparent;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ca-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.2;
+    transition: background-color .15s ease, color .15s ease;
+}
+.caSegBtn:hover { color: var(--ca-text); }
+.caSegBtn:focus-visible { outline: 2px solid var(--ca-accent); outline-offset: 1px; }
+.caSegBtn.isActive {
+    background: var(--ca-surface);
+    color: var(--ca-text);
+    box-shadow: 0 1px 2px rgba(17,24,39,.12);
+}
+.caEmptyAction { margin-top: 10px; }
+.caMetricsHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.caWeekPick { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+.caSelectSm { height: 34px; font-size: 13px; }
+.caKpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 720px) { .caKpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.caKpi {
+    border: 1px solid var(--ca-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--ca-surface);
+}
+.caKpiValue {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--ca-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.caKpiLabel { margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--ca-text); }
+.caKpiSub { font-weight: 400; color: var(--ca-muted); }
+.caSwatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+/* Alto = área de trazo + banda del eje X + leyenda; nunca un scroll interno. */
+.caChartWrap { position: relative; height: 320px; }
+.caChartWrapShort { height: 280px; }
+.caTableWrap { overflow-x: auto; }
+.caTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.caTable th, .caTable td { padding: 8px 10px; border-bottom: 1px solid var(--ca-border); text-align: left; }
+.caTable th { font-size: 11px; font-weight: 800; color: var(--ca-muted); text-transform: uppercase; letter-spacing: .4px; }
+.caTable .num { text-align: right; font-variant-numeric: tabular-nums; }
+.caTable tfoot td { font-weight: 800; border-bottom: none; }
 
 .caSlotActions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 

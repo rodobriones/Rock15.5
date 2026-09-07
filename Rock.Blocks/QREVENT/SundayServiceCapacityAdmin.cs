@@ -134,7 +134,14 @@ SELECT
     s.Capacity,
     s.ReservedCount,
     s.HoldCount,
-    s.IsActive
+    s.IsActive,
+    -- Personas ya ingresadas (Status 3). Es un subconjunto de ReservedCount,
+    -- que cuenta Status IN (1,3); se muestra como 'X de Y ingresaron'.
+    ISNULL( (
+        SELECT SUM( r.Quantity )
+        FROM dbo.SundayServiceReservation r
+        WHERE r.SlotId = s.Id AND r.Status = 3
+    ), 0 ) AS CheckedInCount
 FROM dbo.SundayServiceSlot s
 LEFT JOIN dbo.[Schedule] sch ON sch.Id = s.ScheduleId
 WHERE s.CampusId = @CampusId
@@ -142,7 +149,7 @@ WHERE s.CampusId = @CampusId
   AND s.OccurrenceDate <= @EndDate
 ORDER BY s.OccurrenceDate, sch.[Name]";
 
-                var rows = rockContext.Database.SqlQuery<SlotRow>(
+                var rows = rockContext.Database.SqlQuery<SlotListRow>(
                     sql,
                     new SqlParameter( "@CampusId", bag.campusId ),
                     new SqlParameter( "@StartDate", start ),
@@ -164,6 +171,7 @@ ORDER BY s.OccurrenceDate, sch.[Name]";
                             capacity = r.Capacity,
                             reservedCount = r.ReservedCount,
                             holdCount = r.HoldCount,
+                            checkedInCount = r.CheckedInCount,
                             available = Math.Max( 0, r.Capacity - r.ReservedCount - r.HoldCount ),
                             isActive = r.IsActive
                         } ).ToList()
@@ -435,9 +443,163 @@ WHERE Id = @Id",
             }
         }
 
+        /// <summary>
+        /// Métricas semanales para la pestaña de dashboard: por semana y, dentro de
+        /// cada semana, por horario. Reservados / Ingresaron / No vinieron / Pendientes,
+        /// siempre en PERSONAS (SUM(Quantity)), para que sea comparable con
+        /// ReservedCount.
+        ///
+        /// Reglas:
+        ///  - Reservados  = Status IN (1,3)  (misma fórmula que ReservedCount).
+        ///  - Ingresaron  = Status = 3.
+        ///  - Un slot es "pasado" si su fecha es anterior a hoy. Solo entonces la
+        ///    diferencia Reservados − Ingresaron se reporta como "No vinieron"; para
+        ///    hoy y el futuro esa diferencia es "Pendientes" (todavía pueden llegar).
+        ///  - Semana = lunes a domingo; se etiqueta por el domingo, que es el día de
+        ///    servicio.
+        /// No toca esquema ni SPs: se calcula sobre las tablas existentes.
+        /// </summary>
+        [BlockAction( "GetWeeklyMetrics" )]
+        public BlockActionResult GetWeeklyMetrics( GetSlotsRequestBag bag )
+        {
+            if ( !IsAdminAuthorized() )
+            {
+                return ActionForbidden( "No autorizado." );
+            }
+
+            if ( bag == null || bag.campusId <= 0 )
+            {
+                return ActionBadRequest( "Parámetros inválidos." );
+            }
+
+            if ( !TryParseRange( bag.startDate, bag.endDate, out var start, out var end, out var rangeError ) )
+            {
+                return ActionBadRequest( rangeError );
+            }
+
+            var allowedIds = ParseCsvInts( GetAttributeValue( AttributeKey.AllowedScheduleIds ) );
+            var today = RockDateTime.Today;
+
+            using ( var rockContext = new RockContext() )
+            {
+                var sql = @"
+SELECT
+    s.Id AS SlotId,
+    s.OccurrenceDate,
+    s.ScheduleId,
+    sch.[Name] AS ScheduleName,
+    s.Capacity,
+    ISNULL( (
+        SELECT SUM( r.Quantity )
+        FROM dbo.SundayServiceReservation r
+        WHERE r.SlotId = s.Id AND r.Status IN ( 1, 3 )
+    ), 0 ) AS ReservedPeople,
+    ISNULL( (
+        SELECT SUM( r.Quantity )
+        FROM dbo.SundayServiceReservation r
+        WHERE r.SlotId = s.Id AND r.Status = 3
+    ), 0 ) AS CheckedInPeople
+FROM dbo.SundayServiceSlot s
+LEFT JOIN dbo.[Schedule] sch ON sch.Id = s.ScheduleId
+WHERE s.CampusId = @CampusId
+  AND s.OccurrenceDate >= @StartDate
+  AND s.OccurrenceDate <= @EndDate
+ORDER BY s.OccurrenceDate";
+
+                var rows = rockContext.Database.SqlQuery<MetricsSlotRow>(
+                    sql,
+                    new SqlParameter( "@CampusId", bag.campusId ),
+                    new SqlParameter( "@StartDate", start ),
+                    new SqlParameter( "@EndDate", end )
+                ).ToList();
+
+                var weeks = rows
+                    .GroupBy( r => WeekStartMonday( r.OccurrenceDate ) )
+                    .OrderBy( g => g.Key )
+                    .Select( g =>
+                    {
+                        var sunday = g.Key.AddDays( 6 );
+
+                        var schedules = g
+                            .GroupBy( r => r.ScheduleId )
+                            .Select( sg => BuildScheduleMetrics( sg.Key, sg.First().ScheduleName, sg.ToList(), today ) )
+                            // Mismo orden que el atributo del bloque (7,9,11,13,18); lo no listado al final.
+                            .OrderBy( m => { var i = allowedIds.IndexOf( m.scheduleId ); return i < 0 ? int.MaxValue : i; } )
+                            .ThenBy( m => m.scheduleName )
+                            .ToList();
+
+                        return new WeekMetricsBag
+                        {
+                            weekStart = g.Key.ToString( "yyyy-MM-dd" ),
+                            sundayDate = sunday.ToString( "yyyy-MM-dd" ),
+                            label = "Dom " + sunday.ToString( "d MMM", SpanishCulture ).Replace( ".", "" ),
+                            isPast = sunday < today,
+                            capacity = schedules.Sum( m => m.capacity ),
+                            reserved = schedules.Sum( m => m.reserved ),
+                            checkedIn = schedules.Sum( m => m.checkedIn ),
+                            noShow = schedules.Sum( m => m.noShow ),
+                            pending = schedules.Sum( m => m.pending ),
+                            schedules = schedules
+                        };
+                    } )
+                    .ToList();
+
+                return ActionOk( new WeeklyMetricsResponseBag { weeks = weeks } );
+            }
+        }
+
         #endregion
 
         #region Helpers
+
+        /// <summary>Lunes de la semana a la que pertenece la fecha (lunes → domingo).</summary>
+        private static DateTime WeekStartMonday( DateTime date )
+        {
+            var offset = ( ( int ) date.DayOfWeek + 6 ) % 7;
+            return date.Date.AddDays( -offset );
+        }
+
+        private static ScheduleMetricsBag BuildScheduleMetrics( int scheduleId, string scheduleName, List<MetricsSlotRow> slots, DateTime today )
+        {
+            var reserved = 0;
+            var checkedIn = 0;
+            var noShow = 0;
+            var pending = 0;
+            var capacity = 0;
+            var allPast = true;
+
+            foreach ( var s in slots )
+            {
+                var isPast = s.OccurrenceDate.Date < today;
+                var gap = Math.Max( 0, s.ReservedPeople - s.CheckedInPeople );
+
+                reserved += s.ReservedPeople;
+                checkedIn += s.CheckedInPeople;
+                capacity += s.Capacity;
+
+                if ( isPast )
+                {
+                    noShow += gap;
+                }
+                else
+                {
+                    pending += gap;
+                    allPast = false;
+                }
+            }
+
+            return new ScheduleMetricsBag
+            {
+                scheduleId = scheduleId,
+                scheduleName = scheduleName ?? ( "Schedule " + scheduleId ),
+                capacity = capacity,
+                reserved = reserved,
+                checkedIn = checkedIn,
+                noShow = noShow,
+                pending = pending,
+                isPast = allPast
+            };
+        }
 
         private bool IsAdminAuthorized()
         {
@@ -690,6 +852,7 @@ WHERE Id = @Id",
             public int capacity { get; set; }
             public int reservedCount { get; set; }
             public int holdCount { get; set; }
+            public int checkedInCount { get; set; }
             public int available { get; set; }
             public bool isActive { get; set; }
         }
@@ -743,6 +906,60 @@ WHERE Id = @Id",
             public int ReservedCount { get; set; }
             public int HoldCount { get; set; }
             public bool IsActive { get; set; }
+        }
+
+        /// <summary>
+        /// Fila del listado de GetSlots: SlotRow + personas ingresadas. Es un tipo
+        /// aparte a propósito: Generate y UpdateSlot también materializan SlotRow con
+        /// un SELECT que no trae CheckedInCount, y EF6 exige que toda propiedad tenga
+        /// su columna ("data reader is incompatible"). Agregar la columna a SlotRow
+        /// rompía esas dos acciones.
+        /// </summary>
+        private class SlotListRow : SlotRow
+        {
+            public int CheckedInCount { get; set; }
+        }
+
+        private class MetricsSlotRow
+        {
+            public int SlotId { get; set; }
+            public DateTime OccurrenceDate { get; set; }
+            public int ScheduleId { get; set; }
+            public string ScheduleName { get; set; }
+            public int Capacity { get; set; }
+            public int ReservedPeople { get; set; }
+            public int CheckedInPeople { get; set; }
+        }
+
+        public class ScheduleMetricsBag
+        {
+            public int scheduleId { get; set; }
+            public string scheduleName { get; set; }
+            public int capacity { get; set; }
+            public int reserved { get; set; }
+            public int checkedIn { get; set; }
+            public int noShow { get; set; }
+            public int pending { get; set; }
+            public bool isPast { get; set; }
+        }
+
+        public class WeekMetricsBag
+        {
+            public string weekStart { get; set; }
+            public string sundayDate { get; set; }
+            public string label { get; set; }
+            public bool isPast { get; set; }
+            public int capacity { get; set; }
+            public int reserved { get; set; }
+            public int checkedIn { get; set; }
+            public int noShow { get; set; }
+            public int pending { get; set; }
+            public List<ScheduleMetricsBag> schedules { get; set; }
+        }
+
+        public class WeeklyMetricsResponseBag
+        {
+            public List<WeekMetricsBag> weeks { get; set; }
         }
 
         private class ScheduleCapacityRow

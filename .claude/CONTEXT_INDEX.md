@@ -74,7 +74,8 @@
 | `C:\repos\Rock15.5\QREVENT_CelebremosQrCheckIn_Migration_Context.md` | Migracion de `CelebremosQrCheckIn` de Rock 15.5.1 a Rock 18.1: tipo de bloque, imports, ZXing | Al trabajar en `CelebremosQrCheckIn.cs` o `CelebremosQrCheckIn.obs`. |
 | `C:\repos\Rock15.5\Migration_Context_ReservationScanner_FamilyHub.md` | Migracion de `ReservationScanner` y `FamilyHub` de Rock 15.5.1 a Rock 18.1 en un mismo documento | Al trabajar en `ReservationScanner.obs` o al auditar las migraciones de estos dos bloques. |
 | `C:\repos\Rock15.5\Rock.JavaScript.Obsidian.Blocks\src\QREVENT\vendor\CHANGES.md` | Que es ZXing, por que es vendor (no npm directo), version, y como se usa en los bloques QREVENT | Al entender el pipeline de build de ZXing, reportar warnings de sourcemap, o al agregar nuevos bloques que necesiten QR. |
-| `C:\repos\Rock15.5\Dev Tools\Sql\CHANGES.md` | Que hace `QREVENT_SundayService_Hardening.sql`, cuando ejecutarlo, que tablas/constraints/procedures crea, si es idempotente | Antes de deployar QREVENT por primera vez, o al diagnosticar errores de integridad en tablas `SundayService*`. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\CHANGES.md` | Que hace `QREVENT_SundayService_Hardening.sql` y la migracion a `PersonAliasId` (Step1/Step2): tablas, constraints, SPs vigentes, idempotencia, incidente `Msg 5074` | Antes de deployar QREVENT por primera vez, al tocar los SPs de reservas, o al diagnosticar errores de integridad en tablas `SundayService*`. |
+| `C:\repos\Rock15.5\Dev Tools\Deploy\SundayService_PersonAlias\README.md` | Registro del despliegue de la migracion a `PersonAliasId` (aplicada en prod 2026-09-06): orden SQL→DLL, por que ese orden, el incidente de Step2, verificacion, y que binarios siguen pendientes de subir | Antes de subir cualquier DLL o bundle de QREVENT a produccion. |
 | `C:\repos\Rock15.5\Rock.Blocks\QREVENT\CHANGES.md` | **Documentacion descriptiva del backend por bloque** (no changelog): que hace cada uno, atributos de bloque, BlockActions, estados y codigos de resultado, SPs que usa, ventana de check-in del escaner | Antes de tocar CUALQUIER `.cs` de QREVENT. |
 | `C:\repos\Rock15.5\Rock.JavaScript.Obsidian.Blocks\src\QREVENT\CHANGES.md` | **Documentacion descriptiva del frontend por bloque**: estados reactivos, flujo de camara y permisos, patrones comunes (banner, cooldown de escaneo), design system Brujula VR y sus desviaciones | Antes de tocar CUALQUIER `.obs` de QREVENT. |
 
@@ -82,8 +83,14 @@
 - `Rock.Blocks/QREVENT/QRScanner.cs` + `src/QREVENT/qrScanner.obs` — Lista de eventos y escaneo QR
 - `Rock.Blocks/QREVENT/CelebremosQrCheckIn.cs` + `src/QREVENT/CelebremosQrCheckIn.obs` — Check-in Steps para grupo Celebremos
 - `Rock.Blocks/QREVENT/ReservationScanner.cs` + `src/QREVENT/ReservationScanner.obs` — Scanner de reservaciones
-- `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` + `src/QREVENT/SundayServiceRegistration.obs` — Registro dominical
+- `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` + `src/QREVENT/SundayServiceRegistration.obs` — Registro dominical. Identidad por `PersonAliasId`; tarjeta «Bienvenido» que llega por RealTime al escanear
+- `Rock.Blocks/QREVENT/SundayServiceCapacityAdmin.cs` + `src/QREVENT/SundayServiceCapacityAdmin.obs` — Cupos por sede/fecha/horario + pestaña **Metricas** (barras por semana y por horario)
+- `Rock.Blocks/QREVENT/RealTime/SundayServiceTopic.cs` — Topic SignalR del «Bienvenido», un canal por reserva. Vive en `Rock.Blocks`, no en `Rock.dll`
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/vendor/zxing.lib.ts` — Entry point del vendor bundle ZXing
+
+**Estado en produccion (2026-09-07):** hotfix de ventana de check-in, pestaña Metricas y la
+migracion a `PersonAliasId` (Step1+Step2) estan en prod; el «Bienvenido» acotado a 10 min esta
+compilado y pendiente de subir. Nada commiteado. Detalle y binarios: `Dev Tools/Deploy/SundayService_PersonAlias/README.md`.
 
 ---
 
@@ -169,7 +176,10 @@ No hay archivos de contexto separados para Security. Usar `PROJECT_CONTEXT.md` q
 | Archivo | Proposito | Cuando leerlo |
 |---|---|---|
 | `C:\repos\Rock15.5\Dev Tools\Sql\CHANGES.md` | Descripcion de todos los scripts SQL de VidaReal en este directorio | Al necesitar ejecutar scripts SQL en un ambiente nuevo o diagnosticar problemas de integridad de datos. |
-| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_Hardening.sql` | Script SQL real de hardening: constraints, indice unico y stored procedures para SundayService | Al deployar QREVENT por primera vez o al diagnosticar errores en reservaciones. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_Hardening.sql` | Script SQL real de hardening: constraints, indice unico y stored procedures para SundayService. **Los 4 SPs del flujo de reservas ya no salen de aqui** (ver Step1) | Al deployar QREVENT por primera vez o al diagnosticar errores en reservaciones. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_PersonAlias_Step1.sql` | **Fuente vigente de los 4 SPs de reservas.** Migracion de identidad a `PersonAliasId`, fase expandir; los SPs aceptan `@PersonAliasId` o `@PersonId`. Aplicado en prod 2026-09-06 | Al tocar `sp_SundayService*`, al levantar un ambiente nuevo, o al entender por que el SQL va antes del DLL. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_PersonAlias_Step2.sql` | Fase contraer: `NOT NULL`, indices unicos por alias, limpieza. Aplicado en prod 2026-09-06 | Al replicar la migracion en otro ambiente. Ojo: cualquier `ALTER COLUMN` aqui exige soltar primero los indices de Step1. |
+| `C:\repos\Rock15.5\Dev Tools\Sql\QREVENT_SundayService_PersonAliasFix.sql` | Diagnostico y reparacion de reservas huerfanas por fusion de personas (bloques 1-2 solo lectura) | Si alguien reporta que no ve su reserva despues de una fusion, o antes de una deduplicacion masiva. |
 
 ---
 

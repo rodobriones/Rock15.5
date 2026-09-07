@@ -7,7 +7,10 @@ Los scripts con prefijo `QREVENT_` o `SundayService_` son especificos de VidaRea
 
 ## QREVENT_SundayService_Hardening.sql
 
-> **v2 — APLICADO a `Rock_Nueva` el 2026-07-04.** Fuente canonica de los 5 SPs.
+> **v2 — APLICADO a `Rock_Nueva` el 2026-07-04.** Fuente canonica de los 5 SPs
+> **hasta el 2026-09-06**: desde esa fecha, 4 de los 5 los redefine
+> `QREVENT_SundayService_PersonAlias_Step1.sql` (ver mas abajo). Este archivo sigue siendo el
+> origen de las restricciones `CHECK` y del resto del esquema.
 > Cambios v2: data fix de contadores antes de validar; se agregan
 > `sp_SundayServiceReservationConfirm` y `sp_SundayServiceCleanupExpiredHolds`;
 > orden de locks unificado Slot-primero en todos los SPs (evita deadlocks ABBA);
@@ -39,7 +42,7 @@ Agrega restricciones de integridad (CHECK constraints) e indices unicos a las ta
 | `dbo.SundayServiceHold` | Tabla | Agrega constraint `CK_SundayServiceHold_Quantity` |
 | `dbo.SundayServiceReservation` | Tabla | Agrega constraint `CK_SundayServiceReservation_Quantity` |
 | `dbo.SundayServiceReservation` | Tabla | Agrega constraint `CK_SundayServiceReservation_Status` |
-| `dbo.SundayServiceReservation` | Indice | Crea indice unico filtrado `UX_SundayServiceReservation_ActivePerson` (solo para `Status = 1`) |
+| `dbo.SundayServiceReservation` | Indice | Crea indice unico filtrado `UX_SundayServiceReservation_ActivePerson` (solo para `Status = 1`). **Reemplazado el 2026-09-06** por `…_ActivePersonAlias` (Step2) |
 | `dbo.sp_SundayServiceHoldUpsert` | Stored Procedure | Crea o reemplaza (`CREATE OR ALTER`) |
 | `dbo.sp_SundayServiceReservationCancel` | Stored Procedure | Crea o reemplaza (`CREATE OR ALTER`) |
 | `dbo.sp_SundayService_ConfirmFromHold` | Stored Procedure | Crea o reemplaza — esta DESHABILITADO (retorna error orientando a usar `sp_SundayServiceReservationConfirm`) |
@@ -54,7 +57,7 @@ Agrega restricciones de integridad (CHECK constraints) e indices unicos a las ta
 | `CK_SundayServiceHold_Quantity` | `Quantity > 0`. Impide holds con cantidad cero o negativa. |
 | `CK_SundayServiceReservation_Quantity` | `Quantity > 0`. Impide reservaciones con cantidad invalida. |
 | `CK_SundayServiceReservation_Status` | `Status IN (1, 2, 3, 4)`. Limita los estados validos de una reservacion. |
-| `UX_SundayServiceReservation_ActivePerson` | Indice unico filtrado: solo una reservacion activa (`Status = 1`) por persona. Evita doble-reservacion concurrente. |
+| `UX_SundayServiceReservation_ActivePerson` | Indice unico filtrado: solo una reservacion activa (`Status = 1`) por persona. Evita doble-reservacion concurrente. **Ya no existe:** Step2 lo movio al alias (`UX_SundayServiceReservation_ActivePersonAlias`), con la misma garantia. |
 
 ---
 
@@ -130,3 +133,99 @@ Al momento del snapshot (2026-07-04, antes del hardening v2), `QREVENT_SundaySer
 **El mismo dia se aplico el hardening v2**, que reemplazo estos SPs. Este snapshot queda solo como registro historico de lo que corria antes. La fuente canonica actual es `QREVENT_SundayService_Hardening.sql`.
 
 Indices unicos que ya existian en la BD (ademas de los del hardening): `UX_SundayServiceHold_SlotPerson (SlotId, PersonId)` y `UX_SundayServiceReservation_Code (ReservationCode)`.
+
+---
+
+## QREVENT_SundayService_PersonAlias_Step1.sql y _Step2.sql
+
+> **APLICADOS a `Rock18` (produccion) el 2026-09-06:** Step1 a las 22:20 (re-corrido a las
+> 22:43:57), Step2 v2 a las 22:44:53 despues de que su v1 fallara a las 22:34.
+> Verificados el 2026-09-07. **Fuente vigente de los 4 SPs del flujo de reservas.**
+
+### El problema que resuelven
+
+`SundayServiceReservation` y `SundayServiceHold` guardaban `PersonId` **sin FK a `Person.Id`**.
+Al fusionar dos personas, el merge de Rock repunta los `PersonAlias`, actualiza solo las tablas
+que tienen FK a `Person.Id` —esta no la tenia— y borra la persona absorbida. La reserva quedaba
+apuntando a un Id inexistente: la persona dejaba de verla en la app, sacaba otra, y el domingo
+habia dos cupos ocupados por una sola persona. Diagnostico completo en
+`docs/gps-custom/ETL.md` §3.1; en prod nunca ocurrio (0 huerfanas con 1 009 fusiones), pero la
+deduplicacion del importador de GPS (~700 fusiones de gente que si reserva) lo iba a disparar.
+
+**Por que no basta agregar la FK a `Person.Id`:** el merge empezaria a hacer el `UPDATE` y
+chocaria contra el indice unico filtrado cuando ambas personas tengan reserva activa, cambiando
+orfandad silenciosa por un merge que revienta a media transaccion. La solucion correcta es que
+la columna sea `PersonAliasId`, que el merge repunta solo.
+
+### Step1 — expandir (compatible con el DLL viejo y el nuevo)
+
+| Objeto | Accion |
+|---|---|
+| `SundayServiceReservation.PersonAliasId`, `SundayServiceHold.PersonAliasId` | Agrega la columna (nullable en esta fase) |
+| Backfill | Resuelve el alias por `PersonAlias.AliasPersonId` y, como respaldo, `Person.PrimaryAliasId` |
+| `FK_SundayServiceReservation_PersonAlias`, `FK_SundayServiceHold_PersonAlias` | FK a **`PersonAlias.Id`**, nunca a `Person.Id` |
+| `IX_..._SlotPersonAliasStatus`, `IX_..._PersonAliasStatus`, `IX_SundayServiceHold_Slot_PersonAlias_Expires` | Indices espejo de los que existian por `PersonId` |
+| `sp_SundayServiceHoldUpsert`, `…ReservationConfirm`, `…ReservationCancel`, `…CheckIn` | Redefinidos con resolucion de identidad |
+
+**Resolucion de identidad en los SPs:** aceptan `@PersonAliasId` o `@PersonId`; con uno derivan
+el otro y devuelven `-98` si no viene ninguno. Por eso el DLL viejo (que solo manda `@PersonId`)
+sigue funcionando despues de Step1 — y por eso **el SQL va siempre antes del DLL**: el DLL nuevo
+manda `@PersonAliasId`, que los SPs previos no conocen, y fallaria en cada reserva.
+
+**Cambio de comportamiento en `Confirm`:** ahora cancela **todas** las reservas activas del
+conjunto de alias antes de insertar, no `TOP 1`. Tras una fusion una persona puede tener dos, y
+cancelar solo una dejaba el cupo ocupado. Tambien recalcula el `ReservedCount` de los slots que
+quedaron libres.
+
+Es idempotente: se puede volver a correr.
+
+### Step2 — contraer (v2)
+
+`PersonAliasId` pasa a `NOT NULL`; el indice unico de una reserva activa por persona se mueve al
+alias (`UX_SundayServiceReservation_ActivePersonAlias`, reemplaza a
+`UX_SundayServiceReservation_ActivePerson`), igual el de holds
+(`UX_SundayServiceHold_SlotPersonAlias`); se borran los indices viejos por `PersonId` y un
+duplicado de `IX_SundayServiceHold_Expires`. Aborta con `THROW` si quedan filas sin alias o
+duplicados por alias. **No borra la columna `PersonId`**: los SPs la siguen escribiendo y queda
+informativa hasta un Step3 futuro.
+
+**Prerequisito real:** que los caminos de escritura del DLL nuevo hayan corrido al menos una vez.
+Lo previsto era esperar un domingo entre Step1 y Step2; se hizo la misma noche porque el pipeline
+estaba vacio (0 reservas futuras, 0 holds) y se ejercitaron a mano.
+
+### Incidente: la v1 de Step2 fallo con `Msg 5074`
+
+```
+Msg 5074 … The index 'IX_SundayServiceReservation_SlotPersonAliasStatus' is dependent on column 'PersonAliasId'.
+Msg 4922 … ALTER TABLE ALTER COLUMN PersonAliasId failed because one or more objects access this column.
+```
+
+SQL Server no permite `ALTER COLUMN` sobre una columna que participa en indices o FK, y Step1
+crea tres indices y dos FK sobre ella. Las horas exactas de cada corrida quedaron en
+`sys.objects` y estan en el README del kit de despliegue. La transaccion hizo **rollback completo** (verificado: la
+columna seguia nullable y los objetos de Step1 intactos), asi que produccion no quedo a medias.
+
+La **v2** suelta las FK y los indices dependientes, aplica el `NOT NULL`, recrea los indices —los
+de Step1 mas los unicos nuevos— y vuelve a poner las FK, todo en una transaccion y con
+`IF EXISTS` en cada drop para que sea reintentable. Agrega `SET QUOTED_IDENTIFIER ON`, que los
+indices filtrados exigen: SSMS lo trae por omision, `sqlcmd` no.
+
+Se probo antes de la segunda corrida contra una base local creada con el DDL exacto de prod y una
+persona fusionada: setup → Step1 → Step2 → ciclo con el DLL nuevo y con el viejo → check-in → la
+persona superviviente ve la reserva del absorbido → el indice unico bloquea una segunda activa
+del mismo alias. **Leccion para cualquier `ALTER COLUMN` futuro en estas tablas:** soltar primero
+los indices de Step1.
+
+### QREVENT_SundayService_PersonAliasFix.sql
+
+Diagnostico y reparacion de huerfanas, por si alguna vez aparecen. Bloques 1 y 2 son **solo
+lectura** (huerfanas por estado y vigencia, integridad de `ReservedCount` contando
+`Status IN (1,3)`, historial de fusiones); el 3A repara reasignando al dueño correcto con guarda
+contra el indice unico de holds; el 3B reporta y su resolucion queda comentada a proposito.
+En prod dio cero huerfanas el 2026-09-04.
+
+### Referencia en el codigo
+
+- `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` — manda `@PersonAliasId` y lee por conjunto de alias
+- `Rock.Blocks/QREVENT/ReservationScanner.cs` — resuelve el nombre por alias con respaldo a `PersonId`
+- Registro del despliegue y binarios: `Dev Tools/Deploy/SundayService_PersonAlias/README.md`

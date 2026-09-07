@@ -8,6 +8,22 @@ Cada archivo `.obs` es un Single File Component (SFC) de Vue que incluye `<templ
 
 ---
 
+## Estado de los bundles en produccion (al 2026-09-07)
+
+| Bundle | Estado |
+|---|---|
+| `celebremosQrCheckIn.obs.js`, `qrScanner.obs.js`, `reservationScanner.obs.js` | En prod |
+| `sundayServiceRegistration.obs.js` con «¡Bienvenido!» en vivo | En prod desde 2026-09-06; la version con la tarjeta acotada a 10 min esta **pendiente de subir** |
+| `sundayServiceCapacityAdmin.obs.js` con la pestaña Metricas | En prod desde 2026-09-06; la version con el selector propio y el rango por semana esta **pendiente de subir** |
+
+Los binarios pendientes y su destino estan listados en
+`Dev Tools/Deploy/SundayService_PersonAlias/README.md`. Nada de esto esta commiteado todavia.
+
+**Recordatorio de build:** `npm run build` devuelve exit 0 aunque falle el tsconfig de QREVENT.
+Verificar siempre el tamaño y la fecha del `.obs.js` generado antes de darlo por bueno.
+
+---
+
 ## Libreria ZXing para escaneo QR
 
 ### Archivo: `vendor/zxing.lib.ts`
@@ -461,6 +477,8 @@ if (mySeq !== holdInFlightSeq) return;
 - `ConfirmReservation({ holdToken, forceReplaceExisting, esReemplazo })` → Confirma reserva
 - `CancelReservation({ reservationId })` → Cancela reserva activa
 - `GetActiveReservation({})` → Refresca la reserva activa del usuario
+- `SubscribeToReservation({ connectionId })` → Une la conexión RealTime al canal de su reserva (el servidor elige el canal)
+- `GetTodayCheckIn({})` → Respaldo del «Bienvenido»: el check-in de hoy si tiene menos de 10 min
 
 **Auto-seleccion de campus:** Si solo hay un campus disponible, se selecciona automaticamente y se salta al paso 2.
 
@@ -1015,3 +1033,162 @@ el peor momento. Ahora **encola** en vez de descartar: `refreshQueued` mas
   del tope; `refreshQueued` es un booleano, asi que nunca hay mas de uno pendiente.
 - El ciclo corto puede llegar a 36 llamadas a `GetActiveSlot` en 3 min. Es una query
   ligera y solo ocurre en el minuto de la apertura.
+
+## SundayServiceCapacityAdmin: pestaña "Métricas" con barras por semana y por horario (2026-09-06)
+
+**Pedido:** ver por semana las reservas, la asistencia y los que no vinieron, en barras, y poder
+bajar a cada horario. Va como segunda pestaña dentro del mismo bloque de configuración.
+
+**Estructura:** `TabbedBar` (`type="pills"`) en la barra superior con dos pestañas,
+`Configuración` (todo lo que ya existía) y `Métricas`. La Zona 1 (sede + rango + presets) queda
+compartida arriba de ambas: los filtros gobiernan todo lo que hay debajo. En `Métricas` los
+presets cambian a "Últimas 4 sem. / 12 / 26" (miran hacia atrás; los de configuración miran hacia
+adelante). Si el rango no tiene servicios, el vacío ofrece "Ver últimas 12 semanas".
+
+> **Dos partes de este párrafo quedaron superadas el 2026-09-07** (ver las dos últimas entradas
+> de este archivo): `TabbedBar` se reemplazó por un segmentado propio porque escondía la pestaña
+> bajo un menú «More», y el rango dejó de ser compartido: cada pestaña tiene el suyo y abre en
+> la semana en curso.
+
+**Contenido de la pestaña, en este orden:**
+
+1. **KPIs de la semana seleccionada** (4 tiles): Reservados de N cupos · Ingresaron (%) ·
+   No vinieron (%) —o Pendientes si la semana no ha pasado— · Ocupación. Selector de semana al lado.
+2. **Por horario** (semana seleccionada): barras apiladas por servicio, total de la pila sobre
+   cada barra (≤ 6 barras, etiqueta directa selectiva).
+3. **Por semana**: barras apiladas por semana con todos los horarios sumados. Tocar una barra
+   selecciona esa semana arriba.
+4. **Tabla de detalle** de la semana: Horario · Cupos · Reservados · Ingresaron · No vinieron o
+   Pendientes · Asistencia %. Con fila Total. Es la vista accesible y el respaldo de las etiquetas.
+
+**Datos:** acción `GetWeeklyMetrics` (ver CHANGES.md del backend). Semana por omisión al cargar:
+la más reciente ya realizada; si no hay, la última del rango.
+
+**Gráficas (Chart.js, `@Obsidian/Libs/chart`), decisiones de la guía de dataviz:**
+
+- La altura total de cada barra son los **reservados**; se apila en Ingresaron (`#2a78d6`),
+  No vinieron (`#eb6834`) y Pendientes (`#1baf7a`). Paleta categórica en orden fijo, validada con
+  el script de la guía (CVD ΔE 9.2, normal 27.6; el aqua da WARN de contraste 2.74:1, cubierto
+  con etiquetas directas y la tabla).
+- Marcas: `maxBarThickness: 24`; 2 px de superficie entre segmentos (`borderColor` = surface,
+  `borderWidth.top: 2`), no un borde; extremo redondeado 4 px **solo en el segmento superior
+  visible** de cada pila (`borderRadius` scriptable con `topDatasetIndex`).
+- Un solo eje Y, grid hairline `rgba(17,24,39,.08)` sin dashes, ticks enteros. Texto siempre en
+  tinta (`#111827` / `#6B7280`), nunca en el color de la serie; la identidad la da el swatch.
+- Leyenda abajo (hay ≥ 2 series). Tooltip `mode: "index"` con todas las series y pie
+  "Reservados: N".
+- Plugin inline `caStackTotals` dibuja el total sobre cada pila solo en la gráfica corta.
+
+**Ciclo de vida:** los canvas viven dentro del `v-if` de la pestaña, así que se desmontan al
+cambiar. `upsertChart` compara `chart.canvas` con el ref actual: si difiere, destruye y recrea;
+si es el mismo, `update()`. `onBeforeUnmount` destruye ambos.
+
+**Contador de ingresos en Configuración:** la fila de stats de cada slot muestra ahora
+`Ingresaron N` entre Reservados y Holds (`SlotBag.checkedInCount`).
+
+**Tipos:** `ScheduleMetricsBag`, `WeekMetricsBag`, `Stack`. Cast `as unknown as` al asignar
+`data`/`options` a un `Chart` existente: TS2352 sin el paso por `unknown` (el primer build lo
+rechazó y `npm run build` igual devuelve exit 0 — verificar siempre que el `.obs.js` se regeneró).
+
+**Pendiente de mirar en dev:** la validación visual (colisiones de etiquetas, alto del contenedor
+con leyenda) no se pudo hacer aquí; el contenedor es de 320/280 px para que quepan trazo + eje +
+leyenda sin scroll interno.
+
+## SundayServiceRegistration: «¡Bienvenido!» en vivo al recibir check-in (2026-09-06)
+
+**Qué ve la persona:** está mostrando su QR al kiosko; cuando el escáner lo marca, la tarjeta
+del QR se reemplaza al instante por una tarjeta verde «¡Bienvenido, Nombre!» con servicio,
+personas y hora, una vibración corta (si el dispositivo lo permite) y un botón «Reservar otro
+servicio». Si reabre la app más tarde ese mismo día, ve la misma tarjeta (viene en `InitBag`).
+
+**Cómo:** `getTopic("Rock.Blocks.QREVENT.SundayServiceTopic")` en `onMounted`; handler
+`on("reservationCheckedIn")`; suscripción por `SubscribeToReservation(connectionId)` (el servidor
+decide el canal); `watch` sobre `activeReservation.reservationCode` para re-suscribirse al
+confirmar o cambiar de reserva. Respaldos: `onReconnected` → re-suscribir + `GetTodayCheckIn`;
+`visibilitychange` a visible → lo mismo. Todo en `try/catch`: sin RealTime la página funciona
+igual que antes.
+
+**Guarda de identidad:** el handler ignora avisos de un `reservationCode` distinto al que muestra
+la pantalla (o al último suscrito), por si llegara algo de un canal viejo.
+
+**Template:** la tarjeta de Bienvenido va antes de la de reserva activa; la de reserva pasa de
+`v-if` a `v-else-if`. Clases `ssWelcome*` con `prefers-reduced-motion`.
+
+**Tipos:** `TodayCheckInBag`; `InitBag.todayCheckIn`. Tipo del topic derivado con
+`Awaited<ReturnType<typeof getTopic>>` para no depender de exports de `realTime.ts`.
+
+**No probado en dispositivo:** la tarjeta y el flujo de reconexión se validan en dev/prod con un
+QR real y un escaneo real. En WKWebView y WebView de Android los WebSockets funcionan; si un
+WebView los bloquea, SignalR negocia SSE o long-polling solo.
+
+**Costo en el servidor, acotado a propósito (misma fecha):** la conexión RealTime se abre
+**solo si hay reserva activa y hoy es su día de servicio** (`shouldHoldRealTime`). Quien entra
+entre semana a reservar no abre ningún socket. Así el número de conexiones vivas es proporcional
+a la gente que está en la puerta, no a las visitas a la página. `ensureRealTime()` es idempotente
+(guard `connecting`) y se invoca en `onMounted`, al confirmar/cambiar reserva y al volver a primer
+plano — este último cubre «dejé la página abierta desde el sábado».
+
+Orden de magnitud: una conexión SignalR ociosa cuesta decenas de KB y un keep-alive cada ~10 s;
+300 teléfonos en la puerta ≈ 10–15 MB y ~30 frames/s minúsculos, sin hilos bloqueados. La
+alternativa de sondear cada 10 s costaría ~30 requests/s por todo el pipeline de Rock (auth +
+bloque + SQL): entre 10 y 50 veces más. El envío por check-in es en proceso, sin SQL.
+
+## SundayServiceRegistration: la tarjeta «¡Bienvenido!» se oculta a los 10 minutos (2026-09-07)
+
+**Pedido:** la tarjeta se quedaba todo el día del servicio y volvía a salir en cada recarga.
+Se acotó a diez minutos desde el check-in.
+
+**Un solo camino de escritura:** toda asignación de `checkedIn` pasa ahora por
+`showCheckIn(bag)`, que descarta el bag si `visibleForSeconds <= 0`, lo muestra si es válido y
+arma un `setTimeout` que lo limpia al vencer. Lo llaman los tres orígenes: el valor inicial de
+`config.todayCheckIn`, el aviso RealTime y `refreshCheckIn()`. El botón «Reservar otro servicio»
+llama `showCheckIn(null)`. El temporizador se limpia también en `onBeforeUnmount`.
+
+**Por qué el conteo viene del servidor:** `visibleForSeconds` lo calcula el backend con su propio
+reloj (ver CHANGES.md del backend). Si el front restara `Date.now()` menos la hora del check-in,
+un teléfono con la hora corrida ocultaría la tarjeta de inmediato o la dejaría de más.
+
+**Emparejamiento:** este bundle necesita el DLL del 2026-09-07. Con el DLL anterior no hay
+`visibleForSeconds`, así que la tarjeta simplemente no aparece —sin errores en consola— y el
+resto de la página funciona igual.
+
+## SundayServiceCapacityAdmin: el selector de pestañas escondía «Métricas» (2026-09-07)
+
+**Síntoma:** en la barra superior del bloque de Cupos se veía la pestaña activa y un menú
+«More ▾» en lugar de las dos pastillas. No se podía llegar a Métricas.
+
+**Causa, en el control de Rock:** `TabbedBar` decide qué pestañas caben comparando el ancho de
+su `<ul>` con la suma de los anchos de sus ítems, con `<` estricto (`requiredWidth < barWidth`).
+Su contenedor aquí es `.caTabs`, un ítem flex que se encoge al contenido, así que los dos anchos
+son exactamente iguales: la comparación da falso, concluye que no cabe nada y manda al menú de
+desborde todas las pestañas menos la activa.
+
+**Solución:** se quitó `TabbedBar` y se puso un segmentado propio —dos botones en un
+`role="tablist"`, clases `.caSeg` y `.caSegBtn`— sin lógica de desborde, con el estilo de los
+chips del bloque (fondo gris, activa en blanco con sombra) y `:focus-visible`. Misma variable
+`activeTab`, así que nada más de la pestaña cambió. Sin cambios en C#.
+
+## SundayServiceCapacityAdmin: cada pestaña con su rango, abriendo en la semana en curso (2026-09-07)
+
+**Síntoma:** entrar a Métricas no mostraba nada útil. Heredaba el rango de Configuración —el que
+manda el servidor en `InitBag`, hoy a +3 meses— que es todo futuro: sin servicios pasados no hay
+asistencia que graficar.
+
+**Rango por pestaña.** Métricas tiene ahora `metricsStartDate` / `metricsEndDate`, separados de
+los de Configuración. Los campos Desde/Hasta del encabezado editan el de la pestaña activa a
+través de `rangeStart` / `rangeEnd`, dos `computed` con `get`/`set`. Cambiar el rango en Métricas
+ya no altera la lista de cupos, ni al revés.
+
+**Ambas abren en la semana en curso** (lunes a domingo): `applyWeekPreset(0)` para Métricas,
+`applyConfigWeekPreset(0)` para Configuración; las dos se apoyan en `weekRange(offset)` y
+`mondayOf(date)`. El rango que manda el servidor sigue en `InitBag` por compatibilidad, pero el
+front ya no lo usa como inicial.
+
+**Chips nuevos:** «Esta semana» y «Semana pasada» en las dos pestañas, delante de los que ya
+existían (`Últimas 4/12/26` en Métricas, `4 semanas / 3 meses / 6 meses` en Configuración). El
+estado vacío de Métricas ofrece «Ver semana pasada» junto a «Ver últimas 12 semanas».
+
+**Efecto secundario a tener presente:** «Generar plantilla» usa el rango de Configuración, que
+ahora arranca en una semana en vez de tres meses. Generar un trimestre pide apretar «3 meses»
+antes. Es más difícil crear cupos de más por accidente, pero es un clic extra para quien estaba
+acostumbrado al comportamiento anterior.

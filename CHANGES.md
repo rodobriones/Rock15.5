@@ -7,7 +7,8 @@ Este repositorio es un **fork de [SparkDevNetwork/Rock](https://github.com/Spark
 - **Upstream original:** https://github.com/SparkDevNetwork/Rock/tree/hotfix-18.1
 - **Rama de trabajo:** `hotfix-18.1`
 - **Inicio de personalizaciones:** commit `ca2ca0ec94` — "Bloques nuevos" (10 de febrero de 2026)
-- **Ultimo commit de VidaReal:** `7602e9bbef` — "Update Eventos" (3 de julio de 2026); los cambios del módulo Eventos/Boletería del 2026-07-03/04 (multi-sesión, calendario público, visibilidad, workflow launcher, archivado, reenvío admin) están en working tree, pendientes de commit
+- **Ultimo commit de VidaReal:** `1b9b247e48` — "Up to date" (3 de septiembre de 2026)
+- **Sin commit en working tree (al 2026-09-07):** los cambios del módulo Eventos/Boletería del 2026-07-03/04 (multi-sesión, calendario público, visibilidad, workflow launcher, archivado, reenvío admin) y **todo el trabajo de QREVENT de septiembre** (hotfix de ventana de check-in, pestaña Métricas, migración a `PersonAliasId`, «Bienvenido» por RealTime), más `docs/gps-custom/` completo
 - **Desarrolladores:** Equipo IT VidaReal (rodobriones)
 
 ---
@@ -17,7 +18,7 @@ Este repositorio es un **fork de [SparkDevNetwork/Rock](https://github.com/Spark
 | Area | Descripcion |
 |---|---|
 | **Donaciones (Dar)** | Bloque completo de donaciones con pasarelas Cybersource (tarjeta) y ePay Visanet (Guatemala), dashboard de donaciones, manejo de multiples monedas, anti-fraude, reCAPTCHA |
-| **Eventos / QREVENT** | Check-in por QR para eventos, scanner de reservaciones, registro de servicio dominical (Sunday Service), integración con Steps de Rock |
+| **Eventos / QREVENT** | Check-in por QR para eventos, scanner de reservaciones, registro de servicio dominical (Sunday Service) con identidad por `PersonAliasId` y «Bienvenido» por RealTime al escanear, administración de cupos con dashboard de métricas, integración con Steps de Rock |
 | **FamilyHub** | Portal familiar — vista y edición de miembros de familia y relaciones conocidas (Known Relationships) |
 | **Layout Personalizado** | Bloques de Header y Footer propios de VidaReal (Obsidian, no WebForms) |
 | **Seguridad / Autenticacion** | Flujos de login, AccountEntry, ConfirmAccount, ForgotUserName — todos traducidos al español y con UI adaptada a VidaReal.tv. Bloque nuevo: VRSimpleRegistration (registro simplificado post-passwordless) |
@@ -64,6 +65,8 @@ Todos los commits por debajo de `ca2ca0ec94` son del upstream SparkDevNetwork y 
 | 2026-06-22 | `7fc618ef10` | **Up to Date, translate, eventos, odoo** — Plugin.VidaRealTranslator, ajustes Odoo, base del módulo de eventos |
 | 2026-06-29 → 07-02 | *(sin commit)* | **Módulo Eventos/Boletería custom completo** — Producto propio de boletería end-to-end (esquema `_com_vidareal_Events_*`, 7 entidades, 6 bloques Obsidian, migraciones 001–017 en `Plugin.VidaRealEvents`): admin + checkout 2026 (hold/timer, mutex anti doble-cobro, promos, NIT/SAT, FEL multilínea, preguntas al asistente, invitados como personas reales), Mis Entradas, scanner continuo, reportería, permisos por-usuario (`EventStaff`), correo con PDF de boletos, job de conciliación `EventsMaintenance`. **2026-07-02: migrado a arquitectura hexagonal** — bloques como adaptadores delgados, lógica en `Rock/Model/Eventos/Services/` (CheckoutService, HoldService, PricingService, CheckoutAttendeeService, NitLookupService), front del checkout en partials. Docs: `Rock/Model/Eventos/ARCHITECTURE.md` (capas), `docs/eventos-custom/RESEARCH_Y_PLAN.md` (historial §9.x), `docs/eventos-custom/SMOKE_TESTS.md` (pruebas). |
 | 2026-06-18 | *(sin commit)* | **Rediseño UI/UX del wizard RegistrationEntry** — Solo frontend/CSS, sin tocar lógica. Capa de diseño 2026 en el `<style scoped>` del shell `registrationEntry.obs` (cascadea a hijos vía `:deep()`): superficie sólida calmada (se retiró glassmorphism/blob), jerarquía tipográfica fuerte (h1 grande + barra de acento sobre el título), **barra de acción fija (sticky)**, **transiciones direccionales** entre pasos (usa `navBack`), botones de acento. Tarjetas de registrante con avatar en `summary.partial.obs`; header con ícono en `registrar.partial.obs`; fix doble-tarjeta en `intro.partial.obs`. Sin cambios de marca (acento azul para cohesión con `payment`/`success`). |
+| 2026-09-01 → 09-07 | *(sin commit)* | **QREVENT servicio dominical: cuatro cambios, tres ya en producción** — (1) la ventana de check-in del escáner abre 15 min antes del servicio en vez de 10; (2) contador de ingresos por slot y **pestaña Métricas** en el bloque de Cupos: dashboard de barras por semana y por horario con reservas, asistencia y no-show (`GetWeeklyMetrics`, Chart.js); (3) **migración de identidad a `PersonAliasId`** en `SundayServiceReservation`/`Hold` — cierra el riesgo de reservas huérfanas tras fusionar personas, precondición de la dedup de GPS; Step1 + DLL + Step2 aplicados en prod el 06-sep y verificados el 07-sep; (4) **«Bienvenido» en el teléfono al escanear** por Rock RealTime (topic propio en `Rock.Blocks`, canal por reserva, socket solo el día del servicio), con la tarjeta acotada a 10 min. Docs: `Rock.Blocks/QREVENT/CHANGES.md`, `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CHANGES.md`, `Dev Tools/Deploy/SundayService_PersonAlias/README.md`. |
+| 2026-09-01 → 09-04 | *(sin commit)* | **Diseño del módulo GPS custom** — Producto propio de gestión de grupos pequeños en reemplazo del plugin WordPress `gps` (14 425 líneas de PHP + MariaDB). Diseño cerrado, **sin código todavía**: tablas propias `_com_vidareal_Gps_*` (sin `ConnectionRequest`), `Group`/`Person`/`PersonAlias` nativos, semáforo persistido, correos por workflow lanzado desde C#, importador en dos mitades (Python extrae, job de Rock escribe), 17 pantallas del sistema actual mapeadas a 11 bloques y 6 vistas, más kanban, portal móvil del líder y cableado para un agente de seguimiento. 7 documentos en `docs/gps-custom/`. |
 | 2026-08-04 | *(sin commit)* | **OTP passwordless por plantilla WhatsApp Authentication** — El código del login passwordless (system communication 40) ahora sale por la plantilla `auth_vidareal` de categoría Authentication de Meta (copy fijo + botón "Copiar código"), en cumplimiento de la política de Meta para OTPs. Ruteo nuevo en `WhatsAppTransport`: atributos `OTP Template Name/Language/System Communication Ids`; el payload incluye el código como parámetro de body y del botón copy-code (`sub_type: "url"`). Ver `Rock.WhatsApp/CHANGES.md` §"Códigos de un solo uso". |
 
 ---
@@ -83,6 +86,8 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 - `Rock.Blocks/QREVENT/CelebremosQrCheckIn.cs` — Check-in para grupo Celebremos
 - `Rock.Blocks/QREVENT/ReservationScanner.cs` — Scanner de reservaciones
 - `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` — Registro de servicio dominical
+- `Rock.Blocks/QREVENT/SundayServiceCapacityAdmin.cs` — Administracion de cupos por servicio + pestaña de metricas
+- `Rock.Blocks/QREVENT/RealTime/SundayServiceTopic.cs` — **NUEVO (sin commit)**. Topic de Rock RealTime (SignalR) que avisa al telefono del feligres cuando el escaner marca su check-in. Vive en `Rock.Blocks` y no en `Rock.dll` porque el descubrimiento de topics escanea todos los DLL de `Bin`
 - `Rock.Blocks/Security/VRSimpleRegistration.cs` — Registro simplificado post-passwordless (SIN COMMIT aun, archivo nuevo sin seguimiento)
 
 ### Frontend Obsidian (.obs) nuevos
@@ -95,6 +100,7 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CelebremosQrCheckIn.obs`
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/ReservationScanner.obs`
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceRegistration.obs`
+- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceCapacityAdmin.obs`
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/vendor/zxing.lib.ts` — Libreria ZXing para lectura de QR
 - `Rock.JavaScript.Obsidian.Blocks/src/Security/vrSimpleRegistration.obs` (SIN COMMIT aun)
 
@@ -138,7 +144,13 @@ Estos archivos fueron **creados desde cero** por VidaReal y no tienen contrapart
 
 ### Herramientas y contexto
 - `Dev Tools/Sql/QREVENT_SundayService_Hardening.sql`
-- `Dev Tools/Sql/CHANGES.md` — Documentacion del SQL de hardening (que hace, cuando ejecutar, idempotencia)
+- `Dev Tools/Sql/QREVENT_SundayService_PersonAlias_Step1.sql` — **NUEVO (sin commit)**. Migracion de identidad a `PersonAliasId`, fase expandir: columnas, backfill, FK a `PersonAlias`, indices y los 4 SPs en doble escritura. Aplicado en prod 2026-09-06
+- `Dev Tools/Sql/QREVENT_SundayService_PersonAlias_Step2.sql` — **NUEVO (sin commit)**. Fase contraer: `NOT NULL`, indices unicos por alias, limpieza de los viejos. Aplicado en prod 2026-09-06 (v2)
+- `Dev Tools/Sql/QREVENT_SundayService_PersonAliasFix.sql` — **NUEVO (sin commit)**. Diagnostico y reparacion de reservas huerfanas por fusion de personas (bloques 1-2 solo lectura)
+- `Dev Tools/Deploy/SundayService_PersonAlias/README.md` — **NUEVO (sin commit)**. Registro del despliegue de la migracion (orden, incidente `Msg 5074`, verificacion) y binarios pendientes de subir. Los `.dll`/`.js` de ese folder estan en `.gitignore`
+- `Dev Tools/Sql/CHANGES.md` — Documentacion del SQL de hardening y de la migracion a `PersonAliasId` (que hace, cuando ejecutar, idempotencia)
+- `Rock.Blocks/QREVENT/CHANGES.md` y `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CHANGES.md` — Bitacora del modulo QREVENT (backend y frontend): estado en produccion, cada cambio con su motivo, y los hallazgos abiertos
+- `docs/gps-custom/` — **NUEVO (sin commit)**. Diseño del modulo GPS: `SDD.md` (leer primero), `DATA_MODEL.md`, `BUSINESS_RULES.md`, `ETL.md`, `UI_REFERENCE.md`, `SMOKE_TESTS.md`, `README.md`
 - `Rock.Blocks/Dar/EmailTemplates/confirmacion-donacion.html`
 - `.claude/CONTEXT_INDEX.md` — **Indice maestro de todos los archivos de contexto del repo (leer primero en sesion nueva)**
 - `.claude/PROJECT_CONTEXT.md` — Contexto tecnico principal del proyecto
@@ -252,10 +264,12 @@ Bloques C# nuevos para el sistema de check-in por codigo QR de eventos de VidaRe
 
 - `Rock.Blocks/QREVENT/QRScanner.cs` (~403 lineas) — scanner QR generico para eventos. Lee QR de reservaciones y registra asistencia en Rock.
 - `Rock.Blocks/QREVENT/CelebremosQrCheckIn.cs` (~346 lineas) — check-in especializado para el grupo "Celebremos" con logica de Steps de Rock.
-- `Rock.Blocks/QREVENT/ReservationScanner.cs` (~630 lineas) — scanner de reservaciones con validacion de estado, capacidad y doble check-in.
-- `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` (~1217 lineas) — registro de servicio dominical con manejo de capacidad por servicio, listas de espera y Steps.
+- `Rock.Blocks/QREVENT/ReservationScanner.cs` (~718 lineas) — scanner de reservaciones con validacion de estado, capacidad y doble check-in. La ventana de check-in abre 15 min antes del servicio y cierra 80 min despues del inicio. Al marcar un check-in valido emite el aviso RealTime del «Bienvenido».
+- `Rock.Blocks/QREVENT/SundayServiceRegistration.cs` (~1493 lineas) — registro de servicio dominical con manejo de capacidad por servicio, hold temporal y codigo QR. Identidad por `PersonAliasId` (lee por conjunto de alias, inmune a fusiones de personas). Acciones de RealTime: `SubscribeToReservation`, `GetTodayCheckIn`.
+- `Rock.Blocks/QREVENT/SundayServiceCapacityAdmin.cs` (~973 lineas) — generacion y edicion de cupos por sede, fecha y horario, mas la accion `GetWeeklyMetrics` que alimenta la pestaña de metricas (reservas, asistencia y no-show por semana y por horario).
+- `Rock.Blocks/QREVENT/RealTime/SundayServiceTopic.cs` (~105 lineas) — topic SignalR con un canal por reserva; `NotifyReservationCheckedIn` es fire-and-forget y nunca retrasa la respuesta al escaner.
 
-**Dependencias de BD:** Requieren los SQL de `Dev Tools/Sql/QREVENT_SundayService_Hardening.sql` ejecutados previamente.
+**Dependencias de BD:** Requieren `Dev Tools/Sql/QREVENT_SundayService_Hardening.sql` (restricciones y esquema) y, desde el 2026-09-06, `…_PersonAlias_Step1.sql` + `…_Step2.sql`, que son la version vigente de los 4 SPs del flujo de reservas. **El DLL actual falla contra los SPs previos a Step1** (pasa `@PersonAliasId`); al reves si funciona.
 
 ---
 
@@ -326,8 +340,9 @@ Frontend Obsidian de los bloques de check-in QR.
 
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/qrScanner.obs` (~865 lineas) — scanner QR en browser usando camara del dispositivo. Integra la libreria ZXing para lectura de codigos QR y DataMatrix.
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CelebremosQrCheckIn.obs` (~677 lineas) — check-in para Celebremos con animaciones de exito y flujo de Steps.
-- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/ReservationScanner.obs` (~1333 lineas) — scanner de reservaciones con UI de estado de reservacion (confirmada, lista de espera, ya registrado).
-- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceRegistration.obs` (~1934 lineas) — registro de servicio dominical con selector de servicio y manejo de capacidad en tiempo real.
+- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/ReservationScanner.obs` (~2260 lineas) — scanner de reservaciones con UI de estado de reservacion (confirmada, lista de espera, ya registrado), blindaje de red y reintento.
+- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceRegistration.obs` (~2772 lineas) — registro de servicio dominical con selector de servicio, capacidad en tiempo real, guardado del QR en iOS/WebView y tarjeta «¡Bienvenido!» que llega por RealTime al escanear (visible 10 min).
+- `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/SundayServiceCapacityAdmin.obs` (~1366 lineas) — administracion de cupos y pestaña **Metricas** con barras apiladas (Chart.js) por semana y por horario, KPIs y tabla de detalle. Selector de pestañas propio: el `TabbedBar` de Rock escondia la pestaña bajo un menu «More» dentro de un contenedor flex.
 - `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/vendor/zxing.lib.ts` — wrapper de la libreria ZXing (1 linea de re-export).
 
 ---

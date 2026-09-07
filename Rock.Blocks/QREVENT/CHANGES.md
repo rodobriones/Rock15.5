@@ -10,6 +10,31 @@ El modulo cubre dos casos de uso distintos:
 
 ---
 
+## Estado en produccion (al 2026-09-07)
+
+| Cambio | Estado |
+|---|---|
+| Los 4 bloques, hardening SQL, fix de deadlock | En prod desde antes de sep-2026 |
+| Cierre de horarios pasados (01-sep) | En prod |
+| Hora del servidor en el contador del escaner (03-sep) | En prod |
+| Ventana de check-in 15 min antes (05-sep) | En prod desde 2026-09-06 |
+| Contador de ingresos + pestaña Metricas (06-sep) | En prod desde 2026-09-06 |
+| Identidad por `PersonAliasId`: Step1 + DLL + Step2 (06-sep) | **En prod desde 2026-09-06**; verificado el 07-sep |
+| «Bienvenido» RealTime al escanear (06-sep) | Codigo en prod; **el aviso en vivo no se ha visto funcionar con un escaneo real** |
+| Tarjeta «Bienvenido» limitada a 10 min (07-sep) | Compilada, **pendiente de subir** |
+
+Nada de esto esta commiteado todavia: el arbol de `hotfix-18.1` tiene los cambios sin commit.
+Los binarios y el registro del despliegue viven en
+`Dev Tools/Deploy/SundayService_PersonAlias/README.md`.
+
+**Deuda conocida:** nadie marca `Status = 4` (no-show). Las reservas de un servicio al que la
+persona no llego se quedan en `Status = 1` hasta que reserva otra vez, y el front manda siempre
+`forceReplaceExisting: true` para que eso no la bloquee. El no-show existe como numero solo en
+la pestaña Metricas, calculado por fecha pasada. Cerrarlo de verdad pide un job de Rock que
+cierre los slots del domingo anterior; no esta escrito.
+
+---
+
 ## Los 4 bloques backend
 
 ### 1. CelebremosQrCheckIn.cs
@@ -65,7 +90,7 @@ El modulo cubre dos casos de uso distintos:
 
 **Como funciona:**
 - Detecta automaticamente el slot activo del dia segun el horario del campus configurado. El operador nunca elige el horario a mano.
-- La ventana de check-in se abre **10 minutos antes** de la hora de inicio del servicio y cierra **1 h 20 min despues** de esa misma hora de inicio. Ambos valores son decision de negocio y estan fijos en el codigo (`CheckInOpensMinutesBeforeStart` / `CheckInClosesMinutesAfterStart`), no son configurables. El cierre debe seguir igual a `ReservationClosesMinutesAfterStart` del bloque de reserva (ver seccion del corte horario, 2026-09-01).
+- La ventana de check-in se abre **15 minutos antes** de la hora de inicio del servicio (eran 10 hasta el 2026-09-05) y cierra **1 h 20 min despues** de esa misma hora de inicio. Ambos valores son decision de negocio y estan fijos en el codigo (`CheckInOpensMinutesBeforeStart` / `CheckInClosesMinutesAfterStart`), no son configurables. El cierre debe seguir igual a `ReservationClosesMinutesAfterStart` del bloque de reserva (ver seccion del corte horario, 2026-09-01).
 - El cierre **no** usa el `DTEND` del iCalendar. El servicio dura ~2 h, asi que con `DTEND` la ventana del servicio anterior seguia abierta cuando la del siguiente ya habia abierto: habia dos slots vigentes al mismo tiempo y `sp_SundayServiceCheckIn` exige que la reserva sea exactamente del slot activo, asi que el solapamiento rechazaba en la puerta a gente con reserva valida.
 - Si aun asi dos ventanas se solaparan, gana el horario cuya **hora de inicio esta mas cerca de "ahora"**. El `ORDER BY sch.Id` del query no guarda relacion con el orden cronologico y no sirve como desempate.
 - Extrae la hora de inicio del iCalendar (`DTSTART`) del Schedule de Rock.
@@ -79,7 +104,7 @@ El modulo cubre dos casos de uso distintos:
 
 **Block Actions:**
 - `GetActiveSlot()`: Devuelve el slot activo o informacion del proximo horario. El "Proximo: ..." se ordena por la hora real resuelta del iCalendar, no por `ScheduleId`.
-- `ProcessScan(reservationCode)`: Valida el codigo de reservacion y marca asistencia.
+- `ProcessScan(reservationCode)`: Valida el codigo de reservacion y marca asistencia. Con `ResultCode = 1` emite el aviso RealTime del «Bienvenido» al telefono del feligres (fire-and-forget, nunca retrasa la respuesta al escaner; ver la seccion de RealTime).
 
 **Estados que devuelve `ProcessScan` (campo `status`):**
 - `checked_in`: asistencia registrada.
@@ -126,12 +151,20 @@ Los cuatro casos de rechazo cuentan para el throttle de escaneos invalidos.
 - `HoldUpsert(campusId, occurrenceDate, scheduleId, quantity, holdMinutes)`: Crea o actualiza hold temporal via SP.
 - `ConfirmReservation(holdToken, forceReplaceExisting, esReemplazo)`: Confirma reserva desde hold via SP.
 - `CancelReservation(reservationId)`: Cancela reserva activa via SP.
-- `GetActiveReservation()`: Devuelve la reserva activa actual del usuario.
+- `GetActiveReservation()`: Devuelve la reserva activa actual del usuario (`Status = 1`, horario no cerrado).
+- `SubscribeToReservation(connectionId)`: Une esa conexion RealTime al canal de su reserva activa. El cliente **nunca** elige canal; lo resuelve el servidor.
+- `GetTodayCheckIn()`: Devuelve el check-in de hoy (`Status = 3`) si tiene menos de 10 minutos. Es el respaldo del «Bienvenido» cuando el socket no estaba vivo.
 
 **Procedimientos SQL utilizados:**
 - `sp_SundayServiceHoldUpsert`: Crea/actualiza hold con logica de concurrencia (UPDLOCK, HOLDLOCK).
 - `sp_SundayServiceReservationConfirm`: Confirma reserva a partir del hold.
 - `sp_SundayServiceReservationCancel`: Cancela reserva activa.
+
+> **Identidad por `PersonAliasId` (desde 2026-09-06).** El bloque manda `@PersonAliasId =
+> currentPerson.PrimaryAliasId` ademas de `@PersonId`, y las lecturas de «mi reserva» filtran por
+> **conjunto de alias** (`r.PersonAliasId IN (SELECT Id FROM PersonAlias WHERE PersonId = @PersonId)`),
+> no por `PersonId`. Eso la hace inmune a las fusiones de personas. Los SPs vigentes son los de
+> `Dev Tools/Sql/QREVENT_SundayService_PersonAlias_Step1.sql`, **no los del hardening**.
 
 **Codigos de resultado de los SPs:**
 - `1`: Exito
@@ -140,6 +173,7 @@ Los cuatro casos de rechazo cuentan para el throttle de escaneos invalidos.
 - `-2`: Ya existe reserva activa / reserva no pertenece al usuario
 - `-3`: No se pudo reemplazar reserva existente
 - `-4`: El horario ya cerro (lo devuelve el bloque, no el SP; ver seccion del corte horario)
+- `-98`: No se pudo resolver la identidad (no llego ni `@PersonAliasId` ni `@PersonId`)
 - `-99`: Error inesperado
 
 **Tabla SundayServiceSlot:** Campos clave: `Capacity`, `ReservedCount`, `HoldCount`, `OccurrenceDate`, `ScheduleId`, `CampusId`, `IsActive`.
@@ -299,7 +333,8 @@ Reemplaza al bloque WebForms legacy (`RockWeb/Blocks/SundayService/SundayService
 - Todas las acciones requieren permiso `EDIT` sobre el bloque.
 
 **Block Actions:**
-- `GetSlots(campusId, startDate, endDate)`: slots agrupados por fecha + ultima capacidad por horario.
+- `GetSlots(campusId, startDate, endDate)`: slots agrupados por fecha + ultima capacidad por horario. Desde el 2026-09-06 devuelve tambien `checkedInCount` (cuantos ingresaron) por slot, en un tipo derivado `SlotListRow` — **no agregar propiedades a `SlotRow`**, que tambien materializan `Generate` y `UpdateSlot` con otros `SELECT`.
+- `GetWeeklyMetrics(campusId, startDate, endDate)`: alimenta la pestaña Metricas. Agrupa por semana (lunes a domingo) y por horario: capacidad, reservados, ingresos, no-show y pendientes. Agregado el 2026-09-06.
 - `Generate(campusId, startDate, endDate, items[], overwriteCapacity, deactivateOthers)`: aplica la plantilla en una transaccion; retorna conteos (creados/actualizados/reactivados/desactivados/omitidos) y advertencias.
 - `UpdateSlot(slotId, capacity?, isActive?)`: ajuste individual con las mismas guardas.
 
@@ -322,13 +357,19 @@ Este script aplica restricciones de integridad a las tablas del sistema de reser
 - `CK_SundayServiceHold_Quantity`: `Quantity > 0`.
 - `CK_SundayServiceReservation_Quantity`: `Quantity > 0`.
 - `CK_SundayServiceReservation_Status`: `Status IN (1, 2, 3, 4)`.
-- `UX_SundayServiceReservation_ActivePerson`: Indice unico filtrado que impide que una persona tenga mas de una reservacion activa (`Status = 1`) al mismo tiempo.
+- `UX_SundayServiceReservation_ActivePerson`: Indice unico filtrado que impide que una persona tenga mas de una reservacion activa (`Status = 1`) al mismo tiempo. **Reemplazado el 2026-09-06** por `UX_SundayServiceReservation_ActivePersonAlias` (misma garantia, por alias) — ver la seccion de PersonAliasId.
 
 **Stored Procedures que define/actualiza:**
 - `dbo.sp_SundayServiceHoldUpsert`: Crea o actualiza hold temporal con logica de concurrencia (`UPDLOCK`, `HOLDLOCK`, `ROWLOCK`). Cap. max de hold: 3 minutos. Cap. max de personas: 8.
 - `dbo.sp_SundayServiceReservationCancel`: Cancela una reserva activa y actualiza `ReservedCount` del slot.
 - `dbo.sp_SundayServiceCheckIn`: Marca la asistencia a partir del codigo QR, respetando el orden de locks Slot -> Reservation. Agregado en v3 (2026-08-24), ver abajo.
 - `dbo.sp_SundayService_ConfirmFromHold`: Stub deshabilitado. Usar `sp_SundayServiceReservationConfirm` en su lugar. **No lo llama nadie en el repo.**
+
+> **Este archivo ya no es la version vigente de los SPs.** Desde el 2026-09-06 la fuente de
+> verdad de `sp_SundayServiceHoldUpsert`, `…ReservationConfirm`, `…ReservationCancel` y
+> `…CheckIn` es `Dev Tools/Sql/QREVENT_SundayService_PersonAlias_Step1.sql`, que los redefine
+> con resolucion de identidad por alias. El hardening sigue siendo el origen de las
+> restricciones `CHECK` y del resto del esquema.
 
 ---
 
@@ -430,6 +471,14 @@ asistencia no se pierde. Dos consecuencias verificadas:
    exactos y el aforo de cada slot se respeta, asi que no es sobreventa. Si un asistente
    del primer servicio puede reservar el segundo del mismo dia es una decision de
    negocio, no un defecto tecnico.
+
+**Nadie marca el no-show.** `Status = 4` esta en la restriccion `CHECK` y en el diseño, pero
+ningun proceso lo escribe. Una reserva a la que la persona no llego se queda en `Status = 1`
+indefinidamente; lo que evita que le bloquee la siguiente es que el front manda
+`forceReplaceExisting: true` y `Confirm` cancela la activa antes de insertar. Consecuencias:
+`ReservedCount` de un slot pasado sigue contando a los ausentes (correcto, era su cupo), y el
+no-show solo existe como numero derivado en la pestaña Metricas (`reserved − checkedIn` cuando
+la fecha ya paso). Cerrarlo pide un job que cierre los slots del domingo anterior.
 
 Los scripts de la prueba quedaron fuera del repo (scratchpad de la sesion).
 
@@ -567,3 +616,158 @@ con `!iso`), asi que el JS nuevo funciona con el DLL viejo -sin corregir el desf
 comportamiento anterior-. Para que la correccion tenga efecto hay que subir el DLL.
 
 Detalle del lado del cliente en `Rock.JavaScript.Obsidian.Blocks/src/QREVENT/CHANGES.md`.
+
+## ReservationScanner: ventana de check-in abre 15 min antes (2026-09-05)
+
+**Pedido del ministerio:** abrir la puerta 15 minutos antes del inicio del servicio en vez de 10.
+
+**Cambio:** `CheckInOpensMinutesBeforeStart` pasa de 10 a 15 en `ReservationScanner.cs`. El cierre
+sigue en 80 (`CheckInClosesMinutesAfterStart`), igual que `ReservationClosesMinutesAfterStart` de
+`SundayServiceRegistration`. Con servicios a 2 h de distancia quedan 25 min de separación entre el
+cierre de una ventana y la apertura de la siguiente (antes 30). La regla general quedó en el
+comentario: apertura + cierre < 120 para que no se solapen.
+
+**Sin cambios de front:** el `.obs` recibe `nextCheckInStartIso` del servidor; no tiene el valor quemado.
+
+**Despliegue:** solo `Rock.Blocks.dll`. Se separó a propósito de la migración a `PersonAliasId`
+(ver `Dev Tools/Sql/QREVENT_SundayService_PersonAlias_Step1.sql`), que quedó como parche
+(`..._Step1_Blocks.patch`) para que este hotfix pudiera salir solo.
+
+## SundayServiceCapacityAdmin: contador de ingresos y pestaña de métricas (2026-09-06)
+
+**Pedido:** la vista de configuración mostraba reservas y holds por slot pero no cuántos
+hicieron check-in; además se pidió un dashboard por semana y por horario con barras.
+
+**Backend, dos cambios en `SundayServiceCapacityAdmin.cs`:**
+
+1. `GetSlots` devuelve `checkedInCount` por slot: `SUM(Quantity) WHERE Status = 3`. Es un
+   subconjunto de `ReservedCount` (que cuenta `Status IN (1,3)`); se muestra como "X ingresaron"
+   junto a Reservados.
+2. Nueva acción `GetWeeklyMetrics(campusId, startDate, endDate)`. Agrupa los slots del rango por
+   semana (lunes a domingo, etiquetada por el domingo: "Dom 7 sep") y dentro de cada semana por
+   horario, en el orden del atributo `Allowed Schedule Ids`. Por cada nivel: `capacity`,
+   `reserved` (Status IN 1,3), `checkedIn` (Status 3), `noShow`, `pending`, `isPast`.
+
+**Regla de no-show:** un slot es pasado si `OccurrenceDate < hoy`. Solo entonces
+`reserved − checkedIn` se reporta como `noShow`; para hoy y el futuro esa diferencia es `pending`
+(todavía pueden llegar). Nadie marca Status 4 en el sistema, así que este es hoy el único lugar
+donde el no-show existe como número. Todo en PERSONAS (`SUM(Quantity)`), comparable con
+`ReservedCount`.
+
+**Sin cambios de esquema ni de SPs:** dos subconsultas correlacionadas sobre
+`SundayServiceReservation`, entran por `IX_SundayServiceReservation_SlotPersonStatus`.
+
+**DTOs nuevos:** `MetricsSlotRow` (privado), `ScheduleMetricsBag`, `WeekMetricsBag`,
+`WeeklyMetricsResponseBag`. `SlotBag` gana `checkedInCount`.
+
+**Regresión detectada y corregida en la revisión, antes de desplegar:** la primera versión
+agregó `CheckedInCount` directamente a `SlotRow`. Pero `Generate` y `UpdateSlot` también
+materializan `SlotRow` con un `SELECT` que no trae esa columna, y EF6 exige que toda propiedad
+del tipo tenga su columna en el reader ("The data reader is incompatible with the specified
+type"). Habría roto **Generar plantilla** y **Guardar capacidad / Desactivar**. Se resolvió con un
+tipo derivado `SlotListRow : SlotRow` que solo usa `GetSlots`. Lección: en este archivo un mismo
+Row se materializa desde varios SELECT distintos; nunca agregar propiedades a `SlotRow`.
+
+## Reservas dominicales: identidad por PersonAliasId (2026-09-06, en produccion)
+
+**Problema:** `SundayServiceReservation` y `SundayServiceHold` guardaban `PersonId` sin FK. Al
+fusionar dos personas, el merge de Rock repunta los `PersonAlias`, actualiza solo tablas con FK
+a `Person.Id`, y borra la persona absorbida: la reserva quedaba apuntando a un Id inexistente.
+La página busca «mi reserva» por `PersonId`, así que la persona dejaba de verla, sacaba otra, y
+quedaban dos cupos ocupados. Verificado en producción el 04-sep: cero casos hasta hoy, pero
+1 009 fusiones desde febrero y la dedup de GPS (~700 merges de gente que sí reserva) lo iba a
+disparar.
+
+**Cambio en los bloques:** `SundayServiceRegistration` pasa `@PersonAliasId =
+currentPerson.PrimaryAliasId` a los tres SPs (además de `@PersonId`, mientras dure la
+transición) y `GetActiveReservationInternal` busca por **conjunto de alias**:
+`r.PersonAliasId IN (SELECT Id FROM PersonAlias WHERE PersonId = @PersonId)`. Eso es lo que la
+hace inmune al merge: el alias del absorbido sigue existiendo y ahora apunta al superviviente.
+`ReservationScanner` resuelve el nombre por `PersonAliasId` con respaldo a `PersonId`, y
+`CheckInResultRow` gana `PersonAliasId`.
+
+**Cambio en BD (aparte, `Dev Tools/Sql/…Step1.sql` y `…Step2.sql`):** columna `PersonAliasId`
+en ambas tablas, backfill, FK a `PersonAlias` (nunca a `Person`: activaría el UPDATE del merge y
+chocaría con el índice único), índices espejo, y los 4 SPs en doble escritura. `Confirm` ahora
+cancela **todas** las activas del conjunto de alias antes de insertar, no `TOP 1`: tras un merge
+la persona puede tener dos, y cancelar una dejaba dos cupos. Step2 contrae una semana después.
+
+**Orden obligatorio:** Step1 → DLL → un domingo → Step2. El DLL nuevo contra los SPs viejos
+falla (parámetro desconocido); los SPs nuevos con el DLL viejo funcionan. Kit y checklist en
+`Dev Tools/Deploy/SundayService_PersonAlias/README.md`.
+
+**Sin cambios de front.** Ningún `.obs` conoce `PersonId`.
+
+**Desplegado el 2026-09-06**, no una semana después: Step1 a las 22:20, DLL y bundles con
+reinicio, Step2 —tras el fallo de su v1 a las 22:34— a las 22:44, y el ciclo manual de reserva →
+cambio → cancelación → escaneo a las 22:48. Se adelantó porque el pipeline estaba vacío (domingo después de los servicios: 0 reservas futuras,
+0 holds), así que los caminos de escritura se pudieron ejercitar a mano en lugar de esperar un
+domingo real.
+
+**Step2 falló en el primer intento** con `Msg 5074`: SQL Server no permite `ALTER COLUMN` sobre
+una columna que participa en índices o FK, y Step1 crea tres índices y dos FK sobre
+`PersonAliasId`. La transacción hizo rollback completo, prod no quedó a medias. La v2 suelta
+índices y FK, aplica el `NOT NULL`, y los recrea en la misma transacción; se probó antes de la
+segunda corrida contra una base local con el DDL exacto de prod y una persona fusionada. Detalle
+del incidente en el README del kit.
+
+**Verificado en prod el 2026-09-07:** columnas `NOT NULL`, los índices y las dos FK como se
+esperaba (las viejas por `PersonId` eliminadas, las FK confiables), 0 filas sin alias, 0 alias
+con dos reservas activas, contadores de slot cuadrados, y ninguna excepción del módulo en el
+log. Con esto la precondición de la dedup de GPS (`docs/gps-custom/ETL.md` §3.1) queda cumplida.
+
+## «Bienvenido» en el teléfono al escanear: RealTime (2026-09-06)
+
+**Pedido:** que al escanear el QR en el kiosko, a la persona le aparezca «Bienvenido» en su
+teléfono. La app es un WebView de `SundayServiceRegistration.obs`, en primer plano, mostrando
+el QR: el caso ideal para push por SignalR. Sin webhook ni backend externo.
+
+**Topic propio en Rock.Blocks:** `QREVENT/RealTime/SundayServiceTopic.cs` —
+`SundayServiceTopic : Topic<ISundayServiceClient>` con `[RealTimeTopic]`. Vive aquí y no en
+`Rock.dll` porque `Reflection.GetPluginAssemblies()` escanea todos los DLL de Bin: se descubre
+solo y el despliegue sigue siendo DLL + bundle. Un canal por reserva
+(`sundayservice:reservation:{CODE}`). Patrón de `CheckInTopic` + `CheckInKiosk.SubscribeToRealTime`.
+
+**Suscripción autorizada en el servidor:** nueva acción `SubscribeToReservation(connectionId)`
+en `SundayServiceRegistration`. El cliente nunca elige canal: el bloque resuelve la reserva
+activa de la persona **por conjunto de alias** y une esa conexión a ese canal. Sin reserva
+activa no une a nada.
+
+**Emisión:** en `ReservationScanner.ProcessScan`, **solo con `ResultCode = 1`** (el 0 «ya tenía
+check-in» y los rechazos no avisan), después del SP, fire-and-forget con `Task.Run` + try/catch
+(mismo patrón que `CheckInDirector.SendRefreshKioskConfiguration`). Nunca retrasa ni hace
+fallar la respuesta al escáner. Costo: un envío en proceso, microsegundos; cero consultas.
+
+**Respaldo para cuando el socket no estaba vivo:** nueva acción `GetTodayCheckIn` (Status 3 de
+hoy, por conjunto de alias) y `InitBag.todayCheckIn`. La página la usa al cargar, al volver a
+primer plano y al reconectar. Así el «Bienvenido» también aparece si la persona reabre la app
+después. `GetActiveReservation` **no cambia** (sigue siendo Status 1): una reserva ya ingresada
+no bloquea reservar el próximo servicio.
+
+**Compatibilidad de despliegue:** bundle nuevo con DLL viejo → `getTopic` falla y se captura,
+las acciones faltantes se capturan; DLL nuevo con bundle viejo → acciones extra sin usar. Cualquier
+orden funciona; lo ideal es juntos.
+
+**Verificar en prod antes de confiar:** que el motor RealTime responda desde el WebView
+(petición a `/rock-rt` en las herramientas de red). Si un proxy lo bloquea, SignalR cae a
+long-polling; si ni eso, la página sigue funcionando sin el aviso en vivo.
+
+## La tarjeta «Bienvenido» solo dura 10 minutos (2026-09-07)
+
+**Pedido:** la primera versión mostraba la tarjeta todo el día del servicio —era a propósito,
+para cubrir el caso de escanear con el teléfono bloqueado— y además reaparecía en cada recarga.
+Se pidió acotarla a unos diez minutos.
+
+**Una sola constante:** `SundayServiceTopic.WelcomeVisibleMinutes = 10`. Vive en el topic porque
+la usan los dos lados: el aviso RealTime y la consulta de respaldo.
+
+**Servidor:** `GetTodayCheckInInternal` agrega `AND r.CheckedInDateTime >= @Since` con
+`@Since = ahora − 10 min`, así que una recarga tardía ya no la resucita. Ambos bags
+(`TodayCheckInBag` y `ReservationCheckedInBag`) llevan ahora `visibleForSeconds`: los segundos
+que le quedan de vida, calculados con el reloj del **servidor**. El aviso en vivo manda 600; la
+consulta de respaldo manda lo que reste. Que el conteo salga del servidor evita depender del
+reloj del teléfono, que en la práctica va corrido.
+
+**Compatibilidad:** el bundle viejo ignora el campo y se comporta como antes (tarjeta todo el
+día); el bundle nuevo con el DLL viejo no muestra la tarjeta, porque trata `visibleForSeconds`
+ausente como 0. Lo correcto es subir los dos juntos.

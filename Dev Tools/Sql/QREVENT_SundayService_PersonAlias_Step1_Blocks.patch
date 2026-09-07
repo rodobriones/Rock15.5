@@ -1,0 +1,149 @@
+diff --git a/Rock.Blocks/QREVENT/ReservationScanner.cs b/Rock.Blocks/QREVENT/ReservationScanner.cs
+index f303fd10c4..07c197b30e 100644
+--- a/Rock.Blocks/QREVENT/ReservationScanner.cs
++++ b/Rock.Blocks/QREVENT/ReservationScanner.cs
+@@ -241,7 +241,7 @@ EXEC dbo.sp_SundayServiceCheckIn
+ 
+                     ClearInvalidScanAttempts();
+ 
+-                    var personName = GetReservationPersonName( rockContext, row.PersonId );
++                    var personName = GetReservationPersonName( rockContext, row.PersonAliasId, row.PersonId );
+ 
+                     return ActionOk( BuildResult( "checked_in", personName, "Asistencia marcada correctamente.", activeSlotResult.Slot.scheduleName, row.Quantity ?? 0 ) );
+                 }
+@@ -587,18 +587,26 @@ ORDER BY slot.OccurrenceDate, sch.Id
+         /// Resuelve el nombre a mostrar del reservante. Se consulta despues del check-in,
+         /// fuera de la transaccion del SP, para no alargar el lock del slot.
+         /// </summary>
+-        private static string GetReservationPersonName( RockContext rockContext, int? personId )
++        private static string GetReservationPersonName( RockContext rockContext, int? personAliasId, int? personId )
+         {
+-            if ( !personId.HasValue )
++            // Preferir el alias: sobrevive al merge de personas. PersonId queda como
++            // respaldo para filas anteriores a la migracion (Step1) o si el alias
++            // viniera nulo por cualquier motivo.
++            var person = personAliasId.HasValue
++                ? new PersonAliasService( rockContext ).Queryable()
++                    .Where( pa => pa.Id == personAliasId.Value )
++                    .Select( pa => new { pa.Person.NickName, pa.Person.LastName } )
++                    .FirstOrDefault()
++                : null;
++
++            if ( person == null && personId.HasValue )
+             {
+-                return string.Empty;
++                person = new PersonService( rockContext ).Queryable()
++                    .Where( p => p.Id == personId.Value )
++                    .Select( p => new { p.NickName, p.LastName } )
++                    .FirstOrDefault();
+             }
+ 
+-            var person = new PersonService( rockContext ).Queryable()
+-                .Where( p => p.Id == personId.Value )
+-                .Select( p => new { p.NickName, p.LastName } )
+-                .FirstOrDefault();
+-
+             if ( person == null )
+             {
+                 return string.Empty;
+@@ -683,6 +691,7 @@ ORDER BY slot.OccurrenceDate, sch.Id
+             public int ResultCode { get; set; }
+             public int? Quantity { get; set; }
+             public int? PersonId { get; set; }
++            public int? PersonAliasId { get; set; }
+         }
+ 
+         private class InvalidScanThrottleState
+diff --git a/Rock.Blocks/QREVENT/SundayServiceRegistration.cs b/Rock.Blocks/QREVENT/SundayServiceRegistration.cs
+index d6413d1b70..21c07a5dd2 100644
+--- a/Rock.Blocks/QREVENT/SundayServiceRegistration.cs
++++ b/Rock.Blocks/QREVENT/SundayServiceRegistration.cs
+@@ -277,21 +277,26 @@ namespace Rock.Blocks.QREVENT
+                 var pCampus = new SqlParameter( "@CampusId", bag.campusId );
+                 var pOcc = new SqlParameter( "@OccurrenceDate", occ );
+                 var pSchedule = new SqlParameter( "@ScheduleId", bag.scheduleId );
++                // Identidad por PersonAliasId: sobrevive al merge de personas.
++                // PersonId se sigue pasando para que el SP escriba ambas columnas
++                // mientras dure la transicion (Step1 -> Step2).
+                 var pPerson = new SqlParameter( "@PersonId", currentPerson.Id );
++                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
+                 var pQty = new SqlParameter( "@Quantity", qty );
+                 var pHoldMin = new SqlParameter( "@HoldMinutes", holdMinutes );
+ 
+                 var sql = @"
+ EXEC dbo.sp_SundayServiceHoldUpsert
+-    @CampusId,
+-    @OccurrenceDate,
+-    @ScheduleId,
+-    @PersonId,
+-    @Quantity,
+-    @HoldMinutes";
++    @CampusId = @CampusId,
++    @OccurrenceDate = @OccurrenceDate,
++    @ScheduleId = @ScheduleId,
++    @PersonId = @PersonId,
++    @Quantity = @Quantity,
++    @HoldMinutes = @HoldMinutes,
++    @PersonAliasId = @PersonAliasId";
+ 
+                 var row = rockContext.Database
+-                    .SqlQuery<HoldUpsertResultRow>( sql, pCampus, pOcc, pSchedule, pPerson, pQty, pHoldMin )
++                    .SqlQuery<HoldUpsertResultRow>( sql, pCampus, pOcc, pSchedule, pPerson, pQty, pHoldMin, pPersonAlias )
+                     .FirstOrDefault();
+ 
+                 if ( row == null )
+@@ -365,17 +370,19 @@ EXEC dbo.sp_SundayServiceHoldUpsert
+                 }
+ 
+                 var pPerson = new SqlParameter( "@PersonId", currentPerson.Id );
++                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
+                 var pHold = new SqlParameter( "@HoldToken", holdGuid );
+                 var pForce = new SqlParameter( "@ForceReplaceExisting", bag.forceReplaceExisting ? 1 : 0 );
+ 
+                 var sql = @"
+ EXEC dbo.sp_SundayServiceReservationConfirm
+-    @PersonId,
+-    @HoldToken,
+-    @ForceReplaceExisting";
++    @PersonId = @PersonId,
++    @HoldToken = @HoldToken,
++    @ForceReplaceExisting = @ForceReplaceExisting,
++    @PersonAliasId = @PersonAliasId";
+ 
+                 var row = rockContext.Database
+-                    .SqlQuery<ReservationConfirmResultRow>( sql, pPerson, pHold, pForce )
++                    .SqlQuery<ReservationConfirmResultRow>( sql, pPerson, pHold, pForce, pPersonAlias )
+                     .FirstOrDefault();
+ 
+                 if ( row == null )
+@@ -445,13 +452,15 @@ EXEC dbo.sp_SundayServiceReservationConfirm
+             {
+                 var pReservationId = new SqlParameter( "@ReservationId", bag.reservationId );
+                 var pPersonId = new SqlParameter( "@PersonId", currentPerson.Id );
++                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
+ 
+                 var sql = @"
+ EXEC dbo.sp_SundayServiceReservationCancel
+-    @ReservationId,
+-    @PersonId";
++    @ReservationId = @ReservationId,
++    @PersonId = @PersonId,
++    @PersonAliasId = @PersonAliasId";
+ 
+-                var row = rockContext.Database.SqlQuery<CancelReservationResultRow>( sql, pReservationId, pPersonId ).FirstOrDefault();
++                var row = rockContext.Database.SqlQuery<CancelReservationResultRow>( sql, pReservationId, pPersonId, pPersonAlias ).FirstOrDefault();
+ 
+                 if ( row == null )
+                 {
+@@ -564,7 +573,10 @@ INNER JOIN dbo.SundayServiceSlot sl ON sl.Id = r.SlotId
+ LEFT JOIN dbo.Campus c ON c.Id = sl.CampusId
+ LEFT JOIN dbo.[Schedule] sch ON sch.Id = sl.ScheduleId
+ WHERE
+-    r.PersonId = @PersonId
++    -- Por conjunto de alias, no por PersonId: tras un merge, la reserva hecha
++    -- con el registro absorbido sigue apareciendo (su alias apunta al
++    -- superviviente). Con PersonId directo la persona dejaba de ver su reserva.
++    r.PersonAliasId IN ( SELECT pa.Id FROM dbo.PersonAlias pa WHERE pa.PersonId = @PersonId )
+     AND r.Status = 1
+ ORDER BY
+     r.CreatedDateTime DESC";

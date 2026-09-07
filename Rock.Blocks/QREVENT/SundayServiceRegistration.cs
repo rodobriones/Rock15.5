@@ -4,8 +4,10 @@ using System.ComponentModel;
 using System.Data.SqlClient;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Rock;
+using Rock.RealTime;
 using Rock.Attribute;
 using Rock.Blocks;
 using Rock.Data;
@@ -74,6 +76,14 @@ namespace Rock.Blocks.QREVENT
         /// </summary>
         private const int ReservationClosesMinutesAfterStart = 80;
 
+        /// <summary>
+        /// Minutos que la tarjeta «¡Bienvenido!» permanece visible despues del check-in.
+        /// El servidor no devuelve check-ins mas viejos que esto (cubre recargas) y la
+        /// pagina la oculta sola al vencer si quedo abierta. Una sola fuente:
+        /// <see cref="SundayServiceTopic.WelcomeVisibleMinutes"/>.
+        /// </summary>
+        private const int WelcomeVisibleMinutes = SundayServiceTopic.WelcomeVisibleMinutes;
+
         #endregion
 
         #region Initialization
@@ -111,6 +121,7 @@ namespace Rock.Blocks.QREVENT
 
                 return new InitBag
                 {
+                    todayCheckIn = GetTodayCheckInInternal( rockContext, currentPerson ),
                     notLogged = false,
                     statusHtml = "",
                     campuses = campuses,
@@ -277,21 +288,26 @@ namespace Rock.Blocks.QREVENT
                 var pCampus = new SqlParameter( "@CampusId", bag.campusId );
                 var pOcc = new SqlParameter( "@OccurrenceDate", occ );
                 var pSchedule = new SqlParameter( "@ScheduleId", bag.scheduleId );
+                // Identidad por PersonAliasId: sobrevive al merge de personas.
+                // PersonId se sigue pasando para que el SP escriba ambas columnas
+                // mientras dure la transicion (Step1 -> Step2).
                 var pPerson = new SqlParameter( "@PersonId", currentPerson.Id );
+                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
                 var pQty = new SqlParameter( "@Quantity", qty );
                 var pHoldMin = new SqlParameter( "@HoldMinutes", holdMinutes );
 
                 var sql = @"
 EXEC dbo.sp_SundayServiceHoldUpsert
-    @CampusId,
-    @OccurrenceDate,
-    @ScheduleId,
-    @PersonId,
-    @Quantity,
-    @HoldMinutes";
+    @CampusId = @CampusId,
+    @OccurrenceDate = @OccurrenceDate,
+    @ScheduleId = @ScheduleId,
+    @PersonId = @PersonId,
+    @Quantity = @Quantity,
+    @HoldMinutes = @HoldMinutes,
+    @PersonAliasId = @PersonAliasId";
 
                 var row = rockContext.Database
-                    .SqlQuery<HoldUpsertResultRow>( sql, pCampus, pOcc, pSchedule, pPerson, pQty, pHoldMin )
+                    .SqlQuery<HoldUpsertResultRow>( sql, pCampus, pOcc, pSchedule, pPerson, pQty, pHoldMin, pPersonAlias )
                     .FirstOrDefault();
 
                 if ( row == null )
@@ -365,17 +381,19 @@ EXEC dbo.sp_SundayServiceHoldUpsert
                 }
 
                 var pPerson = new SqlParameter( "@PersonId", currentPerson.Id );
+                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
                 var pHold = new SqlParameter( "@HoldToken", holdGuid );
                 var pForce = new SqlParameter( "@ForceReplaceExisting", bag.forceReplaceExisting ? 1 : 0 );
 
                 var sql = @"
 EXEC dbo.sp_SundayServiceReservationConfirm
-    @PersonId,
-    @HoldToken,
-    @ForceReplaceExisting";
+    @PersonId = @PersonId,
+    @HoldToken = @HoldToken,
+    @ForceReplaceExisting = @ForceReplaceExisting,
+    @PersonAliasId = @PersonAliasId";
 
                 var row = rockContext.Database
-                    .SqlQuery<ReservationConfirmResultRow>( sql, pPerson, pHold, pForce )
+                    .SqlQuery<ReservationConfirmResultRow>( sql, pPerson, pHold, pForce, pPersonAlias )
                     .FirstOrDefault();
 
                 if ( row == null )
@@ -445,13 +463,15 @@ EXEC dbo.sp_SundayServiceReservationConfirm
             {
                 var pReservationId = new SqlParameter( "@ReservationId", bag.reservationId );
                 var pPersonId = new SqlParameter( "@PersonId", currentPerson.Id );
+                var pPersonAlias = new SqlParameter( "@PersonAliasId", ( object ) currentPerson.PrimaryAliasId ?? DBNull.Value );
 
                 var sql = @"
 EXEC dbo.sp_SundayServiceReservationCancel
-    @ReservationId,
-    @PersonId";
+    @ReservationId = @ReservationId,
+    @PersonId = @PersonId,
+    @PersonAliasId = @PersonAliasId";
 
-                var row = rockContext.Database.SqlQuery<CancelReservationResultRow>( sql, pReservationId, pPersonId ).FirstOrDefault();
+                var row = rockContext.Database.SqlQuery<CancelReservationResultRow>( sql, pReservationId, pPersonId, pPersonAlias ).FirstOrDefault();
 
                 if ( row == null )
                 {
@@ -468,6 +488,117 @@ EXEC dbo.sp_SundayServiceReservationCancel
         /// <returns>
         /// La reserva activa del usuario o null si no tiene ninguna.
         /// </returns>
+        /// <summary>
+        /// Une la conexión RealTime del cliente al canal de SU reserva activa, para que
+        /// reciba el aviso de check-in en vivo. La persona no elige canal: se resuelve
+        /// aquí, por conjunto de alias (inmune al merge), y solo si la reserva es suya.
+        /// Patrón de CheckInKiosk.SubscribeToRealTime.
+        /// </summary>
+        [BlockAction( "SubscribeToReservation" )]
+        public async Task<BlockActionResult> SubscribeToReservation( SubscribeToReservationRequestBag bag )
+        {
+            var currentPerson = RequestContext?.CurrentPerson;
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "No autenticado." );
+            }
+
+            if ( bag == null || string.IsNullOrWhiteSpace( bag.connectionId ) )
+            {
+                return ActionBadRequest( "Conexión inválida." );
+            }
+
+            string reservationCode;
+            using ( var rockContext = new RockContext() )
+            {
+                reservationCode = rockContext.Database.SqlQuery<string>( @"
+SELECT TOP 1 r.ReservationCode
+FROM dbo.SundayServiceReservation r
+WHERE r.PersonAliasId IN ( SELECT pa.Id FROM dbo.PersonAlias pa WHERE pa.PersonId = @PersonId )
+  AND r.Status = 1
+ORDER BY r.CreatedDateTime DESC",
+                    new SqlParameter( "@PersonId", currentPerson.Id ) ).FirstOrDefault();
+            }
+
+            if ( string.IsNullOrWhiteSpace( reservationCode ) )
+            {
+                return ActionOk( new SubscribeToReservationResponseBag { subscribed = false } );
+            }
+
+            var channel = SundayServiceTopic.GetReservationChannel( reservationCode );
+            await RealTimeHelper.GetTopicContext<ISundayServiceClient>()
+                .Channels
+                .AddToChannelAsync( bag.connectionId, channel );
+
+            return ActionOk( new SubscribeToReservationResponseBag { subscribed = true, reservationCode = reservationCode } );
+        }
+
+        /// <summary>
+        /// Si la persona ya hizo check-in HOY, devuelve los datos para mostrar
+        /// «¡Bienvenido!» aunque haya cerrado y vuelto a abrir la app. Complementa al
+        /// aviso RealTime, que solo llega si la página estaba abierta en ese momento.
+        /// No altera GetActiveReservation (que sigue siendo Status = 1): así una
+        /// reserva ya ingresada no bloquea reservar el próximo servicio.
+        /// </summary>
+        [BlockAction( "GetTodayCheckIn" )]
+        public BlockActionResult GetTodayCheckIn()
+        {
+            var currentPerson = RequestContext?.CurrentPerson;
+            if ( currentPerson == null )
+            {
+                return ActionBadRequest( "No autenticado." );
+            }
+
+            using ( var rockContext = new RockContext() )
+            {
+                return ActionOk( new { todayCheckIn = GetTodayCheckInInternal( rockContext, currentPerson ) } );
+            }
+        }
+
+        private TodayCheckInBag GetTodayCheckInInternal( RockContext rockContext, Person currentPerson )
+        {
+            var sql = @"
+SELECT TOP 1
+    r.ReservationCode,
+    CAST(r.Quantity AS INT) AS Quantity,
+    r.CheckedInDateTime,
+    sch.[Name] AS ScheduleName
+FROM dbo.SundayServiceReservation r
+INNER JOIN dbo.SundayServiceSlot sl ON sl.Id = r.SlotId
+LEFT JOIN dbo.[Schedule] sch ON sch.Id = sl.ScheduleId
+WHERE r.PersonAliasId IN ( SELECT pa.Id FROM dbo.PersonAlias pa WHERE pa.PersonId = @PersonId )
+  AND r.Status = 3
+  AND sl.OccurrenceDate = @Today
+  AND r.CheckedInDateTime >= @Since
+ORDER BY r.CheckedInDateTime DESC";
+
+            var now = RockDateTime.Now;
+            var row = rockContext.Database.SqlQuery<TodayCheckInRow>(
+                sql,
+                new SqlParameter( "@PersonId", currentPerson.Id ),
+                new SqlParameter( "@Today", RockDateTime.Today ),
+                new SqlParameter( "@Since", now.AddMinutes( -WelcomeVisibleMinutes ) ) ).FirstOrDefault();
+
+            if ( row == null )
+            {
+                return null;
+            }
+
+            return new TodayCheckInBag
+            {
+                reservationCode = row.ReservationCode,
+                name = currentPerson.FullName,
+                scheduleName = row.ScheduleName ?? "",
+                quantity = row.Quantity,
+                checkedInAtIso = row.CheckedInDateTime?.ToString( "yyyy-MM-ddTHH:mm:ss" ),
+                // Segundos que le quedan de vida a la tarjeta, calculados con el reloj del
+                // servidor para no depender del reloj del telefono.
+                visibleForSeconds = row.CheckedInDateTime.HasValue
+                    ? Math.Max( 0, WelcomeVisibleMinutes * 60 - ( int ) ( now - row.CheckedInDateTime.Value ).TotalSeconds )
+                    : WelcomeVisibleMinutes * 60
+            };
+        }
+
         [BlockAction( "GetActiveReservation" )]
         public BlockActionResult GetActiveReservation()
         {
@@ -564,7 +695,10 @@ INNER JOIN dbo.SundayServiceSlot sl ON sl.Id = r.SlotId
 LEFT JOIN dbo.Campus c ON c.Id = sl.CampusId
 LEFT JOIN dbo.[Schedule] sch ON sch.Id = sl.ScheduleId
 WHERE
-    r.PersonId = @PersonId
+    -- Por conjunto de alias, no por PersonId: tras un merge, la reserva hecha
+    -- con el registro absorbido sigue apareciendo (su alias apunta al
+    -- superviviente). Con PersonId directo la persona dejaba de ver su reserva.
+    r.PersonAliasId IN ( SELECT pa.Id FROM dbo.PersonAlias pa WHERE pa.PersonId = @PersonId )
     AND r.Status = 1
 ORDER BY
     r.CreatedDateTime DESC";
@@ -898,6 +1032,11 @@ ORDER BY
             public string statusHtml { get; set; }
 
             /// <summary>
+            /// Check-in de hoy, si ya ocurrió (para mostrar «Bienvenido» al reabrir). Null si no.
+            /// </summary>
+            public TodayCheckInBag todayCheckIn { get; set; }
+
+            /// <summary>
             /// Lista de campus disponibles para selección.
             /// </summary>
             public List<CampusOptionBag> campuses { get; set; }
@@ -1209,6 +1348,35 @@ ORDER BY
         /// <summary>
         /// DTO de respuesta al obtener la reserva activa.
         /// </summary>
+        public class SubscribeToReservationRequestBag
+        {
+            public string connectionId { get; set; }
+        }
+
+        public class SubscribeToReservationResponseBag
+        {
+            public bool subscribed { get; set; }
+            public string reservationCode { get; set; }
+        }
+
+        public class TodayCheckInBag
+        {
+            public string reservationCode { get; set; }
+            public string name { get; set; }
+            public string scheduleName { get; set; }
+            public int quantity { get; set; }
+            public string checkedInAtIso { get; set; }
+            public int visibleForSeconds { get; set; }
+        }
+
+        private class TodayCheckInRow
+        {
+            public string ReservationCode { get; set; }
+            public int Quantity { get; set; }
+            public DateTime? CheckedInDateTime { get; set; }
+            public string ScheduleName { get; set; }
+        }
+
         public class GetActiveReservationResponseBag
         {
             /// <summary>

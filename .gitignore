@@ -59,3 +59,8 @@ node_modules
 /Installers/CheckScannerInstall_2017/CheckScannerInstall
 
 PrecompiledWeb/
+
+# Kits de despliegue locales: binarios compilados, nunca al repo
+Dev Tools/Deploy/**/*.dll
+Dev Tools/Deploy/**/*.pdb
+Dev Tools/Deploy/**/*.js

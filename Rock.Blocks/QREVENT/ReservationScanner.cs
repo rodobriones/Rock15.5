@@ -43,8 +43,9 @@ namespace Rock.Blocks.QREVENT
     public class ReservationScanner : RockBlockType
     {
         // Ventana de check-in. Decision de negocio, fija a proposito y no
-        // configurable: abre 10 minutos ANTES de la hora de inicio del servicio y
+        // configurable: abre 15 minutos ANTES de la hora de inicio del servicio y
         // cierra 1 h 20 min ( 80 minutos ) DESPUES de esa misma hora de inicio.
+        // ( 2026-09-05: la apertura paso de 10 a 15 min a pedido del ministerio. )
         //
         // Deliberadamente ya no se usa el DTEND del iCal para cerrar: el servicio
         // dura ~2 h, asi que la ventana del servicio anterior seguia abierta cuando
@@ -55,10 +56,12 @@ namespace Rock.Blocks.QREVENT
         // El cierre debe seguir igual a ReservationClosesMinutesAfterStart de
         // SundayServiceRegistration ( 80 ): asi todo lo que la app deja reservar sigue
         // siendo escaneable en la puerta. Si se mueve uno, mover el otro.
-        // Con 80 min las ventanas siguen sin cruzarse ( los servicios estan a 2 h:
-        // 7, 9, 11, 13, 18 ), quedan 30 min de separacion entre el cierre de una y la
-        // apertura de la siguiente. Subirlo mas alla de 110 las haria solaparse.
-        private const int CheckInOpensMinutesBeforeStart = 10;
+        // Con 80 de cierre y 15 de apertura las ventanas siguen sin cruzarse ( los
+        // servicios estan a 2 h: 7, 9, 11, 13, 18 ): quedan 25 min de separacion entre
+        // el cierre de una y la apertura de la siguiente. El limite para que no se
+        // solapen es apertura + cierre < 120; subir el cierre mas alla de 105 con esta
+        // apertura, o la apertura mas alla de 40 con este cierre, las haria solaparse.
+        private const int CheckInOpensMinutesBeforeStart = 15;
         private const int CheckInClosesMinutesAfterStart = 80;
 
         private const int InvalidScanThrottleWindowSeconds = 10;
@@ -241,7 +244,16 @@ EXEC dbo.sp_SundayServiceCheckIn
 
                     ClearInvalidScanAttempts();
 
-                    var personName = GetReservationPersonName( rockContext, row.PersonId );
+                    var personName = GetReservationPersonName( rockContext, row.PersonAliasId, row.PersonId );
+
+                    // Aviso al telefono de la persona (su pagina de reserva, abierta en el
+                    // WebView mostrando el QR). Solo aqui, con check-in real: el 0 (ya tenia
+                    // check-in) y los rechazos no avisan. Fire-and-forget: no espera ni falla.
+                    SundayServiceTopic.NotifyReservationCheckedIn(
+                        reservationCode,
+                        personName,
+                        activeSlotResult.Slot.scheduleName,
+                        row.Quantity ?? 0 );
 
                     return ActionOk( BuildResult( "checked_in", personName, "Asistencia marcada correctamente.", activeSlotResult.Slot.scheduleName, row.Quantity ?? 0 ) );
                 }
@@ -587,17 +599,25 @@ ORDER BY slot.OccurrenceDate, sch.Id
         /// Resuelve el nombre a mostrar del reservante. Se consulta despues del check-in,
         /// fuera de la transaccion del SP, para no alargar el lock del slot.
         /// </summary>
-        private static string GetReservationPersonName( RockContext rockContext, int? personId )
+        private static string GetReservationPersonName( RockContext rockContext, int? personAliasId, int? personId )
         {
-            if ( !personId.HasValue )
-            {
-                return string.Empty;
-            }
+            // Preferir el alias: sobrevive al merge de personas. PersonId queda como
+            // respaldo para filas anteriores a la migracion (Step1) o si el alias
+            // viniera nulo por cualquier motivo.
+            var person = personAliasId.HasValue
+                ? new PersonAliasService( rockContext ).Queryable()
+                    .Where( pa => pa.Id == personAliasId.Value )
+                    .Select( pa => new { pa.Person.NickName, pa.Person.LastName } )
+                    .FirstOrDefault()
+                : null;
 
-            var person = new PersonService( rockContext ).Queryable()
-                .Where( p => p.Id == personId.Value )
-                .Select( p => new { p.NickName, p.LastName } )
-                .FirstOrDefault();
+            if ( person == null && personId.HasValue )
+            {
+                person = new PersonService( rockContext ).Queryable()
+                    .Where( p => p.Id == personId.Value )
+                    .Select( p => new { p.NickName, p.LastName } )
+                    .FirstOrDefault();
+            }
 
             if ( person == null )
             {
@@ -683,6 +703,7 @@ ORDER BY slot.OccurrenceDate, sch.Id
             public int ResultCode { get; set; }
             public int? Quantity { get; set; }
             public int? PersonId { get; set; }
+            public int? PersonAliasId { get; set; }
         }
 
         private class InvalidScanThrottleState

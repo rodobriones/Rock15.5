@@ -39,7 +39,35 @@
                             <div v-if="statusHtml" v-html="statusHtml"></div>
 
                             <!-- Reserva activa -->
-                            <div v-if="activeReservation && !replacing" class="card ssCard">
+                            <!-- Check-in recibido: la puerta escaneó el QR de esta persona -->
+                            <div v-if="checkedIn && !replacing" class="card ssCard ssWelcome" role="status" aria-live="polite">
+                                <div class="card-body">
+                                    <div class="ssWelcomeMark" aria-hidden="true">✓</div>
+                                    <div class="ssWelcomeTitle">¡Bienvenido{{ checkedIn.name ? ", " + checkedIn.name : "" }}!</div>
+                                    <div class="ssWelcomeSub">Tu asistencia quedó registrada.</div>
+                                    <div class="ssSummaryCard ssWelcomeSummary">
+                                        <div class="ssSummaryRow" v-if="checkedIn.scheduleName">
+                                            <div class="ssLabel">Servicio</div>
+                                            <div class="ssVal">{{ checkedIn.scheduleName }}</div>
+                                        </div>
+                                        <div class="ssSummaryRow">
+                                            <div class="ssLabel">Personas</div>
+                                            <div class="ssVal">{{ checkedIn.quantity }}</div>
+                                        </div>
+                                        <div class="ssSummaryRow" v-if="checkedInTimeText">
+                                            <div class="ssLabel">Hora</div>
+                                            <div class="ssVal">{{ checkedInTimeText }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="ssActions" style="flex-direction: column; align-items: center; display: flex; gap: 14px;">
+                                        <RockButton btnType="default" @click="dismissWelcome" :disabled="busy" style="width: 100%;">
+                                            Reservar otro servicio
+                                        </RockButton>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else-if="activeReservation && !replacing" class="card ssCard">
                                 <div class="card-body">
                                     <div class="ssCardTitle">Tu reserva activa</div>
 
@@ -373,6 +401,7 @@ import Panel from "@Obsidian/Controls/panel.obs";
 import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
 import RockButton from "@Obsidian/Controls/rockButton.obs";
 import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+import { getTopic } from "@Obsidian/Utility/realTime";
 
 type CampusOptionBag = { text: string; value: string; imageUrl?: string };
 
@@ -410,11 +439,22 @@ type ActiveReservationBag = {
     scheduleName: string;
 };
 
+type TodayCheckInBag = {
+    reservationCode: string;
+    name: string;
+    scheduleName: string;
+    quantity: number;
+    checkedInAtIso: string | null;
+    /** Segundos que la tarjeta debe seguir visible (reloj del servidor). */
+    visibleForSeconds: number;
+};
+
 type InitBag = {
     notLogged: boolean;
     statusHtml: string;
     campuses: CampusOptionBag[];
     activeReservation: ActiveReservationBag | null;
+    todayCheckIn: TodayCheckInBag | null;
 };
 
 type GetWeekSlotsResponse = { days: DaySlotsBag[] };
@@ -443,6 +483,149 @@ const statusHtml = ref<string>(config.statusHtml || "");
 
 const campusOptions = ref<CampusOptionBag[]>(config.campuses || []);
 const activeReservation = ref<ActiveReservationBag | null>(config.activeReservation || null);
+
+// ---- Check-in en vivo (RealTime) ----
+// La persona tiene esta página abierta en el WebView, mostrando el QR al kiosko.
+// El escáner marca el check-in y el servidor emite al canal de ESA reserva; aquí
+// se reemplaza la tarjeta del QR por «¡Bienvenido!». Dos respaldos para cuando
+// el socket no estaba vivo en ese instante (app en segundo plano, red):
+// `onReconnected` y `visibilitychange` vuelven a preguntar con GetTodayCheckIn.
+const checkedIn = ref<TodayCheckInBag | null>(null);
+let welcomeTimer: number | null = null;
+
+/**
+ * Muestra (o quita) la tarjeta «¡Bienvenido!» y arma el temporizador que la oculta
+ * sola. Todo pasa por aquí para que nunca quede visible más de lo que el servidor
+ * indicó en visibleForSeconds (10 min desde el check-in).
+ */
+function showCheckIn(bag: TodayCheckInBag | null): void {
+    if (welcomeTimer != null) {
+        window.clearTimeout(welcomeTimer);
+        welcomeTimer = null;
+    }
+    if (!bag || !bag.reservationCode || (bag.visibleForSeconds ?? 0) <= 0) {
+        checkedIn.value = null;
+        return;
+    }
+    checkedIn.value = bag;
+    welcomeTimer = window.setTimeout(() => {
+        welcomeTimer = null;
+        checkedIn.value = null;
+    }, bag.visibleForSeconds * 1000);
+}
+
+showCheckIn(config.todayCheckIn || null);
+type SundayTopic = Awaited<ReturnType<typeof getTopic>>;
+let sundayTopic: SundayTopic | null = null;
+let subscribedCode: string | null = null;
+
+const checkedInTimeText = computed<string>(() => {
+    const iso = checkedIn.value?.checkedInAtIso;
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("es-GT", { hour: "numeric", minute: "2-digit" });
+});
+
+function onReservationCheckedIn(bag: TodayCheckInBag): void {
+    if (!bag || !bag.reservationCode) return;
+    // Solo si es la reserva que esta pantalla muestra (o la última suscrita).
+    const mine = activeReservation.value?.reservationCode || subscribedCode;
+    if (mine && bag.reservationCode.toUpperCase() !== mine.toUpperCase()) return;
+    showCheckIn(bag);
+    if (navigator.vibrate) {
+        try { navigator.vibrate(120); } catch { /* sin soporte */ }
+    }
+}
+
+async function subscribeToReservation(): Promise<void> {
+    if (!sundayTopic || !sundayTopic.connectionId) return;
+    if (!activeReservation.value) { subscribedCode = null; return; }
+    try {
+        const res = await invokeBlockAction<{ subscribed: boolean; reservationCode: string | null }>("SubscribeToReservation", {
+            bag: { connectionId: sundayTopic.connectionId }
+        });
+        subscribedCode = res.isSuccess && res.data?.subscribed ? (res.data.reservationCode || null) : null;
+    } catch {
+        subscribedCode = null;
+    }
+}
+
+async function refreshCheckIn(): Promise<void> {
+    try {
+        const res = await invokeBlockAction<{ todayCheckIn: TodayCheckInBag | null }>("GetTodayCheckIn", {});
+        if (res.isSuccess) {
+            showCheckIn(res.data?.todayCheckIn || null);
+        }
+    } catch { /* sin red: se mantiene lo que había */ }
+}
+
+function localTodayIso(): string {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+}
+
+// Solo vale la pena tener un socket abierto el DÍA del servicio y con reserva activa:
+// es el único momento en que puede llegar un check-in. Quien entra entre semana a
+// reservar no abre ninguna conexión. Así el costo sostenido en el servidor es
+// proporcional a la gente que está en la puerta, no a la que visita la página.
+function shouldHoldRealTime(): boolean {
+    const r = activeReservation.value;
+    return !!r && r.occurrenceDate === localTodayIso();
+}
+
+let connecting = false;
+
+async function ensureRealTime(): Promise<void> {
+    if (config.notLogged || !shouldHoldRealTime()) return;
+    if (sundayTopic) {
+        await subscribeToReservation();
+        return;
+    }
+    if (connecting) return;
+    connecting = true;
+    try {
+        sundayTopic = await getTopic("Rock.Blocks.QREVENT.SundayServiceTopic");
+        sundayTopic.on("reservationCheckedIn", onReservationCheckedIn);
+        sundayTopic.onReconnected(() => {
+            // La conexión pudo cambiar de id: volver a unirse al canal y ponerse al día.
+            void subscribeToReservation();
+            void refreshCheckIn();
+        });
+        await subscribeToReservation();
+    } catch {
+        // Sin RealTime (proxy, WebView sin sockets): la página sigue funcionando;
+        // el check-in se verá al volver a primer plano o al recargar.
+        sundayTopic = null;
+    } finally {
+        connecting = false;
+    }
+}
+
+function onVisibilityChange(): void {
+    if (document.visibilityState === "visible") {
+        void refreshCheckIn();
+        // Cubre el caso "dejé la página abierta desde ayer": hoy sí toca conectar.
+        void ensureRealTime();
+    }
+}
+
+function dismissWelcome(): void {
+    // Deja ver el flujo para reservar el siguiente servicio; GetActiveReservation ya
+    // no devuelve la ingresada (Status 3), así que no hay reserva activa que estorbe.
+    showCheckIn(null);
+}
+
+// Al confirmar o cambiar de reserva: conectar si hoy es el día, y suscribirse a la nueva.
+// Al cancelar, subscribeToReservation deja subscribedCode en null (no hay canal que unir).
+watch(() => activeReservation.value?.reservationCode ?? null, () => {
+    if (sundayTopic) {
+        void subscribeToReservation();
+    }
+    else {
+        void ensureRealTime();
+    }
+});
 const replacing = ref<boolean>(false);
 
 const step = ref<number>(1);
@@ -1476,6 +1659,8 @@ onMounted(() => {
     applyFullBleed();
     window.addEventListener("resize", applyFullBleed);
     window.addEventListener("orientationchange", applyFullBleed);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void ensureRealTime();
     pageEl.value?.addEventListener("dblclick", onDoubleClick);
 
     // Si no hay reserva activa y solo hay 1 campus, seleccionarlo automáticamente
@@ -1497,6 +1682,12 @@ watch(replacing, (newVal) => {
 onBeforeUnmount(() => {
     window.removeEventListener("resize", applyFullBleed);
     window.removeEventListener("orientationchange", applyFullBleed);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    sundayTopic = null;
+    if (welcomeTimer != null) {
+        window.clearTimeout(welcomeTimer);
+        welcomeTimer = null;
+    }
     pageEl.value?.removeEventListener("dblclick", onDoubleClick);
 
     if (holdCountdownTimer != null) {
@@ -2550,5 +2741,32 @@ onBeforeUnmount(() => {
     background: var(--neu-bg) !important;
     border-color: var(--neu-bg) !important;
     color: var(--neu-text) !important;
+}
+
+/* ===== Check-in recibido (Bienvenido) ===== */
+.ssWelcome .card-body { text-align: center; }
+.ssWelcomeMark {
+    width: 64px;
+    height: 64px;
+    margin: 4px auto 12px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    font-weight: 800;
+    color: #fff;
+    background: #047857;
+    animation: ssWelcomePop .35s ease-out;
+}
+.ssWelcomeTitle { font-size: 24px; font-weight: 900; line-height: 1.15; margin-bottom: 4px; }
+.ssWelcomeSub { font-size: 14px; opacity: .75; margin-bottom: 16px; }
+.ssWelcomeSummary { text-align: left; margin-bottom: 16px; }
+@keyframes ssWelcomePop {
+    from { transform: scale(.6); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ssWelcomeMark { animation: none; }
 }
 </style>
