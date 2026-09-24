@@ -231,6 +231,7 @@ namespace Rock.Blocks.QREVENT
         /// - 0: No hay suficiente capacidad.
         /// - -1: Slot no encontrado.
         /// - -4: El horario ya cerró (pasó más de 1 h 20 min de su hora de inicio).
+        /// - -5: Ya tiene check-in dentro de la ventana de bienvenida; no puede reservar todavía.
         /// - -99: Error inesperado.
         /// </returns>
         [BlockAction( "HoldUpsert" )]
@@ -273,6 +274,19 @@ namespace Rock.Blocks.QREVENT
 
             using ( var rockContext = new RockContext() )
             {
+                // Acaba de entrar al servicio: durante la ventana de bienvenida no
+                // aparta lugares de otro horario.
+                if ( HasRecentCheckIn( rockContext, currentPerson.Id ) )
+                {
+                    return ActionOk( new HoldUpsertResponseBag
+                    {
+                        resultCode = -5,
+                        holdToken = "",
+                        availableAfter = 0,
+                        holdSeconds = holdMinutes * 60
+                    } );
+                }
+
                 // El horario pudo cerrar mientras la pantalla estaba abierta.
                 if ( IsScheduleClosedForOccurrence( rockContext, bag.scheduleId, occ ) )
                 {
@@ -344,6 +358,7 @@ EXEC dbo.sp_SundayServiceHoldUpsert
         /// - -1: Hold no encontrado.
         /// - -2 / -3: Ya existe una reserva activa o no se pudo reemplazar la existente.
         /// - -4: El horario ya cerró (pasó más de 1 h 20 min de su hora de inicio).
+        /// - -5: Ya tiene check-in dentro de la ventana de bienvenida; no puede reservar todavía.
         /// - -99: Error inesperado.
         /// </returns>
         [BlockAction( "ConfirmReservation" )]
@@ -369,6 +384,18 @@ EXEC dbo.sp_SundayServiceHoldUpsert
 
             using ( var rockContext = new RockContext() )
             {
+                // Segunda barrera: el hold pudo crearse antes del check-in, o venir de
+                // un cliente que ignora el -5 de HoldUpsert.
+                if ( HasRecentCheckIn( rockContext, currentPerson.Id ) )
+                {
+                    return ActionOk( new ConfirmReservationResponseBag
+                    {
+                        resultCode = -5,
+                        reservationId = 0,
+                        reservationCode = ""
+                    } );
+                }
+
                 // El horario pudo cerrar entre el hold y la confirmacion.
                 if ( IsHoldSlotClosedForReservation( rockContext, holdGuid ) )
                 {
@@ -553,6 +580,38 @@ ORDER BY r.CreatedDateTime DESC",
             {
                 return ActionOk( new { todayCheckIn = GetTodayCheckInInternal( rockContext, currentPerson ) } );
             }
+        }
+
+        /// <summary>
+        /// Indica si la persona recibió check-in dentro de la ventana de bienvenida
+        /// (<see cref="WelcomeVisibleMinutes"/>). Mientras dure no puede apartar ni
+        /// confirmar otra reserva: ya entró al servicio y una reserva nueva en ese
+        /// momento solo resta cupo del siguiente horario.
+        ///
+        /// Mismo criterio que <see cref="GetTodayCheckInInternal"/> — Status 3
+        /// (ingresada), slot de hoy y check-in reciente — pero como EXISTS, para no
+        /// traer filas ni depender de que el cliente tenga la tarjeta en pantalla.
+        /// </summary>
+        private bool HasRecentCheckIn( RockContext rockContext, int personId )
+        {
+            var sql = @"
+SELECT CASE WHEN EXISTS (
+    SELECT 1
+    FROM dbo.SundayServiceReservation r
+    INNER JOIN dbo.SundayServiceSlot sl ON sl.Id = r.SlotId
+    WHERE r.PersonAliasId IN ( SELECT pa.Id FROM dbo.PersonAlias pa WHERE pa.PersonId = @PersonId )
+      AND r.Status = 3
+      AND sl.OccurrenceDate = @Today
+      AND r.CheckedInDateTime >= @Since
+) THEN 1 ELSE 0 END";
+
+            var now = RockDateTime.Now;
+
+            return rockContext.Database.SqlQuery<int>(
+                sql,
+                new SqlParameter( "@PersonId", personId ),
+                new SqlParameter( "@Today", RockDateTime.Today ),
+                new SqlParameter( "@Since", now.AddMinutes( -WelcomeVisibleMinutes ) ) ).FirstOrDefault() == 1;
         }
 
         private TodayCheckInBag GetTodayCheckInInternal( RockContext rockContext, Person currentPerson )

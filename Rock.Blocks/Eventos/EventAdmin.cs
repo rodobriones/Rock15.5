@@ -27,6 +27,7 @@ using Rock.Model;
 using Rock.Security;
 using Rock.SystemGuid;
 using Rock.ViewModels.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Blocks.Eventos
 {
@@ -71,6 +72,8 @@ namespace Rock.Blocks.Eventos
                     statusOptions = GetEnumOptions<EventStatus>(),
                     discountTypeOptions = GetEnumOptions<DiscountType>(),
                     visibilityOptions = GetVisibilityOptions(),
+                    ministryOptions = GetMinistryOptions(),
+                    categoryOptions = GetCategoryOptions(),
                     checkoutUrlTemplate = "",
                     checkoutSlugUrlTemplate = ""
                 };
@@ -89,6 +92,10 @@ namespace Rock.Blocks.Eventos
                     statusOptions = GetEnumOptions<EventStatus>(),
                     discountTypeOptions = GetEnumOptions<DiscountType>(),
                     visibilityOptions = GetVisibilityOptions(),
+                    // Los dos catálogos administrables (DefinedTypes): sin ellos los dropdowns
+                    // de Tipo y Ministerio del formulario llegan vacíos.
+                    ministryOptions = GetMinistryOptions(),
+                    categoryOptions = GetCategoryOptions(),
                     // URL con marcador ((Key)) que el front reemplaza por el EventId de cada fila.
                     checkoutUrlTemplate = this.GetLinkedPageUrl( AttributeKey.CheckoutPage, "EventId", "((Key))" ),
                     // URL por slug (BuildUrl elige la ruta eventos/evento/{Slug}); el front sustituye ((Slug)).
@@ -287,32 +294,57 @@ namespace Rock.Blocks.Eventos
                 ev.RegistrationWorkflowTypeId = GetWorkflowTypeId( bag.registrationWorkflowType );
                 ev.CheckinWorkflowTypeId = GetWorkflowTypeId( bag.checkinWorkflowType );
 
-                // Imagen del evento (BinaryFile). El uploader manda un ListItemBag con el Guid del archivo.
-                var imageGuid = bag.image?.Value.AsGuidOrNull();
-                if ( imageGuid.HasValue )
+                // Imagen del evento y banner del checkout (BinaryFile). El uploader manda un
+                // ListItemBag con el Guid del archivo.
+                if ( !TryResolveImageId( rockContext, bag.image, out var imageFileId, out var imageError ) )
                 {
-                    var binaryFile = new BinaryFileService( rockContext ).Get( imageGuid.Value );
-                    if ( binaryFile != null )
-                    {
-                        // Defensa: solo aceptar imágenes (no adoptar/permanentizar un BinaryFile arbitrario
-                        // de otro propósito referenciado por su Guid).
-                        if ( binaryFile.MimeType == null || !binaryFile.MimeType.StartsWith( "image/", StringComparison.OrdinalIgnoreCase ) )
-                        {
-                            return ActionBadRequest( "El archivo seleccionado no es una imagen válida." );
-                        }
+                    return ActionBadRequest( imageError );
+                }
+                ev.ImageBinaryFileId = imageFileId;
 
-                        ev.ImageBinaryFileId = binaryFile.Id;
-                        // El archivo se sube como temporal; al guardarlo lo hacemos permanente.
-                        if ( binaryFile.IsTemporary )
-                        {
-                            binaryFile.IsTemporary = false;
-                        }
-                    }
-                }
-                else
+                if ( !TryResolveImageId( rockContext, bag.banner, out var bannerFileId, out var bannerError ) )
                 {
-                    ev.ImageBinaryFileId = null;
+                    return ActionBadRequest( bannerError );
                 }
+                ev.BannerBinaryFileId = bannerFileId;
+
+                if ( !TryResolveImageId( rockContext, bag.logo, out var logoFileId, out var logoError ) )
+                {
+                    return ActionBadRequest( logoError );
+                }
+                ev.LogoBinaryFileId = logoFileId;
+
+                // Ministerio: solo se acepta un valor del DefinedType (el DropDownList manda el texto).
+                ev.Ministry = IsKnownMinistry( bag.ministry ) ? bag.ministry.Trim() : null;
+
+                // Ponentes del paso 1 del checkout.
+                var speakerRows = new List<EventSpeaker>();
+                foreach ( var row in bag.speakers ?? new List<SpeakerRowBag>() )
+                {
+                    if ( row == null || row.name.IsNullOrWhiteSpace() )
+                    {
+                        continue;
+                    }
+
+                    if ( !TryResolveImageId( rockContext, row.photo, out var photoFileId, out var photoError ) )
+                    {
+                        return ActionBadRequest( photoError );
+                    }
+
+                    speakerRows.Add( new EventSpeaker
+                    {
+                        Name = row.name,
+                        Role = row.role,
+                        PhotoBinaryFileId = photoFileId
+                    } );
+                }
+
+                var speakersJson = EventSpeakerService.Normalize( speakerRows, out var speakersError );
+                if ( speakersError != null )
+                {
+                    return ActionBadRequest( speakersError );
+                }
+                ev.SpeakersJson = speakersJson;
 
                 rockContext.SaveChanges();
 
@@ -667,6 +699,10 @@ namespace Rock.Blocks.Eventos
                     CampusId = source.CampusId,
                     VenueName = source.VenueName,
                     ImageBinaryFileId = source.ImageBinaryFileId,
+                    BannerBinaryFileId = source.BannerBinaryFileId,
+                    LogoBinaryFileId = source.LogoBinaryFileId,
+                    Ministry = source.Ministry,
+                    SpeakersJson = source.SpeakersJson,
                     Status = EventStatus.Draft,
                     OrganizerPersonAliasId = source.OrganizerPersonAliasId,
                     FinancialGatewayId = source.FinancialGatewayId,
@@ -994,6 +1030,17 @@ namespace Rock.Blocks.Eventos
                     financialGatewayId = ev.FinancialGatewayId,
                     financialAccountId = ev.FinancialAccountId,
                     image = BuildImageListItem( rockContext, ev.ImageBinaryFileId ),
+                    banner = BuildImageListItem( rockContext, ev.BannerBinaryFileId ),
+                    logo = BuildImageListItem( rockContext, ev.LogoBinaryFileId ),
+                    ministry = ev.Ministry,
+                    speakers = EventSpeakerService.Parse( ev.SpeakersJson )
+                        .Select( sp => new SpeakerRowBag
+                        {
+                            name = sp.Name,
+                            role = sp.Role,
+                            photo = BuildImageListItem( rockContext, sp.PhotoBinaryFileId )
+                        } )
+                        .ToList(),
                     headerStyle = ev.HeaderStyle.IsNullOrWhiteSpace() ? "persistente" : ev.HeaderStyle,
                     category = ev.Category,
                     visibility = ( int ) ev.Visibility,
@@ -1062,13 +1109,72 @@ namespace Rock.Blocks.Eventos
         /// Devuelve el BinaryFile de la imagen como ListItemBag (value = Guid) para que el
         /// ImageUploader lo muestre. Null si el evento no tiene imagen.
         /// </summary>
-        // Categorías válidas para el badge del hero del checkout (colores definidos en el front).
-        private static readonly string[] _knownCategories = { "Conferencia", "Concierto", "Deportivo", "Familiar" };
-
+        // Tipo (Category) y Ministerio se guardan como TEXTO —el calendario filtra sobre el init
+        // bag sin joins—, así que hay que validarlos contra el catálogo: no hay FK que lo
+        // garantice. Los dos catálogos son DefinedTypes administrables (migraciones 022 y 024);
+        // la lectura vive en EventTagService para que front, admin y calendario coincidan.
         private static bool IsKnownCategory( string category )
         {
-            return !category.IsNullOrWhiteSpace()
-                && System.Array.IndexOf( _knownCategories, category.Trim() ) >= 0;
+            return EventTagService.IsKnownType( category );
+        }
+
+        private static bool IsKnownMinistry( string ministry )
+        {
+            return EventTagService.IsKnownMinistry( ministry );
+        }
+
+        private static List<OptionBag> GetMinistryOptions()
+        {
+            return EventTagService.GetMinistries()
+                .Select( t => new OptionBag { value = t.Value, text = t.Value } )
+                .ToList();
+        }
+
+        private static List<OptionBag> GetCategoryOptions()
+        {
+            return EventTagService.GetTypes()
+                .Select( t => new OptionBag { value = t.Value, text = t.Value } )
+                .ToList();
+        }
+
+        /// <summary>
+        /// Resolves the BinaryFile id behind an uploader's ListItemBag and makes the file
+        /// permanent. Returns false with a message when the Guid points at something that isn't
+        /// an image — defensa para no adoptar un BinaryFile arbitrario de otro propósito.
+        /// A null/empty bag means "sin imagen" and resolves to a null id, not an error.
+        /// </summary>
+        private static bool TryResolveImageId( RockContext rockContext, ListItemBag bag, out int? binaryFileId, out string error )
+        {
+            binaryFileId = null;
+            error = null;
+
+            var guid = bag?.Value.AsGuidOrNull();
+            if ( !guid.HasValue )
+            {
+                return true;
+            }
+
+            var binaryFile = new BinaryFileService( rockContext ).Get( guid.Value );
+            if ( binaryFile == null )
+            {
+                return true;
+            }
+
+            if ( binaryFile.MimeType == null || !binaryFile.MimeType.StartsWith( "image/", StringComparison.OrdinalIgnoreCase ) )
+            {
+                error = "El archivo seleccionado no es una imagen válida.";
+                return false;
+            }
+
+            binaryFileId = binaryFile.Id;
+
+            // El archivo se sube como temporal; al guardarlo lo hacemos permanente.
+            if ( binaryFile.IsTemporary )
+            {
+                binaryFile.IsTemporary = false;
+            }
+
+            return true;
         }
 
         private static ListItemBag BuildImageListItem( RockContext rockContext, int? binaryFileId )

@@ -1,122 +1,175 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!-- Mis Entradas: portada, pestañas Próximos / Historial y una card por evento con sus boletos
+     (QR, reenvío por correo y visor a pantalla completa con Apple/Google Wallet).
+     Rediseño 2026 (Claude Design · artboard "05.Eventos - myTickets").
+     Los estilos son NO-scoped a propósito: targetean .panel-block, el chrome que Rock pone
+     fuera del template, y posicionan el visor de QR sobre todo el bloque. -->
 <template>
-    <Panel type="block" title="Eventos • Mis Entradas">
+    <Panel type="block" title="" class="mt-panel">
         <template #default>
-            <div class="mtWrap">
-                <NotificationBox v-if="config.notLogged" alertType="warning">
+            <div class="mtPage">
+                <NotificationBox v-if="config.notLogged" alertType="warning" class="mtGlobalNote">
                     Debes iniciar sesión para ver tus entradas.
                 </NotificationBox>
 
-                <div v-else>
-                    <header class="mtHead">
-                        <div>
-                            <h1 class="mtTitle">Mis Eventos</h1>
-                            <p class="mtSub">Tus entradas, listas para presentar en el ingreso.</p>
+                <div v-else class="mtLogged">
+                    <!-- Portada: la foto del próximo evento del usuario; sin evento, el degradado navy. -->
+                    <div class="mtCover" :class="{ 'mtCover--noimg': !coverImageUrl }"
+                         :style="coverImageUrl ? { backgroundImage: `url('${coverImageUrl}')` } : {}">
+                        <div class="mtCoverShade"></div>
+                        <div class="mtCoverInner">
+                            <h1 class="mtCoverTitle">Mis eventos</h1>
+                            <div class="mtCoverMeta">
+                                <span>Revisa el historial de tus eventos</span>
+                            </div>
                         </div>
-                        <button type="button" class="mtReload" :disabled="busy" @click="loadTickets">
-                            {{ busy ? "Cargando…" : "Recargar" }}
-                        </button>
-                    </header>
-
-                    <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
-                    <NotificationBox v-if="notice" alertType="success" class="mb-3">{{ notice }}</NotificationBox>
-
-                    <div v-if="!busy && tickets.length === 0" class="mtEmpty">
-                        <div class="mtEmptyIcon">🎟️</div>
-                        <h3>Aún no tienes entradas</h3>
-                        <p>Cuando compres entradas — o alguien de tu familia te asigne una — aparecerán aquí.</p>
                     </div>
 
-                    <!-- Próximos eventos -->
-                    <section v-if="upcomingGroups.length" class="mtSection">
-                        <div v-for="g in upcomingGroups" :key="g.eventId" class="mtEvent">
-                            <div class="mtEventHero mtEventHero--tappable" :class="{ 'mtEventHero--noimg': !g.imageUrl }"
-                                 :style="g.imageUrl ? { backgroundImage: `url('${g.imageUrl}')` } : {}"
-                                 role="button" tabindex="0" :aria-expanded="isExpanded(g)"
-                                 @click="toggleEvent(g.eventId)"
-                                 @keydown.enter="toggleEvent(g.eventId)">
-                                <div class="mtEventHeroShade"></div>
-                                <div class="mtEventHeroInner">
-                                    <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
-                                    <h2 class="mtEventName">{{ g.name }}</h2>
-                                    <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
-                                    <ul v-if="g.sessions.length" class="mtEventSessions">
-                                        <li v-for="s in g.sessions" :key="s">{{ s }}</li>
-                                    </ul>
-                                </div>
-                                <span class="mtEventCount">
-                                    {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
-                                    <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
-                                </span>
-                            </div>
-                            <div v-show="isExpanded(g)" class="mtTickets">
-                                <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket mtTicket--tappable"
-                                     role="button" tabindex="0"
-                                     @click="showTicket(t, g)"
-                                     @keydown.enter="showTicket(t, g)">
-                                    <img v-if="t.qrImageUrl" :src="t.qrImageUrl" :alt="'QR ' + t.uniqueCode" class="mtQr" />
-                                    <div class="mtTicketInfo">
-                                        <div class="mtTicketTags">
-                                            <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
-                                            <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
-                                                {{ t.status === "CheckedIn" ? "Utilizada" : "Válida" }}
-                                            </span>
-                                        </div>
-                                        <span class="mtTicketType">{{ t.ticketTypeName }}</span>
-                                        <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
-                                        <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
-                                        <div class="mtTicketFoot">
-                                            <button type="button" class="mtResend" :disabled="resendingId === t.ticketId" @click.stop="resend(t.ticketId)" @keydown.enter.stop="resend(t.ticketId)">
-                                                {{ resendingId === t.ticketId ? "Enviando…" : "Reenviar por correo" }}
-                                            </button>
-                                            <span v-if="t.emailSentCount > 0" class="mtSent">Enviado {{ t.emailSentCount }}×</span>
-                                        </div>
-                                        <span class="mtShowHint">Toca para mostrar el QR en grande</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                    <div class="mtWrap">
+                        <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
+                        <NotificationBox v-if="notice" alertType="success" class="mb-3">{{ notice }}</NotificationBox>
 
-                    <!-- Eventos pasados -->
-                    <section v-if="pastGroups.length" class="mtSection">
-                        <button type="button" class="mtPastToggle" @click="showPast = !showPast">
-                            <span>Eventos pasados ({{ pastGroups.length }})</span>
-                            <span class="mtPastChevron">{{ showPast ? "▲" : "▼" }}</span>
-                        </button>
-                        <div v-if="showPast">
-                            <div v-for="g in pastGroups" :key="g.eventId" class="mtEvent mtEvent--past">
-                                <div class="mtEventHero mtEventHero--noimg mtEventHero--tappable"
-                                     role="button" tabindex="0" :aria-expanded="isExpanded(g)"
-                                     @click="toggleEvent(g.eventId)"
-                                     @keydown.enter="toggleEvent(g.eventId)">
-                                    <div class="mtEventHeroInner">
-                                        <span v-if="g.startDateTime" class="mtEventDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
-                                        <h2 class="mtEventName">{{ g.name }}</h2>
-                                        <span v-if="g.venueName" class="mtEventVenue">{{ g.venueName }}</span>
-                                    </div>
-                                    <span class="mtEventCount">
-                                        {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
-                                        <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
-                                    </span>
+                        <div v-if="!busy && tickets.length === 0" class="mtEmpty">
+                            <div class="mtEmptyIcon">🎟️</div>
+                            <h3>Aún no tienes entradas</h3>
+                            <p>Cuando compres entradas — o alguien de tu familia te asigne una — aparecerán aquí.</p>
+                        </div>
+
+                        <template v-else>
+                            <div class="mtTabsRow">
+                                <div class="mtTabs">
+                                    <button type="button"
+                                            class="mtTab"
+                                            :class="{ 'mtTab--active': activeTab === 'upcoming' }"
+                                            @click="activeTab = 'upcoming'">
+                                        Próximos eventos ({{ upcomingGroups.length }})
+                                    </button>
+                                    <button type="button"
+                                            class="mtTab"
+                                            :class="{ 'mtTab--active': activeTab === 'past' }"
+                                            @click="activeTab = 'past'">
+                                        Historial de anteriores ({{ pastGroups.length }})
+                                    </button>
                                 </div>
-                                <div v-show="isExpanded(g)" class="mtTickets">
-                                    <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket">
-                                        <div class="mtTicketInfo">
-                                            <div class="mtTicketTags">
-                                                <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
-                                                <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
-                                                    {{ t.status === "CheckedIn" ? "Asististe" : "No utilizada" }}
-                                                </span>
+                                <button type="button" class="mtReload" :disabled="busy" @click="loadTickets">
+                                    {{ busy ? "Cargando…" : "Recargar" }}
+                                </button>
+                            </div>
+
+                            <!-- Próximos eventos -->
+                            <section v-if="activeTab === 'upcoming'" class="mtSection">
+                                <div v-if="!upcomingGroups.length" class="mtEmpty">
+                                    <div class="mtEmptyIcon">🎟️</div>
+                                    <h3>No tienes eventos próximos</h3>
+                                    <p>Tus entradas de eventos que ya pasaron están en el historial.</p>
+                                </div>
+
+                                <div v-for="g in upcomingGroups" :key="g.eventId" class="mtEvent">
+                                    <div class="mtEventHero mtEventHero--tappable"
+                                         :class="{ 'mtEventHero--noimg': !g.imageUrl }"
+                                         :style="g.imageUrl ? { backgroundImage: `url('${g.imageUrl}')` } : {}"
+                                         role="button" tabindex="0" :aria-expanded="isExpanded(g)"
+                                         @click="toggleEvent(g.eventId)"
+                                         @keydown.enter="toggleEvent(g.eventId)">
+                                        <div class="mtEventHeroShade"></div>
+                                        <div class="mtEventHeroInner">
+                                            <span class="mtPill mtPill--neu mtEventTag">{{ g.category || "Evento" }}</span>
+                                            <h2 class="mtEventName">{{ g.name }}</h2>
+                                        </div>
+                                    </div>
+                                    <div class="mtEventMeta">
+                                        <div class="mtEventMetaRow">
+                                            <div class="mtEventMetaText">
+                                                <span v-if="g.startDateTime" class="mtEventMetaDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
+                                                <span v-if="g.venueName" class="mtEventMetaVenue">{{ g.venueName }}</span>
                                             </div>
-                                            <span class="mtTicketType">{{ t.ticketTypeName }}</span>
-                                            <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
-                                            <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                                            <button type="button" class="mtEventCount" @click="toggleEvent(g.eventId)">
+                                                {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
+                                                <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div v-show="isExpanded(g)" class="mtTickets">
+                                        <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket mtTicket--tappable"
+                                             role="button" tabindex="0"
+                                             @click="showTicket(t, g)"
+                                             @keydown.enter="showTicket(t, g)">
+                                            <img v-if="t.qrImageUrl" :src="t.qrImageUrl" :alt="'QR ' + t.uniqueCode" class="mtQr" />
+                                            <div class="mtTicketInfo">
+                                                <div class="mtTicketTags">
+                                                    <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
+                                                    <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
+                                                        {{ t.status === "CheckedIn" ? "Utilizada" : "Válida" }}
+                                                    </span>
+                                                </div>
+                                                <span class="mtTicketType">{{ t.ticketTypeName }}</span>
+                                                <!-- Un boleto admite TODAS las sesiones del evento (no hay sesión por
+                                                     ticket), así que el horario que se muestra es el del evento. -->
+                                                <span v-if="g.startDateTime" class="mtTicketTime ecCap">{{ formatEventDate(g.startDateTime) }}</span>
+                                                <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
+                                                <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                                                <div class="mtTicketFoot">
+                                                    <button type="button" class="mtResend" :disabled="resendingId === t.ticketId" @click.stop="resend(t.ticketId)" @keydown.enter.stop="resend(t.ticketId)">
+                                                        {{ resendingId === t.ticketId ? "Enviando…" : "Reenviar por correo" }}
+                                                    </button>
+                                                    <span v-if="t.emailSentCount > 0" class="mtSent">Enviado {{ t.emailSentCount }}×</span>
+                                                </div>
+                                                <span class="mtShowHint">Toca para mostrar el QR en grande</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </section>
+                            </section>
+
+                            <!-- Historial -->
+                            <section v-if="activeTab === 'past'" class="mtSection">
+                                <div v-if="!pastGroups.length" class="mtEmpty">
+                                    <div class="mtEmptyIcon">🎟️</div>
+                                    <h3>Todavía no hay historial</h3>
+                                    <p>Los eventos a los que asististe aparecerán aquí cuando terminen.</p>
+                                </div>
+
+                                <div v-for="g in pastGroups" :key="g.eventId" class="mtEvent mtEvent--past">
+                                    <div class="mtEventHero mtEventHero--noimg mtEventHero--tappable"
+                                         role="button" tabindex="0" :aria-expanded="isExpanded(g)"
+                                         @click="toggleEvent(g.eventId)"
+                                         @keydown.enter="toggleEvent(g.eventId)">
+                                        <div class="mtEventHeroInner">
+                                            <span class="mtPill mtEventTag mtEventTag--past">Tus entradas</span>
+                                            <h2 class="mtEventName">{{ g.name }}</h2>
+                                        </div>
+                                    </div>
+                                    <div class="mtEventMeta">
+                                        <div class="mtEventMetaRow">
+                                            <div class="mtEventMetaText">
+                                                <span v-if="g.startDateTime" class="mtEventMetaDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
+                                                <span v-if="g.venueName" class="mtEventMetaVenue">{{ g.venueName }}</span>
+                                            </div>
+                                            <button type="button" class="mtEventCount" @click="toggleEvent(g.eventId)">
+                                                {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
+                                                <span class="mtEventChevron">{{ isExpanded(g) ? "▲" : "▼" }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div v-show="isExpanded(g)" class="mtTickets">
+                                        <div v-for="t in g.tickets" :key="t.ticketId" class="mtTicket">
+                                            <div class="mtTicketInfo">
+                                                <div class="mtTicketTags">
+                                                    <span v-if="t.isCurrentUser" class="mtPill mtPill--mine">Tu entrada</span>
+                                                    <span class="mtPill" :class="t.status === 'CheckedIn' ? 'mtPill--used' : 'mtPill--valid'">
+                                                        {{ t.status === "CheckedIn" ? "Asististe" : "No utilizada" }}
+                                                    </span>
+                                                </div>
+                                                <span class="mtTicketType">{{ t.ticketTypeName }}</span>
+                                                <span class="mtTicketAttendee">{{ t.attendeeName || "Sin nombre asignado" }}</span>
+                                                <span class="mtTicketCode ecMono notranslate">{{ t.uniqueCode }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- Visor fullscreen del QR (para enseñar en la puerta) -->
@@ -156,50 +209,146 @@
 
 <style>
 /* ============================================================
-   Vida Real — Mis Entradas (hub de eventos, diseño 2026)
-   Misma paleta slate / Roboto del checkout de Eventos.
-   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   Vida Real — Eventos • Mis Entradas
+   Rediseño 2026 (Claude Design · artboard "05.Eventos - myTickets").
+   NO-scoped: oculta el chrome del panel vía ancestro (:has) y posiciona el
+   visor de QR a pantalla completa sobre el bloque.
    ============================================================ */
 
-.panel-block:has(.mtWrap) > .panel-heading,
-.panel-block:has(.mtWrap) > .panel-header { display: none !important; }
-.panel-block:has(.mtWrap) {
+.panel-block:has(.mtPage) > .panel-heading,
+.panel-block:has(.mtPage) > .panel-header { display: none !important; }
+.panel-block:has(.mtPage) {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     margin: 0 !important;
     padding: 0 !important;
 }
-.panel-block:has(.mtWrap) > .panel-body { padding: 0 !important; }
+.panel-block:has(.mtPage) > .panel-body { padding: 0 !important; }
+
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* El escenario es el contexto de posicionamiento del visor de QR. */
+.mtPage {
+    position: relative;
+    background: #E0E5E8;
+    margin: 0 -15px;
+    padding-bottom: 48px;
+    min-height: 70vh;
+}
+.mtGlobalNote { max-width: 860px; margin: 24px auto; }
+.mtLogged { background: #F3F5F7; }
+
+/* ---------- Portada ---------- */
+.mtCover {
+    position: relative; width: 100%;
+    height: clamp(340px, 40vh, 620px);
+    overflow: hidden;
+    background: #1E293B center / cover no-repeat;
+}
+.mtCover--noimg { background: linear-gradient(135deg, #0F334B, #143E5A); }
+.mtCoverShade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,23,42,0.05) 0%, rgba(15,23,42,0.35) 55%, rgba(15,23,42,0.88) 100%);
+}
+.mtCoverInner {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 0 clamp(20px, 4vw, 64px) 72px;
+    display: flex; flex-direction: column; gap: 14px;
+    max-width: 1280px; margin: 0 auto;
+}
+.mtCoverTitle {
+    margin: 0;
+    font-size: clamp(34px, 5.4vw, 64px);
+    font-weight: 700; letter-spacing: -0.02em; line-height: 1.02; color: #fff;
+}
+.mtCoverMeta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    font-size: 15px; color: rgba(255,255,255,0.82);
+}
 
 .mtWrap {
-    --surface-card: #ffffff;
-    --surface-mid: #f8fafc;
-    --surface-alt: #f1f5f9;
-    --primary-900: #1e293b;
-    --primary-800: #334155;
-    --primary-500: #64748b;
-    --primary-300: #94a3b8;
-    --primary-200: #cbd5e1;
-    --success-bg: #f0fdf4;
-    --success-text: #166534;
+    /* Tokens Brújula VR */
+    --vr-navy: #0E364C;
+    --vr-navy-800: #21465A;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink-soft: #5B7685;
+    --ink-faint: #8297A2;
+    --rule-strong: #CAD3D8;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-bg: #E9F6F2; --ok-text: #1E7A64;
+    --warn-bg: #FDF2E1; --warn-text: #8F5B0B;
+    --err-bg: #FCEAE8; --err-text: #B02E22;
+    --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-num: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+
+    /* Alias de la paleta anterior, remapeados a los tokens */
+    --surface-card: var(--paper);
+    --surface-mid: var(--paper-alt);
+    --surface-alt: var(--action-soft);
+    --primary-900: var(--vr-navy);
+    --primary-800: var(--vr-navy-800);
+    --primary-500: var(--ink-soft);
+    --primary-300: var(--ink-faint);
+    --primary-200: var(--rule-strong);
+    --success-bg: var(--ok-bg);
+    --success-text: var(--ok-text);
 
     max-width: 860px;
     margin: 0 auto;
     padding: 28px 16px 48px;
-    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     color: var(--primary-900);
 }
-.mtWrap .ecMono { font-family: "Roboto Mono", Consolas, Menlo, monospace; }
+.mtWrap *, .mtWrap *::before, .mtWrap *::after { box-sizing: border-box; }
+.mtWrap .ecMono { font-family: var(--font-num); }
 .mtWrap .ecCap::first-letter { text-transform: uppercase; }
 
-/* ---------- Encabezado ---------- */
-.mtHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
-.mtTitle { margin: 0; font-size: 26px; font-weight: 700; color: var(--primary-900); }
-.mtSub { margin: 4px 0 0; font-size: 14px; color: var(--primary-500); }
+/* ---------- Pestañas ---------- */
+.mtTabsRow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+}
+.mtTabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.mtTab {
+    border: 1px solid var(--ink-faint); cursor: pointer; font-family: inherit;
+    background: var(--ink-faint); color: #fff;
+    padding: 10px 20px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    transition: background .15s ease, color .15s ease, border-color .15s ease, filter .15s ease;
+}
+.mtTab:hover { filter: brightness(1.2); color: #fff; }
+.mtTab--active { color: #fff; background: var(--vr-navy); border-color: var(--vr-navy); }
+.mtTab--active:hover { filter: brightness(1.2); color: #fff; }
+
 .mtReload {
     border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
-    padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;
+    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 500;
+    cursor: pointer; font-family: inherit;
 }
 .mtReload:hover:not(:disabled) { background: var(--surface-mid); }
 .mtReload:disabled { opacity: .6; cursor: default; }
@@ -217,120 +366,143 @@
 .mtSection { margin-bottom: 28px; }
 .mtEvent {
     background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 20px;
-    overflow: hidden; box-shadow: 0 8px 24px rgba(15, 23, 42, .06); margin-bottom: 20px;
+    overflow: hidden; box-shadow: 0 8px 24px rgba(15, 51, 75, .06); margin-bottom: 20px;
 }
 .mtEventHero {
-    position: relative; min-height: 132px; display: flex; align-items: flex-end;
+    position: relative; min-height: 136px; display: flex; align-items: flex-end;
     background-size: cover; background-position: center;
 }
-.mtEventHero--noimg { background: linear-gradient(135deg, #1e293b, #334155); }
+.mtEventHero--noimg { background: linear-gradient(135deg, #0F334B, #143E5A); }
 .mtEventHeroShade {
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(15,23,42,.15) 0%, rgba(15,23,42,.72) 100%);
+    background: linear-gradient(180deg, rgba(15,51,75,.15) 0%, rgba(15,51,75,.72) 100%);
 }
-.mtEventHeroInner { position: relative; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; }
-.mtEventDate { font-size: 12px; font-weight: 600; letter-spacing: .5px; color: rgba(255,255,255,.85); }
-.mtEventName { margin: 0; font-size: 20px; font-weight: 700; color: #fff; line-height: 1.2; }
-.mtEventVenue { font-size: 13px; color: rgba(255,255,255,.8); }
-.mtEventSessions {
-    list-style: none; margin: 4px 0 0; padding: 0;
-    font-size: 12px; color: rgba(255,255,255,.75);
+.mtEventHeroInner {
+    position: relative; padding: 26px 24px;
+    display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
 }
-.mtEventSessions li::before { content: "•"; margin-right: 6px; color: rgba(255,255,255,.45); }
-.mtEventCount {
-    position: absolute; top: 14px; right: 14px;
-    background: rgba(255,255,255,.92); color: var(--primary-900);
-    font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
+.mtPill--neu { background: var(--surface-alt); color: var(--primary-800); }
+.mtEventTag { align-self: flex-start; text-transform: uppercase; }
+/* En el historial el tag pierde el fondo y queda como rótulo blanco sobre el hero. */
+.mtEventTag--past {
+    background: transparent; color: #fff;
+    padding: 0; border-radius: 0;
 }
-.mtEventChevron { font-size: 9px; color: var(--primary-500); margin-left: 4px; }
+.mtEventName { margin: 0; font-size: 27px; font-weight: 600; color: #fff; line-height: 1.28; letter-spacing: -0.01em; }
 .mtEventHero--tappable { cursor: pointer; }
 .mtEventHero--tappable:hover .mtEventHeroShade {
-    background: linear-gradient(180deg, rgba(15,23,42,.28) 0%, rgba(15,23,42,.8) 100%);
+    background: linear-gradient(180deg, rgba(15,51,75,.28) 0%, rgba(15,51,75,.8) 100%);
 }
 .mtEventHero--tappable:hover.mtEventHero--noimg { filter: brightness(1.08); }
 
-/* ---------- Tickets dentro del evento ---------- */
-.mtTickets { display: flex; flex-direction: column; }
-.mtTicket {
-    display: flex; gap: 18px; align-items: center; padding: 18px 22px;
+.mtEventMeta {
+    padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 6px;
+    background: var(--surface-card); border-bottom: 1px solid var(--surface-alt);
 }
-.mtTicket + .mtTicket { border-top: 1px dashed var(--primary-200); }
+.mtEventMetaRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.mtEventMetaText { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mtEventMetaDate { font-size: 13.5px; font-weight: 600; color: var(--primary-800); }
+.mtEventMetaVenue { font-size: 13.5px; color: var(--primary-500); }
+.mtEvent:not(.mtEvent--past) .mtEventMetaDate,
+.mtEvent:not(.mtEvent--past) .mtEventMetaVenue { font-size: 15px; }
+.mtEventCount {
+    flex: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    background: var(--surface-mid); color: var(--primary-900); border: 1px solid var(--primary-200);
+    font-size: 13.5px; font-weight: 600; padding: 10px 16px; border-radius: 999px; font-family: inherit;
+}
+.mtEventCount:hover { background: var(--surface-alt); }
+.mtEventChevron { font-size: 10px; color: var(--primary-500); }
+
+/* ---------- Entradas dentro del evento ---------- */
+.mtTickets { display: flex; flex-direction: column; gap: 10px; padding: 4px 18px 18px; }
+.mtTicket {
+    display: flex; gap: 18px; align-items: center; padding: 16px 18px;
+    background: var(--surface-mid); border-radius: 14px;
+}
 .mtQr {
     width: 108px; height: 108px; flex: none; border: 1px solid var(--surface-alt);
     border-radius: 12px; background: #fff; padding: 5px;
 }
-.mtTicketInfo { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.mtTicketInfo { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
 .mtTicketTags { display: flex; gap: 6px; flex-wrap: wrap; }
 .mtPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
 .mtPill--mine { background: var(--primary-900); color: #fff; }
 .mtPill--valid { background: var(--success-bg); color: var(--success-text); }
 .mtPill--used { background: var(--surface-alt); color: var(--primary-500); }
-.mtTicketType { font-size: 15px; font-weight: 700; color: var(--primary-900); }
-.mtTicketAttendee { font-size: 13px; color: var(--primary-500); }
+.mtTicketType { font-size: 16px; font-weight: 700; color: var(--primary-900); }
+.mtTicketTime { font-size: 13px; font-weight: 600; color: var(--primary-800); }
+.mtTicketAttendee { font-size: 14px; color: var(--primary-500); }
 .mtTicketCode { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--primary-800); }
 .mtTicketFoot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .mtResend {
     border: none; background: none; padding: 0; color: var(--primary-500);
-    font-size: 12px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+    font-size: 12px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px;
+    cursor: pointer; font-family: inherit;
 }
 .mtResend:hover:not(:disabled) { color: var(--primary-900); }
 .mtResend:disabled { opacity: .6; cursor: default; }
 .mtSent { font-size: 11px; color: var(--primary-300); }
+.mtTicket--tappable { cursor: pointer; }
+.mtTicket--tappable:hover { background: var(--surface-alt); }
+.mtShowHint { font-size: 11px; color: var(--primary-300); margin-top: 2px; }
 
-/* ---------- Eventos pasados ---------- */
-.mtPastToggle {
-    width: 100%; display: flex; justify-content: space-between; align-items: center;
-    border: 1px solid var(--surface-alt); background: var(--surface-mid); color: var(--primary-800);
-    padding: 14px 20px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer;
-    margin-bottom: 16px;
-}
-.mtPastChevron { font-size: 11px; color: var(--primary-300); }
-.mtEvent--past { opacity: .82; }
-.mtEvent--past .mtEventHero { min-height: 84px; }
+/* ---------- Historial ---------- */
+.mtEvent--past { opacity: .82; filter: grayscale(1); }
+.mtEvent--past .mtEventHero--noimg { background: linear-gradient(135deg, #929393, #143E5A); }
+.mtEvent--past .mtEventHero { min-height: 108px; }
 
 /* ---------- Visor fullscreen del QR ---------- */
-.mtTicket--tappable { cursor: pointer; }
-.mtTicket--tappable:hover { background: var(--surface-mid); }
-.mtShowHint { font-size: 11px; color: var(--primary-300); margin-top: 2px; }
 .mtViewer {
-    position: fixed; inset: 0; z-index: 1050;
-    background: rgba(15, 23, 42, .78); backdrop-filter: blur(3px);
+    position: absolute; inset: 0; z-index: 1050;
+    background: rgba(15, 51, 75, .78); backdrop-filter: blur(3px);
     display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .mtViewerCard {
     position: relative; background: #fff; border-radius: 24px;
     padding: 36px 32px 28px; max-width: 380px; width: 100%;
     display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
-    box-shadow: 0 24px 60px rgba(15, 23, 42, .4);
+    box-shadow: 0 24px 60px rgba(15, 51, 75, .4);
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --primary-900: #0E364C; --primary-500: #5B7685; --primary-300: #8297A2; --surface-alt: #EAF1F6;
 }
 .mtViewerClose {
     position: absolute; top: 12px; right: 14px; border: none; background: var(--surface-alt);
-    color: var(--primary-800); width: 32px; height: 32px; border-radius: 50%;
+    color: #143E5A; width: 32px; height: 32px; border-radius: 50%;
     font-size: 14px; cursor: pointer; line-height: 1;
 }
 .mtViewerEvent { font-size: 15px; font-weight: 700; color: var(--primary-900); }
-.mtViewerQr {
-    width: min(280px, 72vw); height: auto; aspect-ratio: 1;
-    image-rendering: pixelated;
+.mtViewerQr { width: min(280px, 72vw); height: auto; aspect-ratio: 1; image-rendering: pixelated; }
+.mtViewerCode {
+    font-size: 19px; font-weight: 700; letter-spacing: 3px;
+    color: var(--primary-900); font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
 }
-.mtViewerCode { font-size: 19px; font-weight: 700; letter-spacing: 3px; color: var(--primary-900); }
 .mtViewerMeta { font-size: 13px; color: var(--primary-500); }
 .mtViewerNote { font-size: 11px; color: var(--primary-300); margin-top: 4px; }
 .mtWalletBtn {
     display: inline-flex; align-items: center; gap: 8px;
     margin-top: 10px; padding: 10px 18px;
     background: #000; color: #fff; border: none; border-radius: 10px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    font-family: inherit;
+    font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .mtWalletBtn:hover { background: #1c1c1e; color: #fff; }
 .mtWalletBtn:disabled { opacity: .6; cursor: default; }
 .mtWalletBtn svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
 .mtWalletErr { font-size: 12px; color: #dc2626; margin-top: 6px; }
 
+@media (max-width: 720px) {
+    /* Móvil a sangre, igual que el checkout: calc(50% - 50vw) cancela el padding de CUALQUIER
+       contenedor del tema. El `margin: 0` anterior quitaba la compensación y dejaba un marco
+       gris de 15px a los lados. */
+    .mtPage { width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); }
+}
 @media (max-width: 560px) {
     .mtTicket { flex-direction: column; align-items: flex-start; }
     .mtQr { width: 140px; height: 140px; align-self: center; }
+    .mtTabsRow { flex-direction: column; align-items: stretch; }
+    .mtEventMetaRow { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mtTab, .mtEventHero--tappable { transition: none; }
 }
 </style>
 
@@ -344,6 +516,7 @@ type TicketBag = {
     ticketId: number;
     eventId: number;
     eventName: string | null;
+    eventCategory: string | null;
     eventStartDateTime: string | null;
     eventEndDateTime: string | null;
     eventSessions: string[] | null;
@@ -363,6 +536,7 @@ type InitBag = { notLogged: boolean; appleWalletEnabled?: boolean; googleWalletE
 type EventGroup = {
     eventId: number;
     name: string;
+    category: string | null;
     startDateTime: string | null;
     endDateTime: string | null;
     sessions: string[];
@@ -379,7 +553,8 @@ const busy = ref<boolean>(false);
 const resendingId = ref<number | null>(null);
 const err = ref<string>("");
 const notice = ref<string>("");
-const showPast = ref<boolean>(false);
+// Pestañas del rediseño 2026: próximos e historial dejaron de ser dos secciones apiladas.
+const activeTab = ref<"upcoming" | "past">("upcoming");
 
 // Cards de evento plegadas por defecto: con varios eventos (y varias entradas c/u) la página
 // se hacía interminable. Tocar el hero despliega sus entradas; con UN solo evento próximo se
@@ -460,6 +635,7 @@ function groupByEvent(list: TicketBag[]): EventGroup[] {
             g = {
                 eventId: t.eventId,
                 name: t.eventName || "Evento",
+                category: t.eventCategory,
                 startDateTime: t.eventStartDateTime,
                 endDateTime: t.eventEndDateTime,
                 sessions: t.eventSessions || [],
@@ -504,6 +680,13 @@ const upcomingGroups = computed<EventGroup[]>(() =>
 const pastGroups = computed<EventGroup[]>(() =>
     groupByEvent(tickets.value).filter(g => isPast(g))
         .sort((a, b) => new Date(b.startDateTime ?? 0).getTime() - new Date(a.startDateTime ?? 0).getTime()));
+
+// Portada: la imagen del próximo evento del usuario. Sin eventos próximos, cae al más reciente
+// del historial; si tampoco hay imagen, el CSS pinta el degradado navy.
+const coverImageUrl = computed<string | null>(() =>
+    upcomingGroups.value.find(g => g.imageUrl)?.imageUrl
+    ?? pastGroups.value.find(g => g.imageUrl)?.imageUrl
+    ?? null);
 
 function formatEventDate(value: string | null): string {
     if (!value) {

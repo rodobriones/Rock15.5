@@ -41,6 +41,26 @@ Copy-Item bin/Debug/net472/com.vidareal.Wallet.dll ../../RockWeb/Bin/ -Force
 
 Verificación: `SELECT MigrationNumber FROM PluginMigration WHERE PluginAssemblyName = 'com.vidareal.Wallet'`.
 
+## Enviar el pase por correo
+
+Plantilla lista para pegar en una comunicación: `docs/wallet-module/correo-pase-digital.html`,
+con sus notas en [`correo-pase-digital.md`](../docs/wallet-module/correo-pase-digital.md).
+
+Reemplaza al plugin MinistryPass: `{{ Person | GetMinistryPassUrl:1 }}` pasa a ser
+`{{ Person | WalletPassUrl:'f0a1b2c3-d4e5-4f60-8a01-940000000002' }}` — el viejo recibía el **id**
+de su plantilla, el nuestro el **Guid** de la `WalletTemplate`. Ese guid es el seed "VidaAventura"
+de la 009, que la 016 generalizó como pase digital de la iglesia.
+
+Tres cosas que el `.md` explica y conviene no re-descubrir a golpes:
+
+- **Lava parsea dentro de los comentarios HTML.** Documentar con un `{% raw %}{% if %}{% endraw %}`
+  de ejemplo en un `<!-- -->` revienta la plantilla.
+- **No acortar el link en un correo con botón.** La URL no se ve, y el short link cambia una
+  credencial de 256 bits (serial + token) por ~47 generados con `System.Random`. Y **jamás** un
+  token derivado del `Person.Id`: `personas.vidareal.tv/pase-123` es enumerable.
+- **El link ES la credencial** y no caduca por sesión: el endpoint de descarga es anónimo a
+  propósito (quien lo pide no tiene sesión, o es iOS). El correo es personal y no reenviable.
+
 ## Notas
 
 - El seed es consumido por guid desde `Rock.Model.WalletService.EventTicketTemplateGuid`

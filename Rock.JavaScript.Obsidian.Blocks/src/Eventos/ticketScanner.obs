@@ -1,6 +1,7 @@
 <template>
-    <Panel type="block" title="Eventos • Escáner de Entradas">
+    <Panel type="block" title="" class="ts-panel">
         <template #default>
+            <div class="tsPage">
             <div class="tsWrap">
                 <NotificationBox v-if="config.notLogged" alertType="warning">
                     Debes iniciar sesión para escanear tickets.
@@ -127,6 +128,16 @@
                             Iniciar cámara
                         </button>
 
+                        <!-- Barra de acciones sticky (no tapa nada: es parte del flujo) -->
+                        <div class="tsBar">
+                            <button type="button" class="tsBtn tsBtn--danger" :disabled="!scanning" @click="stopScan">
+                                Detener cámara
+                            </button>
+                            <button type="button" class="tsBtn" :disabled="!bannerStatus" @click="clearResult">
+                                Limpiar
+                            </button>
+                        </div>
+
                         <!-- Resultado (persistente, sin modal: la cámara sigue escaneando) -->
                         <div class="tsBanner" :class="bannerClass">
                             <div class="tsBannerIcon">{{ bannerIcon }}</div>
@@ -208,17 +219,9 @@
 
                         <p class="tsTip">Tip: en iPhone, permite el acceso a la cámara en el navegador. Si cambiaste permisos, recarga la página.</p>
 
-                        <!-- Barra de acciones sticky (no tapa nada: es parte del flujo) -->
-                        <div class="tsBar">
-                            <button type="button" class="tsBtn tsBtn--danger" :disabled="!scanning" @click="stopScan">
-                                Detener cámara
-                            </button>
-                            <button type="button" class="tsBtn" :disabled="!bannerStatus" @click="clearResult">
-                                Limpiar
-                            </button>
-                        </div>
                     </section>
                 </div>
+            </div>
             </div>
         </template>
     </Panel>
@@ -226,9 +229,10 @@
 
 <style>
 /* ============================================================
-   Vida Real — Escáner de Entradas (diseño 2026)
-   Misma paleta slate / Roboto del checkout y Mis Entradas.
-   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   Vida Real — Escáner de Entradas
+   Rediseño 2026 (Claude Design · artboard "10.Eventos - ticketScanner").
+   NO-scoped: oculta el chrome del panel vía ancestro (:has) y estiliza las
+   alertas de Rock que se renderizan dentro del bloque.
    ============================================================ */
 
 .panel-block:has(.tsWrap) > .panel-heading,
@@ -242,32 +246,83 @@
 }
 .panel-block:has(.tsWrap) > .panel-body { padding: 0 !important; }
 
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* El escenario es el contexto de posicionamiento del modal de resultado. */
+.tsPage { background: #fff; position: relative; }
+
+.tsPage .alert {
+    padding: 12px 16px; border-radius: 8px; font-size: 14px;
+    margin-bottom: 16px; border: 1px solid transparent;
+}
+.tsPage .alert-warning { background: #FDF2E1; border-color: #F09E30; color: #8F5B0B; }
+.tsPage .alert-info { background: #EAF1F6; border-color: #CFE0EC; color: #1E5B87; }
+.tsPage .alert-danger { background: #FCEAE8; border-color: #FCEAE8; color: #B02E22; }
+
 .tsWrap {
-    --surface-card: #ffffff;
-    --surface-mid: #f8fafc;
-    --surface-alt: #f1f5f9;
-    --primary-900: #1e293b;
-    --primary-800: #334155;
-    --primary-500: #64748b;
-    --primary-300: #94a3b8;
-    --primary-200: #cbd5e1;
-    --ok-bg: #f0fdf4;
-    --ok-border: #bbf7d0;
-    --ok-text: #166534;
-    --warn-bg: #fffbeb;
-    --warn-border: #fde68a;
-    --warn-text: #92400e;
-    --bad-bg: #fef2f2;
-    --bad-border: #fecaca;
-    --bad-text: #991b1b;
+    /* Tokens Brújula VR */
+    --vr-navy: #0E364C;
+    --vr-navy-800: #21465A;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink-soft: #5B7685;
+    --ink-faint: #8297A2;
+    --rule-strong: #CAD3D8;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-num: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+
+    /* Alias de la paleta anterior, remapeados a los tokens */
+    --surface-card: var(--paper);
+    --surface-mid: var(--paper-alt);
+    --surface-alt: var(--action-soft);
+    --primary-900: var(--vr-navy);
+    --primary-800: var(--vr-navy-800);
+    --primary-500: var(--ink-soft);
+    --primary-300: var(--ink-faint);
+    --primary-200: var(--rule-strong);
+    --ok-bg: #E9F6F2;
+    --ok-border: #39B396;
+    --ok-text: #1E7A64;
+    --warn-bg: #FDF2E1;
+    --warn-border: #F09E30;
+    --warn-text: #8F5B0B;
+    --bad-bg: #FCEAE8;
+    --bad-border: #E74133;
+    --bad-text: #B02E22;
 
     max-width: 640px;
     margin: 0 auto;
     padding: 28px 16px 48px;
-    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     color: var(--primary-900);
 }
-.tsWrap .ecMono { font-family: "Roboto Mono", Consolas, Menlo, monospace; }
+.tsWrap *, .tsWrap *::before, .tsWrap *::after { box-sizing: border-box; }
+.tsWrap .ecMono { font-family: var(--font-num); }
 
 /* ---------- Encabezado ---------- */
 .tsHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
@@ -279,9 +334,12 @@
     font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; margin-top: 4px;
 }
 .tsDot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-300); }
-.tsStatus--scan .tsDot { background: #16a34a; animation: tsPulse 1.2s ease-in-out infinite; }
-.tsStatus--busy .tsDot { background: #d97706; }
+.tsStatus--scan .tsDot { background: #39B396; animation: tsPulse 1.2s ease-in-out infinite; }
+.tsStatus--busy .tsDot { background: #F09E30; }
 @keyframes tsPulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+    .tsStatus--scan .tsDot { animation: none; }
+}
 
 /* ---------- Búsqueda / lista de eventos ---------- */
 .tsSearchRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
@@ -304,16 +362,16 @@
     display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
     background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
     padding: 14px 16px; cursor: pointer; font-family: inherit;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+    box-shadow: 0 4px 14px rgba(15, 51, 75, .05);
     transition: transform .06s ease, box-shadow .06s ease, border-color .06s ease;
 }
-.tsEvent:hover { border-color: var(--primary-200); box-shadow: 0 8px 20px rgba(15, 23, 42, .08); transform: translateY(-1px); }
+.tsEvent:hover { border-color: var(--primary-200); box-shadow: 0 8px 20px rgba(15, 51, 75, .08); transform: translateY(-1px); }
 .tsEventCal {
     flex: none; width: 52px; display: flex; flex-direction: column; align-items: center;
     background: var(--surface-mid); border: 1px solid var(--surface-alt); border-radius: 12px; padding: 6px 0;
 }
 .tsEventCalMonth { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--primary-500); }
-.tsEventCalDay { font-size: 20px; font-weight: 700; color: var(--primary-900); line-height: 1.1; }
+.tsEventCalDay { font-size: 20px; font-weight: 700; color: var(--primary-900); line-height: 1.1; font-family: var(--font-num); }
 .tsEventMain { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .tsEventName { font-size: 15px; font-weight: 700; color: var(--primary-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tsEventMeta { font-size: 12px; color: var(--primary-500); }
@@ -344,7 +402,7 @@
 .tsSelectedName { font-size: 16px; font-weight: 700; word-break: break-word; }
 .tsGhostBtn {
     flex: none; border: 1px solid rgba(255, 255, 255, .35); background: transparent; color: #fff;
-    padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 500; cursor: pointer; font-family: inherit;
 }
 .tsGhostBtn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
 .tsGhostBtn:disabled { opacity: .5; cursor: default; }
@@ -352,12 +410,15 @@
 /* ---------- Contadores del evento ---------- */
 .tsStats {
     background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
-    padding: 14px 16px 16px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+    padding: 14px 16px 16px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15, 51, 75, .05);
 }
 .tsStatsRow { display: flex; gap: 8px; margin-bottom: 12px; }
 .tsStat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .tsStat + .tsStat { border-left: 1px solid var(--surface-alt); }
-.tsStatNum { font-size: 24px; font-weight: 800; color: var(--primary-900); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tsStatNum {
+    font-size: 24px; font-weight: 800; color: var(--primary-900); line-height: 1.1;
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+}
 .tsStatLabel { font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--primary-500); }
 .tsStat:first-child .tsStatNum { color: var(--ok-text); }
 .tsProgress { height: 8px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; }
@@ -366,42 +427,46 @@
 /* ---------- Cámara ---------- */
 .tsVideoShell {
     position: relative; border-radius: 20px; overflow: hidden;
-    background: #0f172a; box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+    background: #0F334B; box-shadow: 0 8px 24px rgba(15, 51, 75, .18);
 }
-.tsVideo { width: 100%; height: 340px; object-fit: cover; display: block; }
+.tsVideo { width: 100%; height: 340px; object-fit: cover; display: block; background: #0F334B; }
 .tsOverlay { position: absolute; inset: 0; pointer-events: none; }
 .tsFrame {
     position: absolute; left: 50%; top: 50%; width: min(68vw, 280px); height: min(68vw, 280px);
     transform: translate(-50%, -50%); border-radius: 20px;
-    border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 0 0 9999px rgba(15, 23, 42, .35);
+    border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 0 0 9999px rgba(15, 51, 75, .35);
     transition: border-color .15s ease;
 }
 .tsFrame--live { border-color: rgba(74, 222, 128, .9); }
 .tsFrame--ok { border-color: #22c55e; border-width: 4px; }
 .tsFrame--warn { border-color: #f59e0b; border-width: 4px; }
 .tsFrame--bad { border-color: #ef4444; border-width: 4px; }
-.tsOverText { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; padding: 18px; }
+.tsOverText {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff; text-align: center; padding: 18px;
+}
 .tsOverTitle { font-weight: 700; font-size: 16px; }
 .tsOverSub { margin-top: 4px; font-size: 12px; opacity: .8; }
 .tsOverHint {
     position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); white-space: nowrap;
-    background: rgba(15, 23, 42, .72); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 999px;
+    background: rgba(15, 51, 75, .72); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 999px;
 }
 
+/* ---------- Botones ---------- */
 .tsBtn {
     border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
-    padding: 12px 18px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .tsBtn:hover:not(:disabled) { background: var(--surface-mid); }
 .tsBtn:disabled { opacity: .5; cursor: default; }
 .tsBtn--primary { border-color: var(--primary-900); background: var(--primary-900); color: #fff; }
 .tsBtn--primary:hover:not(:disabled) { background: var(--primary-800); }
 .tsBtn--danger { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad-text); }
-.tsBtn--danger:hover:not(:disabled) { background: #fee2e2; }
+.tsBtn--danger:hover:not(:disabled) { background: #FCEAE8; }
 .tsBtn--block { display: block; width: 100%; margin-top: 12px; }
 .tsBtnSm {
     border: 1px solid var(--primary-900); background: var(--primary-900); color: #fff;
-    padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .tsBtnSm:hover:not(:disabled) { background: var(--primary-800); }
 .tsBtnSm:disabled { opacity: .5; cursor: default; }
@@ -438,7 +503,7 @@
 /* ---------- Cards (búsqueda / código manual) ---------- */
 .tsCard {
     background: var(--surface-card); border: 1px solid var(--surface-alt); border-radius: 16px;
-    padding: 16px; margin-top: 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+    padding: 16px; margin-top: 14px; box-shadow: 0 4px 14px rgba(15, 51, 75, .05);
 }
 .tsCardLabel {
     display: block; font-size: 12px; font-weight: 700; letter-spacing: .5px;
@@ -465,21 +530,24 @@
 
 /* ---------- Modal de resultado (salta con cada scan, cierre automático) ---------- */
 .tsModalBack {
-    position: fixed; inset: 0; z-index: 90;
+    position: absolute; inset: 0; z-index: 90;
     display: flex; align-items: center; justify-content: center; padding: 24px;
-    background: rgba(15, 23, 42, .45);
-    /* El backdrop NO come taps: en fila continua el modal está abierto casi todo
-       el tiempo y taparía la barra sticky, inputs y botones (doble tap en todo).
-       Solo el card es interactivo (tocarlo lo cierra). */
+    background: rgba(15, 51, 75, .45);
     pointer-events: none;
 }
 .tsModal {
     width: 100%; max-width: 340px; background: #fff; border-radius: 20px; overflow: hidden;
-    box-shadow: 0 24px 64px rgba(15, 23, 42, .35); text-align: center;
+    box-shadow: 0 24px 64px rgba(15, 51, 75, .35); text-align: center;
     animation: tsModalPop .18s ease-out;
     pointer-events: auto; cursor: pointer;
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --primary-900: #0E364C; --primary-500: #5B7685; --primary-300: #8297A2;
+    --ok-bg: #E9F6F2; --ok-border: #39B396; --ok-text: #1E7A64;
+    --warn-bg: #FDF2E1; --warn-border: #F09E30; --warn-text: #8F5B0B;
+    --bad-bg: #FCEAE8; --bad-border: #E74133; --bad-text: #B02E22;
 }
 @keyframes tsModalPop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tsModal { animation: none; } }
 .tsModalStrip { height: 6px; }
 .tsModalBody { padding: 22px 20px 18px; }
 .tsModalIcon {
@@ -501,7 +569,7 @@
 .tsModal--bad .tsModalIcon { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad-text); }
 .tsModal--bad .tsModalTitle { color: var(--bad-text); }
 
-/* ---------- Barra sticky de acciones (patrón de la app de check-in) ---------- */
+/* ---------- Barra sticky de acciones ---------- */
 .tsBar {
     position: sticky; bottom: 0; z-index: 20;
     display: flex; gap: 10px; margin-top: 16px;

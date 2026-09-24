@@ -43,7 +43,10 @@
                             <div v-if="checkedIn && !replacing" class="card ssCard ssWelcome" role="status" aria-live="polite">
                                 <div class="card-body">
                                     <div class="ssWelcomeMark" aria-hidden="true">✓</div>
-                                    <div class="ssWelcomeTitle">¡Bienvenido{{ checkedIn.name ? ", " + checkedIn.name : "" }}!</div>
+                                    <div class="ssWelcomeTitle">
+                                        <span class="ssWelcomeGreet">¡Bienvenido{{ welcomeName ? "," : "!" }}</span>
+                                        <span v-if="welcomeName" class="ssWelcomeName">{{ welcomeName }}!</span>
+                                    </div>
                                     <div class="ssWelcomeSub">Tu asistencia quedó registrada.</div>
                                     <div class="ssSummaryCard ssWelcomeSummary">
                                         <div class="ssSummaryRow" v-if="checkedIn.scheduleName">
@@ -59,11 +62,9 @@
                                             <div class="ssVal">{{ checkedInTimeText }}</div>
                                         </div>
                                     </div>
-                                    <div class="ssActions" style="flex-direction: column; align-items: center; display: flex; gap: 14px;">
-                                        <RockButton btnType="default" @click="dismissWelcome" :disabled="busy" style="width: 100%;">
-                                            Reservar otro servicio
-                                        </RockButton>
-                                    </div>
+                                    <!-- Sin CTA: la tarjeta es solo informativa mientras dura
+                                         (visibleForSeconds). Al expirar se oculta sola y la
+                                         pantalla vuelve al flujo para reservar otro servicio. -->
                                 </div>
                             </div>
 
@@ -212,7 +213,11 @@
                                         </div>
 
                                         <div v-if="!weekBusy && !weekError && availableDays.length === 0" class="text-muted ssSmall">
-                                            No hay horarios con cupo disponible para esta sede esta semana. Prob&aacute; con otra sede o volv&eacute; a intentar m&aacute;s tarde.
+                                            No hay horarios para esta sede esta semana. Prob&aacute; con otra sede o volv&eacute; a intentar m&aacute;s tarde.
+                                        </div>
+
+                                        <div v-else-if="!weekBusy && !weekError && !hasSelectableSlot" class="text-muted ssSmall">
+                                            Ning&uacute;n horario de esta sede tiene cupo para {{ quantity }} {{ quantity === 1 ? "persona" : "personas" }}. Prob&aacute; con menos personas, con otra sede o volv&eacute; a intentar m&aacute;s tarde.
                                         </div>
 
                                         <div v-if="availableDays.length > 0" class="ssSlots">
@@ -224,13 +229,13 @@
                                                     :key="s.slotId"
                                                     type="button"
                                                     class="ssSlotBtn"
-                                                    :class="{ isSelected: s.slotId === selectedSlotId }"
+                                                    :class="{ isSelected: s.slotId === selectedSlotId, isDisabled: !s.selectable }"
                                                     :aria-pressed="s.slotId === selectedSlotId"
-                                                    :disabled="busy"
+                                                    :disabled="busy || !s.selectable"
                                                     @click="selectSlot(s)">
                                                     <div class="ssSlotTop">
                                                         <div class="ssSlotName">{{ s.scheduleName }}</div>
-                                                        <div class="ssSlotCap">Cupo: {{ s.available }}</div>
+                                                        <div class="ssSlotCap" :class="{ isFull: !s.selectable }">{{ s.capacityText }}</div>
                                                         <div class="ssSlotCheck" aria-hidden="true"></div>
                                                     </div>
                                                 </button>
@@ -425,6 +430,19 @@ type DaySlotsBag = {
     slots: SlotBag[];
 };
 
+/* Slot ya evaluado contra la cantidad pedida: los llenos y los que no alcanzan
+   siguen listandose, pero deshabilitados y con su motivo en capacityText. */
+type SlotViewBag = SlotBag & {
+    selectable: boolean;
+    capacityText: string;
+};
+
+type DaySlotsViewBag = {
+    occurrenceDate: string;
+    occurrenceDateText: string;
+    slots: SlotViewBag[];
+};
+
 type ActiveReservationBag = {
     reservationId: number;
     reservationCode: string;
@@ -493,6 +511,10 @@ const activeReservation = ref<ActiveReservationBag | null>(config.activeReservat
 const checkedIn = ref<TodayCheckInBag | null>(null);
 let welcomeTimer: number | null = null;
 
+// resultCode -5 de HoldUpsert/ConfirmReservation: el servidor bloquea reservas
+// nuevas durante la ventana de bienvenida (WelcomeVisibleMinutes).
+const recentCheckInMessage = "Tu asistencia de hoy ya quedó registrada.";
+
 /**
  * Muestra (o quita) la tarjeta «¡Bienvenido!» y arma el temporizador que la oculta
  * sola. Todo pasa por aquí para que nunca quede visible más de lo que el servidor
@@ -518,6 +540,21 @@ showCheckIn(config.todayCheckIn || null);
 type SundayTopic = Awaited<ReturnType<typeof getTopic>>;
 let sundayTopic: SundayTopic | null = null;
 let subscribedCode: string | null = null;
+
+/**
+ * Primer nombre + primer apellido, para que el saludo quepa en una linea de movil.
+ *
+ * El nombre llega ya armado en `name` desde dos origenes distintos —
+ * `currentPerson.FullName` en GetTodayCheckIn y GetReservationPersonName en el
+ * escaner (RealTime)—, asi que el corte se hace aqui una sola vez en lugar de
+ * duplicarlo en los dos lados del backend. FullName de Rock es NickName +
+ * LastName, de modo que las dos primeras palabras son lo buscado; un NickName
+ * compuesto ("Ana Maria Perez") daria "Ana Maria", limitacion aceptada.
+ */
+const welcomeName = computed<string>(() => {
+    const parts = (checkedIn.value?.name || "").trim().split(/\s+/).filter(Boolean);
+    return parts.slice(0, 2).join(" ");
+});
 
 const checkedInTimeText = computed<string>(() => {
     const iso = checkedIn.value?.checkedInAtIso;
@@ -608,12 +645,6 @@ function onVisibilityChange(): void {
         // Cubre el caso "dejé la página abierta desde ayer": hoy sí toca conectar.
         void ensureRealTime();
     }
-}
-
-function dismissWelcome(): void {
-    // Deja ver el flujo para reservar el siguiente servicio; GetActiveReservation ya
-    // no devuelve la ingresada (Status 3), así que no hay reserva activa que estorbe.
-    showCheckIn(null);
 }
 
 // Al confirmar o cambiar de reserva: conectar si hoy es el día, y suscribirse a la nueva.
@@ -951,13 +982,34 @@ const campusNameSelected = computed<string>(() => {
     return found?.text || "";
 });
 
-const availableDays = computed<DaySlotsBag[]>(() => {
+const availableDays = computed<DaySlotsViewBag[]>(() => {
     return (days.value || [])
         .map(d => ({
             ...d,
-            slots: (d.slots || []).filter(s => s.isAvailable && s.available >= quantity.value)
+            // Se listan todos los horarios: el lleno queda visible y deshabilitado
+            // en lugar de desaparecer, para que se vea que el servicio existe.
+            slots: (d.slots || []).map<SlotViewBag>(s => {
+                const selectable = s.isAvailable && s.available >= quantity.value;
+
+                let capacityText: string;
+                if (!s.isAvailable || s.available <= 0) {
+                    capacityText = "Lleno";
+                }
+                else if (!selectable) {
+                    capacityText = `Solo ${s.available}`;
+                }
+                else {
+                    capacityText = `Cupo: ${s.available}`;
+                }
+
+                return { ...s, selectable, capacityText };
+            })
         }))
         .filter(d => d.slots.length > 0);
+});
+
+const hasSelectableSlot = computed<boolean>(() => {
+    return availableDays.value.some(d => d.slots.some(s => s.selectable));
 });
 
 function campusInitials(name: string): string {
@@ -1271,8 +1323,8 @@ async function goStep3() {
     }
 }
 
-function selectSlot(s: SlotBag) {
-    if (!s.isAvailable) return;
+function selectSlot(s: SlotViewBag) {
+    if (!s.selectable) return;
 
     selectedSlotId.value = s.slotId;
     selectedScheduleId.value = s.scheduleId ?? null;
@@ -1360,10 +1412,19 @@ async function doHoldUpsertLatest() {
                 ? "Ese horario ya no tiene lugar para esa cantidad. Probá con menos personas o elegí otro horario."
                 : data.resultCode === -4
                     ? "Ese horario ya cerró. Elegí uno de los que siguen disponibles."
-                    : data.resultCode === -1
-                        ? "El horario ya no existe o no está activo."
-                        : "No pudimos apartar tu lugar. Reintentá en unos segundos.";
+                    : data.resultCode === -5
+                        ? recentCheckInMessage
+                        : data.resultCode === -1
+                            ? "El horario ya no existe o no está activo."
+                            : "No pudimos apartar tu lugar. Reintentá en unos segundos.";
             holdToken.value = "";
+
+            // -5: el check-in llegó mientras esta pantalla seguía en el flujo de reserva.
+            // Traer la tarjeta «¡Bienvenido!» devuelve la UI al estado que corresponde.
+            if (data.resultCode === -5) {
+                void refreshCheckIn();
+            }
+
             void refreshWeekSilent();
             return;
         }
@@ -1524,9 +1585,16 @@ async function confirm() {
                 ? "Se venció el tiempo para confirmar. Elegí tu horario de nuevo."
                 : data.resultCode === -4
                     ? "Ese horario ya cerró. Elegí uno de los que siguen disponibles."
-                    : data.resultCode === -2 || data.resultCode === -3
-                        ? "Ya existe otra reserva activa para esta persona."
-                        : "No pudimos confirmar tu reserva. Reintentá en unos segundos.";
+                    : data.resultCode === -5
+                        ? recentCheckInMessage
+                        : data.resultCode === -2 || data.resultCode === -3
+                            ? "Ya existe otra reserva activa para esta persona."
+                            : "No pudimos confirmar tu reserva. Reintentá en unos segundos.";
+
+            if (data.resultCode === -5) {
+                void refreshCheckIn();
+            }
+
             void refreshWeekSilent();
             resetHold();
             return;
@@ -2235,7 +2303,16 @@ onBeforeUnmount(() => {
     background: var(--action-soft);
 }
 
-.ssSlotBtn.isDisabled { opacity: .55; cursor: not-allowed; }
+/* Horario sin cupo suficiente: sigue visible pero apagado y sin hover. */
+.ssSlotBtn.isDisabled {
+    opacity: .55;
+    cursor: not-allowed;
+    background: var(--paper);
+}
+
+.ssSlotBtn.isDisabled:hover { background: var(--paper); }
+
+.ssSlotBtn.isDisabled .ssSlotCheck { display: none; }
 
 .ssSlotTop {
     display: flex;
@@ -2272,6 +2349,8 @@ onBeforeUnmount(() => {
 }
 
 .ssSlotBtn.isSelected .ssSlotCap { color: var(--ink-soft); }
+
+.ssSlotCap.isFull { color: var(--err-text); }
 
 @media (max-width: 400px) {
     /* En pantallas angostas se recupera todo el ancho posible */
@@ -2759,9 +2838,34 @@ onBeforeUnmount(() => {
     background: #047857;
     animation: ssWelcomePop .35s ease-out;
 }
-.ssWelcomeTitle { font-size: 24px; font-weight: 900; line-height: 1.15; margin-bottom: 4px; }
+/* Saludo y nombre en renglones propios: con el nombre en la misma linea el
+   texto se partia por donde cayera ("Rodolfo / Rodriguez"). Mobile-first: se
+   parte de 20px y crece en pantallas anchas. */
+.ssWelcomeTitle {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.15;
+    margin-bottom: 4px;
+}
+
+.ssWelcomeGreet,
+.ssWelcomeName {
+    display: block;
+}
+
+/* Un nombre largo se encoge antes de partirse en dos renglones. */
+.ssWelcomeName {
+    overflow-wrap: anywhere;
+    font-size: clamp(17px, 5.2vw, 24px);
+}
+
+@media (min-width: 480px) {
+    .ssWelcomeTitle { font-size: 24px; }
+}
+
 .ssWelcomeSub { font-size: 14px; opacity: .75; margin-bottom: 16px; }
-.ssWelcomeSummary { text-align: left; margin-bottom: 16px; }
+/* Ultimo elemento de la tarjeta desde que se quito el CTA: sin margen sobrante. */
+.ssWelcomeSummary { text-align: left; margin-bottom: 0; }
 @keyframes ssWelcomePop {
     from { transform: scale(.6); opacity: 0; }
     to { transform: scale(1); opacity: 1; }

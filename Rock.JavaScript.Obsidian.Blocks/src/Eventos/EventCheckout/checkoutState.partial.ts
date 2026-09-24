@@ -180,8 +180,15 @@ function createCheckoutState() {
         return !isNaN(d.getTime()) && d.getTime() < Date.now();
     });
 
-    // Slug de la categoría para el color del badge (ecBadge--conferencia, etc.).
-    const categorySlug = computed(() => (event.value?.category ?? "").toLowerCase());
+    // Los dos chips del hero (tipo y ministerio) se pintan con el color que trae el catálogo
+    // administrable; sin color definido, cada uno cae a su estilo por defecto del CSS.
+    const categoryChipStyle = computed(() => chipStyle(event.value?.categoryColor));
+    const ministryChipStyle = computed(() => chipStyle(event.value?.ministryColor));
+
+    function chipStyle(color: string | null | undefined): Record<string, string> {
+        const c = (color ?? "").trim();
+        return c ? { background: c, borderColor: c, color: "#fff" } : {};
+    }
 
     const eventSubtitle = computed(() => {
         const ev = event.value;
@@ -207,7 +214,7 @@ function createCheckoutState() {
         if (isNaN(d.getTime())) {
             return "";
         }
-        return d.toLocaleString("es-GT", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" });
+        return capFirst(d.toLocaleString("es-GT", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" }));
     });
 
     // Fecha + rango horario para el detalle del evento, ej: "sábado, 04 de julio de 2026 · 08:00 → 13:00".
@@ -229,8 +236,13 @@ function createCheckoutState() {
                 timeStr = `${timeStr} → ${e.toLocaleTimeString("es-GT", timeOpts)}`;
             }
         }
-        return `${dateStr} · ${timeStr}`;
+        return capFirst(`${dateStr} · ${timeStr}`);
     });
+
+    /** Solo la primera letra. es-GT devuelve los días y meses en minúscula. */
+    function capFirst(text: string): string {
+        return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+    }
 
     const hasSelection = computed(() => Object.values(quantities.value).some(q => q > 0));
 
@@ -891,7 +903,8 @@ function createCheckoutState() {
         event,
         slimHeader,
         eventEnded,
-        categorySlug,
+        categoryChipStyle,
+        ministryChipStyle,
         eventSubtitle,
         eventDateLabel,
         eventDateRange,

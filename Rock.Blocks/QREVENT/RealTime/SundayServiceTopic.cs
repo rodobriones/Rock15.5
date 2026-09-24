@@ -50,10 +50,14 @@ namespace Rock.Blocks.QREVENT
 
         /// <summary>
         /// Minutos que la tarjeta «¡Bienvenido!» permanece visible tras el check-in.
-        /// Decision de negocio (2026-09-07): 10 minutos, luego desaparece sola.
+        /// Decision de negocio (2026-09-10): 30 minutos, luego desaparece sola.
+        /// Durante esa ventana la persona tampoco puede crear otra reserva
+        /// (ver <c>HasRecentCheckIn</c> en SundayServiceRegistration): el mismo
+        /// lapso que la tarjeta ocupa la pantalla es el que el servidor bloquea,
+        /// para que la restriccion no dependa de que la UI este visible.
         /// La usa tambien SundayServiceRegistration para filtrar recargas.
         /// </summary>
-        public const int WelcomeVisibleMinutes = 10;
+        public const int WelcomeVisibleMinutes = 30;
 
         /// <summary>Canal de una reserva concreta.</summary>
         public static string GetReservationChannel( string reservationCode )

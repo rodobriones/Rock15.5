@@ -360,6 +360,8 @@ namespace Rock.Blocks.Eventos
                     ticketId = t.Id,
                     eventId = ev?.Id ?? 0,
                     eventName = ev?.Name,
+                    // Categoría del evento: badge del hero en Mis Entradas (rediseño 2026).
+                    eventCategory = ev?.Category,
                     eventStartDateTime = ev?.StartDateTime,
                     eventEndDateTime = ev?.EndDateTime,
                     eventSessions = EventSessionService.Format( ev?.SessionsJson ),
@@ -423,6 +425,7 @@ namespace Rock.Blocks.Eventos
             public int ticketId { get; set; }
             public int eventId { get; set; }
             public string eventName { get; set; }
+            public string eventCategory { get; set; }
             public DateTime? eventStartDateTime { get; set; }
             public DateTime? eventEndDateTime { get; set; }
             public List<string> eventSessions { get; set; }

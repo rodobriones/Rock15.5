@@ -81,6 +81,9 @@ namespace Rock.Blocks.Eventos
                         name = e.Name,
                         description = e.Description,
                         category = e.Category,
+                        categoryColor = EventTagService.GetTypeColor( e.Category ),
+                        ministry = e.Ministry,
+                        ministryColor = EventTagService.GetMinistryColor( e.Ministry ),
                         venueName = e.VenueName,
                         campusName = e.CampusId.HasValue ? CampusCache.Get( e.CampusId.Value )?.Name : null,
                         startDateTime = e.StartDateTime,
@@ -112,6 +115,12 @@ namespace Rock.Blocks.Eventos
             public string name { get; set; }
             public string description { get; set; }
             public string category { get; set; }
+            /// <summary>Color del chip de tipo (DefinedType "Tipos de Evento"); null = azul institucional.</summary>
+            public string categoryColor { get; set; }
+            /// <summary>Área de la iglesia que organiza; alimenta el filtro "Ministerio".</summary>
+            public string ministry { get; set; }
+            /// <summary>Color del chip de ministerio; null = chip de contorno.</summary>
+            public string ministryColor { get; set; }
             public string venueName { get; set; }
             public string campusName { get; set; }
             public DateTime startDateTime { get; set; }

@@ -961,3 +961,60 @@ capability AUSENTE daba true (undefined !== -1) y el constraint no soportado inv
 ticketScanner: el veto de dedupe se libera en fallas rápidas del server (se conserva solo en
 timeout, donde el POST pudo llegar). Aceptado sin fix: respuesta tardía post-timeout descartada
 (server idempotente; re-scan informa "ya usado").
+
+### §9.39 — Rediseño visual 2026 de los 7 bloques + campos de presentación (2026-09-07/09)
+
+**Origen: un proyecto de Claude Design entregado por el diseñador** (10 artboards, uno por
+`.obs`, recreación 1:1 con el CSS completo y los estados como props). El diseño manda; las
+convenciones del repo sólo gobiernan CÓMO se implementa. Tokens del design system **Brújula VR**
+(copia con typography.css en **Montserrat**, no Blogger Sans) — Montserrat ya estaba instalada en
+`RockWeb/Assets/Fonts/Montserrat/`, así que el `@font-face` se declara por bloque y NO se carga
+CDN.
+
+**Los 7 bloques convertidos**: questionCatalog, eventReport, ticketScanner (sólo estilos);
+eventAdmin (re-skin del chrome Bootstrap desde `.evAdWrap`, la lista de preguntas pasó de
+estilos inline a clases); eventCalendar (reescrito: buscador + panel de filtros plegable +
+TODOS los meses a la vez, en vez de la barra de chips ‹ › con un mes por vez); myTickets
+(portada + pestañas Próximos/Historial); eventCheckout + los 5 partials (hero con chips de
+sesiones, stepper de 5 círculos, paso 1 en dos columnas con los tipos de entrada mudados a un
+aside pegajoso).
+
+**⚠️ Trampa que costó dos vueltas — hay DOS artboards del checkout con las MISMAS clases `ec*`:**
+`03.Eventos - eventCheckout copy` (recreación del bloque viejo) y **`04.Checkout Boletos`**, que
+es el diseño bueno. Difieren en valores concretos: botones píldora radio 20 vs 12, paso 1 en flex
+con base 480/340 vs grid de columnas iguales, aside con borde `--ink-faint` y tope 400px,
+tarjeta de boleto con fondo propio, stepper **a la izquierda sin conectores** con círculos 55×53
+(el otro: centrado, con conectores, 50×50), y el **logo del ministerio** en el hero. Mezclar los
+dos produce un resultado que no se parece a ninguno. **Vale el 04.** Señal rápida para
+distinguirlos: los props del canvas del 04 son `headerStyle` · `eventoTipo` · `mostrarContador`.
+
+**Método que funcionó para encontrar desviaciones**: un comparador que extrae las reglas CSS del
+artboard y del `.obs` y las contrasta propiedad por propiedad, normalizando el prefijo del
+wrapper (`.evAdWrap .btn` ↔ `.btn`) y descontando lo que el artboard sobrescribe con estilos
+inline. Sacó 43 diferencias reales que a ojo no se ven.
+
+**Escenario de los bloques con chrome** (eventAdmin, eventReport): el artboard los muestra
+flotando sobre gris `#F3F5F7` con 24px de aire. Ese fondo NO puede ir dentro del template — el
+`Panel` es la raíz, y quedaría el gris DENTRO del panel blanco. Va en el contenedor externo:
+`.block-instance:has(.evAdWrap)`, que es como Rock envuelve cada bloque
+(`RockBlockWrapper.cs:137`).
+
+**Backend (migraciones 022 y 023)**: `Event.Ministry` + DefinedType "Ministerios de Eventos",
+`Event.BannerBinaryFileId`, `Event.SpeakersJson` + `EventSpeakerService`, y `Event.LogoBinaryFileId`.
+Más dos que no necesitaban columna: `eventCategory` en el bag de MyTickets (el campo ya existía)
+y `SessionTimes` en el del checkout — las marcas de tiempo de cada sesión junto al texto ya
+formateado, para que el hero resalte el chip de la sesión en curso sin parsear español en el
+navegador. Los cuatro campos son opcionales: ningún evento existente cambia de aspecto hasta que
+alguien los llene, y cada sección se dibuja sólo si hay dato.
+
+**Despliegue — son CUATRO DLLs.** `MissingMethodException: set_BannerUrl` es la señal de que
+faltó `Rock.ViewModels.dll`: `EventBag` vive ahí, no en `Rock.dll`. Y el orden no es negociable:
+las cuatro se copian y se recicla UNA vez, porque `Rock.dll` con el modelo nuevo contra una tabla
+sin las columnas tumba toda consulta a `Event`. Detalle completo en
+`Plugin.VidaRealEvents/README.md`.
+
+**Pendiente al cerrar la sesión**: nada commiteado (28 archivos, mezclados con cambios ajenos de
+QREVENT en `Rock.Blocks.dll` — la ventana de bienvenida de 10→30 min y el bloqueo de reserva
+durante esa ventana viajan en el mismo assembly, no se pueden separar). Falta verificar qué
+migraciones tiene prod: si viene desde la 017 consolidada, al subir el plugin corren 018→023 de
+un saque.

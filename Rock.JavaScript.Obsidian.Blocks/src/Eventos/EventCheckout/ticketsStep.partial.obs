@@ -1,10 +1,50 @@
 <!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
-<!-- STEP 1: Entradas — selección de boletos con cupo en vivo y subtotal. -->
+<!-- STEP 1: Entradas — ficha del evento a la izquierda y selección de boletos en el aside
+     pegajoso, con cupo en vivo y subtotal.
+     Rediseño 2026 (Claude Design · artboard "03.Eventos - eventCheckout"). -->
 <template>
     <div class="ecGrid2">
         <div class="ecCol">
             <h2 class="ecSectionTitle">Boletos</h2>
 
+            <!-- Banner del paso 1; si el evento no tiene, cae a la imagen del hero. -->
+            <img v-if="event?.bannerUrl || event?.imageUrl"
+                 :src="event.bannerUrl || event.imageUrl"
+                 :alt="event?.name"
+                 class="ecEventBanner" />
+
+            <div class="ecDetailsGrid">
+                <div v-if="eventDateRange" class="ecDetail">
+                    <div class="ecDetailLabel">Fecha y hora</div>
+                    <div class="ecDetailValue">{{ eventDateRange }}</div>
+                </div>
+                <div v-if="eventSubtitle" class="ecDetail">
+                    <div class="ecDetailLabel">Ubicación</div>
+                    <div class="ecDetailValue">{{ eventSubtitle }}</div>
+                </div>
+                <div v-if="event?.organizerName" class="ecDetail">
+                    <div class="ecDetailLabel">Organizador</div>
+                    <div class="ecDetailValue">{{ event.organizerName }}</div>
+                </div>
+            </div>
+
+            <p v-if="event?.description" class="ecEventDesc">{{ event.description }}</p>
+
+            <!-- Ponentes: la sección no se dibuja si el evento no tiene ninguno. -->
+            <div v-if="event?.speakers?.length" class="ecSpeakers">
+                <div class="ecDetailLabel">Ponentes</div>
+                <div class="ecSpeakerGrid">
+                    <div v-for="sp in event.speakers" :key="sp.name" class="ecSpeaker">
+                        <img v-if="sp.photoUrl" :src="sp.photoUrl" :alt="sp.name" class="ecSpeakerPhoto" />
+                        <div v-else class="ecSpeakerPhoto ecSpeakerPhoto--empty" aria-hidden="true"></div>
+                        <span class="ecSpeakerName">{{ sp.name }}</span>
+                        <span v-if="sp.role" class="ecSpeakerRole">{{ sp.role }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <aside class="ecAside">
             <div v-if="busy && !ticketTypes.length" class="ecEmpty">Cargando entradas…</div>
             <div v-else-if="!ticketTypes.length" class="ecEmpty">No hay entradas disponibles por ahora.</div>
 
@@ -22,47 +62,37 @@
                 <p v-if="tt.isEarlyBird && tt.earlyBirdUntil" class="ecTTearly">
                     Early bird hasta {{ formatShortDate(tt.earlyBirdUntil) }}<span v-if="earlyBirdCountdown(tt)"> · faltan {{ earlyBirdCountdown(tt) }}</span>
                 </p>
-                <p class="ecTTavail">
-                    <span v-if="tt.soldOut">Agotado</span>
-                    <span v-else-if="tt.remaining != null">Quedan {{ tt.remaining }}</span>
-                    <span v-else>Disponible</span>
-                    <span v-if="!tt.onSale && !tt.soldOut"> · Venta no disponible</span>
-                </p>
                 <div class="ecStepper">
                     <button type="button" class="ecStepBtn"
                             :disabled="getQty(tt.id) <= 0"
+                            :aria-label="'Quitar una entrada de ' + tt.name"
                             @click="setQty(tt, getQty(tt.id) - 1)">−</button>
                     <span class="ecStepQty ecMono">{{ getQty(tt.id) }}</span>
                     <button type="button" class="ecStepBtn"
                             :disabled="tt.soldOut || !tt.onSale || getQty(tt.id) >= maxQtyFor(tt)"
+                            :aria-label="'Agregar una entrada de ' + tt.name"
                             @click="setQty(tt, getQty(tt.id) + 1)">+</button>
                 </div>
+                <p class="ecTTavail">
+                    <span v-if="tt.soldOut">Agotado</span>
+                    <span v-else-if="tt.remaining != null">Quedan {{ tt.remaining }}</span>
+                    <span v-else>Cupo sin límite</span>
+                    <span v-if="!tt.onSale && !tt.soldOut"> · Venta no disponible</span>
+                </p>
+                <!-- Sin esto, el "+" simplemente deja de responder y no se sabe por qué. -->
+                <p v-if="!tt.soldOut && tt.onSale && getQty(tt.id) >= maxQtyFor(tt)" class="ecTTcap">
+                    {{ tt.remaining != null && maxQtyFor(tt) === tt.remaining
+                        ? "Llegaste al cupo disponible de este boleto."
+                        : `Máximo ${maxQtyFor(tt)} por orden.` }}
+                </p>
             </div>
 
-            <div class="ecDetailsGrid">
-                <div v-if="eventDateRange" class="ecDetail">
-                    <div class="ecDetailLabel">Fecha y hora</div>
-                    <div class="ecDetailValue ecCap">{{ eventDateRange }}</div>
-                </div>
-                <div v-if="eventSubtitle" class="ecDetail">
-                    <div class="ecDetailLabel">Ubicación</div>
-                    <div class="ecDetailValue">{{ eventSubtitle }}</div>
-                </div>
-                <div v-if="event?.organizerName" class="ecDetail">
-                    <div class="ecDetailLabel">Organizador</div>
-                    <div class="ecDetailValue">{{ event.organizerName }}</div>
-                </div>
-            </div>
-
-            <p v-if="event?.description" class="ecEventDesc">{{ event.description }}</p>
-        </div>
-
-        <aside class="ecAside">
             <div class="ecAsideLabel">Subtotal</div>
             <div class="ecAsideValue">{{ formatCurrency(total) }}</div>
             <RockButton class="ecCta ecCtaBlock" btnType="primary" :disabled="!hasSelection || busy" @click="goToAttendees">
                 {{ busy ? "Reservando…" : "Continuar" }} <span v-if="!busy" class="ecCtaArrow">→</span>
             </RockButton>
+            <p v-if="!hasSelection" class="ecAsideNote">Elige al menos una entrada para continuar.</p>
             <RockButton class="ecGhostLink" btnType="link" :disabled="busy" @click="reloadTicketTypes">Actualizar disponibilidad</RockButton>
         </aside>
     </div>

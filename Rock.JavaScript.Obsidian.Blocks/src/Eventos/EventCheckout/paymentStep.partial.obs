@@ -19,7 +19,7 @@
                    v-model="deliveryEmail"
                    placeholder="correo@ejemplo.com"
                    autocomplete="email" />
-            <span v-if="!deliveryEmailValid" class="ecPayEmailErr">Escribe un correo válido para recibir tus entradas.</span>
+            <span v-if="!deliveryEmailValid" class="ecPayEmailErr" role="alert">Escribe un correo válido para recibir tus entradas.</span>
             <span v-else class="ecPayEmailHint">Tus boletos (PDF con código QR) llegarán a este correo.</span>
         </div>
 
@@ -27,7 +27,7 @@
         <div v-if="isFree" class="ecPay">
             <NotificationBox alertType="success">Estas entradas no tienen costo. Confirma para recibir tus boletos.</NotificationBox>
             <NotificationBox v-if="gatewayError" alertType="danger">{{ gatewayError }}</NotificationBox>
-            <div class="ecActions">
+            <div class="ecStepActions">
                 <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
                 <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !holdActive || holdExpired || !deliveryEmailValid" @click="confirmFree" autoDisable>
                     {{ busy ? "Procesando…" : "Confirmar entradas" }}
@@ -53,7 +53,7 @@
                     Cargando pasarela de pago…
                 </NotificationBox>
 
-                <div class="ecActions">
+                <div class="ecStepActions">
                     <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
                     <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !gatewayControlModel || !holdActive || holdExpired || !deliveryEmailValid" @click="onPayClick" autoDisable>
                         {{ busy ? "Procesando…" : `Pagar ${formatCurrency(grandTotal)}` }}

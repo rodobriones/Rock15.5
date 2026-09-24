@@ -59,7 +59,64 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
 
     // ---------- Selector de fecha de nacimiento propio (Día / Mes / Año, en español) ----------
     const MONTHS_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    const dobDayOptions: ListItemBag[] = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), text: String(i + 1) }));
+    /**
+     * Días del mes elegido. Con 1-31 fijo se podía guardar "31 de febrero": el combo la ofrecía y
+     * nada la rechazaba después. Sin mes todavía elegido se ofrecen 31; sin año se asume bisiesto
+     * para no esconder el 29 de febrero antes de que elijan el año.
+     */
+    function daysInMonth(month: number, year: number): number {
+        if (!month) {
+            return 31;
+        }
+        return new Date(year || 2000, month, 0).getDate();
+    }
+
+    function dobDayOptionsFor(unit: AttendeeUnit): ListItemBag[] {
+        const total = daysInMonth(Number(unit.dobParts.m), Number(unit.dobParts.y));
+        return Array.from({ length: total }, (_, i) => ({ value: String(i + 1), text: String(i + 1) }));
+    }
+
+    // ---------- Validación de formato ----------
+    // El servidor vuelve a validar; esto existe para que el error aparezca donde el usuario lo
+    // puede corregir y no al final del checkout (o peor: nunca, y entre basura a la base).
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
+
+    function emailError(value: string): string {
+        const text = (value ?? "").trim();
+        if (!text) {
+            return "";
+        }
+        return EMAIL_RE.test(text) ? "" : "Escribe un correo válido (ejemplo: nombre@dominio.com).";
+    }
+
+    function phoneError(value: string): string {
+        const text = (value ?? "").trim();
+        if (!text) {
+            return "";
+        }
+        if (/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(text)) {
+            return "El teléfono solo lleva números.";
+        }
+        return text.replace(/\D/g, "").length >= 8 ? "" : "El teléfono debe tener al menos 8 dígitos.";
+    }
+
+    function dobError(unit: AttendeeUnit): string {
+        const { d, m, y } = unit.dobParts;
+        if (!d && !m && !y) {
+            return "";
+        }
+        if (!d || !m || !y) {
+            return "Completa día, mes y año.";
+        }
+        const max = daysInMonth(Number(m), Number(y));
+        if (Number(d) > max) {
+            return `${MONTHS_ES[Number(m) - 1]} de ${y} tiene ${max} días.`;
+        }
+        const picked = new Date(Number(y), Number(m) - 1, Number(d));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return picked.getTime() > today.getTime() ? "La fecha de nacimiento no puede ser futura." : "";
+    }
     const dobMonthOptions: ListItemBag[] = MONTHS_ES.map((m, i) => ({ value: String(i + 1), text: m }));
     const dobYearOptions: ListItemBag[] = Array.from({ length: new Date().getFullYear() - 1919 }, (_, i) => {
         const y = new Date().getFullYear() - i;
@@ -68,8 +125,16 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
 
     function setDobPart(unit: AttendeeUnit, part: "d" | "m" | "y", value: string): void {
         unit.dobParts[part] = value;
+
+        // Al cambiar mes o año, un día que dejó de existir (31 en un mes de 30) se recorta en vez
+        // de quedarse guardado como fecha imposible.
+        const max = daysInMonth(Number(unit.dobParts.m), Number(unit.dobParts.y));
+        if (Number(unit.dobParts.d) > max) {
+            unit.dobParts.d = String(max);
+        }
+
         const { d, m, y } = unit.dobParts;
-        unit.answers.birthDate = (d && m && y)
+        unit.answers.birthDate = (d && m && y && !dobError(unit))
             ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`
             : null;
     }
@@ -193,6 +258,10 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
             // Duplicado: la misma persona dos veces en el mismo tipo de boleto.
             return false;
         }
+        // Formato: un correo o teléfono con basura no puede pasar como "✓ Completo".
+        if (emailError(u.answers.email) || phoneError(u.answers.phone) || dobError(u)) {
+            return false;
+        }
         // Preguntas obligatorias respondidas.
         return questionsFor(u).every(q => !q.required || answerValueFor(u, q).trim().length > 0);
     }
@@ -218,10 +287,22 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
     }
 
     function goNextUnit(unit: AttendeeUnit): void {
+        // Saltar con la tarjeta incompleta la colapsaba sin avisar y dejaba el error escondido
+        // hasta el final; el botón se deshabilita mientras falte algo.
+        if (!unitValid(unit)) {
+            return;
+        }
         const next = nextUnitAfter(unit);
         if (next) {
             openUnitKey.value = next.key;
         }
+    }
+
+    /** Nombres asignados a un tipo de boleto, en el orden de las entradas. Lo usa el paso 3. */
+    function attendeeNamesForType(ticketTypeId: number): string[] {
+        return attendeeUnits.value
+            .filter(u => u.ticketTypeId === ticketTypeId)
+            .map(u => attendeeDisplayName(u));
     }
 
     function attendeeDisplayName(unit: AttendeeUnit): string {
@@ -363,7 +444,7 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
         openUnitKey,
         genderOptions,
         relationRoles,
-        dobDayOptions,
+        dobDayOptionsFor,
         dobMonthOptions,
         dobYearOptions,
         choicesFor,
@@ -373,10 +454,14 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
         attrBagsFor,
         hasAttrQuestions,
         unitValid,
+        emailError,
+        phoneError,
+        dobError,
         toggleUnit,
         nextUnitAfter,
         goNextUnit,
         attendeeDisplayName,
+        attendeeNamesForType,
         loadFamilyMembers,
         buildAttendeeUnits,
         buildLines

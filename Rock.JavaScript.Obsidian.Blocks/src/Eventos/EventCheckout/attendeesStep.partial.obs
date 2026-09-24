@@ -7,9 +7,15 @@
 
         <div class="ecStack">
             <div v-for="unit in attendeeUnits" :key="unit.key" class="ecAttendee">
-                <div class="ecAttendeeTag"
-                     :class="{ 'ecAttendeeTag--nav': accordionMode }"
-                     @click="accordionMode && toggleUnit(unit)">
+                <!-- En modo acordeón la cabecera ES el control que abre y cierra: tiene que ser un
+                     <button> para existir en el orden de tabulación y anunciar su estado. -->
+                <component :is="accordionMode ? 'button' : 'div'"
+                           type="button"
+                           class="ecAttendeeTag"
+                           :class="{ 'ecAttendeeTag--nav': accordionMode }"
+                           :aria-expanded="accordionMode ? String(openUnitKey === unit.key) : undefined"
+                           :aria-controls="accordionMode ? ('ecUnit-' + unit.key) : undefined"
+                           @click="accordionMode && toggleUnit(unit)">
                     <span class="ecAttendeeType">{{ unit.ticketTypeName }}</span>
                     <span class="ecAttendeeTagRight">
                         <span v-if="accordionMode"
@@ -20,17 +26,19 @@
                         <span class="ecAttendeeNo">#{{ unit.indexInType }}</span>
                         <span v-if="accordionMode" class="ecAttChevron">{{ openUnitKey === unit.key ? "▾" : "▸" }}</span>
                     </span>
-                </div>
+                </component>
 
                 <!-- Colapsado: resumen de a quién quedó asignada -->
                 <div v-if="accordionMode && openUnitKey !== unit.key" class="ecAttSummary">
                     {{ attendeeDisplayName(unit) }}
                 </div>
 
-                <template v-else>
+                <div v-else :id="'ecUnit-' + unit.key">
                     <DropDownList :modelValue="unit.selection"
                                   @update:modelValue="v => onAttendeeSelect(unit, v)"
                                   :items="choicesFor(unit)"
+                                  :label="'Asistente de ' + unit.ticketTypeName + ' #' + unit.indexInType"
+                                  formGroupClasses="ecSrLabel"
                                   :showBlankItem="false" />
 
                     <!-- Invitado nuevo: datos completos (el servidor crea la persona
@@ -45,14 +53,18 @@
                             <div class="ecDobRow">
                                 <DropDownList :modelValue="unit.dobParts.d"
                                               @update:modelValue="v => setDobPart(unit, 'd', v)"
-                                              :items="dobDayOptions" />
+                                              label="Día" formGroupClasses="ecSrLabel"
+                                              :items="dobDayOptionsFor(unit)" />
                                 <DropDownList :modelValue="unit.dobParts.m"
                                               @update:modelValue="v => setDobPart(unit, 'm', v)"
+                                              label="Mes" formGroupClasses="ecSrLabel"
                                               :items="dobMonthOptions" />
                                 <DropDownList :modelValue="unit.dobParts.y"
                                               @update:modelValue="v => setDobPart(unit, 'y', v)"
+                                              label="Año" formGroupClasses="ecSrLabel"
                                               :items="dobYearOptions" />
                             </div>
+                            <p v-if="dobError(unit)" class="ecFieldError" role="alert">{{ dobError(unit) }}</p>
                         </div>
                         <div class="ecTwoCol">
                             <DropDownList v-model="unit.answers.gender" label="Sexo *" :items="genderOptions" />
@@ -64,26 +76,36 @@
                          Para invitados, nacimiento y sexo ya van en el bloque de arriba. -->
                     <div v-if="questionsFor(unit).length" class="ecQForm">
                         <template v-for="q in questionsFor(unit)" :key="q.key ?? q.attributeGuid ?? ''">
-                            <TextBox v-if="q.kind === 'basic' && q.key === 'phone'"
-                                     v-model="unit.answers.phone"
-                                     :label="'Teléfono' + (q.required ? ' *' : '')" />
-                            <TextBox v-else-if="q.kind === 'basic' && q.key === 'email'"
-                                     v-model="unit.answers.email"
-                                     :label="'Email' + (q.required ? ' *' : '')" />
+                            <template v-if="q.kind === 'basic' && q.key === 'phone'">
+                                <TextBox v-model="unit.answers.phone"
+                                         inputMode="tel"
+                                         :label="'Teléfono' + (q.required ? ' *' : '')" />
+                                <p v-if="phoneError(unit.answers.phone)" class="ecFieldError" role="alert">{{ phoneError(unit.answers.phone) }}</p>
+                            </template>
+                            <template v-else-if="q.kind === 'basic' && q.key === 'email'">
+                                <TextBox v-model="unit.answers.email"
+                                         inputMode="email"
+                                         :label="'Email' + (q.required ? ' *' : '')" />
+                                <p v-if="emailError(unit.answers.email)" class="ecFieldError" role="alert">{{ emailError(unit.answers.email) }}</p>
+                            </template>
                             <div v-else-if="q.kind === 'basic' && q.key === 'birthDate' && unit.selection !== guestValue"
                                  class="form-group">
                                 <label class="control-label">Fecha de nacimiento{{ q.required ? " *" : "" }}</label>
                                 <div class="ecDobRow">
                                     <DropDownList :modelValue="unit.dobParts.d"
                                                   @update:modelValue="v => setDobPart(unit, 'd', v)"
-                                                  :items="dobDayOptions" />
+                                                  label="Día" formGroupClasses="ecSrLabel"
+                                                  :items="dobDayOptionsFor(unit)" />
                                     <DropDownList :modelValue="unit.dobParts.m"
                                                   @update:modelValue="v => setDobPart(unit, 'm', v)"
+                                                  label="Mes" formGroupClasses="ecSrLabel"
                                                   :items="dobMonthOptions" />
                                     <DropDownList :modelValue="unit.dobParts.y"
                                                   @update:modelValue="v => setDobPart(unit, 'y', v)"
+                                                  label="Año" formGroupClasses="ecSrLabel"
                                                   :items="dobYearOptions" />
                                 </div>
+                                <p v-if="dobError(unit)" class="ecFieldError" role="alert">{{ dobError(unit) }}</p>
                             </div>
                             <DropDownList v-else-if="q.kind === 'basic' && q.key === 'gender' && unit.selection !== guestValue"
                                           v-model="unit.answers.gender"
@@ -100,14 +122,18 @@
                     <button v-if="accordionMode && nextUnitAfter(unit)"
                             type="button"
                             class="ecAttNext"
+                            :disabled="!unitValid(unit)"
                             @click="goNextUnit(unit)">
                         Siguiente asistente ↓
                     </button>
-                </template>
+                    <p v-if="accordionMode && nextUnitAfter(unit) && !unitValid(unit)" class="ecAttNextHint">
+                        Completa los datos de este asistente para continuar.
+                    </p>
+                </div>
             </div>
         </div>
 
-        <div class="ecActions">
+        <div class="ecStepActions">
             <RockButton class="ecGhost" btnType="default" @click="backToTickets">← Atrás</RockButton>
             <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="!attendeesValid" @click="goToReview">
                 Continuar <span class="ecCtaArrow">→</span>
@@ -136,6 +162,9 @@ const {
     attrBagsFor,
     hasAttrQuestions,
     unitValid,
+    emailError,
+    phoneError,
+    dobError,
     toggleUnit,
     nextUnitAfter,
     goNextUnit,
@@ -144,7 +173,7 @@ const {
     goToReview,
     genderOptions,
     relationRoles,
-    dobDayOptions,
+    dobDayOptionsFor,
     dobMonthOptions,
     dobYearOptions
 } = useCheckoutState();

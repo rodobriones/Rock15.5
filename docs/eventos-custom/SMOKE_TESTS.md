@@ -15,7 +15,7 @@ prefijo `[EventCheckout]`, `[EventsMaintenance]`, `[FelService]`) y las tablas `
    ```sql
    SELECT [MigrationNumber], [MigrationName] FROM [PluginMigration]
    WHERE [PluginAssemblyName] LIKE '%vidareal.Events%' ORDER BY [MigrationNumber];
-   -- DEV (histórica): filas 1..17.  PRODUCCIÓN (limpia): UNA fila — 17 / ProductionSetup.
+   -- DEV (histórica): filas 1..23.  PRODUCCIÓN (limpia): 17 / ProductionSetup + las posteriores que haya corrido.
    ```
 3. `Admin > System > Jobs`: existe **Events Maintenance** activo, cron cada 5 min. Historial sin errores.
 
@@ -194,3 +194,60 @@ En `eventos` (interno) > Administrar Eventos:
    `SELECT DeliveryEmail FROM _com_vidareal_Events_Order WHERE Id = <orden>` = corregido;
    reintento inmediato SIN cambiar correo → mensaje de cooldown (2 min). Con un usuario
    solo-CanViewReport: la columna de correo y el botón ✉ NO aparecen.
+
+## 15. Rediseño 2026 + campos de presentación (agregado 2026-09-09, requiere migraciones 022 y 023)
+
+**Antes que nada — el error que delata un deploy incompleto.** Si el checkout muestra
+`MissingMethodException: set_BannerUrl`, faltó **`Rock.ViewModels.dll`** (ahí vive `EventBag`,
+no en `Rock.dll`). Son CUATRO DLLs; ver `Plugin.VidaRealEvents/README.md`.
+
+### 15.1 Nada cambia sin llenar los campos (lo primero a verificar)
+
+Con un evento **existente**, sin tocarle nada:
+- El checkout abre normal: hero, badge, título, stepper, "Boletos" y el aside con las entradas.
+- **NO** aparece sección de ponentes, **NO** aparece logo en el hero, y el paso 1 usa la imagen
+  del hero como banner.
+- El calendario **no** muestra el filtro "Ministerio" si ningún evento publicado tiene uno.
+
+Si algo de eso se dibuja vacío o deja un hueco, es bug.
+
+### 15.2 Los campos nuevos (Administrar Eventos > editar un evento)
+
+1. **Banner del checkout** (al lado de "Imagen del evento"): subir una apaisada → en el paso 1
+   aparece arriba de la ficha. Quitarla → vuelve a usar la del hero, sin hueco.
+2. **Logo del ministerio**: subir una cuadrada → aparece a la izquierda del badge y el título en
+   el hero. Vacía → hero con badge y título solos.
+3. **Ministerio**: elegir uno → en el calendario público aparece la columna "Ministerio" dentro
+   de "Más filtros", y filtra. Las opciones salen del DefinedType *Ministerios de Eventos*
+   (`Admin > System > Defined Types`), no de código.
+4. **Ponentes**: agregar 2-3 filas con nombre, rol y foto → salen con foto circular bajo la ficha
+   del evento. Una fila sin nombre se descarta al guardar. Sin foto, se dibuja el círculo vacío.
+5. **Duplicar el evento** → los cuatro campos viajan a la copia.
+6. Subir un archivo que NO sea imagen en cualquiera de los tres uploaders → rechaza con
+   "El archivo seleccionado no es una imagen válida" (defensa de `TryResolveImageId`).
+
+### 15.3 Indicador de sesiones en el hero
+
+Evento con **varias sesiones** (sección Sesiones del admin): el hero muestra un chip por horario
+y el de la sesión **en curso** va resaltado en azul; si ninguna corre, el resaltado va a la
+próxima. Evento de un solo bloque: sin chips.
+
+### 15.4 Rediseño — barrido rápido por bloque
+
+| Bloque | Qué mirar |
+|---|---|
+| Calendario | buscador + "Más filtros" (fecha / tipo / ministerio); TODOS los meses listados, separados por línea; tarjeta con cubo de fecha y badge de categoría |
+| Checkout | stepper de 5 círculos **a la izquierda, sin líneas** entre ellos; paso 1 con los tipos de entrada en el aside derecho (pegajoso al hacer scroll) |
+| Mis Entradas | portada con foto; pestañas **Próximos / Historial**; historial en escala de grises |
+| Escáner | píldora de estado con punto que late; barra de acciones pegada abajo mientras se revisan resultados |
+| Administración | botones en píldora; el panel flota sobre gris con aire alrededor; toasts abajo a la derecha, visibles **con la página scrolleada** |
+| Reportería | mismo chrome re-estilado; los 5 KPIs; editor de correo en línea |
+| Catálogo de Preguntas | encabezado grande; tarjetas de 18px de radio |
+
+En móvil: el stepper envuelve, el aside del checkout deja de ser pegajoso y pasa abajo, y las
+entradas de Mis Entradas apilan el QR arriba.
+
+### 15.5 Fuentes
+
+Todo el módulo en **Montserrat**. Si se ve Arial, el navegador no cargó
+`/Assets/Fonts/Montserrat/*.woff2` — verificar que la carpeta viajó al servidor.

@@ -1,0 +1,82 @@
+<!--
+    Correo del Pase Digital Vida Real (plantilla de comunicacion de Rock).
+    Documentacion, guids y advertencias: docs/wallet-module/correo-pase-digital.md
+    OJO: Lava procesa el contenido de los comentarios HTML - no escribir tags Lava aqui.
+-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email VidaReal</title>
+
+{% assign paseUrl = Person | WalletPassUrl:'f0a1b2c3-d4e5-4f60-8a01-940000000002' %}
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" align="center" style="background-color: #D8D8D8; padding: 60px 20px;">
+  <tbody><tr>
+    <td align="center">
+      <table width="700" cellpadding="0" cellspacing="0" border="0" style="max-width: 700px; width: 100%; background-color: #F2F2F2;">
+        <tbody><tr>
+          <td>
+            <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'walletpassimg' }}" alt="Pase Digital Vida Real" style="display: block; width: 100%; height: auto;">
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding: 60px 40px; background-color: #ffffff; box-shadow: 0 5px 20px rgba(0,0,0,0.15);">
+            <h1 style="color: #0E364C; font-size: 30px; font-weight: bold; margin-bottom: 20px; font-family: Arial, sans-serif;">
+              ¡{{ Person.NickName }}, tenemos algo para ti!
+            </h1>
+            <p style="font-size: 16px; color: #5A5A5A; line-height: 1.6; margin-bottom: 30px; font-family: Arial, sans-serif;">
+              <strong>Seguimos innovando</strong>, por eso ponemos a tu disposición este <strong>Pase Digital.</strong>
+              Con él podrás hacer tu check-in y el de tu familia de forma <strong>fácil, rápida y segura</strong>, con tu celular.<br><br>
+              Es importante que descargues y guardes este pase en tu dispositivo para poder utilizarlo cuando lo necesites.
+            </p>
+
+            {% if paseUrl != '' %}
+              <a href="{{ paseUrl }}" style="display: inline-block; background-color: #0E364C; color: #ffffff; padding: 18px 30px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; margin-top: 10px; font-family: Arial, sans-serif;">
+                Descarga tu pase
+              </a>
+              <p style="font-size: 13px; color: #8297A2; line-height: 1.6; margin-top: 24px; font-family: Arial, sans-serif;">
+                Al abrirlo desde tu teléfono, el pase se guarda en Apple Wallet o Google Wallet.
+              </p>
+            {% else %}
+              <p style="font-size: 15px; color: #B02E22; line-height: 1.6; font-family: Arial, sans-serif;">
+                No pudimos generar tu pase en este momento. Escríbenos a
+                <a href="mailto:soporte@vidareal.tv" style="color: #0E364C;">soporte@vidareal.tv</a> y lo resolvemos.
+              </p>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding: 40px 20px; background-color: #F2F2F2; color: #333333; font-size: 14px; font-family: Arial, sans-serif;">
+            <div style="margin-bottom: 15px;">
+              <a href="https://www.vidareal.tv/">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'EmailFooterLogo' }}" alt="Logo VidaReal" style="width: 150px; height: auto;">
+              </a>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <a href="https://www.vidareal.tv/" target="_blank" style="color: #333; text-decoration: none;">www.Vidareal.tv</a>
+            </div>
+            <div style="margin-top: 15px;">
+              <a href="https://www.instagram.com/vidarealtv/" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoInstagramnegro' }}" alt="Instagram" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+              <a href="https://www.facebook.com/VidaRealTV" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoFacebooknegro' }}" alt="Facebook" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+              <a href="https://www.youtube.com/@IglesiaVidarealtv" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoYoutubenegro' }}" alt="YouTube" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+              <a href="http://whatsapp.com/channel/0029VaGe2PqHQbS9VOFJfB2i" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoWhatsappnegro' }}" alt="WhatsApp" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+              <a href="https://tiktok.com/@vidarealtv" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoTiktoknegro' }}" alt="TikTok" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+              <a href="https://x.com/VidaRealTV" target="_blank">
+                <img src="{{ 'Global' | Attribute:'PublicApplicationRoot' }}{{ 'Global' | Attribute:'IconoXnegro' }}" alt="X" style="width: 15px; height: 15px; margin: 0 6px;">
+              </a>
+            </div>
+          </td>
+        </tr>
+      </tbody></table>
+    </td>
+  </tr>
+</tbody></table>

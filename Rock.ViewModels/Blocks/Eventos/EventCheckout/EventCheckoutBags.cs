@@ -107,10 +107,68 @@ namespace Rock.ViewModels.Blocks.Eventos.EventCheckout
         public string Category { get; set; }
 
         /// <summary>
+        /// Hex color of the category chip, from the "Tipos de Evento" defined type (migration 024).
+        /// Null falls back to the institutional blue in CSS.
+        /// </summary>
+        public string CategoryColor { get; set; }
+
+        /// <summary>Ministry that organizes the event, shown as a second chip, or null for no chip.</summary>
+        public string Ministry { get; set; }
+
+        /// <summary>
+        /// Hex color of the ministry chip, from the "Ministerios de Eventos" defined type.
+        /// Null draws the outlined chip over the hero image.
+        /// </summary>
+        public string MinistryColor { get; set; }
+
+        /// <summary>
+        /// Public URL of the wide banner shown in step 1 (via GetImage.ashx). Null when the event
+        /// has no banner — the front falls back to <see cref="ImageUrl"/>.
+        /// </summary>
+        public string BannerUrl { get; set; }
+
+        /// <summary>Speakers shown in step 1, or an empty list when the event has none.</summary>
+        public List<EventSpeakerBag> Speakers { get; set; }
+
+        /// <summary>
+        /// Public URL of the ministry logo shown in the hero (via GetImage.ashx), or null.
+        /// </summary>
+        public string LogoUrl { get; set; }
+
+        /// <summary>
+        /// Start/end of each session, aligned 1:1 with <c>Sessions</c>. The formatted strings are
+        /// for reading; these are for deciding which chip is the current session.
+        /// </summary>
+        public List<EventSessionTimeBag> SessionTimes { get; set; }
+
+        /// <summary>
         /// Pre-formatted session lines for multi-session events (e.g. "Lunes 3 de agosto · 8:00 a. m. – 9:00 a. m.").
         /// Empty for single-block events.
         /// </summary>
         public List<string> Sessions { get; set; }
+    }
+
+    /// <summary>
+    /// One speaker of the event as shown in step 1 of the checkout.
+    /// </summary>
+    public class EventSpeakerBag
+    {
+        public string Name { get; set; }
+
+        /// <summary>Role under the name (e.g. "Pastor principal"), or null.</summary>
+        public string Role { get; set; }
+
+        /// <summary>Public URL of the speaker photo (via GetImage.ashx), or null.</summary>
+        public string PhotoUrl { get; set; }
+    }
+
+    /// <summary>
+    /// Start/end of one session of the event, for the hero's session chips.
+    /// </summary>
+    public class EventSessionTimeBag
+    {
+        public DateTime? Start { get; set; }
+        public DateTime? End { get; set; }
     }
 
     /// <summary>

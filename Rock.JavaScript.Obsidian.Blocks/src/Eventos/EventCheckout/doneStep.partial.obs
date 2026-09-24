@@ -13,9 +13,11 @@
         <div v-if="confirmation" class="ecDoneCard">
             <div class="ecDoneTop">
                 <span class="ecDoneEvent">{{ event?.name }}</span>
-                <span class="ecDoneOrder ecMono">Orden #{{ confirmation.orderId }}</span>
+                <div class="ecDoneOrderBox">
+                    <span class="ecDoneOrder ecMono">Orden #{{ confirmation.orderId }}</span>
+                </div>
             </div>
-            <div v-if="eventDateLabel || eventSubtitle" class="ecDoneSub ecCap">{{ eventDateLabel }}<span v-if="eventDateLabel && eventSubtitle"> · </span>{{ eventSubtitle }}</div>
+            <div v-if="eventDateLabel || eventSubtitle" class="ecDoneSub">{{ eventDateLabel }}<span v-if="eventDateLabel && eventSubtitle"> · </span>{{ eventSubtitle }}</div>
             <div class="ecDoneDivider"></div>
             <div class="ecDoneList">
                 <div v-for="t in confirmation.tickets" :key="t.uniqueCode" class="ecDoneItem">

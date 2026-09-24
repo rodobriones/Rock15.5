@@ -159,6 +159,44 @@ namespace Rock.Model
         public string SessionsJson { get; set; }
 
         /// <summary>
+        /// Gets or sets the ministry (área de la iglesia) that organizes this event: General,
+        /// Alabanza, Deportes, Jóvenes… Distinto de <see cref="Category"/>, que describe QUÉ TIPO
+        /// de evento es (badge de color del hero). Alimenta el filtro "Ministerio" del calendario
+        /// público. Los valores vienen del DefinedType "Ministerios de Eventos" (migración 022);
+        /// se guarda el texto y no el id para que el calendario filtre sin joins.
+        /// </summary>
+        [MaxLength( 100 )]
+        [DataMember]
+        public string Ministry { get; set; }
+
+        /// <summary>
+        /// Gets or sets the identifier of the wide <see cref="Rock.Model.BinaryFile"/> shown above
+        /// the event details in step 1 of the checkout. Separate from
+        /// <see cref="ImageBinaryFileId"/>, which feeds the hero, the condensed header and the
+        /// calendar cards. When null the checkout falls back to the hero image.
+        /// </summary>
+        [DataMember]
+        public int? BannerBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the identifier of the square <see cref="Rock.Model.BinaryFile"/> shown to
+        /// the left of the badge and title in the checkout hero (the ministry logo). Third and last
+        /// image of an event: <see cref="ImageBinaryFileId"/> is the cover,
+        /// <see cref="BannerBinaryFileId"/> the step-1 banner. Null draws no logo.
+        /// </summary>
+        [DataMember]
+        public int? LogoBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the speakers shown in step 1 of the checkout, as a JSON array of
+        /// <c>{ Name, Role, PhotoBinaryFileId }</c>. Same shape-in-a-column approach as
+        /// <see cref="SessionsJson"/>: son datos de presentación sin consultas propias, así que no
+        /// justifican una tabla. Null o vacío = no se dibuja la sección.
+        /// </summary>
+        [DataMember]
+        public string SpeakersJson { get; set; }
+
+        /// <summary>
         /// Gets or sets the identifier of the <see cref="Rock.Model.WorkflowType"/> launched for
         /// every ticket of this event when its order is paid (registration confirmed).
         /// Plain id on purpose (no FK/navigation): a deleted workflow type simply stops launching.
@@ -188,6 +226,18 @@ namespace Rock.Model
         /// </summary>
         [DataMember]
         public virtual BinaryFile ImageBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the wide banner shown in step 1 of the checkout.
+        /// </summary>
+        [DataMember]
+        public virtual BinaryFile BannerBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the ministry logo shown in the checkout hero.
+        /// </summary>
+        [DataMember]
+        public virtual BinaryFile LogoBinaryFile { get; set; }
 
         /// <summary>
         /// Gets or sets the <see cref="Rock.Model.PersonAlias"/> of the event organizer.
@@ -240,6 +290,8 @@ namespace Rock.Model
         {
             this.HasOptional( e => e.Campus ).WithMany().HasForeignKey( e => e.CampusId ).WillCascadeOnDelete( false );
             this.HasOptional( e => e.ImageBinaryFile ).WithMany().HasForeignKey( e => e.ImageBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( e => e.BannerBinaryFile ).WithMany().HasForeignKey( e => e.BannerBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( e => e.LogoBinaryFile ).WithMany().HasForeignKey( e => e.LogoBinaryFileId ).WillCascadeOnDelete( false );
             this.HasOptional( e => e.OrganizerPersonAlias ).WithMany().HasForeignKey( e => e.OrganizerPersonAliasId ).WillCascadeOnDelete( false );
             this.HasOptional( e => e.FinancialGateway ).WithMany().HasForeignKey( e => e.FinancialGatewayId ).WillCascadeOnDelete( false );
             this.HasOptional( e => e.FinancialAccount ).WithMany().HasForeignKey( e => e.FinancialAccountId ).WillCascadeOnDelete( false );

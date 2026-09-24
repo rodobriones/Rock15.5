@@ -84,7 +84,8 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
           ".epayCheckboxLabel input[type='checkbox']:checked::before { transform:translateX(20px); }",
           ".epayInstallmentSelect { display:grid; gap:12px; }",
           ".epayWrap [data-el='installmentSelectWrap'] { gap:12px; }",
-          ".epayInputWrap select.epayInput { appearance:auto; cursor:pointer; }",
+          "/* appearance:none — con appearance:auto el select conserva las metricas nativas del SO y queda ~12px mas alto que los inputs de al lado. Chevron propio para no perder la flecha. */",
+          ".epayInputWrap select.epayInput { appearance:none; -webkit-appearance:none; cursor:pointer; height:48px; padding-right:24px; background-image:url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%2364748b%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E); background-repeat:no-repeat; background-position:right center; background-size:14px; }",
           /* Recargo: colores warning del checkout (ecHoldTimer). */
           ".epaySurchargeInfo { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px 14px; }",
           ".epaySurchargeLabel { font-size:13px; color:#92400e; }",

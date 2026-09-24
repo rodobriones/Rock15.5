@@ -44,6 +44,10 @@ conocen HTTP (`BlockActionResult`) ni parámetros de página.
 │                           best-effort, dedupe evento/tipo. Entidad = Ticket; atributos por
 │                           convención si el workflow los define: Person/Buyer/Event/EventName/
 │                           Order/Ticket/TicketType/TicketTypeName/AttendeeName.
+│    EventSpeakerService    ponentes del paso 1 del checkout (Event.SpeakersJson, migr. 022):
+│                           parse/normaliza, tope de 24, descarta filas sin nombre. Mismo
+│                           criterio que la agenda: datos de PRESENTACIÓN, sin consultas
+│                           propias, no justifican tabla. Sin efectos sobre cupo ni precio.
 │
 ├─ Adaptadores de SALIDA (Rock/Model/Eventos/Services/)
 │    PaymentService         pasarela (ePay Visanet vía IObsidianHostedGatewayComponent).
@@ -57,6 +61,41 @@ conocen HTTP (`BlockActionResult`) ni parámetros de página.
      Event, TicketType, Order, Ticket, PromoCode, CheckinLog, EventStaff
      (Entity<T> de Rock = entidad + persistencia EF; tabla propia _com_vidareal_Events_*).
 ```
+
+## Las tres imágenes de un evento (migr. 022 y 023)
+
+Se confunden fácil porque las tres son `BinaryFile` del mismo evento:
+
+| Columna | Dónde se dibuja |
+|---|---|
+| `ImageBinaryFileId` | portada del hero del checkout, header condensado, tarjetas del calendario y de Mis Entradas |
+| `BannerBinaryFileId` | banner apaisado del paso 1, encima de la ficha del evento. Null ⇒ cae a la del hero |
+| `LogoBinaryFileId` | logo cuadrado del ministerio, a la izquierda del badge y el título en el hero |
+
+`BuildEventBag` las resuelve **en una sola consulta** junto con las fotos de los ponentes
+(diccionario Guid-por-Id), no una consulta por archivo.
+
+## Category ≠ Ministry
+
+Los dos son catálogos administrables (DefinedTypes) y los dos se dibujan como chip en el hero
+del checkout y en las tarjetas del calendario. `EventTagService` es la única puerta de lectura:
+lista, validación y color.
+
+- **`Category`** — QUÉ TIPO de evento es: Conferencia, Concierto, Deportivo, Familiar. Sale del
+  DefinedType *Tipos de Evento* (migr. 024).
+- **`Ministry`** (migr. 022) — QUÉ ÁREA lo organiza: General, Alabanza, Deportes, Jóvenes… Sale del
+  DefinedType *Ministerios de Eventos*. Alimenta además el filtro "Ministerio" del calendario.
+
+Los dos **guardan el texto y no el id del DefinedValue** para que el calendario filtre sobre el
+init bag sin joins; como no hay FK, el servidor valida contra el catálogo al guardar. Cada
+DefinedValue lleva un atributo **`Color`** (migr. 024) que viaja en el bag y pinta el chip vía
+`:style`: agregar un tipo o un ministerio nuevo no obliga a tocar el CSS. Sin color, el chip de
+tipo cae al azul institucional y el de ministerio al estilo de contorno.
+
+Ojo: renombrar un DefinedValue no reescribe los eventos que ya guardaron el texto anterior —
+siguen mostrando su chip, pero sin color, hasta que se reasignen.
+
+Un evento puede ser tipo "Deportivo" **y** ministerio "Deportes" — no son lo mismo.
 
 Fuera del árbol: `Rock/Jobs/EventsMaintenance.cs` (job de conciliación: holds expirados +
 órdenes Charging recuperables) y `Plugin.VidaRealEvents/` (solo migraciones SQL, assembly

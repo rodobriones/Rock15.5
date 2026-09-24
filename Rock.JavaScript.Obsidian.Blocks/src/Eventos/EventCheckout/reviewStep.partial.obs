@@ -3,14 +3,23 @@
 <template>
     <div class="ecNarrow">
         <h2 class="ecPaneTitle">Revisa tu orden</h2>
-        <p class="ecPaneText">Confirma el detalle, aplica un código y elige si necesitas factura.</p>
+        <p class="ecPaneText">
+            {{ isFree ? "Confirma el detalle y a quién queda cada entrada." : "Confirma el detalle, aplica un código y elige si necesitas factura." }}
+        </p>
 
         <div class="ecSummary">
-            <div v-for="row in summaryRows" :key="row.ticketTypeId" class="ecSumRow">
-                <span>{{ row.quantity }}× {{ row.name }}</span>
-                <span class="ecMono">{{ formatCurrency(row.lineTotal) }}</span>
+            <div v-for="row in summaryRows" :key="row.ticketTypeId" class="ecSumLine">
+                <div class="ecSumRow">
+                    <span>{{ row.quantity }}× {{ row.name }}</span>
+                    <span class="ecMono">{{ formatCurrency(row.lineTotal) }}</span>
+                </div>
+                <!-- A quién quedó cada entrada: es lo que se acaba de llenar en el paso 2. -->
+                <ul class="ecSumWho">
+                    <li v-for="(who, i) in attendeeNamesForType(row.ticketTypeId)" :key="i">{{ who }}</li>
+                </ul>
             </div>
-            <div class="ecSumRow ecSumIva">
+            <!-- Un total de Q0 no lleva IVA: mostrar la línea solo confunde. -->
+            <div v-if="!isFree" class="ecSumRow ecSumIva">
                 <span>Incluye IVA (12%)</span>
                 <span class="ecMono">{{ formatCurrency(ivaIncluded) }}</span>
             </div>
@@ -24,8 +33,8 @@
             </div>
         </div>
 
-        <!-- Código de descuento -->
-        <div v-if="!appliedPromo" class="ecPromoRow">
+        <!-- Código de descuento (no aplica sobre un total de Q0) -->
+        <div v-if="!isFree && !appliedPromo" class="ecPromoRow">
             <input v-model="promoInput"
                    class="form-control ecInput ecPromoInput"
                    type="text"
@@ -36,12 +45,12 @@
                 {{ promoBusy ? "…" : "Aplicar" }}
             </RockButton>
         </div>
-        <div v-else class="ecPromoApplied">
+        <div v-else-if="!isFree" class="ecPromoApplied">
             <span class="ecPromoTag">✓ {{ appliedPromo.code }}</span>
             <span class="ecPromoDesc">{{ appliedPromo.description }}</span>
             <button type="button" class="ecPromoRemove" @click="removePromo">Quitar</button>
         </div>
-        <p v-if="promoError" class="ecFieldError">{{ promoError }}</p>
+        <p v-if="promoError" class="ecFieldError" role="alert">{{ promoError }}</p>
 
         <!-- Factura (no aplica en entradas gratuitas: Q0 no genera FEL) -->
         <div v-if="!isFree" class="ecToggleRow">
@@ -61,7 +70,7 @@
                     {{ busyNit ? "Validando…" : "Validar NIT" }}
                 </RockButton>
             </div>
-            <p v-if="nitError" class="ecFieldError">{{ nitError }}</p>
+            <p v-if="nitError" class="ecFieldError" role="alert">{{ nitError }}</p>
             <div v-if="invoiceName || nitAddress" class="ecNitResult">
                 <label class="ecNitField">
                     <span>Nombre / Razón Social</span>
@@ -74,15 +83,15 @@
             </div>
         </div>
 
-        <p class="ecHint">
+        <p v-if="!isFree" class="ecHint">
             Precios en GTQ, IVA incluido. Si eliges pago en cuotas, el recargo se calcula y se
             muestra en el control de pago y se suma al cargo final.
         </p>
 
-        <div class="ecActions">
+        <div class="ecStepActions">
             <RockButton class="ecGhost" btnType="default" @click="step = 2">← Atrás</RockButton>
             <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy" @click="goToPayment">
-                {{ busy ? "Reservando…" : "Continuar a pago" }} <span v-if="!busy" class="ecCtaArrow">→</span>
+                {{ busy ? "Reservando…" : (isFree ? "Continuar" : "Continuar a pago") }} <span v-if="!busy" class="ecCtaArrow">→</span>
             </RockButton>
         </div>
     </div>
@@ -96,6 +105,7 @@ const {
     step,
     busy,
     summaryRows,
+    attendeeNamesForType,
     formatCurrency,
     ivaIncluded,
     discount,

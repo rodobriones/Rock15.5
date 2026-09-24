@@ -460,7 +460,10 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
-    .mpPage { margin: 0; }
+    /* Móvil a sangre, igual que el checkout: calc(50% - 50vw) cancela el padding de CUALQUIER
+       contenedor del tema. El `margin: 0` anterior quitaba la compensación y dejaba un marco
+       gris de 15px a los lados. */
+    .mpPage { width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); }
 }
 </style>
 

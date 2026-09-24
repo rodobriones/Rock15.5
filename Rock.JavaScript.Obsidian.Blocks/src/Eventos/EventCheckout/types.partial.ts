@@ -16,7 +16,32 @@ export type EventBag = {
     organizerName?: string | null;
     headerStyle?: string | null;
     category?: string | null;
+    /** Color del chip de tipo (DefinedType "Tipos de Evento"); null = azul institucional. */
+    categoryColor?: string | null;
+    /** Ministerio que organiza; null no dibuja el segundo chip. */
+    ministry?: string | null;
+    /** Color del chip de ministerio; null = chip de contorno sobre la portada. */
+    ministryColor?: string | null;
     sessions?: string[] | null;
+    /** Banner apaisado del paso 1; null cae a imageUrl. */
+    bannerUrl?: string | null;
+    /** Logo del ministerio en el hero; null no dibuja logo. */
+    logoUrl?: string | null;
+    /** Ponentes del paso 1; lista vacía = no se dibuja la sección. */
+    speakers?: EventSpeakerBag[] | null;
+    /** Marcas de tiempo de cada sesión, alineadas 1:1 con `sessions`. */
+    sessionTimes?: EventSessionTimeBag[] | null;
+};
+
+export type EventSpeakerBag = {
+    name: string;
+    role?: string | null;
+    photoUrl?: string | null;
+};
+
+export type EventSessionTimeBag = {
+    start?: string | null;
+    end?: string | null;
 };
 
 export type TicketTypeBag = {

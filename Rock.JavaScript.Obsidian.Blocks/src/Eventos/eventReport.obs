@@ -1,6 +1,7 @@
 <template>
-    <Panel type="block" title="Eventos • Reportería">
+    <Panel type="block" title="Eventos • Reportería" class="er-panel">
         <template #default>
+            <div class="erWrap">
             <NotificationBox v-if="config.notLogged" alertType="warning">
                 Debes iniciar sesión para ver la reportería.
             </NotificationBox>
@@ -141,8 +142,8 @@
                                         </button>
                                     </td>
                                 </tr>
-                                <tr v-if="emailEdit && emailEdit.ticketId === r.ticketId">
-                                    <td colspan="9" style="background:#f8fafc;">
+                                <tr v-if="emailEdit && emailEdit.ticketId === r.ticketId" class="erEditRow">
+                                    <td colspan="9">
                                         <div class="d-flex align-items-end" style="gap:8px; flex-wrap:wrap;">
                                             <div style="width:320px;">
                                                 <TextBox v-model="emailEdit.email" label="Correo de envío" type="email" />
@@ -170,18 +171,179 @@
                     </table>
                 </div>
             </div>
+            </div>
         </template>
     </Panel>
 </template>
 
 <style>
+/* ============================================================
+   Vida Real — Eventos • Reportería
+   Rediseño 2026 (Claude Design · artboard "09. Eventos - eventReport").
+   NO-scoped a propósito: este bloque SÍ se apoya en el chrome de Rock
+   (Panel + Bootstrap 3 del tema) y el rediseño consiste en re-estilar ese
+   chrome desde el ancestro del bloque, sin ocultarlo.
+   ============================================================ */
+
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* ---------- Escenario: el panel flota sobre el gris de página ---------- */
+.block-instance:has(.erWrap) {
+    background: #F3F5F7;
+    margin: 0 -15px;
+    padding: 24px;
+    position: relative;
+}
+
+/* ---------- Panel de Rock (se conserva, se re-estiliza) ---------- */
+.panel-block:has(.erWrap) {
+    background: #fff !important;
+    border: 1px solid #E1E7EC !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(15, 51, 75, .05) !important;
+}
+.panel-block:has(.erWrap) > .panel-heading,
+.panel-block:has(.erWrap) > .panel-header {
+    padding: 12px 18px !important;
+    background: #fff !important;
+    border-bottom: 1px solid #E1E7EC !important;
+}
+.panel-block:has(.erWrap) > .panel-heading .panel-title,
+.panel-block:has(.erWrap) > .panel-header .panel-title {
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 28px; font-weight: 600; color: #0F334B; margin: 0;
+}
+.panel-block:has(.erWrap) > .panel-body { padding: 18px !important; }
+
+.erWrap {
+    /* Tokens Brújula VR */
+    --vr-navy: #0E364C;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #143E5A;
+    --ink-soft: #5A6E7C;
+    --ink-faint: #8296A2;
+    --rule: #E1E7EC;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-text: #1E7A64; --ok-bg: #E9F6F2; --ok-fill: #39B396;
+    --warn-text: #8F5B0B; --warn-bg: #FDF2E1; --warn-fill: #F09E30;
+    --err-text: #B02E22; --err-bg: #FCEAE8; --err-fill: #E74133;
+    --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-num: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.42857143;
+}
+.erWrap *, .erWrap *::before, .erWrap *::after { box-sizing: border-box; }
+
+/* ---------- Controles ---------- */
+.erWrap .control-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
+.erWrap .form-control {
+    display: block; width: 100%; height: 34px; padding: 6px 12px;
+    font-size: 14px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule-strong); border-radius: 4px;
+    font-family: inherit; outline: none; box-shadow: none;
+}
+/* Los DropDownList de Obsidian son Ant Select, no <select>: el tema les pone el padding y el alto
+   en .ant-select-selector (con !important) y deja el contenedor en padding: 0. Al redefinir aquí
+   .form-control se lo devolvíamos al contenedor —texto ~12px más adentro que el de los inputs— y
+   el selector conservaba el alto del tema en vez del de este bloque. Estas dos líneas alinean los
+   desplegables con los inputs en horizontal y en vertical. */
+.erWrap .ant-select.form-control { padding: 0; }
+.erWrap .ant-select.form-control .ant-select-selector { height: 100% !important; }
+.erWrap .form-control:focus { border-color: var(--action); box-shadow: 0 0 0 3px rgba(30,91,135,.18); }
+
+/* ---------- Botones (píldora del rediseño) ---------- */
+.erWrap .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--rule-strong) !important;
+    background: var(--paper) !important; color: var(--ink) !important;
+    border-radius: 20px !important; font-family: inherit;
+    padding: 10px 20px !important; font-size: 15px !important; font-weight: 500;
+    text-decoration: none; box-shadow: none !important;
+}
+.erWrap .btn.btn-default:hover:not(:disabled) { background: var(--paper-alt) !important; }
+.erWrap .btn.btn-primary {
+    background: #0F334B !important; border-color: #0F334B !important; color: #fff !important;
+}
+.erWrap .btn.btn-primary:hover:not(:disabled) { background: var(--vr-navy) !important; color: #fff !important; }
+.erWrap .btn:disabled { opacity: .55; cursor: default; }
+.erWrap .btn + .btn { margin-left: 6px; }
+
+/* ---------- Tablas ---------- */
+.erWrap .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+.erWrap .table-bordered,
+.erWrap .table-bordered th,
+.erWrap .table-bordered td { border: 1px solid var(--rule); }
+.erWrap .grid-table th { background: var(--action-soft); font-weight: 600; color: #0F334B; }
+.erWrap .grid-table th,
+.erWrap .grid-table td { padding: 8px 10px; vertical-align: middle; }
+.erWrap .table-striped tbody tr:nth-of-type(odd) { background: var(--paper-alt); }
+.erWrap .notranslate { font-family: var(--font-num); }
+
+.erWrap .label {
+    display: inline-block; padding: 3px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+}
+.erWrap .label-success { background: var(--ok-bg); color: var(--ok-text); }
+.erWrap .label-default { background: var(--action-soft); color: var(--ink-soft); }
+
+.erWrap .alert {
+    padding: 12px 16px; border-radius: 6px; font-size: 14px; border: 1px solid transparent;
+}
+.erWrap .alert-warning { background: var(--warn-bg); border-color: var(--warn-fill); color: var(--warn-text); }
+.erWrap .alert-info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.erWrap .alert-danger { background: var(--err-bg); border-color: var(--err-fill); color: var(--err-text); }
+
+.erWrap h5 { font-size: 15px; font-weight: 700; color: #0F334B; margin: 0 0 10px; }
+.erWrap .text-muted { color: var(--ink-soft); }
+
+/* ---------- KPIs ---------- */
 .erStats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
 .erStat {
-    flex: 1; min-width: 130px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+    flex: 1; min-width: 130px;
+    background: var(--paper-alt); border: 1px solid var(--rule); border-radius: 12px;
     padding: 14px 18px; display: flex; flex-direction: column; gap: 2px;
 }
-.erStatVal { font-size: 22px; font-weight: 700; color: #0f172a; }
-.erStatLabel { font-size: 12px; color: #64748b; }
+.erStatVal { font-size: 22px; font-weight: 700; color: #0F334B; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.erStatLabel { font-size: 12px; color: var(--ink-soft); }
+
+/* ---------- Editor de correo en línea ---------- */
+.erEditRow > td { background: var(--paper-alt); }
+
+@media (max-width: 900px) {
+    /* La tabla scrollea sola en vez de desbordar la página. */
+    .erWrap .table { display: block; overflow-x: auto; }
+    .panel-block:has(.erWrap) > .panel-heading .panel-title,
+    .panel-block:has(.erWrap) > .panel-header .panel-title { font-size: 22px; }
+}
 </style>
 
 <script setup lang="ts">

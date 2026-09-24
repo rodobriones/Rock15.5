@@ -1082,19 +1082,38 @@ namespace Rock.Blocks.Eventos
 
         private EventBag BuildEventBag( Rock.Model.Event ev, RockContext rockContext )
         {
-            // Imagen del evento: URL servida por GetImage.ashx a partir del Guid del BinaryFile.
-            string imageUrl = null;
+            // Imágenes del evento (hero, banner del paso 1 y fotos de los ponentes): se resuelven
+            // en UNA sola consulta por Guid, no una por archivo.
+            var speakers = EventSpeakerService.Parse( ev.SpeakersJson );
+
+            var fileIds = EventSpeakerService.PhotoFileIds( speakers );
             if ( ev.ImageBinaryFileId.HasValue )
             {
-                var imageGuid = new BinaryFileService( rockContext ).Queryable()
-                    .Where( f => f.Id == ev.ImageBinaryFileId.Value )
-                    .Select( f => ( Guid? ) f.Guid )
-                    .FirstOrDefault();
-                if ( imageGuid.HasValue )
-                {
-                    imageUrl = $"/GetImage.ashx?guid={imageGuid.Value}";
-                }
+                fileIds.Add( ev.ImageBinaryFileId.Value );
             }
+            if ( ev.BannerBinaryFileId.HasValue )
+            {
+                fileIds.Add( ev.BannerBinaryFileId.Value );
+            }
+            if ( ev.LogoBinaryFileId.HasValue )
+            {
+                fileIds.Add( ev.LogoBinaryFileId.Value );
+            }
+
+            var guidById = fileIds.Any()
+                ? new BinaryFileService( rockContext ).Queryable()
+                    .Where( f => fileIds.Contains( f.Id ) )
+                    .ToDictionary( f => f.Id, f => f.Guid )
+                : new Dictionary<int, Guid>();
+
+            string ImageUrlFor( int? binaryFileId )
+            {
+                return binaryFileId.HasValue && guidById.TryGetValue( binaryFileId.Value, out var g )
+                    ? $"/GetImage.ashx?guid={g}"
+                    : null;
+            }
+
+            var imageUrl = ImageUrlFor( ev.ImageBinaryFileId );
 
             // Organizador: nombre de la persona (si está configurada).
             string organizerName = null;
@@ -1118,7 +1137,31 @@ namespace Rock.Blocks.Eventos
                 OrganizerName = organizerName,
                 HeaderStyle = ev.HeaderStyle.IsNullOrWhiteSpace() ? "persistente" : ev.HeaderStyle,
                 Category = ev.Category,
-                Sessions = EventSessionService.Format( ev.SessionsJson )
+                // El color del chip es dato del catálogo (DefinedType), no CSS: agregar un tipo
+                // o un ministerio nuevo no obliga a tocar el front.
+                CategoryColor = EventTagService.GetTypeColor( ev.Category ),
+                Ministry = ev.Ministry,
+                MinistryColor = EventTagService.GetMinistryColor( ev.Ministry ),
+                BannerUrl = ImageUrlFor( ev.BannerBinaryFileId ),
+                LogoUrl = ImageUrlFor( ev.LogoBinaryFileId ),
+                Speakers = speakers
+                    .Select( sp => new EventSpeakerBag
+                    {
+                        Name = sp.Name,
+                        Role = sp.Role,
+                        PhotoUrl = ImageUrlFor( sp.PhotoBinaryFileId )
+                    } )
+                    .ToList(),
+                Sessions = EventSessionService.Format( ev.SessionsJson ),
+                // Además del texto ya formateado, las marcas de tiempo: el front las usa para
+                // resaltar el chip de la sesión en curso sin tener que parsear español.
+                SessionTimes = EventSessionService.Parse( ev.SessionsJson )
+                    .Select( sn => new EventSessionTimeBag
+                    {
+                        Start = sn.GetStartDateTime(),
+                        End = sn.GetEndDateTime()
+                    } )
+                    .ToList()
             };
         }
 
@@ -1223,6 +1266,13 @@ namespace Rock.Blocks.Eventos
             };
         }
 
+        /// <summary>Texto recortado, o null cuando queda vacío (el front decide si dibuja el bloque).</summary>
+        private static string NullIfBlank( string text )
+        {
+            var trimmed = ( text ?? string.Empty ).Trim();
+            return trimmed.Length == 0 ? null : trimmed;
+        }
+
         private ProcessCheckoutResponseBag BuildConfirmation( Order order, RockContext rockContext )
         {
             var qrService = new QrService();
@@ -1230,13 +1280,27 @@ namespace Rock.Blocks.Eventos
                 .Queryable()
                 .AsNoTracking()
                 .Where( t => t.OrderId == order.Id )
-                .Select( t => new { t.UniqueCode, TicketTypeName = t.TicketType.Name, t.AttendeeName, t.PricePaid } )
+                // Ticket.AttendeeName solo guarda texto libre: cuando el asistente es una persona
+                // real el nombre vive en el PersonAlias y la columna queda null a propósito. Sin
+                // resolverlo aquí, la confirmación mostraba los QR sin nombre y con 2+ asistentes
+                // no había forma de saber cuál es de quién (el PDF y el correo sí lo resuelven).
+                .Select( t => new
+                {
+                    t.UniqueCode,
+                    TicketTypeName = t.TicketType.Name,
+                    t.AttendeeName,
+                    PersonNickName = t.AttendeePersonAlias.Person.NickName,
+                    PersonLastName = t.AttendeePersonAlias.Person.LastName,
+                    t.PricePaid
+                } )
                 .ToList()
                 .Select( t => new ConfirmationTicketBag
                 {
                     UniqueCode = t.UniqueCode,
                     TicketTypeName = t.TicketTypeName,
-                    AttendeeName = t.AttendeeName,
+                    AttendeeName = t.AttendeeName.IsNullOrWhiteSpace()
+                        ? NullIfBlank( $"{t.PersonNickName} {t.PersonLastName}" )
+                        : t.AttendeeName,
                     PricePaid = t.PricePaid,
                     // QR regenerado desde el código (determinista): base64 para render/print, sin URL pública.
                     QrImageDataUri = qrService.GenerateQrDataUri( t.UniqueCode )

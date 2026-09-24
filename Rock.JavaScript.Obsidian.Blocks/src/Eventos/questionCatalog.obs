@@ -1,21 +1,22 @@
 <template>
-    <Panel type="block" title="Eventos • Catálogo de Preguntas">
+    <Panel type="block" title="" class="qc-panel">
         <template #default>
+            <div class="qcPage">
             <div class="qcWrap">
                 <NotificationBox v-if="config.notAuthorized" alertType="warning">
                     No tienes permiso para administrar el catálogo de preguntas.
                 </NotificationBox>
 
                 <div v-else>
-                    <header class="qcHead">
-                        <div>
+                    <div class="qcHeadInner">
+                        <header class="qcHead">
                             <h1 class="qcTitle">Catálogo de Preguntas</h1>
                             <p class="qcSub">
                                 Preguntas al asistente para los boletos. Las respuestas quedan en el perfil de la persona
                                 y se pre-llenan en eventos futuros. Arma plantillas para aplicarlas a un boleto en un clic.
                             </p>
-                        </div>
-                    </header>
+                        </header>
+                    </div>
 
                     <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
                     <NotificationBox v-if="ok" alertType="success" class="mb-3">{{ ok }}</NotificationBox>
@@ -49,7 +50,7 @@
                         </div>
 
                         <div v-if="items.length === 0" class="qcEmpty">
-                            <div class="qcEmptyIcon">❓</div>
+                            <div class="qcEmptyIcon">◌</div>
                             <p>Aún no hay preguntas. Crea la primera con "+ Nueva pregunta".</p>
                         </div>
 
@@ -126,7 +127,7 @@
                         </div>
 
                         <div v-if="templates.length === 0" class="qcEmpty">
-                            <div class="qcEmptyIcon">📋</div>
+                            <div class="qcEmptyIcon">◌</div>
                             <p>Sin plantillas todavía.</p>
                         </div>
 
@@ -145,14 +146,17 @@
                     </section>
                 </div>
             </div>
+            </div>
         </template>
     </Panel>
 </template>
 
 <style>
 /* ============================================================
-   Vida Real — Catálogo de Preguntas (diseño 2026, paleta slate)
-   NO-scoped: oculta el chrome del panel vía ancestro (:has).
+   Vida Real — Catálogo de Preguntas
+   Rediseño 2026 (Claude Design · artboard "06.Eventos - questionCatalog").
+   NO-scoped: oculta el chrome del panel vía ancestro (:has) y estiliza los
+   controles Obsidian (.form-control, .checkbox) que Rock renderiza dentro.
    ============================================================ */
 
 .panel-block:has(.qcWrap) > .panel-heading,
@@ -166,71 +170,170 @@
 }
 .panel-block:has(.qcWrap) > .panel-body { padding: 0 !important; }
 
+/* --- Tipografía del design system Brújula VR. Los .woff2 se sirven desde el
+       propio RockWeb (nunca CDN); si el tema ya enlaza montserrat.css, estas
+       reglas son redundantes e inocuas. --- */
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+
+.qcPage { background: #F3F5F7; }
+
 .qcWrap {
-    --surface-mid: #f8fafc;
-    --surface-alt: #f1f5f9;
-    --primary-900: #1e293b;
-    --primary-800: #334155;
-    --primary-500: #64748b;
-    --primary-300: #94a3b8;
-    --primary-200: #cbd5e1;
+    /* Tokens Brújula VR (tokens/colors.css del design system) */
+    --vr-navy: #0E364C;
+    --vr-navy-800: #21465A;
+    --vr-navy-600: #3E5E70;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0E364C;
+    --ink-soft: #5B7685;
+    --ink-faint: #8297A2;
+    --rule: #E0E5E8;
+    --rule-strong: #CAD3D8;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-fill: #39B396; --ok-text: #1E7A64; --ok-bg: #E9F6F2;
+    --warn-fill: #F09E30; --warn-text: #8F5B0B; --warn-bg: #FDF2E1;
+    --err-fill: #E74133; --err-text: #B02E22; --err-bg: #FCEAE8;
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --font-title: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+
+    /* Alias de la paleta anterior, remapeados a los tokens */
+    --surface-mid: var(--paper-alt);
+    --surface-alt: var(--action-soft);
+    --primary-900: var(--vr-navy);
+    --primary-800: var(--vr-navy-800);
+    --primary-500: var(--ink-soft);
+    --primary-300: var(--ink-faint);
+    --primary-200: var(--rule-strong);
 
     max-width: 860px;
     margin: 0 auto;
     padding: 28px 16px 48px;
-    font-family: Roboto, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     color: var(--primary-900);
 }
+.qcWrap *, .qcWrap *::before, .qcWrap *::after { box-sizing: border-box; }
 
-.qcHead { margin-bottom: 22px; }
-.qcTitle { margin: 0; font-size: 26px; font-weight: 700; }
+/* ---------- Controles Obsidian (TextBox / DropDownList / CheckBox) ---------- */
+.qcWrap .form-group { margin-bottom: 12px; }
+.qcWrap .control-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
+.qcWrap .form-control {
+    display: block; width: 100%; height: 36px; padding: 7px 11px;
+    font-size: 14px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule-strong); border-radius: 8px;
+    font-family: inherit; outline: none; box-shadow: none;
+}
+/* Los DropDownList de Obsidian son Ant Select, no <select>: el tema les pone el padding y el alto
+   en .ant-select-selector (con !important) y deja el contenedor en padding: 0. Al redefinir aquí
+   .form-control se lo devolvíamos al contenedor —texto ~12px más adentro que el de los inputs— y
+   el selector conservaba el alto del tema en vez del de este bloque. Estas dos líneas alinean los
+   desplegables con los inputs en horizontal y en vertical. */
+.qcWrap .ant-select.form-control { padding: 0; }
+.qcWrap .ant-select.form-control .ant-select-selector { height: 100% !important; }
+.qcWrap .form-control:focus { border-color: var(--action); box-shadow: 0 0 0 3px rgba(30,91,135,.18); }
+.qcWrap textarea.form-control { height: auto; resize: vertical; }
+.qcWrap .checkbox { margin: 0 0 4px; }
+.qcWrap .checkbox label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 400; color: var(--ink); cursor: pointer; margin: 0;
+}
+.qcWrap .checkbox input { margin: 0; accent-color: var(--vr-navy); }
+
+.qcWrap .alert {
+    padding: 12px 16px; border-radius: 8px; font-size: 14px;
+    margin-bottom: 16px; border: 1px solid transparent;
+}
+.qcWrap .alert-warning { background: var(--warn-bg); border-color: var(--warn-fill); color: var(--warn-text); }
+.qcWrap .alert-danger { background: var(--err-bg); border-color: var(--err-fill); color: var(--err-text); }
+.qcWrap .alert-success { background: var(--ok-bg); border-color: var(--ok-fill); color: var(--ok-text); }
+
+/* ---------- Encabezado ---------- */
+.qcHeadInner { max-width: 860px; margin: 0 auto; padding: 36px 16px; }
+.qcHead { margin: 0; display: flex; flex-direction: column; gap: 25px; }
+.qcTitle { margin: 0; font-size: 42px; font-weight: 700; font-family: var(--font-title); }
 .qcSub { margin: 4px 0 0; font-size: 14px; color: var(--primary-500); max-width: 640px; }
 
+/* ---------- Tarjetas de sección ---------- */
 .qcCard {
-    background: #fff; border: 1px solid var(--surface-alt); border-radius: 18px;
-    padding: 20px; margin-bottom: 22px; box-shadow: 0 6px 18px rgba(15, 23, 42, .05);
+    background: var(--paper); border: 1px solid var(--surface-alt); border-radius: 18px;
+    padding: 20px; margin-bottom: 22px; box-shadow: var(--shadow-card);
 }
 .qcCardHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
-.qcCardTitle { margin: 0; font-size: 18px; font-weight: 700; }
+.qcCardTitle { margin: 0; font-size: 22px; font-weight: 700; font-family: var(--font-title); }
 .qcHint { font-size: 13px; color: var(--primary-500); margin: 0 0 14px; }
 
+/* ---------- Botones ---------- */
 .qcBtn {
-    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
-    padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+    border: 1px solid var(--primary-200); background: var(--paper); color: var(--primary-800);
+    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
 }
 .qcBtn:hover:not(:disabled) { background: var(--surface-mid); }
 .qcBtn:disabled { opacity: .5; cursor: default; }
 .qcBtn--primary { border-color: var(--primary-900); background: var(--primary-900); color: #fff; }
 .qcBtn--primary:hover:not(:disabled) { background: var(--primary-800); }
 
+/* ---------- Formularios en línea ---------- */
 .qcForm {
     background: var(--surface-mid); border: 1px solid var(--surface-alt); border-radius: 14px;
     padding: 16px; margin: 10px 0 16px;
 }
 .qcGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .qcFormActions { display: flex; gap: 10px; margin-top: 6px; }
-.qcFieldLabel { display: block; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--primary-500); margin: 12px 0 8px; }
+.qcFieldLabel {
+    display: block; font-size: 12px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--primary-500); margin: 12px 0 8px;
+}
 .qcBasics { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 14px; }
 .qcAddRow { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; }
 .qcAddRow > :first-child { flex: 1; }
-.qcInlineCheck { margin: 0; font-weight: 400; font-size: 12px; cursor: pointer; white-space: nowrap; color: var(--primary-500); }
+.qcInlineCheck {
+    margin: 0; font-weight: 400; font-size: 12px; cursor: pointer;
+    white-space: nowrap; color: var(--primary-500);
+}
 
+/* ---------- Listas ---------- */
 .qcList { border: 1px solid var(--surface-alt); border-radius: 14px; overflow: hidden; margin-top: 10px; }
 .qcList--tight { margin-top: 0; }
 .qcRow {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 12px 16px; background: #fff;
+    padding: 12px 16px; background: var(--paper);
 }
 .qcRow + .qcRow { border-top: 1px solid var(--surface-alt); }
 .qcRow--inactive { opacity: .55; }
-.qcRowMain { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.qcRowName { font-size: 14px; font-weight: 700; }
+.qcRowMain { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.qcRowName { font-size: 14px; font-weight: 700; font-family: var(--font-title); }
 .qcRowMeta { font-size: 12px; color: var(--primary-500); }
 .qcRowRight { flex: none; display: flex; align-items: center; gap: 12px; }
 
 .qcPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .qcPill--muted { background: var(--surface-alt); color: var(--primary-500); }
-.qcPill--use { background: #eff6ff; color: #1d4ed8; }
+.qcPill--use { background: var(--action-soft); color: var(--action); }
 
 .qcLink {
     border: none; background: none; padding: 0; color: var(--primary-500);
@@ -239,8 +342,9 @@
 }
 .qcLink:hover:not(:disabled) { color: var(--primary-900); }
 .qcLink:disabled { opacity: .4; cursor: default; text-decoration: none; }
-.qcLink--danger:hover:not(:disabled) { color: #991b1b; }
+.qcLink--danger:hover:not(:disabled) { color: var(--err-text); }
 
+/* ---------- Vacíos ---------- */
 .qcEmpty {
     text-align: center; padding: 32px 20px; background: var(--surface-mid);
     border: 1px dashed var(--primary-200); border-radius: 14px; margin-top: 10px;

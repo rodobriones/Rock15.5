@@ -59,7 +59,18 @@ SELECT MigrationNumber, MigrationName FROM [PluginMigration] WHERE PluginAssembl
 | 018 | `018_EventSessions.cs` | Columna `Event.SessionsJson`: agenda de sesiones para eventos de varios días/horarios (JSON `[{Date,Start,End,Label}]`). Null = evento de un solo bloque. |
 | 019 | `019_OrderDeliveryEmail.cs` | Columna `Order.DeliveryEmail`: correo al que se envían las entradas (elegido en el paso de pago; null = perfil del comprador). |
 | 020 | `020_EventVisibilityAndCalendar.cs` | Columnas `Event.Visibility` (0=Público/1=Privado/2=Con contraseña) + `Event.AccessPassword`; BlockType **Event Calendar** + página pública `eventos/calendario`; cablea "Checkout Page" del calendario y "Calendar Page" del checkout (botón "Volver al inicio"). |
-| 021 | `021_EventWorkflows.cs` | Workflow launcher: columnas `RegistrationWorkflowTypeId` + `CheckinWorkflowTypeId` en `Event` Y `TicketType` (INT **sin FK** a propósito: un WorkflowType borrado solo deja de lanzarse). Inscripción = orden pagada (se lanza por ticket); check-in = ingreso Ok. El estado "Archivado" del evento es solo enum (sin SQL). **La próxima migración debe ser la 22+.** |
+| 021 | `021_EventWorkflows.cs` | Workflow launcher: columnas `RegistrationWorkflowTypeId` + `CheckinWorkflowTypeId` en `Event` Y `TicketType` (INT **sin FK** a propósito: un WorkflowType borrado solo deja de lanzarse). Inscripción = orden pagada (se lanza por ticket); check-in = ingreso Ok. El estado "Archivado" del evento es solo enum (sin SQL). |
+| 022 | `022_EventSpeakersBannerMinistry.cs` | Campos de presentación del rediseño 2026: `Event.Ministry` (área que organiza — DISTINTO de `Category`, que es el badge del hero; guarda el TEXTO para que el calendario filtre sin joins) + DefinedType **"Ministerios de Eventos"** con 6 valores; `Event.BannerBinaryFileId` (banner apaisado del paso 1, FK sin cascade; null cae a la imagen del hero); `Event.SpeakersJson` (ponentes del paso 1, mismo criterio que `SessionsJson`). Los tres opcionales: sin llenarlos, ningún evento cambia de aspecto. |
+| 023 | `023_EventLogo.cs` | `Event.LogoBinaryFileId`: logo cuadrado del ministerio, a la izquierda del badge y el título en el hero del checkout. **Tercera** imagen del evento — ver la tabla de abajo. **La próxima migración debe ser la 24+.** |
+
+### Las tres imágenes de un evento
+
+| Columna | Dónde se dibuja |
+|---|---|
+| `ImageBinaryFileId` | portada del hero del checkout, header condensado, tarjetas del calendario y de Mis Entradas |
+| `BannerBinaryFileId` | banner apaisado del paso 1 del checkout (022) |
+| `LogoBinaryFileId` | logo sobre la portada, en el hero (023) |
+
 
 ## Modelo de permisos (desde 011–013)
 
@@ -74,3 +85,24 @@ dotnet build Plugin.VidaRealEvents/VidaRealEvents/VidaRealEvents.csproj
 cp Plugin.VidaRealEvents/VidaRealEvents/bin/Debug/net472/com.vidareal.Events.dll RockWeb/Bin/
 # El DLL NO se autocopia. Reciclar el app pool de Rock => corren las migraciones pendientes.
 ```
+
+### ⚠️ El plugin NO viaja solo: son CUATRO DLLs, y el orden importa
+
+Desde la 022 el modelo `Event` tiene columnas que sólo existen si las migraciones corrieron.
+Si se despliega `Rock.dll` y se recicla SIN el plugin, **toda consulta a `Event` truena** —
+venta de boletos incluida.
+
+| DLL | Qué lleva | Si falta |
+|---|---|---|
+| `com.vidareal.Events.dll` | las migraciones (crea las columnas) | `Rock.dll` pide columnas inexistentes: el módulo entero cae |
+| `Rock.dll` | modelo `Event`, `EventSpeakerService` | el servidor no sabe de los campos nuevos |
+| `Rock.ViewModels.dll` | `EventBag` (`BannerUrl`, `Speakers`, `LogoUrl`, `SessionTimes`) | **`MissingMethodException: set_BannerUrl`** al abrir el checkout |
+| `Rock.Blocks.dll` | los block actions | los bloques no responden |
+
+Regla: **copiar las cuatro y recién entonces reciclar, una sola vez.** Las migraciones corren en
+el arranque, antes de atender la primera petición, así que las columnas existen para cuando el
+modelo nuevo las pida. Los `.obs.js` de `RockWeb/Obsidian/Blocks/Eventos/` son estáticos y
+pueden ir antes o después.
+
+Y respaldar la base antes: el plugin toca el esquema. Las migraciones traen `Down()`, pero
+revertir con gente comprando no es algo para improvisar.

@@ -33,6 +33,10 @@ namespace Rock.Blocks.Eventos
             public bool canEdit { get; set; }
             public bool canAdministrate { get; set; }
             public List<OptionBag> campuses { get; set; }
+            /// <summary>Ministerios del DefinedType "Ministerios de Eventos" (migración 022).</summary>
+            public List<OptionBag> ministryOptions { get; set; }
+            /// <summary>Tipos del DefinedType "Tipos de Evento" (migración 024). Antes iban hardcodeados en el front.</summary>
+            public List<OptionBag> categoryOptions { get; set; }
             public List<OptionBag> gateways { get; set; }
             public List<OptionBag> accounts { get; set; }
             public List<OptionBag> statusOptions { get; set; }
@@ -94,8 +98,16 @@ namespace Rock.Blocks.Eventos
             public int? financialGatewayId { get; set; }
             public int? financialAccountId { get; set; }
             public ListItemBag image { get; set; }
+            /// <summary>Imagen apaisada del paso 1 del checkout; null cae a <see cref="image"/>.</summary>
+            public ListItemBag banner { get; set; }
+            /// <summary>Logo cuadrado del ministerio, a la izquierda del título en el hero.</summary>
+            public ListItemBag logo { get; set; }
             public string headerStyle { get; set; }
             public string category { get; set; }
+            /// <summary>Área de la iglesia que organiza (DefinedType "Ministerios de Eventos").</summary>
+            public string ministry { get; set; }
+            /// <summary>Ponentes del paso 1 del checkout.</summary>
+            public List<SpeakerRowBag> speakers { get; set; }
             public int visibility { get; set; }
             public string accessPassword { get; set; }
             public List<SessionRowBag> sessions { get; set; }
@@ -103,6 +115,17 @@ namespace Rock.Blocks.Eventos
             public ListItemBag registrationWorkflowType { get; set; }
             /// <summary>Workflow lanzado al hacer check-in de un ticket del evento.</summary>
             public ListItemBag checkinWorkflowType { get; set; }
+        }
+
+        /// <summary>
+        /// One speaker row as edited in the admin (mirror of <see cref="Rock.Model.EventSpeaker"/>;
+        /// la foto viaja como ListItemBag con el Guid del BinaryFile, igual que la imagen del evento).
+        /// </summary>
+        public class SpeakerRowBag
+        {
+            public string name { get; set; }
+            public string role { get; set; }
+            public ListItemBag photo { get; set; }
         }
 
         /// <summary>

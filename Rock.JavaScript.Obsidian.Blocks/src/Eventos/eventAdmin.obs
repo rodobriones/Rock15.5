@@ -1,6 +1,7 @@
 <template>
-    <Panel type="block" title="Eventos • Administración">
+    <Panel type="block" title="Eventos • Administración" class="evAd-panel">
         <template #default>
+            <div class="evAdWrap">
             <NotificationBox v-if="config.notLogged" alertType="warning">
                 Debes iniciar sesión para administrar eventos.
             </NotificationBox>
@@ -84,7 +85,10 @@
                                     <span v-if="e.totalCapacity" class="text-muted small">({{ Math.round(e.totalSold * 100 / e.totalCapacity) }}%)</span>
                                 </td>
                                 <td class="text-right" style="white-space: nowrap;">
-                                    <a v-if="config.checkoutUrlTemplate" :href="checkoutUrl(e.eventId)" target="_blank" class="btn btn-link btn-sm">Checkout</a>
+                                    <a v-if="config.checkoutUrlTemplate || config.checkoutSlugUrlTemplate"
+                                       :href="checkoutUrl(e)"
+                                       target="_blank"
+                                       class="btn btn-link btn-sm">Checkout</a>
                                     <RockButton btnType="link" btnSize="sm" :disabled="busy" @click="duplicateEvent(e)">Duplicar</RockButton>
                                     <RockButton btnType="link" btnSize="sm" @click="openEvent(e.eventId)">Editar</RockButton>
                                 </td>
@@ -227,17 +231,40 @@
                                     <input type="text" class="form-control" :value="eventCheckoutSlugUrl" readonly @focus="(e) => (e.target as HTMLInputElement).select()" />
                                     <span class="input-group-btn">
                                         <RockButton btnType="default" @click="copyCheckoutUrl">{{ copied ? "¡Copiada!" : "Copiar" }}</RockButton>
+                                        <a :href="eventCheckoutSlugUrl" target="_blank" rel="noopener" class="btn btn-default">Abrir</a>
                                     </span>
                                 </div>
                                 <span class="help-block">Comparte este enlace para vender entradas de este evento.</span>
                             </div>
                             <TextBox v-model="eventForm.description" label="Descripción" textMode="multiline" :rows="3" />
-                            <ImageUploader v-model="eventForm.image"
-                                           label="Imagen del evento"
-                                           help="Se muestra en el checkout, arriba de los boletos."
-                                           :uploadAsTemporary="true"
-                                           uploadButtonText="Subir imagen"
-                                           :showDeleteButton="true" />
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ImageUploader v-model="eventForm.image"
+                                                   label="Imagen del evento"
+                                                   help="Portada del checkout y del calendario. También es la imagen de las tarjetas de Mis Entradas."
+                                                   :uploadAsTemporary="true"
+                                                   uploadButtonText="Subir imagen"
+                                                   :showDeleteButton="true" />
+                                </div>
+                                <div class="col-md-6">
+                                    <ImageUploader v-model="eventForm.banner"
+                                                   label="Banner del checkout"
+                                                   help="Imagen apaisada que va arriba de los datos del evento, en el paso 1. Si la dejas vacía se usa la imagen del evento."
+                                                   :uploadAsTemporary="true"
+                                                   uploadButtonText="Subir banner"
+                                                   :showDeleteButton="true" />
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ImageUploader v-model="eventForm.logo"
+                                                   label="Logo del ministerio"
+                                                   help="Logo cuadrado que va sobre la portada, a la izquierda del título. Si la dejas vacía, el hero muestra solo el badge y el nombre."
+                                                   :uploadAsTemporary="true"
+                                                   uploadButtonText="Subir logo"
+                                                   :showDeleteButton="true" />
+                                </div>
+                            </div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <DropDownList v-model="eventForm.headerStyle"
@@ -248,8 +275,8 @@
                                 </div>
                                 <div class="col-md-6">
                                     <DropDownList v-model="eventForm.category"
-                                                  label="Categoría (badge del hero)"
-                                                  help="Muestra un badge de color en el checkout. Déjalo en blanco para no mostrar badge."
+                                                  label="Tipo (chip del hero)"
+                                                  help="Muestra un chip de color en el checkout y alimenta el filtro Tipo del calendario. Déjalo en blanco para no mostrar chip. La lista y los colores se administran en Defined Types → Tipos de Evento."
                                                   :items="categoryOptions"
                                                   :showBlankItem="true"
                                                   blankValue="" />
@@ -268,6 +295,24 @@
                                              label="Contraseña del evento"
                                              help="Compártela con los invitados; se pide al abrir el enlace del evento."
                                              :maxLength="100" />
+                                </div>
+                                <div v-else class="col-md-6">
+                                    <DropDownList v-model="eventForm.ministry"
+                                                  label="Ministerio"
+                                                  help="Área de la iglesia que organiza el evento. Filtra el calendario público. La lista se administra en Defined Types → Ministerios de Eventos."
+                                                  :items="config.ministryOptions || []"
+                                                  :showBlankItem="true"
+                                                  blankValue="" />
+                                </div>
+                            </div>
+                            <div v-if="eventForm.visibility === '2'" class="row">
+                                <div class="col-md-6">
+                                    <DropDownList v-model="eventForm.ministry"
+                                                  label="Ministerio"
+                                                  help="Área de la iglesia que organiza el evento. Filtra el calendario público."
+                                                  :items="config.ministryOptions || []"
+                                                  :showBlankItem="true"
+                                                  blankValue="" />
                                 </div>
                             </div>
                             <div v-if="!hasSessions" class="row">
@@ -309,6 +354,43 @@
                                     </tbody>
                                 </table>
                                 <RockButton btnType="default" btnSize="xs" @click="addSession">Agregar sesión</RockButton>
+                            </div>
+
+                            <!-- Ponentes del paso 1 del checkout. Presentación pura: no afectan cupo ni precio. -->
+                            <div class="form-group">
+                                <label class="control-label">Ponentes</label>
+                                <div class="help-block" style="margin-top: 0;">
+                                    Se muestran con foto redonda debajo de los datos del evento, en el paso 1 del checkout.
+                                    Si no agregas ninguno, la sección no aparece.
+                                </div>
+                                <table v-if="hasSpeakers" class="table table-condensed" style="max-width: 720px; margin-bottom: 8px;">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th>Rol (opcional)</th>
+                                            <th style="width: 190px;">Foto (opcional)</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(sp, i) in eventForm.speakers" :key="i">
+                                            <td><input type="text" class="form-control input-sm" v-model="sp.name" placeholder="Daniel Ortiz" maxlength="100" /></td>
+                                            <td><input type="text" class="form-control input-sm" v-model="sp.role" placeholder="Pastor principal" maxlength="100" /></td>
+                                            <td>
+                                                <ImageUploader v-model="sp.photo"
+                                                               :uploadAsTemporary="true"
+                                                               uploadButtonText="Subir foto"
+                                                               :showDeleteButton="true" />
+                                            </td>
+                                            <td class="text-right">
+                                                <RockButton btnType="link" btnSize="sm" @click="removeSpeaker(i)">Quitar</RockButton>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <RockButton btnType="default" btnSize="xs" :disabled="eventForm.speakers.length >= MAX_SPEAKERS" @click="addSpeaker">
+                                    Agregar ponente
+                                </RockButton>
                             </div>
                             <div class="row">
                                 <div class="col-md-4">
@@ -449,12 +531,11 @@
                                     </div>
                                 </div>
 
-                                <div v-if="attrSel.length" style="border:1px solid #ececf0; border-radius:10px; overflow:hidden; margin-bottom:10px;">
-                                    <div v-for="a in attrSel" :key="a.guid"
-                                         style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; border-bottom:1px solid #f0f0f3;">
-                                        <span style="font-weight:600;">{{ a.name }}</span>
-                                        <span style="display:flex; align-items:center; gap:12px; flex:none;">
-                                            <label style="margin:0; font-weight:400; font-size:12px; cursor:pointer;">
+                                <div v-if="attrSel.length" class="evAdQList">
+                                    <div v-for="a in attrSel" :key="a.guid" class="evAdQRow">
+                                        <span class="evAdQName">{{ a.name }}</span>
+                                        <span class="evAdQRight">
+                                            <label>
                                                 <input type="checkbox" v-model="a.required" /> Obligatoria
                                             </label>
                                             <RockButton btnType="link" btnSize="sm" @click="removeAttrQuestion(a.guid)">Quitar</RockButton>
@@ -562,11 +643,225 @@
                     </div>
                 </div>
             </div>
+            </div>
         </template>
     </Panel>
 </template>
 
 <style>
+/* ============================================================
+   Vida Real — Eventos • Administración
+   Rediseño 2026 (Claude Design · artboard "08.Eventos - eventAdmin").
+   NO-scoped a propósito: este bloque SÍ se apoya en el chrome de Rock
+   (Panel + Bootstrap 3 del tema) y en controles Obsidian; el rediseño
+   re-estiliza ese chrome desde el ancestro del bloque, sin ocultarlo.
+   ============================================================ */
+
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Regular.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Medium.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Montserrat";
+    src: url("/Assets/Fonts/Montserrat/Montserrat-Bold.woff2") format("woff2"),
+         url("/Assets/Fonts/Montserrat/Montserrat-Bold.ttf") format("truetype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* ---------- Escenario: el panel flota sobre el gris de página ---------- */
+.block-instance:has(.evAdWrap) {
+    background: #F3F5F7;
+    margin: 0 -15px;
+    padding: 24px;
+    position: relative;
+}
+
+/* ---------- Panel de Rock (se conserva, se re-estiliza) ---------- */
+.panel-block:has(.evAdWrap) {
+    background: #fff !important;
+    border: 1px solid #E1E7EC !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(15, 51, 75, .05) !important;
+}
+.panel-block:has(.evAdWrap) > .panel-heading,
+.panel-block:has(.evAdWrap) > .panel-header {
+    padding: 12px 18px !important;
+    background: #fff !important;
+    border-bottom: 1px solid #E1E7EC !important;
+}
+.panel-block:has(.evAdWrap) > .panel-heading .panel-title,
+.panel-block:has(.evAdWrap) > .panel-header .panel-title {
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 28px; font-weight: 600; color: #0F334B; margin: 0;
+}
+.panel-block:has(.evAdWrap) > .panel-body { padding: 18px !important; }
+
+.evAdWrap {
+    /* Tokens Brújula VR */
+    --vr-navy: #0E364C;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #143E5A;
+    --ink-soft: #5A6E7C;
+    --ink-faint: #8296A6;
+    --rule: #E1E7EC;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-text: #1E7A64; --ok-bg: #E9F6F2;
+    --warn-text: #8F5B0B; --warn-bg: #FDF2E1; --warn-fill: #F09E30;
+    --err-text: #B02E22; --err-bg: #FCEAE8; --err-fill: #E74133;
+    --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-num: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.42857143;
+}
+.evAdWrap *, .evAdWrap *::before, .evAdWrap *::after { box-sizing: border-box; }
+
+/* ---------- Paneles anidados (dashboard, secciones) ---------- */
+.evAdWrap .panel.panel-block {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(15, 51, 75, .05);
+}
+.evAdWrap .panel-heading { padding: 12px 18px; border-bottom: 1px solid var(--rule); background: var(--paper); }
+.evAdWrap .panel-title { margin: 0; font-size: 15px; font-weight: 600; color: #0F334B; font-family: var(--font-body); }
+.evAdWrap .panel-body { padding: 18px; }
+
+/* ---------- Tipografía y utilidades ---------- */
+.evAdWrap h4 { font-size: 17px; font-weight: 700; color: #0F334B; margin: 0 0 12px; }
+.evAdWrap h5 { font-size: 15px; font-weight: 700; color: #0F334B; margin: 0 0 6px; }
+.evAdWrap .h2 { font-size: 28px; font-weight: 700; color: #0F334B; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.evAdWrap .small { font-size: 15px; }
+.evAdWrap .text-muted { color: var(--ink-soft); }
+.evAdWrap hr { border: 0; border-top: 1px solid var(--rule); margin: 18px 0; }
+.evAdWrap code {
+    background: var(--action-soft); padding: 1px 5px; border-radius: 4px;
+    font-size: 15px; color: var(--ink); font-family: var(--font-num);
+}
+
+/* ---------- Controles ---------- */
+.evAdWrap .form-group { margin-bottom: 15px; }
+.evAdWrap .control-label { display: block; font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
+.evAdWrap .form-control {
+    display: block; width: 100%; height: 34px; padding: 6px 12px;
+    font-size: 15px; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule-strong); border-radius: 4px;
+    font-family: inherit; outline: none; box-shadow: none;
+}
+/* Los DropDownList de Obsidian son Ant Select, no <select>: el tema les pone el padding y el alto
+   en .ant-select-selector (con !important) y deja el contenedor en padding: 0. Al redefinir aquí
+   .form-control se lo devolvíamos al contenedor —texto ~12px más adentro que el de los inputs— y
+   el selector conservaba el alto del tema en vez del de este bloque. Estas dos líneas alinean los
+   desplegables con los inputs en horizontal y en vertical. */
+.evAdWrap .ant-select.form-control { padding: 0; }
+.evAdWrap .ant-select.form-control .ant-select-selector { height: 100% !important; }
+.evAdWrap .form-control:focus { border-color: var(--action); box-shadow: 0 0 0 3px rgba(30,91,135,.18); }
+.evAdWrap .input-sm { height: 30px; padding: 4px 8px; font-size: 15px; }
+.evAdWrap textarea.form-control { height: auto; resize: vertical; }
+.evAdWrap .help-block { display: block; margin-top: 4px; font-size: 15px; color: var(--ink-faint); }
+.evAdWrap .checkbox { margin: 0 0 6px; }
+.evAdWrap .checkbox label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 400; color: var(--ink); cursor: pointer; margin: 0;
+}
+.evAdWrap .checkbox input { margin: 0; accent-color: #0F334B; }
+.evAdWrap .actions { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.evAdWrap .well { background: var(--paper-alt); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+/* ---------- Botones (píldora del rediseño) ---------- */
+.evAdWrap .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--rule-strong) !important;
+    background: var(--paper) !important; color: var(--ink) !important;
+    border-radius: 20px !important; font-family: inherit; cursor: pointer;
+    padding: 10px 40px !important; font-size: 15px !important; font-weight: 500;
+    text-decoration: none; box-shadow: none !important;
+}
+.evAdWrap .btn.btn-sm,
+.evAdWrap .btn.btn-xs { padding: 10px 20px !important; font-size: 15px !important; }
+.evAdWrap .btn.btn-default:hover:not(:disabled) { background: var(--paper-alt) !important; }
+.evAdWrap .btn.btn-primary { background: #0F334B !important; border-color: #0F334B !important; color: #fff !important; }
+.evAdWrap .btn.btn-primary:hover:not(:disabled) { background: var(--vr-navy) !important; color: #fff !important; }
+.evAdWrap .btn.btn-warning { background: var(--warn-fill) !important; border-color: var(--warn-fill) !important; color: #fff !important; }
+.evAdWrap .btn.btn-danger { background: var(--err-fill) !important; border-color: var(--err-fill) !important; color: #fff !important; }
+.evAdWrap .btn.btn-link {
+    background: none !important; border-color: transparent !important;
+    color: var(--action) !important; text-decoration: none;
+}
+.evAdWrap .btn.btn-link:hover:not(:disabled) { text-decoration: underline; }
+.evAdWrap .btn:disabled { opacity: .55; cursor: default; }
+.evAdWrap .btn + .btn,
+.evAdWrap .btn + .btn-link { margin-left: 4px; }
+.evAdWrap .input-group .form-control { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.evAdWrap .input-group-btn .btn {
+    border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important;
+    margin: 0; height: 34px; padding: 6px 14px !important;
+}
+
+/* ---------- Tablas ---------- */
+.evAdWrap .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 15px; }
+.evAdWrap .table-bordered,
+.evAdWrap .table-bordered th,
+.evAdWrap .table-bordered td { border: 1px solid var(--rule); }
+.evAdWrap .grid-table th { background: var(--action-soft); font-weight: 600; color: #0F334B; }
+.evAdWrap .grid-table th,
+.evAdWrap .grid-table td { padding: 8px 10px; vertical-align: middle; }
+.evAdWrap .table-striped tbody tr:nth-of-type(odd) { background: var(--paper-alt); }
+.evAdWrap .table-condensed { width: 100%; border-collapse: collapse; font-size: 15px; }
+.evAdWrap .table-condensed th { text-align: left; font-weight: 600; color: var(--ink-soft); font-size: 15px; padding: 4px 6px; }
+.evAdWrap .table-condensed td { padding: 4px 6px; }
+
+.evAdWrap .label { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 15px; font-weight: 600; }
+.evAdWrap .label-default { background: var(--action-soft); color: var(--ink-soft); }
+.evAdWrap .label-success { background: var(--ok-bg); color: var(--ok-text); }
+.evAdWrap .label-warning { background: var(--warn-bg); color: var(--warn-text); }
+.evAdWrap .label-danger { background: var(--err-bg); color: var(--err-text); }
+.evAdWrap .label-info { background: #dbeafe; color: #1d4ed8; }
+
+.evAdWrap .alert {
+    padding: 12px 16px; border-radius: 6px; font-size: 14px;
+    border: 1px solid transparent; margin-bottom: 16px;
+}
+.evAdWrap .alert-warning { background: var(--warn-bg); border-color: var(--warn-fill); color: var(--warn-text); }
+.evAdWrap .alert-info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.evAdWrap .alert-danger { background: var(--err-bg); border-color: var(--err-fill); color: var(--err-text); }
+
+/* ---------- Imagen del evento ---------- */
+.evAdEventImg { max-width: 320px; width: 100%; border-radius: 6px; border: 1px solid var(--rule); }
+
+/* ---------- Lista de preguntas del tipo de boleto ---------- */
+.evAdQList { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.evAdQRow {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--rule);
+}
+.evAdQRow:last-child { border-bottom: none; }
+.evAdQName { font-weight: 600; }
+.evAdQRight { display: flex; align-items: center; gap: 12px; flex: none; }
+.evAdQRight label { margin: 0; font-weight: 400; font-size: 12px; cursor: pointer; }
+
+/* ---------- Toasts ----------
+   position: fixed (no absolute como en el artboard): el aviso tiene que verse
+   con la página scrolleada, que es justo por lo que se hizo toast. */
 .evAdToast {
     position: fixed;
     bottom: 24px;
@@ -579,12 +874,13 @@
     padding: 13px 18px;
     border-radius: 12px;
     color: #fff;
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
     font-weight: 600;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, .25);
+    box-shadow: 0 10px 30px rgba(15, 51, 75, .25);
     animation: evAdToastIn .18s ease-out;
 }
-.evAdToast--ok { background: #15803d; }
-.evAdToast--err { background: #b91c1c; }
+.evAdToast--ok { background: #1E7A64; }
+.evAdToast--err { background: #B02E22; }
 .evAdToast .fa { font-size: 18px; flex: none; }
 .evAdToastX {
     flex: none;
@@ -601,6 +897,16 @@
 @keyframes evAdToastIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .evAdToast { animation: none; } }
+
+@media (max-width: 900px) {
+    .panel-block:has(.evAdWrap) > .panel-heading .panel-title,
+    .panel-block:has(.evAdWrap) > .panel-header .panel-title { font-size: 22px; }
+    .evAdWrap .btn { padding: 10px 24px !important; }
+    /* Las tablas (eventos, tipos de boleto, promos, sesiones, ponentes) no caben a este ancho:
+       que scrolleen ellas en vez de desbordar la página entera. */
+    .evAdWrap .table { display: block; overflow-x: auto; }
 }
 </style>
 
@@ -635,6 +941,8 @@ type InitBag = {
     statusOptions: OptionBag[];
     discountTypeOptions: OptionBag[];
     visibilityOptions: OptionBag[];
+    ministryOptions: OptionBag[];
+    categoryOptions: OptionBag[];
     checkoutUrlTemplate: string;
     checkoutSlugUrlTemplate: string;
 };
@@ -667,11 +975,15 @@ type EventEditBag = {
     financialGatewayId: number | null;
     financialAccountId: number | null;
     image: ListItemBag | null;
+    banner: ListItemBag | null;
+    logo: ListItemBag | null;
     headerStyle: string | null;
     category: string | null;
+    ministry: string | null;
     visibility: number;
     accessPassword: string | null;
     sessions: SessionRow[] | null;
+    speakers: SpeakerRow[] | null;
     registrationWorkflowType: ListItemBag | null;
     checkinWorkflowType: ListItemBag | null;
 };
@@ -681,6 +993,12 @@ type SessionRow = {
     start: string;
     end: string;
     label: string | null;
+};
+
+type SpeakerRow = {
+    name: string;
+    role: string | null;
+    photo: ListItemBag | null;
 };
 
 type TicketTypeEditBag = {
@@ -745,13 +1063,9 @@ const headerStyleOptions: OptionBag[] = [
     { value: "condensado", text: "Condensado (barra fina)" }
 ];
 
-// Categoría del evento: badge de color en el hero del checkout (o sin badge).
-const categoryOptions: OptionBag[] = [
-    { value: "Conferencia", text: "Conferencia" },
-    { value: "Concierto", text: "Concierto" },
-    { value: "Deportivo", text: "Deportivo" },
-    { value: "Familiar", text: "Familiar" }
-];
+// Tipo del evento: chip de color en el hero del checkout (o sin chip). La lista y el color de
+// cada valor viven en el DefinedType "Tipos de Evento" (migración 024), no en el código.
+const categoryOptions = computed<OptionBag[]>(() => config.categoryOptions || []);
 const discountTypeOptions = ref<OptionBag[]>(config.discountTypeOptions || []);
 
 const view = ref<"list" | "detail" | "staff">("list");
@@ -838,9 +1152,13 @@ type EventForm = {
     image: ListItemBag | null;
     headerStyle: string;
     category: string;
+    ministry: string;
     visibility: string;
     accessPassword: string;
+    banner: ListItemBag | null;
+    logo: ListItemBag | null;
     sessions: SessionRow[];
+    speakers: SpeakerRow[];
     registrationWorkflowType: ListItemBag | null;
     checkinWorkflowType: ListItemBag | null;
 };
@@ -866,6 +1184,21 @@ function addSession(): void {
 
 function removeSession(index: number): void {
     eventForm.value.sessions.splice(index, 1);
+}
+
+// Ponentes: el tope lo impone también EventSpeakerService en el servidor.
+const MAX_SPEAKERS = 24;
+const hasSpeakers = computed<boolean>(() => eventForm.value.speakers.length > 0);
+
+function addSpeaker(): void {
+    if (eventForm.value.speakers.length >= MAX_SPEAKERS) {
+        return;
+    }
+    eventForm.value.speakers.push({ name: "", role: "", photo: null });
+}
+
+function removeSpeaker(index: number): void {
+    eventForm.value.speakers.splice(index, 1);
 }
 const ticketTypes = ref<TicketTypeEditBag[]>([]);
 const promoCodes = ref<PromoCodeEditBag[]>([]);
@@ -928,11 +1261,15 @@ function blankEventForm(): EventForm {
         financialGatewayId: "",
         financialAccountId: "",
         image: null,
+        banner: null,
+        logo: null,
         headerStyle: "persistente",
         category: "",
+        ministry: "",
         visibility: "0",
         accessPassword: "",
         sessions: [],
+        speakers: [],
         registrationWorkflowType: null,
         checkinWorkflowType: null
     };
@@ -944,8 +1281,16 @@ function toIntOrNull(v: string): number | null {
     return Number.isFinite(n) ? n : null;
 }
 
-function checkoutUrl(eventId: number): string {
-    return (config.checkoutUrlTemplate || "").replace("((Key))", String(eventId));
+// Mismo criterio que el calendario público (EventCalendar.eventUrl): URL bonita por slug cuando
+// el evento tiene uno, y EventId como respaldo. Antes este botón abría SIEMPRE por EventId,
+// aunque la ficha del evento mostrara la URL por slug para copiar — dos enlaces distintos para
+// el mismo evento.
+function checkoutUrl(e: EventListItemBag): string {
+    const slug = (e.slug ?? "").trim();
+    if (slug && config.checkoutSlugUrlTemplate) {
+        return config.checkoutSlugUrlTemplate.replace("((Slug))", encodeURIComponent(slug));
+    }
+    return (config.checkoutUrlTemplate || "").replace("((Key))", String(e.eventId));
 }
 
 function fmtDate(iso: string | null): string {
@@ -1029,11 +1374,15 @@ function applyDetail(d: EventDetailBag): void {
         financialGatewayId: e.financialGatewayId == null ? "" : String(e.financialGatewayId),
         financialAccountId: e.financialAccountId == null ? "" : String(e.financialAccountId),
         image: e.image ?? null,
+        banner: e.banner ?? null,
+        logo: e.logo ?? null,
         headerStyle: e.headerStyle || "persistente",
         category: e.category || "",
+        ministry: e.ministry || "",
         visibility: String(e.visibility ?? 0),
         accessPassword: e.accessPassword || "",
         sessions: (e.sessions || []).map(s => ({ date: s.date || "", start: s.start || "", end: s.end || "", label: s.label || "" })),
+        speakers: (e.speakers || []).map(sp => ({ name: sp.name || "", role: sp.role || "", photo: sp.photo ?? null })),
         registrationWorkflowType: e.registrationWorkflowType ?? null,
         checkinWorkflowType: e.checkinWorkflowType ?? null
     };
@@ -1080,11 +1429,17 @@ async function saveEvent(): Promise<void> {
             financialGatewayId: toIntOrNull(f.financialGatewayId),
             financialAccountId: toIntOrNull(f.financialAccountId),
             image: f.image,
+            banner: f.banner,
+            logo: f.logo,
             headerStyle: f.headerStyle,
             category: f.category || null,
+            ministry: f.ministry || null,
             visibility: Number(f.visibility) || 0,
             accessPassword: f.accessPassword || null,
             sessions: f.sessions,
+            // Las filas sin nombre son las que el admin agregó y no llenó: el servidor las
+            // descarta igual, pero no tiene sentido mandarlas.
+            speakers: f.speakers.filter(sp => sp.name.trim().length > 0),
             registrationWorkflowType: f.registrationWorkflowType,
             checkinWorkflowType: f.checkinWorkflowType
         };
