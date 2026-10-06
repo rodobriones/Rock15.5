@@ -60,7 +60,7 @@
                 </div>
                 <p v-if="tt.description" class="ecTTdesc">{{ tt.description }}</p>
                 <p v-if="tt.isEarlyBird && tt.earlyBirdUntil" class="ecTTearly">
-                    Early bird hasta {{ formatShortDate(tt.earlyBirdUntil) }}<span v-if="earlyBirdCountdown(tt)"> · faltan {{ earlyBirdCountdown(tt) }}</span>
+                    Early bird hasta {{ formatShortDate(tt.earlyBirdUntil) }}<span v-if="earlyBirdCountdown(tt)" class="notranslate"> · faltan {{ earlyBirdCountdown(tt) }}</span>
                 </p>
                 <div class="ecStepper">
                     <button type="button" class="ecStepBtn"
@@ -90,7 +90,7 @@
             <div class="ecAsideLabel">Subtotal</div>
             <div class="ecAsideValue">{{ formatCurrency(total) }}</div>
             <RockButton class="ecCta ecCtaBlock" btnType="primary" :disabled="!hasSelection || busy" @click="goToAttendees">
-                {{ busy ? "Reservando…" : "Continuar" }} <span v-if="!busy" class="ecCtaArrow">→</span>
+                <span class="notranslate">{{ busy ? "Reservando…" : "Continuar" }}</span> <span v-if="!busy" class="ecCtaArrow">→</span>
             </RockButton>
             <p v-if="!hasSelection" class="ecAsideNote">Elige al menos una entrada para continuar.</p>
             <RockButton class="ecGhostLink" btnType="link" :disabled="busy" @click="reloadTicketTypes">Actualizar disponibilidad</RockButton>

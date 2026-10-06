@@ -412,7 +412,7 @@ namespace Rock.Blocks.Eventos
                 case Rock.SystemGuid.FieldType.MEMO:
                     return "Párrafo";
                 case Rock.SystemGuid.FieldType.SINGLE_SELECT:
-                    return "Selección";
+                    return "Selección (una opción)";
                 case Rock.SystemGuid.FieldType.MULTI_SELECT:
                     return "Selección múltiple";
                 case Rock.SystemGuid.FieldType.INTEGER:

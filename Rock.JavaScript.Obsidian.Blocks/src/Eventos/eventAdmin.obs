@@ -25,7 +25,7 @@
                 <!-- LIST VIEW -->
                 <div v-if="view === 'list'">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4 class="mb-0">Eventos <span v-if="!busy" class="text-muted small">({{ filteredEvents.length }} de {{ events.length }})</span></h4>
+                        <h4 class="mb-0">Eventos <span v-if="!busy" class="evAdCount">({{ filteredEvents.length }} de {{ events.length }})</span></h4>
                         <div>
                             <RockButton v-if="config.canAdministrate" btnType="default" btnSize="sm" :disabled="busy" @click="openStaffView">
                                 Permisos
@@ -154,7 +154,7 @@
                                 <td>{{ r.personName }}</td>
                                 <td>
                                     {{ r.eventName }}
-                                    <div class="text-muted small">{{ fmtDate(r.eventStartDateTime) }}</div>
+                                    <div class="text-muted small">{{ fmtDateTime(r.eventStartDateTime) }}</div>
                                 </td>
                                 <td class="text-center">
                                     <input type="checkbox" :checked="r.canScan" :disabled="busy" @change="toggleStaffFlag(r, 'canScan')" />
@@ -684,7 +684,7 @@
 
 /* ---------- Escenario: el panel flota sobre el gris de página ---------- */
 .block-instance:has(.evAdWrap) {
-    background: #F3F5F7;
+    background: #F1F3F6;
     margin: 0 -15px;
     padding: 24px;
     position: relative;
@@ -693,7 +693,7 @@
 /* ---------- Panel de Rock (se conserva, se re-estiliza) ---------- */
 .panel-block:has(.evAdWrap) {
     background: #fff !important;
-    border: 1px solid #E1E7EC !important;
+    border: 1px solid #DDE3E9 !important;
     border-radius: 6px !important;
     box-shadow: 0 1px 2px rgba(15, 51, 75, .05) !important;
 }
@@ -701,12 +701,13 @@
 .panel-block:has(.evAdWrap) > .panel-header {
     padding: 12px 18px !important;
     background: #fff !important;
-    border-bottom: 1px solid #E1E7EC !important;
+    border-bottom: 1px solid #DDE3E9 !important;
 }
 .panel-block:has(.evAdWrap) > .panel-heading .panel-title,
 .panel-block:has(.evAdWrap) > .panel-header .panel-title {
     font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 28px; font-weight: 600; color: #0F334B; margin: 0;
+    font-size: 28px; font-weight: 600; color: #132C41; margin: 0;
+    padding: 0 !important; /* el tema le pone 0 24px: el título quedaba más adentro que el contenido */
 }
 .panel-block:has(.evAdWrap) > .panel-body { padding: 18px !important; }
 
@@ -715,14 +716,18 @@
     --vr-navy: #0E364C;
     --paper: #FFFFFF;
     --paper-alt: #F8FAFB;
-    --ink: #143E5A;
-    --ink-soft: #5A6E7C;
+    /* Colores medidos sobre la captura de diseño (13-ev). */
+    --navy: #132C41;
+    --ink: #17354F;
+    --ink-soft: #516270;
     --ink-faint: #8296A6;
-    --rule: #E1E7EC;
+    --rule: #DDE3E9;
+    --link: #2C3FCE;
+    --th-bg: #E7EFF4;
     --rule-strong: #C9D4DC;
     --action: #1E5B87;
     --action-soft: #EAF1F6;
-    --ok-text: #1E7A64; --ok-bg: #E9F6F2;
+    --ok-text: #1C6E59; --ok-bg: #E6F4F0;
     --warn-text: #8F5B0B; --warn-bg: #FDF2E1; --warn-fill: #F09E30;
     --err-text: #B02E22; --err-bg: #FCEAE8; --err-fill: #E74133;
     --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
@@ -747,7 +752,8 @@
 .evAdWrap .panel-body { padding: 18px; }
 
 /* ---------- Tipografía y utilidades ---------- */
-.evAdWrap h4 { font-size: 17px; font-weight: 700; color: #0F334B; margin: 0 0 12px; }
+.evAdWrap h4 { font-size: 17px; font-weight: 700; color: var(--navy); margin: 0 0 12px; }
+.evAdCount { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .evAdWrap h5 { font-size: 15px; font-weight: 700; color: #0F334B; margin: 0 0 6px; }
 .evAdWrap .h2 { font-size: 28px; font-weight: 700; color: #0F334B; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .evAdWrap .small { font-size: 15px; }
@@ -799,13 +805,13 @@
 .evAdWrap .btn.btn-sm,
 .evAdWrap .btn.btn-xs { padding: 10px 20px !important; font-size: 15px !important; }
 .evAdWrap .btn.btn-default:hover:not(:disabled) { background: var(--paper-alt) !important; }
-.evAdWrap .btn.btn-primary { background: #0F334B !important; border-color: #0F334B !important; color: #fff !important; }
+.evAdWrap .btn.btn-primary { background: var(--navy) !important; border-color: var(--navy) !important; color: #fff !important; }
 .evAdWrap .btn.btn-primary:hover:not(:disabled) { background: var(--vr-navy) !important; color: #fff !important; }
 .evAdWrap .btn.btn-warning { background: var(--warn-fill) !important; border-color: var(--warn-fill) !important; color: #fff !important; }
 .evAdWrap .btn.btn-danger { background: var(--err-fill) !important; border-color: var(--err-fill) !important; color: #fff !important; }
 .evAdWrap .btn.btn-link {
     background: none !important; border-color: transparent !important;
-    color: var(--action) !important; text-decoration: none;
+    color: var(--link) !important; text-decoration: none;
 }
 .evAdWrap .btn.btn-link:hover:not(:disabled) { text-decoration: underline; }
 .evAdWrap .btn:disabled { opacity: .55; cursor: default; }
@@ -822,7 +828,9 @@
 .evAdWrap .table-bordered,
 .evAdWrap .table-bordered th,
 .evAdWrap .table-bordered td { border: 1px solid var(--rule); }
-.evAdWrap .grid-table th { background: var(--action-soft); font-weight: 600; color: #0F334B; }
+/* Encabezados centrados salvo los numéricos (.text-right), como en el diseño. */
+.evAdWrap .grid-table th { background: var(--th-bg); font-weight: 600; color: var(--navy); text-align: center; }
+.evAdWrap .grid-table th.text-right { text-align: right; }
 .evAdWrap .grid-table th,
 .evAdWrap .grid-table td { padding: 8px 10px; vertical-align: middle; }
 .evAdWrap .table-striped tbody tr:nth-of-type(odd) { background: var(--paper-alt); }
@@ -830,12 +838,12 @@
 .evAdWrap .table-condensed th { text-align: left; font-weight: 600; color: var(--ink-soft); font-size: 15px; padding: 4px 6px; }
 .evAdWrap .table-condensed td { padding: 4px 6px; }
 
-.evAdWrap .label { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 15px; font-weight: 600; }
-.evAdWrap .label-default { background: var(--action-soft); color: var(--ink-soft); }
+.evAdWrap .label { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.25; }
+.evAdWrap .label-default { background: var(--th-bg); color: var(--ink-soft); }
 .evAdWrap .label-success { background: var(--ok-bg); color: var(--ok-text); }
 .evAdWrap .label-warning { background: var(--warn-bg); color: var(--warn-text); }
 .evAdWrap .label-danger { background: var(--err-bg); color: var(--err-text); }
-.evAdWrap .label-info { background: #dbeafe; color: #1d4ed8; }
+.evAdWrap .label-info { background: #D7E6FD; color: var(--link); }
 
 .evAdWrap .alert {
     padding: 12px 16px; border-radius: 6px; font-size: 14px;
@@ -1093,7 +1101,7 @@ function statusLabelEs(status: number): string {
     return statusEs[status] ?? String(status);
 }
 
-const statusBadge: Record<number, string> = { 0: "label-default", 1: "label-success", 2: "label-warning", 3: "label-danger", 4: "label-default" };
+const statusBadge: Record<number, string> = { 0: "label-default", 1: "label-success", 2: "label-info", 3: "label-danger", 4: "label-default" };
 
 function statusBadgeClass(status: number): string {
     return statusBadge[status] ?? "label-default";
@@ -1133,7 +1141,7 @@ const staffCanScan = ref<boolean>(true);
 const staffCanReport = ref<boolean>(false);
 
 const staffEventOptions = computed<OptionBag[]>(() =>
-    events.value.map(e => ({ value: String(e.eventId), text: `${e.name} — ${fmtDate(e.startDateTime)}` })));
+    events.value.map(e => ({ value: String(e.eventId), text: `${e.name} — ${fmtDateTime(e.startDateTime)}` })));
 
 // Event form state (DropDownList-bound numeric ids stored as strings).
 type EventForm = {
@@ -1296,11 +1304,20 @@ function checkoutUrl(e: EventListItemBag): string {
 function fmtDate(iso: string | null): string {
     if (!iso) return "";
     const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+    // dd/mm/aaaa, como en el diseño; la hora ya se ve en el detalle del evento.
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Fecha + hora (24h) para listas donde dos eventos del mismo nombre y día deben distinguirse. */
+function fmtDateTime(iso: string | null): string {
+    const day = fmtDate(iso);
+    if (!day) return "";
+    const d = new Date(iso as string);
+    return `${day} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function fmtMoney(n: number): string {
-    return "Q " + (Number(n) || 0).toFixed(2);
+    return "Q" + (Number(n) || 0).toFixed(2);
 }
 
 function fmtDiscount(p: PromoCodeEditBag): string {

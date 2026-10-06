@@ -93,6 +93,10 @@ namespace Rock.Blocks.Eventos
                             ? $"/GetImage.ashx?guid={imgGuid}"
                             : null
                     } ).ToList(),
+                    // Opciones de los filtros "Tipo" y "Ministerio": el catálogo completo en su orden
+                    // (DefinedTypes de las migraciones 024 y 022), no solo lo que traen los eventos.
+                    typeOptions = EventTagService.GetTypes().Select( t => t.Value ).ToList(),
+                    ministryOptions = EventTagService.GetMinistries().Select( m => m.Value ).ToList(),
                     checkoutUrlTemplate = this.GetLinkedPageUrl( AttributeKey.CheckoutPage, "EventId", "((Key))" ),
                     checkoutSlugUrlTemplate = this.GetLinkedPageUrl( AttributeKey.CheckoutPage, "Slug", "((Slug))" )
                 };
@@ -104,6 +108,10 @@ namespace Rock.Blocks.Eventos
         public class InitBag
         {
             public List<CalendarEventBag> events { get; set; }
+            /// <summary>Tipos de evento del catálogo, en orden; opciones del filtro "Tipo".</summary>
+            public List<string> typeOptions { get; set; }
+            /// <summary>Ministerios del catálogo, en orden; opciones del filtro "Ministerio".</summary>
+            public List<string> ministryOptions { get; set; }
             public string checkoutUrlTemplate { get; set; }
             public string checkoutSlugUrlTemplate { get; set; }
         }

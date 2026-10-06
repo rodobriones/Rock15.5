@@ -3,7 +3,7 @@
 <template>
     <div class="ecNarrow">
         <!-- El contador de la reserva vive en el shell (visible en pasos 2-4). -->
-        <h2 class="ecSectionTitle">{{ isFree ? "Confirmación" : "Pago" }}</h2>
+        <h2 class="ecPaneTitle ecPayTitle">{{ isFree ? "Confirmación" : "Pago" }}</h2>
 
         <div class="ecPayTotal">
             <span class="ecPayTotalLabel">Total a pagar</span>
@@ -30,7 +30,7 @@
             <div class="ecStepActions">
                 <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
                 <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !holdActive || holdExpired || !deliveryEmailValid" @click="confirmFree" autoDisable>
-                    {{ busy ? "Procesando…" : "Confirmar entradas" }}
+                    <span class="notranslate">{{ busy ? "Procesando…" : "Confirmar entradas" }}</span>
                 </RockButton>
             </div>
         </div>
@@ -40,7 +40,11 @@
             <span class="ecPayHead">Datos de pago</span>
             <RockForm ref="paymentForm" @submit="onPaymentFormSubmit">
                 <NotificationBox v-if="gatewayError" alertType="danger">{{ gatewayError }}</NotificationBox>
-                <RockValidation :errors="gatewayValidationFields" />
+                <!-- Resumen de validación para pasarelas que no marcan sus campos. Con Epay, que pone el
+                     error bajo cada campo, se oculta por CSS (.ecPay:has(.epayWrap)) para no repetirlo. -->
+                <div class="ecGatewayValidation">
+                    <RockValidation :errors="gatewayValidationFields" />
+                </div>
 
                 <div v-if="gatewayControlModel" class="ecGateway">
                     <GatewayControl :gatewayControlModel="gatewayControlModel"
@@ -56,7 +60,7 @@
                 <div class="ecStepActions">
                     <RockButton class="ecGhost" btnType="default" :disabled="busy" @click="backToReview">← Atrás</RockButton>
                     <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy || !gatewayControlModel || !holdActive || holdExpired || !deliveryEmailValid" @click="onPayClick" autoDisable>
-                        {{ busy ? "Procesando…" : `Pagar ${formatCurrency(grandTotal)}` }}
+                        <span class="notranslate">{{ busy ? "Procesando…" : "Pagar" }}</span>
                     </RockButton>
                 </div>
             </RockForm>

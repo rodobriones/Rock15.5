@@ -1,0 +1,740 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Panel de uso de los códigos QR.
+    Todos los gráficos son SVG inline: una sola serie de magnitud cada uno, así que llevan un
+    solo tono (#1E5B87) y la identidad la carga la etiqueta de cada fila, no el color. Por eso
+    no hay paleta categórica — la de marca falla la validación como categórica (navy muy oscuro,
+    acero muy claro) y no hace falta para magnitud.
+    El <style> es NO-scoped a propósito: targetea .panel-block, chrome de Rock fuera del template.
+-->
+<template>
+    <Panel type="block" title="" class="qrm-panel">
+        <div class="qrmWrap">
+            <div v-if="notAuthorized" class="qrmPage">
+                <NotificationBox alertType="warning">No tenés permiso para ver las métricas.</NotificationBox>
+            </div>
+
+            <div v-else class="qrmPage">
+                <nav class="qrNav" aria-label="Secciones del módulo QR">
+                    <a v-if="options.catalogPageUrl" :href="options.catalogPageUrl">Catálogo</a>
+                    <a v-if="options.dashboardPageUrl" :href="options.dashboardPageUrl">Reportería</a>
+                    <span class="qrNavOn" aria-current="page">Uso</span>
+                </nav>
+
+                <header class="qrmHead">
+                    <div>
+                        <h1 class="qrmTitle">Uso de códigos QR</h1>
+                        <p class="qrmSub">{{ rangeText }}</p>
+                    </div>
+                    <div class="qrmRange">
+                        <!-- El selector iba con label="" y quedaba sin nombre accesible. La etiqueta
+                             va acá y no en el control porque el `for` que arma RockFormField apunta
+                             a un id generado que nadie lleva; el `id` que se le pasa al DropDownList
+                             sí baja hasta el input role=combobox, así que esta asociación es real. -->
+                        <label class="qrmSrOnly" for="qrmRangeSelect">Rango de fechas</label>
+                        <DropDownList id="qrmRangeSelect" v-model="rangeDays" label=""
+                                      :items="rangeItems" :showBlankItem="false" />
+                    </div>
+                </header>
+
+                <!-- Región viva siempre presente: un aria-live que nace junto con su texto no se
+                     anuncia, y NotificationBox no trae ninguno propio. -->
+                <div class="qrmLive" aria-live="polite" aria-atomic="true">
+                    <NotificationBox v-if="errorMessage" alertType="danger">{{ errorMessage }}</NotificationBox>
+                </div>
+
+                <!-- ===== KPIs: números, no gráficos =====
+                     Se ocultan cuando no hay un solo código dinámico: cinco ceros no informan nada
+                     y hacen creer que el problema es el rango. -->
+                <div v-if="hasDynamicCodes" class="qrmKpis">
+                    <div class="qrmKpi">
+                        <span class="qrmKpiNum">{{ fmt(data.totalScans) }}</span>
+                        <span class="qrmKpiLbl">escaneos</span>
+                    </div>
+                    <div class="qrmKpi">
+                        <span class="qrmKpiNum">{{ fmt(data.activeCodes) }}</span>
+                        <span class="qrmKpiLbl">códigos activos</span>
+                    </div>
+                    <div class="qrmKpi" :class="{ qrmKpiAlert: data.staleCodes > 0 }">
+                        <span class="qrmKpiNum">{{ fmt(data.staleCodes) }}</span>
+                        <span class="qrmKpiLbl">dormidos · {{ options.staleDays }} días</span>
+                    </div>
+                    <div class="qrmKpi">
+                        <span class="qrmKpiNum">{{ fmt(data.distinctCountries) }}</span>
+                        <span class="qrmKpiLbl">países</span>
+                    </div>
+                    <div class="qrmKpi">
+                        <span class="qrmKpiNum">{{ identifiedPct }}%</span>
+                        <span class="qrmKpiLbl">identificados</span>
+                    </div>
+                </div>
+
+                <NotificationBox v-if="data.qualityNote" alertType="info">{{ data.qualityNote }}</NotificationBox>
+
+                <!-- Estado vacío honesto: sin dinámicos no faltan escaneos "en este rango",
+                     falta el tipo de código que los deja. Mandar a cambiar el rango es mentir. -->
+                <div v-if="!hasDynamicCodes" class="qrmEmpty">
+                    <p class="qrmEmptyText">Ningún código del catálogo es dinámico, y solo los
+                        dinámicos dejan escaneos. Creá uno para empezar a medir.</p>
+                    <a v-if="newCodeUrl" class="qrmLink qrmEmptyLink" :href="newCodeUrl">Crear un código dinámico</a>
+                </div>
+
+                <div v-else-if="data.totalScans === 0" class="qrmEmpty">
+                    <p class="qrmEmptyText">Todavía no hay escaneos registrados en este rango.</p>
+                </div>
+
+                <template v-else>
+                    <!-- ===== Serie temporal ===== -->
+                    <section class="qrmCard">
+                        <h2 class="qrmH2">{{ timelineTitle }}</h2>
+                        <div class="qrmChart" @mouseleave="hoverDay = null">
+                            <svg :viewBox="`0 0 ${TL_W} ${TL_H}`" preserveAspectRatio="none" class="qrmSvg"
+                                 role="group" :aria-label="timelineTitle">
+                                <!-- El dibujo va en su propio grupo con role=img, no en el svg
+                                     entero: role=img poda TODO lo que tiene adentro del árbol de
+                                     accesibilidad, y las zonas de hover de abajo son enfocables.
+                                     Puesto en el svg las habría borrado para el lector. -->
+                                <g role="img" :aria-label="timelineSummary">
+                                    <!-- Grilla recesiva -->
+                                    <line v-for="g in timelineGrid" :key="'g'+g.y"
+                                          :x1="0" :y1="g.y" :x2="TL_W" :y2="g.y" class="qrmGrid" />
+
+                                    <!-- Un solo día: una polilínea de un punto no dibuja NADA y el
+                                         gráfico sale en blanco aunque haya dato. -->
+                                    <circle v-if="tlMode === 'point'" :cx="TL_W / 2" :cy="tlY(timeline[0].count)"
+                                            r="6" class="qrmDot" />
+
+                                    <!-- Pocos días: barras. Una línea de dos o tres vértices sugiere una
+                                         tendencia que con tan pocos datos no existe. -->
+                                    <template v-else-if="tlMode === 'bars'">
+                                        <rect v-for="(p, i) in timeline" :key="'b'+i"
+                                              :x="tlBandX(i) + tlBandW * 0.2" :y="tlY(p.count)"
+                                              :width="tlBandW * 0.6" :height="TL_H - tlY(p.count)" class="qrmBarMark" />
+                                    </template>
+
+                                    <polyline v-else :points="timelinePoints" class="qrmLine" />
+                                </g>
+
+                                <!-- Zonas de hover: más anchas que la marca. Son las MISMAS en los
+                                     tres modos (punto, barras, línea), así que enfocarlas deja
+                                     accesible cualquiera de los tres. tabindex 0 + focus/blur
+                                     replican el mouseenter: antes el detalle solo existía con
+                                     mouse. -->
+                                <rect v-for="(p, i) in timeline" :key="'h'+i"
+                                      :x="hitX(i)" y="0" :width="hitW" :height="TL_H"
+                                      class="qrmHit" tabindex="0" role="img" :aria-label="pointLabel(i)"
+                                      @mouseenter="hoverDay = i"
+                                      @focus="hoverDay = i"
+                                      @blur="hoverDay = null" />
+                                <circle v-if="hoverDay !== null && tlMode === 'line'"
+                                        :cx="tlX(hoverDay)" :cy="tlY(timeline[hoverDay].count)"
+                                        r="4" class="qrmDot" />
+                            </svg>
+                            <div class="qrmAxis" aria-hidden="true">
+                                <span>{{ shortDate(timeline[0]?.date) }}</span>
+                                <span>{{ shortDate(timeline[timeline.length - 1]?.date) }}</span>
+                            </div>
+                            <!-- El rótulo cambia con la agrupación: un pico semanal leído como
+                                 diario se equivoca por un orden de magnitud. -->
+                            <div v-if="hoverDay !== null" class="qrmTip">
+                                <strong>{{ fmt(timeline[hoverDay].count) }}</strong> escaneos ·
+                                {{ isWeekly ? "semana del " : "" }}{{ longDate(timeline[hoverDay].date) }}
+                            </div>
+                            <!-- El pico con su fecha, visible y en texto: antes el máximo estaba
+                                 acá pero sin decir cuándo, y el cuándo solo se conseguía con el
+                                 cursor encima. -->
+                            <div v-else class="qrmTip qrmTipIdle">
+                                Máximo {{ fmt(peakPoint?.count ?? 0) }}
+                                {{ isWeekly ? "en la semana del" : "el" }} {{ longDate(peakPoint?.date) }} ·
+                                pasá el cursor o recorré la serie con el tabulador para ver el detalle
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="qrmGrid2">
+                        <!-- ===== Top de códigos ===== -->
+                        <section class="qrmCard">
+                            <h2 class="qrmH2">Más escaneados</h2>
+                            <!-- camelCase obligatorio: los attrs de un componente funcional NO se
+                                 camelizan, así que :href-for llegaba como undefined. -->
+                            <BarList :rows="topRows" :hrefFor="hrefFor" />
+                            <p v-if="topNote" class="qrmNote">{{ topNote }}</p>
+                        </section>
+
+                        <!-- ===== Dormidos ===== -->
+                        <section class="qrmCard">
+                            <h2 class="qrmH2">Dormidos</h2>
+                            <p class="qrmNote">Material impreso que nadie está usando. Es la lista que justifica
+                                retirar o reemplazar.</p>
+                            <div v-if="data.staleList.length === 0" class="qrmNone">Ninguno. Todos los códigos
+                                tuvieron actividad reciente.</div>
+                            <ul v-else class="qrmStale">
+                                <li v-for="row in data.staleList" :key="row.idKey ?? row.name ?? ''">
+                                    <a v-if="options.detailPageUrl" class="qrmLink" :href="hrefFor(row)">{{ row.name }}</a>
+                                    <span v-else>{{ row.name }}</span>
+                                    <span class="qrmStaleWhen">{{ row.lastScanDateTime
+                                        ? 'último ' + shortDate(row.lastScanDateTime)
+                                        : 'nunca escaneado' }}</span>
+                                </li>
+                            </ul>
+                        </section>
+
+                        <!-- ===== Dispositivo ===== -->
+                        <section class="qrmCard">
+                            <h2 class="qrmH2">Dispositivo</h2>
+                            <BarList :rows="clientRows" />
+                            <h2 class="qrmH2 qrmH2Sep">Sistema operativo</h2>
+                            <BarList :rows="osRows" />
+                            <p v-if="osNote" class="qrmNote">{{ osNote }}</p>
+                        </section>
+
+                        <!-- ===== Procedencia ===== -->
+                        <section class="qrmCard">
+                            <h2 class="qrmH2">Desde dónde se escaneó</h2>
+                            <NotificationBox v-if="!data.geoAvailable" alertType="info">
+                                La base de geolocalización no está disponible, así que no se puede resolver la
+                                procedencia. Los escaneos igual quedaron registrados.
+                            </NotificationBox>
+                            <template v-else>
+                                <BarList :rows="countryRows" />
+                                <p v-if="countryNote" class="qrmNote">{{ countryNote }}</p>
+
+                                <!-- Fuera del ranking a propósito: no es un país, es la parte de los
+                                     escaneos que quedó sin resolver. Tampoco se descarta, porque
+                                     entonces el total dejaría de cuadrar con los escaneos. -->
+                                <div v-if="unresolvedGeo" class="qrmUnresolved">
+                                    <span>{{ unresolvedGeo.countryName }}</span>
+                                    <span class="qrmUnresolvedVal">{{ fmt(unresolvedGeo.count) }}</span>
+                                </div>
+
+                                <template v-if="data.byCity.length">
+                                    <h2 class="qrmH2 qrmH2Sep">Ciudades · {{ topCountryName }}</h2>
+                                    <BarList :rows="cityRows" />
+                                    <p v-if="cityNote" class="qrmNote">{{ cityNote }}</p>
+                                </template>
+                            </template>
+                            <p class="qrmNote">Se deriva de la IP de cada escaneo y se muestra solo agregado.
+                                Una IP ubica al proveedor, no a la persona.</p>
+                            <p v-if="unresolvedGeo" class="qrmNote">La procedencia es una muestra: se
+                                resuelven hasta 500 IP distintas por carga, las de más escaneos. Lo que
+                                queda afuera se cuenta arriba como no resuelto, y es distinto de
+                                «Desconocido», que significa que sí se consultó y no se pudo ubicar.</p>
+                        </section>
+                    </div>
+
+                    <div class="qrmActions">
+                        <RockButton btnType="default" class="qrmBtn" @click="onExport">Exportar CSV</RockButton>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </Panel>
+</template>
+
+<style>
+/* Fuentes Brújula VR servidas desde RockWeb (no CDN). Blogger Sans es CC BY-ND: formato original. */
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Mono";
+    src: url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* Chrome del panel: solo para este bloque. */
+.panel-block:has(.qrmWrap) > .panel-heading,
+.panel-block:has(.qrmWrap) > .panel-header { display: none !important; }
+.panel-block:has(.qrmWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.qrmWrap) > .panel-body { padding: 0 !important; }
+
+.qrmWrap {
+    /* Tokens Brújula VR */
+    --vr-navy: #0F334B;
+    --vr-red: #E74133;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-soft: #5A6E7C;
+    /* #8296A6 daba 3,06:1 sobre blanco y acá se usa en texto de 10-12 px (etiquetas de KPI,
+       notas, ejes): no pasa AA. Este tono da ~5,1:1 y sigue leyéndose recesivo. */
+    --ink-faint: #5E6E7A;
+    --rule: #E1E8ED;
+    --action: #1E5B87;       /* el único tono de las marcas: pasa contraste >=3:1 */
+    --steel: #A2BACA;        /* solo grilla y ejes: recesivo a propósito */
+    --warn-text: #8F5B0B;
+    --warn-bg: #FDF2E1;
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --font-title: "Blogger Sans", "Century Gothic", Futura, sans-serif;
+    --font-body: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+    --font-num: "Fira Mono", "Fira Sans", Consolas, monospace;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+.qrmWrap *, .qrmWrap *::before, .qrmWrap *::after { box-sizing: border-box; }
+
+.qrmPage { margin: 0 -15px; background: var(--bg); padding: 24px 20px 32px; min-height: 50vh; }
+
+
+/* Navegación entre las páginas del módulo. Hace falta porque el menú de Rock 18 solo muestra
+   dos niveles y estas páginas son nietas de Digital Tools: por el menú no se llega. */
+.qrNav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.qrNav a, .qrNav span { padding: 8px 14px; font-size: 13px; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.qrNav a { color: var(--ink-soft); }
+.qrNav a:hover { color: var(--action); }
+.qrNavOn { color: var(--vr-navy); font-weight: 600; border-bottom-color: var(--vr-navy) !important; }
+
+.qrmHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.qrmTitle { font-family: var(--font-title); font-weight: 700; font-size: 26px; color: var(--vr-navy); margin: 0; }
+.qrmSub { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+.qrmRange { min-width: 190px; }
+
+.qrmKpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+.qrmKpi { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-card); }
+.qrmKpiAlert { background: var(--warn-bg); border-color: #F0DCBB; }
+.qrmKpiNum { display: block; font-family: var(--font-num); font-size: 26px; color: var(--vr-navy); line-height: 1.1; }
+.qrmKpiAlert .qrmKpiNum { color: var(--warn-text); }
+.qrmKpiLbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin-top: 3px; }
+
+.qrmCard { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-card); margin-bottom: 16px; }
+.qrmGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.qrmGrid2 .qrmCard { margin-bottom: 0; }
+.qrmH2 { font-family: var(--font-title); font-weight: 700; font-size: 15px; color: var(--vr-navy); margin: 0 0 12px; }
+.qrmH2Sep { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.qrmNote { font-size: 11px; color: var(--ink-faint); line-height: 1.5; margin: 10px 0 0; }
+.qrmNone { font-size: 12px; color: var(--ink-faint); font-style: italic; padding: 8px 0; }
+
+/* Serie temporal */
+.qrmChart { position: relative; }
+.qrmSvg { width: 100%; height: 160px; display: block; overflow: visible; }
+.qrmGrid { stroke: var(--steel); stroke-width: 1; opacity: .45; vector-effect: non-scaling-stroke; }
+.qrmLine { fill: none; stroke: var(--action); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.qrmBarMark { fill: var(--action); }
+.qrmDot { fill: var(--action); stroke: var(--paper); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.qrmHit { fill: transparent; cursor: crosshair; }
+.qrmAxis { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-faint); margin-top: 6px; font-family: var(--font-num); }
+.qrmTip { font-size: 12px; color: var(--ink-soft); margin-top: 8px; min-height: 18px; }
+.qrmTipIdle { color: var(--ink-faint); }
+
+/* Barras horizontales */
+.qrmBars { list-style: none; margin: 0; padding: 0; }
+.qrmBar { margin-bottom: 10px; }
+.qrmBarTop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px; margin-bottom: 3px; }
+.qrmBarName { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qrmBarVal { font-family: var(--font-num); color: var(--ink-soft); flex-shrink: 0; }
+.qrmBarTrack { background: var(--paper-alt); border-radius: 4px; height: 8px; overflow: hidden; }
+.qrmBarFill { background: var(--action); height: 100%; border-radius: 4px; min-width: 2px; }
+.qrmLink { color: var(--action); text-decoration: none; }
+.qrmLink:hover { text-decoration: underline; }
+
+/* Bucket sin resolver: fuera del ranking y visualmente aparte, con regla arriba. */
+.qrmUnresolved { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--ink-soft); padding-top: 8px; margin-top: 4px; border-top: 1px dashed var(--rule); }
+.qrmUnresolvedVal { font-family: var(--font-num); flex-shrink: 0; }
+
+.qrmStale { list-style: none; margin: 0; padding: 0; }
+.qrmStale li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+.qrmStale li:last-child { border-bottom: none; }
+.qrmStaleWhen { color: var(--warn-text); flex-shrink: 0; font-size: 11px; }
+
+.qrmEmpty { background: var(--paper); border: 1px dashed var(--steel); border-radius: var(--radius); padding: 40px 20px; text-align: center; }
+.qrmEmptyText { color: var(--ink-faint); font-size: 13px; margin: 0; max-width: 520px; margin-left: auto; margin-right: auto; line-height: 1.5; }
+.qrmEmptyLink { display: inline-block; margin-top: 10px; font-size: 13px; }
+.qrmActions { margin-top: 16px; }
+.qrmBtn.btn { background: var(--paper) !important; border-color: var(--steel) !important; color: var(--vr-navy) !important; border-radius: var(--radius-sm) !important; }
+
+/* Solo para lectores de pantalla. Recorte en vez de display:none a propósito: `display:none`
+   saca el elemento del árbol de accesibilidad y entonces tampoco existe para el lector. */
+.qrmSrOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Foco visible: sin esto no se ve dónde está el teclado. El outline va por fuera del
+   elemento para no empujar el layout de la barra de navegación. */
+.qrmWrap a:focus-visible,
+.qrmWrap button:focus-visible,
+.qrmWrap .btn:focus-visible,
+.qrmWrap .qrNav a:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+}
+
+/* Foco en las zonas sensibles del gráfico. El outline de un elemento SVG se dibuja en el
+   espacio del viewBox y este va con preserveAspectRatio="none", así que el grosor sale
+   deformado: por eso además se tiñe la banda entera, que es lo que de verdad se distingue. */
+.qrmHit:focus-visible {
+    fill: rgba(30, 91, 135, .14);
+    outline: 2px solid var(--action);
+    outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+    .qrmKpis { grid-template-columns: repeat(2, 1fr); }
+    .qrmGrid2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .qrmPage { margin: 0; padding: 16px 12px 24px; }
+    .qrmHead { flex-direction: column; }
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, ref, h, FunctionalComponent } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { MetricsData, MetricsOptions, TopCode, UNRESOLVED_COUNTRY_NAME } from "./QrMetrics/types.partial";
+    import { truncationNote } from "./QrShared/types.partial";
+
+    const config = useConfigurationValues<{ notAuthorized: boolean; options: MetricsOptions; data: MetricsData }>();
+    const invokeBlockAction = useInvokeBlockAction();
+
+    // #region Values
+
+    const notAuthorized = ref(config.notAuthorized === true);
+    const options = ref<MetricsOptions>(config.options ?? ({} as MetricsOptions));
+    const data = ref<MetricsData>(config.data ?? ({ timeline: [], topCodes: [], staleList: [], byClientType: [], byOperatingSystem: [], byCountry: [], byCity: [] } as unknown as MetricsData));
+    const errorMessage = ref("");
+    const hoverDay = ref<number | null>(null);
+    const rangeDaysRaw = ref("90");
+
+    const TL_W = 600;
+    const TL_H = 140;
+
+    // Los mismos rangos que Reportería: dos pantallas del mismo módulo con rangos distintos
+    // hacen que los números no se puedan comparar entre sí.
+    // "Toda la historia" se quitó a propósito: dispara la resolución de geolocalización sobre
+    // todos los escaneos históricos.
+    const rangeItems: ListItemBag[] = [
+        { value: "30", text: "Últimos 30 días" },
+        { value: "90", text: "Últimos 90 días" },
+        { value: "180", text: "Últimos 6 meses" },
+        { value: "365", text: "Último año" }
+    ];
+
+    // #endregion
+
+    // #region Computed
+
+    const rangeDays = computed({
+        get: () => rangeDaysRaw.value,
+        set: (v: string) => { rangeDaysRaw.value = v; void onRangeChange(); }
+    });
+
+    const timeline = computed(() => data.value.timeline ?? []);
+    const timelineMax = computed(() => Math.max(1, ...timeline.value.map(p => p.count)));
+
+    const tlStep = computed(() => timeline.value.length > 1 ? TL_W / (timeline.value.length - 1) : TL_W);
+
+    /**
+     * Cómo dibujar la serie. Con un solo día la polilínea no tiene segmento que trazar y el
+     * gráfico queda en blanco; con menos de cinco, una línea insinúa una tendencia que no hay.
+     */
+    const tlMode = computed<"point" | "bars" | "line">(() => {
+        const n = timeline.value.length;
+        if (n === 1) { return "point"; }
+        return n < 5 ? "bars" : "line";
+    });
+
+    /** Ancho de la banda de cada día: la usan las barras y las zonas de hover. */
+    const tlBandW = computed(() => TL_W / Math.max(1, timeline.value.length));
+
+    const hitW = computed(() => tlMode.value === "line" ? tlStep.value : tlBandW.value);
+
+    const timelinePoints = computed(() =>
+        timeline.value.map((p, i) => `${tlX(i)},${tlY(p.count)}`).join(" "));
+
+    const timelineGrid = computed(() => [0, 0.5, 1].map(f => ({ y: TL_H - f * TL_H })));
+
+    const rangeText = computed(() =>
+        `Últimos ${rangeDaysRaw.value} días · ${fmt(data.value.totalScans)} escaneos`);
+
+    /** Sin un solo código dinámico no hay nada que medir: el rango no tiene la culpa. */
+    const hasDynamicCodes = computed(() => (data.value.dynamicCodeCount ?? 0) > 0);
+
+    /** El detalle con ((Key))=0 es la pantalla de código nuevo, igual que en el catálogo. */
+    const newCodeUrl = computed(() => options.value.detailPageUrl
+        ? options.value.detailPageUrl.replace("((Key))", "0")
+        : (options.value.catalogPageUrl ?? ""));
+
+    const identifiedPct = computed(() => {
+        if (!data.value.totalScans) { return 0; }
+        return Math.round((data.value.identifiedScans / data.value.totalScans) * 100);
+    });
+
+    /**
+     * El desglose de países puede traer un bucket que no es un país: los escaneos cuya IP quedó
+     * fuera de la muestra que se resuelve contra MaxMind. Se separa del ranking, pero no se
+     * descarta: si se descartara, la suma dejaría de cuadrar con el total de escaneos.
+     */
+    const unresolvedGeo = computed(() =>
+        (data.value.byCountry ?? []).find(c => !c.countryCode && c.countryName === UNRESOLVED_COUNTRY_NAME) ?? null);
+
+    const rankedCountries = computed(() =>
+        (data.value.byCountry ?? []).filter(c => c !== unresolvedGeo.value));
+
+    const topCountryName = computed(() => rankedCountries.value[0]?.countryName ?? "");
+
+    const isWeekly = computed(() => data.value.timelineIsWeekly === true);
+
+    const timelineTitle = computed(() => isWeekly.value ? "Escaneos por semana" : "Escaneos por día");
+
+    /**
+     * El punto más alto de la serie. No se deriva de `timelineMax`, que arranca en Math.max(1, …)
+     * para no dividir por cero: con la serie entera en cero ese 1 no es el dato de nadie.
+     */
+    const peakPoint = computed(() => {
+        let best = timeline.value[0] ?? null;
+        for (const p of timeline.value) { if (best === null || p.count > best.count) { best = p; } }
+        return best;
+    });
+
+    const timelineTotal = computed(() => timeline.value.reduce((sum, p) => sum + p.count, 0));
+
+    /** Lo que el lector de pantalla escucha en lugar del dibujo: rango, total y pico. */
+    const timelineSummary = computed(() => {
+        const points = timeline.value;
+        if (!points.length) { return "Serie de escaneos sin datos."; }
+
+        const unit = isWeekly.value ? "semanas" : "días";
+        const desde = longDate(points[0].date);
+        const hasta = longDate(points[points.length - 1].date);
+        const peak = peakPoint.value;
+        const cuando = isWeekly.value ? "la semana del" : "el";
+
+        return `${timelineTitle.value}. ${points.length} ${unit}, del ${desde} al ${hasta}. `
+            + `Total ${fmt(timelineTotal.value)} escaneos. `
+            + `Máximo ${fmt(peak?.count ?? 0)} en ${cuando} ${longDate(peak?.date)}.`;
+    });
+
+    type BarRow = { key: string; name: string; count: number; pct: number; row?: TopCode };
+
+    function toBars(items: { name: string; count: number; key?: string; row?: TopCode }[]): BarRow[] {
+        const max = Math.max(1, ...items.map(i => i.count));
+        return items.map((i, idx) => ({
+            key: i.key ?? `${i.name}-${idx}`,
+            name: i.name,
+            count: i.count,
+            pct: (i.count / max) * 100,
+            row: i.row
+        }));
+    }
+
+    const topRows = computed(() => toBars(
+        (data.value.topCodes ?? []).map(c => ({ name: c.name ?? "(sin nombre)", count: c.count, key: c.idKey ?? c.name ?? "", row: c }))));
+
+    const clientRows = computed(() => toBars((data.value.byClientType ?? []).map(c => ({ name: c.name, count: c.count }))));
+    const osRows = computed(() => toBars((data.value.byOperatingSystem ?? []).map(c => ({ name: c.name, count: c.count }))));
+    const countryRows = computed(() => toBars(rankedCountries.value.map(c => ({ name: c.countryName ?? "Desconocido", count: c.count }))));
+    const cityRows = computed(() => toBars((data.value.byCity ?? []).map(c => ({ name: c.city ?? "—", count: c.count }))));
+
+    // #endregion
+
+    // #region Functions
+
+    function tlX(i: number): number {
+        return timeline.value.length > 1 ? (i / (timeline.value.length - 1)) * TL_W : TL_W / 2;
+    }
+
+    function tlY(count: number): number {
+        return TL_H - (count / timelineMax.value) * TL_H;
+    }
+
+    /** Borde izquierdo de la banda del día i. */
+    function tlBandX(i: number): number {
+        return tlBandW.value * i;
+    }
+
+    /** En modo línea la zona sensible se centra en la marca; en barras, en la banda. */
+    function hitX(i: number): number {
+        return tlMode.value === "line" ? tlX(i) - tlStep.value / 2 : tlBandX(i);
+    }
+
+    function fmt(n: number | null | undefined): string {
+        return (n ?? 0).toLocaleString("es-GT");
+    }
+
+    function shortDate(value: string | null | undefined): string {
+        if (!value) { return ""; }
+        try { return new Date(value).toLocaleDateString("es-GT", { month: "short", day: "numeric" }); }
+        catch { return value; }
+    }
+
+    function longDate(value: string | null | undefined): string {
+        if (!value) { return ""; }
+        try { return new Date(value).toLocaleDateString("es-GT", { year: "numeric", month: "long", day: "numeric" }); }
+        catch { return value; }
+    }
+
+    /** Nombre accesible de cada zona sensible: es lo que se oye al tabular por la serie. */
+    function pointLabel(i: number): string {
+        const p = timeline.value[i];
+        if (!p) { return ""; }
+
+        const cuando = isWeekly.value ? `semana del ${longDate(p.date)}` : longDate(p.date);
+        return `${cuando}: ${fmt(p.count)} escaneos`;
+    }
+
+    function hrefFor(row: TopCode | undefined): string {
+        if (!row || !options.value.detailPageUrl) { return ""; }
+        return options.value.detailPageUrl.replace("((Key))", row.idKey ?? "");
+    }
+
+    type BarListProps = { rows: BarRow[]; hrefFor?: (row: TopCode | undefined) => string };
+
+    /**
+     * Lista de barras horizontales. Una sola serie de magnitud: un tono, y el nombre de cada fila
+     * lleva la identidad — por eso no hace falta leyenda ni paleta categórica.
+     */
+    // Las listas van recortadas en el servidor. Declararlo es la diferencia entre "estos son
+    // los países" y "estos son los 8 primeros de 20": sin la línea, la primera barra llega al
+    // 100 % y se lee como el total.
+    const topNote = computed(() => truncationNote(data.value.topCodesMeta, "escaneos"));
+    const osNote = computed(() => truncationNote(data.value.byOperatingSystemMeta, "escaneos"));
+    const countryNote = computed(() => truncationNote(data.value.byCountryMeta, "escaneos"));
+    const cityNote = computed(() => truncationNote(data.value.byCityMeta, "escaneos del país"));
+
+    const BarList: FunctionalComponent<BarListProps> = (props) => {
+        if (!props.rows.length) {
+            return h("div", { class: "qrmNone" }, "Sin datos en este rango.");
+        }
+
+        return h("ul", { class: "qrmBars" }, props.rows.map(r => {
+            const href = props.hrefFor && r.row ? props.hrefFor(r.row) : "";
+            const label = href
+                ? h("a", { class: "qrmBarName qrmLink", href, title: r.name }, r.name)
+                : h("span", { class: "qrmBarName", title: r.name }, r.name);
+
+            return h("li", { class: "qrmBar", key: r.key }, [
+                // El nombre y el valor van juntos en la misma línea: el lector lee "Android 1.204"
+                // sin que haga falta ningún aria, porque el valor ya está visible al lado.
+                h("div", { class: "qrmBarTop" }, [label, h("span", { class: "qrmBarVal" }, fmt(r.count))]),
+                // La barra es puro decorado del número de arriba: sin aria-hidden el lector anuncia
+                // dos contenedores vacíos por fila.
+                h("div", { class: "qrmBarTrack", "aria-hidden": "true" }, [
+                    h("div", { class: "qrmBarFill", style: { width: `${Math.max(1, r.pct)}%` } })
+                ])
+            ]);
+        }));
+    };
+
+    // Sin esto Vue trata cada atributo como attr crudo (instance.props = attrs) y los attrs NO se
+    // camelizan: `href-for` nunca llegaba a `props.hrefFor` y el top perdía los enlaces en silencio.
+    BarList.props = ["rows", "hrefFor"];
+
+    // #endregion
+
+    // #region Event Handlers
+
+    async function onRangeChange(): Promise<void> {
+        errorMessage.value = "";
+        hoverDay.value = null;
+
+        const result = await invokeBlockAction<MetricsData>("Refresh", { days: Number(rangeDaysRaw.value) });
+
+        if (!result.isSuccess || !result.data) {
+            errorMessage.value = result.errorMessage || "No se pudieron cargar las métricas.";
+            return;
+        }
+
+        data.value = result.data;
+    }
+
+    /**
+     * Celda CSV segura. Excel ejecuta como fórmula cualquier celda que empiece con = + - o @,
+     * y los nombres de los códigos los escribe el usuario: un "=HYPERLINK(...)" se ejecutaría
+     * al abrir el archivo. El apóstrofo inicial la fuerza a texto.
+     */
+    function csvCell(value: string | null | undefined): string {
+        const raw = String(value ?? "");
+        const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replace(/"/g, "\"\"")}"`;
+    }
+
+    /** Exporta lo que está en pantalla. Solo agregados: nunca IPs ni personas. */
+    function onExport(): void {
+        const lines: string[] = ["seccion,etiqueta,escaneos"];
+
+        const push = (section: string, rows: { name: string; count: number }[]): void => {
+            for (const r of rows) {
+                lines.push(`${section},${csvCell(r.name)},${r.count}`);
+            }
+        };
+
+        push("top", topRows.value);
+        push("dispositivo", clientRows.value);
+        push("sistema_operativo", osRows.value);
+        push("pais", countryRows.value);
+
+        // El bucket sin resolver va en su propia sección: mezclarlo con los países haría que la
+        // columna "pais" tenga una fila que no es un país, y sacarlo haría que no cuadre el total.
+        if (unresolvedGeo.value) {
+            lines.push(`pais_no_resuelto,${csvCell(unresolvedGeo.value.countryName)},${unresolvedGeo.value.count}`);
+        }
+
+        push("ciudad", cityRows.value);
+
+        const timelineSection = isWeekly.value ? "semana" : "dia";
+        for (const p of timeline.value) {
+            lines.push(`${timelineSection},${csvCell(p.date.substring(0, 10))},${p.count}`);
+        }
+
+        // BOM para que Excel en español abra bien los acentos.
+        const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `qr-metricas-${new Date().toISOString().substring(0, 10)}.csv`;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // #endregion
+</script>

@@ -5,7 +5,7 @@
         <div class="epayHeader">
             <div class="epayTitleWrap">
                 <h4 class="epayTitle">Tarjeta</h4>
-                <p class="epaySubtitle">Complete la informacion de pago segura.</p>
+                <p class="epaySubtitle">Complete la información de pago segura.</p>
             </div>
         </div>
 
@@ -24,7 +24,7 @@
         <div class="epayFields">
             <label class="epayField">
                 <div class="epayFieldHead">
-                    <span>Numero de tarjeta</span>
+                    <span>Número de tarjeta</span>
                     <div class="epayCardBrands" role="img" aria-label="Tarjetas aceptadas: Visa y Mastercard">
                         <span
                             class="epayBrandIcon"
@@ -81,10 +81,10 @@
                             maxlength="5"
                             inputmode="numeric"
                             autocomplete="cc-exp"
-                            placeholder="MM/YY"
+                            placeholder="MM / AA"
                             @input="onExpDateInput" />
                     </div>
-                    <small class="epayHint">Formato: MM/YY</small>
+                    <small class="epayHint">Formato: MM/AA</small>
                     <small v-if="fieldErrors.expDate" class="epayError">{{ fieldErrors.expDate }}</small>
                 </label>
 
@@ -98,16 +98,16 @@
                             maxlength="4"
                             inputmode="numeric"
                             autocomplete="cc-csc"
-                            :placeholder="`CVV (${expectedCvvLength})`"
+                            :placeholder="expectedCvvLength === 4 ? '1234' : '123'"
                             @input="onCvvInput" />
                     </div>
-                    <small class="epayHint">{{ expectedCvvLength }} digitos para {{ cardBrandLabel }}</small>
+                    <small class="epayHint">{{ expectedCvvLength }} dígitos para {{ cardBrandLabel }}</small>
                     <small v-if="fieldErrors.cvv" class="epayError">{{ fieldErrors.cvv }}</small>
                 </label>
             </div>
 
             <label class="epayField" v-if="props.settings.promptForNameOnCard !== false">
-                <span>Nombre del titular</span>
+                <span>Nombre en la tarjeta</span>
                 <div class="epayInputWrap" :class="{ isInvalid: !!fieldErrors.cardName }">
                     <input
                         v-model="form.cardName"
@@ -115,7 +115,7 @@
                         type="text"
                         maxlength="120"
                         autocomplete="cc-name"
-                        placeholder="Nombre como aparece en la tarjeta"
+                        placeholder="Como aparece en la tarjeta"
                         @input="fieldErrors.cardName = ''" />
                 </div>
                 <small v-if="fieldErrors.cardName" class="epayError">{{ fieldErrors.cardName }}</small>
@@ -251,7 +251,7 @@ const cardPreviewName = computed<string>(() => {
     return name ? name.toUpperCase() : "NOMBRE TITULAR";
 });
 
-const cardPreviewExp = computed<string>(() => form.expDate || "MM/YY");
+const cardPreviewExp = computed<string>(() => form.expDate || "MM/AA");
 
 const installmentOptions = computed<InstallmentOptionType[]>(() => {
     return props.settings.installmentOptions || [];
@@ -408,34 +408,34 @@ function validate(): FormError[] {
     const validationErrors: FormError[] = [];
 
     if (!luhnCheck(cardNumberDigits.value)) {
-        fieldErrors.cardNumber = "Numero de tarjeta invalido.";
+        fieldErrors.cardNumber = "El número de tarjeta no es válido. Revísalo e intenta de nuevo.";
         validationErrors.push({ name: "Card Number", text: fieldErrors.cardNumber });
     }
 
     const expiry = parseExpiry(form.expDate);
     if (!expiry.valid) {
-        fieldErrors.expDate = "Usa el formato MM/YY.";
+        fieldErrors.expDate = "Usa el formato MM/AA.";
         validationErrors.push({ name: "Expiration Date", text: fieldErrors.expDate });
     }
     else if (isExpired(expiry.month, expiry.year)) {
-        fieldErrors.expDate = "La tarjeta esta vencida.";
+        fieldErrors.expDate = "La tarjeta está vencida.";
         validationErrors.push({ name: "Expiration Date", text: fieldErrors.expDate });
     }
 
     const cvv = (form.cvv || "").replace(/[^\d]/g, "");
     const validCvvLength = cardBrand.value === "amex" ? cvv.length === 4 : cvv.length === 3;
     if (!validCvvLength) {
-        fieldErrors.cvv = `El CVV debe tener ${expectedCvvLength.value} digitos.`;
+        fieldErrors.cvv = `El CVV debe tener ${expectedCvvLength.value} dígitos.`;
         validationErrors.push({ name: "CVV", text: fieldErrors.cvv });
     }
 
     if (props.settings.promptForNameOnCard !== false && (form.cardName || "").trim().length < 3) {
-        fieldErrors.cardName = "Ingresa el nombre del titular.";
+        fieldErrors.cardName = "Escribe el nombre como aparece en la tarjeta.";
         validationErrors.push({ name: "Name on Card", text: fieldErrors.cardName });
     }
 
     if (form.useInstallments && hasInstallmentOptions.value && !form.installmentCode) {
-        fieldErrors.installment = "Selecciona el numero de cuotas.";
+        fieldErrors.installment = "Selecciona el número de cuotas.";
         validationErrors.push({ name: "Installments", text: fieldErrors.installment });
     }
 
@@ -729,7 +729,14 @@ onSubmitPayment(submit);
 
 .epayInstallmentSelect { display: grid; gap: 12px; }
 
-.epayInputWrap select.epayInput { appearance: auto; cursor: pointer; }
+/* appearance: none — con appearance: auto el select conserva las métricas nativas del SO y queda
+   ~12px más alto que los inputs de al lado. El chevron se dibuja aquí para no perder la flecha. */
+.epayInputWrap select.epayInput {
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+    height: 48px; padding-right: 24px;
+    background-image: url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%2364748b%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E);
+    background-repeat: no-repeat; background-position: right center; background-size: 14px;
+}
 
 /* Recargo: colores warning del checkout (ecHoldTimer). */
 .epaySurchargeInfo {

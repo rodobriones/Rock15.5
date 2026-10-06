@@ -9,6 +9,7 @@ using Rock.Blocks;
 using Rock.Data;
 using Rock.Model;
 using Rock.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Blocks.Eventos
 {
@@ -362,11 +363,16 @@ namespace Rock.Blocks.Eventos
                     eventName = ev?.Name,
                     // Categoría del evento: badge del hero en Mis Entradas (rediseño 2026).
                     eventCategory = ev?.Category,
+                    // Color del catálogo "Tipos de Evento" (migración 024) para teñir el chip y el
+                    // acento del pase; null = estilo neutro.
+                    eventCategoryColor = EventTagService.GetTypeColor( ev?.Category ),
                     eventStartDateTime = ev?.StartDateTime,
                     eventEndDateTime = ev?.EndDateTime,
                     eventSessions = EventSessionService.Format( ev?.SessionsJson ),
                     eventImageUrl = imageUrl,
                     venueName = ev?.VenueName,
+                    // Sede: la línea de lugar es "venue · sede", igual que en el calendario.
+                    campusName = ev?.CampusId != null ? CampusCache.Get( ev.CampusId.Value )?.Name : null,
                     ticketTypeName = t.TicketType?.Name,
                     attendeeName = ResolveAttendeeName( t ),
                     // La entrada "es mía" cuando el asistente asignado es la persona logueada
@@ -426,11 +432,13 @@ namespace Rock.Blocks.Eventos
             public int eventId { get; set; }
             public string eventName { get; set; }
             public string eventCategory { get; set; }
+            public string eventCategoryColor { get; set; }
             public DateTime? eventStartDateTime { get; set; }
             public DateTime? eventEndDateTime { get; set; }
             public List<string> eventSessions { get; set; }
             public string eventImageUrl { get; set; }
             public string venueName { get; set; }
+            public string campusName { get; set; }
             public string ticketTypeName { get; set; }
             public string attendeeName { get; set; }
             public bool isCurrentUser { get; set; }

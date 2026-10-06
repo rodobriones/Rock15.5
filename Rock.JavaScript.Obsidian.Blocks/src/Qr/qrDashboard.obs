@@ -1,0 +1,659 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Dashboard de reportería del programa de QR: catálogo, gobernanza, salud y patrones.
+    Complementa a qrMetrics.obs sin repetirlo — aquel mira los escaneos, este mira el programa.
+    Gráficos SVG/HTML inline, una sola serie de magnitud cada uno: un tono (#1E5B87), identidad
+    por etiqueta de fila. El <style> es NO-scoped: targetea .panel-block, chrome de Rock.
+-->
+<template>
+    <Panel type="block" title="" class="qrd-panel">
+        <div class="qrdWrap">
+            <div v-if="notAuthorized" class="qrdPage">
+                <NotificationBox alertType="warning">No tenés permiso para ver la reportería.</NotificationBox>
+            </div>
+
+            <div v-else class="qrdPage">
+                <nav class="qrNav" aria-label="Secciones del módulo QR">
+                    <a v-if="options.catalogPageUrl" :href="options.catalogPageUrl">Catálogo</a>
+                    <span class="qrNavOn" aria-current="page">Reportería</span>
+                    <a v-if="options.metricsPageUrl" :href="options.metricsPageUrl">Uso</a>
+                </nav>
+
+                <header class="qrdHead">
+                    <div>
+                        <h1 class="qrdTitle">Reportería de QR</h1>
+                        <p class="qrdSub">{{ rangeText }}</p>
+                    </div>
+                    <div class="qrdRange">
+                        <!-- El selector iba con label="" y quedaba sin nombre accesible. La etiqueta
+                             va acá y no en el control porque el `for` que arma RockFormField apunta
+                             a un id generado que nadie lleva; el `id` que se le pasa al DropDownList
+                             sí baja hasta el input role=combobox, así que esta asociación es real. -->
+                        <label class="qrdSrOnly" for="qrdRangeSelect">Rango de fechas</label>
+                        <DropDownList id="qrdRangeSelect" v-model="rangeDays" label=""
+                                      :items="rangeItems" :showBlankItem="false" />
+                    </div>
+                </header>
+
+                <!-- Región viva siempre presente: un aria-live que nace junto con su texto no se
+                     anuncia, y NotificationBox no trae ninguno propio. La nota de alcance queda
+                     afuera a propósito: viene con la carga, no es un cambio que anunciar. -->
+                <div class="qrdLive" aria-live="polite" aria-atomic="true">
+                    <NotificationBox v-if="errorMessage" alertType="danger">{{ errorMessage }}</NotificationBox>
+                </div>
+                <NotificationBox v-if="data.scopeNote" alertType="info">{{ data.scopeNote }}</NotificationBox>
+
+                <!-- ===== KPIs con comparación ===== -->
+                <div class="qrdKpis">
+                    <div v-for="k in data.kpis" :key="k.label" class="qrdKpi">
+                        <span class="qrdKpiLbl">{{ k.label }}</span>
+                        <span class="qrdKpiNum">{{ fmt(k.value) }}</span>
+                        <span v-if="k.changePercent !== null" class="qrdDelta" :class="deltaClass(k)">
+                            {{ deltaArrow(k) }} {{ deltaPercent(k) }}% vs. período anterior
+                        </span>
+                        <span v-else-if="k.note" class="qrdKpiNote">{{ k.note }}</span>
+                        <span v-else class="qrdKpiNote">sin base de comparación</span>
+                    </div>
+                </div>
+
+                <div class="qrdGrid2">
+                    <!-- ===== Composición del catálogo ===== -->
+                    <section class="qrdCard">
+                        <h2 class="qrdH2">El catálogo</h2>
+                        <div class="qrdSplit">
+                            <div class="qrdSplitCell">
+                                <span class="qrdSplitNum">{{ fmt(data.totalCodes) }}</span>
+                                <span class="qrdSplitLbl">códigos</span>
+                            </div>
+                            <div class="qrdSplitCell">
+                                <span class="qrdSplitNum">{{ fmt(data.dynamicCodes) }}</span>
+                                <span class="qrdSplitLbl">dinámicos</span>
+                            </div>
+                            <div class="qrdSplitCell">
+                                <span class="qrdSplitNum">{{ fmt(data.staticCodes) }}</span>
+                                <span class="qrdSplitLbl">estáticos</span>
+                            </div>
+                            <div class="qrdSplitCell">
+                                <span class="qrdSplitNum">{{ fmt(data.retiredCodes) }}</span>
+                                <span class="qrdSplitLbl">dados de baja</span>
+                            </div>
+                        </div>
+
+                        <!-- Mismo texto que el estado vacío de Uso: es el mismo hecho contado en
+                             dos pantallas, y contarlo distinto hace dudar de cuál es cierta. -->
+                        <NotificationBox v-if="data.totalCodes > 0 && data.dynamicCodes === 0" alertType="warning">
+                            Ningún código del catálogo es dinámico, y solo los dinámicos dejan
+                            escaneos. Creá uno para empezar a medir.
+                        </NotificationBox>
+
+                        <h2 class="qrdH2 qrdH2Sep">Por categoría</h2>
+                        <BarList :rows="categoryRows" />
+                        <p v-if="categoryNote" class="qrdNote">{{ categoryNote }}</p>
+                    </section>
+
+                    <!-- ===== Gobernanza ===== -->
+                    <section class="qrdCard">
+                        <h2 class="qrdH2">Quién los creó</h2>
+                        <p class="qrdNote">Es el objetivo número uno del módulo: antes nadie sabía
+                            cuántos QR existían ni de quién eran.</p>
+                        <BarList :rows="creatorRows" />
+                        <p v-if="creatorNote" class="qrdNote">{{ creatorNote }}</p>
+
+                        <template v-if="data.codesByMonth.length">
+                            <h2 class="qrdH2 qrdH2Sep">Códigos creados por mes</h2>
+                            <BarList :rows="monthRows" />
+                        </template>
+                    </section>
+
+                    <!-- ===== Salud del programa ===== -->
+                    <section class="qrdCard">
+                        <h2 class="qrdH2">Salud de lo impreso</h2>
+                        <p class="qrdNote">Sobre toda la historia, no solo el período: un código que
+                            nadie escanea desde hace dos años no es "sin datos este mes".</p>
+
+                        <div v-if="healthTotal === 0" class="qrdNone">
+                            Todavía no hay códigos dinámicos activos que medir.
+                        </div>
+                        <template v-else>
+                            <div class="qrdHealth">
+                                <!-- Los tres segmentos son EXCLUYENTES y suman el total exacto.
+                                     El servidor manda StaleCodes incluyendo a los nunca escaneados
+                                     (la KPI "Dormidos" y el CSV lo necesitan así), por eso acá se
+                                     le restan: pintarlos dos veces desbordaba el 100 %. -->
+                                <!-- Única barra apilada del módulo: los tres tramos no llevan número
+                                     encima, así que sin el role=img son tres divs vacíos. -->
+                                <div class="qrdHealthBar" role="img" :aria-label="healthSummary">
+                                    <!-- Los segmentos vacíos no se renderizan: la barra tiene gap y
+                                         un tramo de ancho 0 igual dejaría su separación. -->
+                                    <div v-if="healthOk > 0" class="qrdHealthOk" :style="{ width: pct(healthOk) }"></div>
+                                    <div v-if="healthStaleSeen > 0" class="qrdHealthStale" :style="{ width: pct(healthStaleSeen) }"></div>
+                                    <div v-if="healthNever > 0" class="qrdHealthNever" :style="{ width: pct(healthNever) }"></div>
+                                </div>
+                                <ul class="qrdLegend">
+                                    <li><span class="qrdSwatch qrdSwOk" aria-hidden="true"></span>
+                                        Con actividad reciente · {{ fmt(healthOk) }}</li>
+                                    <li><span class="qrdSwatch qrdSwStale" aria-hidden="true"></span>
+                                        Dormidos {{ options.staleDays }}+ días que alguna vez se
+                                        escanearon · {{ fmt(healthStaleSeen) }}</li>
+                                    <li><span class="qrdSwatch qrdSwNever" aria-hidden="true"></span>
+                                        Nunca escaneados · {{ fmt(healthNever) }}</li>
+                                </ul>
+                                <p class="qrdNote qrdNoteTight">La KPI «Dormidos» de arriba cuenta
+                                    {{ fmt(data.staleCodes) }}: ahí los nunca escaneados también
+                                    entran, porque para decidir qué material retirar da igual si
+                                    alguna vez funcionó.</p>
+                            </div>
+                        </template>
+                    </section>
+
+                    <!-- ===== Patrones ===== -->
+                    <section class="qrdCard">
+                        <h2 class="qrdH2">Cuándo escanean</h2>
+                        <div v-if="weekdayMax === 0" class="qrdNone">Sin escaneos en este período.</div>
+                        <template v-else>
+                            <!-- Son siete columnas y el número cabe: va visible debajo de cada
+                                 barra. El valor vivía solo en el title=, que no llega ni por
+                                 teclado ni por táctil. -->
+                            <div class="qrdWeek">
+                                <div v-for="d in data.byWeekday" :key="d.name" class="qrdWeekCol"
+                                     :title="`${d.name}: ${fmt(d.count)} escaneos`">
+                                    <div class="qrdWeekBarWrap" aria-hidden="true">
+                                        <div class="qrdWeekBar" :style="{ height: barH(d.count, weekdayMax) }"></div>
+                                    </div>
+                                    <span class="qrdWeekLbl">{{ d.name.substring(0, 3) }}</span>
+                                    <span class="qrdWeekVal">{{ fmt(d.count) }}</span>
+                                </div>
+                            </div>
+
+                            <h2 class="qrdH2 qrdH2Sep">Por hora</h2>
+                            <!-- Veinticuatro columnas: el número no cabe. Cada barra se nombra con
+                                 role=img, y abajo va la tabla con los mismos datos para quien
+                                 prefiera leerlos de corrido. -->
+                            <div class="qrdHours">
+                                <div v-for="h in data.byHour" :key="h.name" class="qrdHourCol"
+                                     role="img" :aria-label="`${h.name}: ${fmt(h.count)} escaneos`"
+                                     :title="`${h.name}: ${fmt(h.count)} escaneos`">
+                                    <div class="qrdHourBarWrap">
+                                        <div class="qrdHourBar" :style="{ height: barH(h.count, hourMax) }"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- "00 06 12 18 23" leído en voz alta no es un eje, es ruido. -->
+                            <div class="qrdHourAxis" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+
+                            <!-- Alternativa textual del gráfico de horas. Se recorta, no se oculta
+                                 con display:none: eso la sacaría también del árbol de accesibilidad
+                                 y dejaría de servir para lo único que existe. -->
+                            <table class="qrdSrOnly">
+                                <caption>Escaneos por hora del día</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Hora</th>
+                                        <th scope="col">Escaneos</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="h in data.byHour" :key="'tbl-' + h.name">
+                                        <th scope="row">{{ h.name }}</th>
+                                        <td>{{ fmt(h.count) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p class="qrdNote">Pico a las {{ peakHour }}. Sirve para decidir cuándo
+                                publicar el material, no solo dónde.</p>
+                        </template>
+
+                        <template v-if="data.byCampaign.length">
+                            <h2 class="qrdH2 qrdH2Sep">Por campaña</h2>
+                            <BarList :rows="campaignRows" />
+                            <p v-if="campaignNote" class="qrdNote">{{ campaignNote }}</p>
+                        </template>
+                    </section>
+                </div>
+
+                <div class="qrdActions">
+                    <RockButton btnType="default" class="qrdBtn" @click="onExport">Exportar CSV</RockButton>
+                    <a v-if="options.metricsPageUrl" class="qrdLink" :href="options.metricsPageUrl">
+                        Ver detalle de escaneos →
+                    </a>
+                </div>
+            </div>
+        </div>
+    </Panel>
+</template>
+
+<style>
+/* Fuentes Brújula VR servidas desde RockWeb (no CDN). Blogger Sans es CC BY-ND: formato original. */
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Mono";
+    src: url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* Chrome del panel: solo para este bloque. */
+.panel-block:has(.qrdWrap) > .panel-heading,
+.panel-block:has(.qrdWrap) > .panel-header { display: none !important; }
+.panel-block:has(.qrdWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.qrdWrap) > .panel-body { padding: 0 !important; }
+
+.qrdWrap {
+    --vr-navy: #0F334B;
+    --vr-red: #E74133;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-soft: #5A6E7C;
+    /* #8296A6 daba 3,06:1 sobre blanco y acá se usa en texto de 10-12 px (etiquetas de KPI,
+       notas, ejes): no pasa AA. Este tono da ~5,1:1 y sigue leyéndose recesivo. */
+    --ink-faint: #5E6E7A;
+    --rule: #E1E8ED;
+    --action: #1E5B87;      /* único tono de marcas; pasa contraste >=3:1 */
+    --steel: #A2BACA;       /* recesivo: grilla, ejes, estados neutros */
+    --ok-text: #1E7A64;
+    --warn-text: #8F5B0B;
+    --warn-bg: #FDF2E1;
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --font-title: "Blogger Sans", "Century Gothic", Futura, sans-serif;
+    --font-body: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+    --font-num: "Fira Mono", "Fira Sans", Consolas, monospace;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+.qrdWrap *, .qrdWrap *::before, .qrdWrap *::after { box-sizing: border-box; }
+
+.qrdPage { margin: 0 -15px; background: var(--bg); padding: 24px 20px 32px; min-height: 50vh; }
+
+
+/* Navegación entre las páginas del módulo. Hace falta porque el menú de Rock 18 solo muestra
+   dos niveles y estas páginas son nietas de Digital Tools: por el menú no se llega. */
+.qrNav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.qrNav a, .qrNav span { padding: 8px 14px; font-size: 13px; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.qrNav a { color: var(--ink-soft); }
+.qrNav a:hover { color: var(--action); }
+.qrNavOn { color: var(--vr-navy); font-weight: 600; border-bottom-color: var(--vr-navy) !important; }
+
+.qrdHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.qrdTitle { font-family: var(--font-title); font-weight: 700; font-size: 26px; color: var(--vr-navy); margin: 0; }
+.qrdSub { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+.qrdRange { min-width: 190px; }
+
+.qrdKpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+.qrdKpi { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-card); }
+.qrdKpiLbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+.qrdKpiNum { display: block; font-family: var(--font-num); font-size: 26px; color: var(--vr-navy); line-height: 1.15; margin: 2px 0; }
+.qrdDelta { display: block; font-size: 11px; }
+.qrdDeltaGood { color: var(--ok-text); }
+.qrdDeltaBad { color: var(--vr-red); }
+.qrdDeltaFlat { color: var(--ink-faint); }
+.qrdKpiNote { display: block; font-size: 11px; color: var(--ink-faint); }
+
+.qrdCard { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-card); }
+.qrdGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.qrdH2 { font-family: var(--font-title); font-weight: 700; font-size: 15px; color: var(--vr-navy); margin: 0 0 12px; }
+.qrdH2Sep { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.qrdNote { font-size: 11px; color: var(--ink-faint); line-height: 1.5; margin: 0 0 12px; }
+.qrdNoteTight { margin: 10px 0 0; }
+.qrdNone { font-size: 12px; color: var(--ink-faint); font-style: italic; padding: 8px 0; }
+
+.qrdSplit { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.qrdSplitCell { background: var(--paper-alt); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+.qrdSplitNum { display: block; font-family: var(--font-num); font-size: 20px; color: var(--vr-navy); }
+.qrdSplitLbl { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-faint); margin-top: 2px; }
+
+/* Barras horizontales */
+.qrdBars { list-style: none; margin: 0; padding: 0; }
+.qrdBar { margin-bottom: 10px; }
+.qrdBarTop { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px; margin-bottom: 3px; }
+.qrdBarName { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qrdBarVal { font-family: var(--font-num); color: var(--ink-soft); flex-shrink: 0; }
+.qrdBarTrack { background: var(--paper-alt); border-radius: 4px; height: 8px; overflow: hidden; }
+.qrdBarFill { background: var(--action); height: 100%; border-radius: 4px; min-width: 2px; }
+
+/* Salud: única barra apilada del panel, con leyenda porque son tres estados distintos */
+.qrdHealthBar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--paper-alt); gap: 2px; }
+.qrdHealthOk { background: var(--action); }
+.qrdHealthStale { background: var(--steel); }
+.qrdHealthNever { background: var(--vr-red); opacity: .75; }
+.qrdLegend { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12px; }
+.qrdLegend li { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: var(--ink-soft); }
+.qrdSwatch { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.qrdSwOk { background: var(--action); }
+.qrdSwStale { background: var(--steel); }
+.qrdSwNever { background: var(--vr-red); opacity: .75; }
+
+/* Día de semana y hora */
+.qrdWeek { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; }
+.qrdWeekCol { text-align: center; }
+.qrdWeekBarWrap { height: 90px; display: flex; align-items: flex-end; }
+.qrdWeekBar { background: var(--action); width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; }
+.qrdWeekLbl { display: block; font-size: 10px; color: var(--ink-faint); margin-top: 4px; }
+/* El valor de cada día, visible: antes solo vivía en el title=. */
+.qrdWeekVal { display: block; font-family: var(--font-num); font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
+.qrdHours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; }
+.qrdHourBarWrap { height: 60px; display: flex; align-items: flex-end; }
+.qrdHourBar { background: var(--action); width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
+.qrdHourAxis { display: flex; justify-content: space-between; font-family: var(--font-num); font-size: 10px; color: var(--ink-faint); margin-top: 4px; }
+
+.qrdActions { margin-top: 16px; display: flex; align-items: center; gap: 16px; }
+.qrdLink { color: var(--action); font-size: 13px; text-decoration: none; }
+.qrdLink:hover { text-decoration: underline; }
+.qrdBtn.btn { background: var(--paper) !important; border-color: var(--steel) !important; color: var(--vr-navy) !important; border-radius: var(--radius-sm) !important; }
+
+/* Solo para lectores de pantalla. Recorte en vez de display:none a propósito: `display:none`
+   saca el elemento del árbol de accesibilidad y entonces tampoco existe para el lector. */
+.qrdSrOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Foco visible: sin esto no se ve dónde está el teclado. */
+.qrdWrap a:focus-visible,
+.qrdWrap button:focus-visible,
+.qrdWrap .btn:focus-visible,
+.qrdWrap .qrNav a:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+    .qrdKpis { grid-template-columns: repeat(2, 1fr); }
+    .qrdGrid2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .qrdPage { margin: 0; padding: 16px 12px 24px; }
+    .qrdHead { flex-direction: column; }
+    .qrdSplit { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, ref, h, FunctionalComponent } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { DashboardData, DashboardOptions, Kpi, Slice } from "./QrDashboard/types.partial";
+    import { truncationNote } from "./QrShared/types.partial";
+
+    const config = useConfigurationValues<{ notAuthorized: boolean; options: DashboardOptions; data: DashboardData }>();
+    const invokeBlockAction = useInvokeBlockAction();
+
+    // #region Values
+
+    const emptyData = {
+        kpis: [], byCategory: [], byCreator: [], codesByMonth: [],
+        byWeekday: [], byHour: [], byCampaign: [],
+        totalCodes: 0, dynamicCodes: 0, staticCodes: 0, retiredCodes: 0,
+        codesWithScans: 0, codesNeverScanned: 0, staleCodes: 0
+    } as unknown as DashboardData;
+
+    const notAuthorized = ref(config.notAuthorized === true);
+    const options = ref<DashboardOptions>(config.options ?? ({} as DashboardOptions));
+    const data = ref<DashboardData>(config.data ?? emptyData);
+    const errorMessage = ref("");
+    const rangeDaysRaw = ref("90");
+
+    const rangeItems: ListItemBag[] = [
+        { value: "30", text: "Últimos 30 días" },
+        { value: "90", text: "Últimos 90 días" },
+        { value: "180", text: "Últimos 6 meses" },
+        { value: "365", text: "Último año" }
+    ];
+
+    // #endregion
+
+    // #region Computed
+
+    const rangeDays = computed({
+        get: () => rangeDaysRaw.value,
+        set: (v: string) => { rangeDaysRaw.value = v; void onRangeChange(); }
+    });
+
+    const rangeText = computed(() =>
+        `Últimos ${rangeDaysRaw.value} días, comparados contra los ${rangeDaysRaw.value} anteriores`);
+
+    // Semántica del servidor: CodesWithScans = W, CodesNeverScanned = N, StaleCodes = N + S
+    // (incluye a los nunca escaneados a propósito). Total = W + N.
+    // Los tres segmentos de la barra se derivan excluyentes para que sumen el total exacto; los
+    // Math.max(0, …) que había antes no arreglaban el desborde, solo lo escondían recortando el
+    // primer segmento a 0 y mostrando "Con actividad reciente · 0" cuando no lo era.
+    // Ver la nota equivalente en qrMetrics.obs: una lista recortada que no lo declara miente.
+    const categoryNote = computed(() => truncationNote(data.value.byCategoryMeta, "códigos"));
+    const creatorNote = computed(() => truncationNote(data.value.byCreatorMeta, "códigos"));
+    const campaignNote = computed(() => truncationNote(data.value.byCampaignMeta, "escaneos"));
+
+    const healthTotal = computed(() => data.value.codesWithScans + data.value.codesNeverScanned);
+
+    /** Recientes: total menos todo lo dormido. */
+    // Sin restas entre buckets de semántica distinta: el servidor ya publica los tres estados.
+    // La versión anterior hacía `staleCodes - codesNeverScanned`, que se volvió incorrecta —y
+    // podía dar negativo— cuando `StaleCodes` dejó de incluir a TODOS los nunca escaneados.
+    const healthOk = computed(() =>
+        Math.max(0, healthTotal.value - data.value.staleCodesEverScanned - data.value.codesNeverScanned));
+
+    /** Dormidos que alguna vez se escanearon: (N + S) − N. */
+    const healthStaleSeen = computed(() => data.value.staleCodesEverScanned);
+
+    const healthNever = computed(() => data.value.codesNeverScanned);
+
+    /** Lo que el lector escucha en lugar de la barra apilada: los tres tramos con su valor. */
+    const healthSummary = computed(() =>
+        `Salud de lo impreso sobre ${fmt(healthTotal.value)} códigos: `
+        + `${fmt(healthOk.value)} con actividad reciente, `
+        + `${fmt(healthStaleSeen.value)} dormidos ${options.value.staleDays}+ días que alguna vez se escanearon, `
+        + `${fmt(healthNever.value)} nunca escaneados.`);
+
+    const weekdayMax = computed(() => Math.max(0, ...(data.value.byWeekday ?? []).map(d => d.count)));
+    const hourMax = computed(() => Math.max(0, ...(data.value.byHour ?? []).map(d => d.count)));
+
+    const peakHour = computed(() => {
+        const hours = data.value.byHour ?? [];
+        if (!hours.length) { return "—"; }
+        let best = hours[0];
+        for (const h of hours) { if (h.count > best.count) { best = h; } }
+        return best.name;
+    });
+
+    type BarRow = { key: string; name: string; count: number; pct: number };
+
+    function toBars(items: Slice[]): BarRow[] {
+        const max = Math.max(1, ...items.map(i => i.count));
+        return items.map((i, idx) => ({
+            key: `${i.name}-${idx}`,
+            name: i.name,
+            count: i.count,
+            pct: (i.count / max) * 100
+        }));
+    }
+
+    const categoryRows = computed(() => toBars(data.value.byCategory ?? []));
+    const creatorRows = computed(() => toBars(data.value.byCreator ?? []));
+    const monthRows = computed(() => toBars(data.value.codesByMonth ?? []));
+    const campaignRows = computed(() => toBars(data.value.byCampaign ?? []));
+
+    // #endregion
+
+    // #region Functions
+
+    function fmt(n: number | null | undefined): string {
+        return (n ?? 0).toLocaleString("es-GT");
+    }
+
+    /** Verde/rojo según si subir es bueno para ESE indicador: en dormidos, subir es malo. */
+    function deltaClass(k: Kpi): string {
+        if (k.changePercent === null || k.changePercent === 0) { return "qrdDeltaFlat"; }
+        const improving = k.changePercent > 0 === k.higherIsBetter;
+        return improving ? "qrdDeltaGood" : "qrdDeltaBad";
+    }
+
+    function pct(n: number): string {
+        const total = healthTotal.value;
+        if (total <= 0) { return "0%"; }
+        return `${(n / total) * 100}%`;
+    }
+
+    /** Flecha y magnitud del delta, fuera de la plantilla: changePercent puede ser null. */
+    function deltaArrow(k: Kpi): string {
+        const change = k.changePercent ?? 0;
+        return change > 0 ? "▲" : (change < 0 ? "▼" : "—");
+    }
+
+    function deltaPercent(k: Kpi): number {
+        return Math.abs(k.changePercent ?? 0);
+    }
+
+    function barH(count: number, max: number): string {
+        if (max <= 0) { return "2px"; }
+        return `${Math.max(2, (count / max) * 100)}%`;
+    }
+
+    /** Barras horizontales: una serie de magnitud, un tono, identidad por etiqueta. */
+    const BarList: FunctionalComponent<{ rows: BarRow[] }> = (props) => {
+        if (!props.rows.length) {
+            return h("div", { class: "qrdNone" }, "Sin datos en este período.");
+        }
+
+        return h("ul", { class: "qrdBars" }, props.rows.map(r =>
+            h("li", { class: "qrdBar", key: r.key }, [
+                // Nombre y valor en la misma línea visible: el lector lee "Eventos 42" sin aria.
+                h("div", { class: "qrdBarTop" }, [
+                    h("span", { class: "qrdBarName", title: r.name }, r.name),
+                    h("span", { class: "qrdBarVal" }, fmt(r.count))
+                ]),
+                // La barra solo repite el número de arriba; sin aria-hidden el lector anuncia dos
+                // contenedores vacíos por fila.
+                h("div", { class: "qrdBarTrack", "aria-hidden": "true" }, [
+                    h("div", { class: "qrdBarFill", style: { width: `${Math.max(1, r.pct)}%` } })
+                ])
+            ])
+        ));
+    };
+
+    // Un componente funcional sin `props` declaradas recibe los atributos como attrs crudos, y los
+    // attrs no se camelizan: cualquier prop de más de una palabra llegaría como undefined.
+    BarList.props = ["rows"];
+
+    // #endregion
+
+    // #region Event Handlers
+
+    async function onRangeChange(): Promise<void> {
+        errorMessage.value = "";
+
+        const result = await invokeBlockAction<DashboardData>("Refresh", { days: Number(rangeDaysRaw.value) });
+
+        if (!result.isSuccess || !result.data) {
+            errorMessage.value = result.errorMessage || "No se pudo cargar la reportería.";
+            return;
+        }
+
+        data.value = result.data;
+    }
+
+    /**
+     * Celda CSV segura. Excel ejecuta como fórmula cualquier celda que empiece con = + - o @,
+     * y estas etiquetas (categorías, nombres de personas) las escribe el usuario. El apóstrofo
+     * inicial la fuerza a texto.
+     */
+    function csvCell(value: string | null | undefined): string {
+        const raw = String(value ?? "");
+        const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+        return `"${safe.replace(/"/g, "\"\"")}"`;
+    }
+
+    function onExport(): void {
+        const lines: string[] = ["seccion,etiqueta,valor"];
+
+        const push = (section: string, rows: Slice[]): void => {
+            for (const r of rows) {
+                lines.push(`${section},${csvCell(r.name)},${r.count}`);
+            }
+        };
+
+        for (const k of data.value.kpis ?? []) {
+            lines.push(`kpi,${csvCell(k.label)},${k.value}`);
+            // previousValue es null cuando no hay período anterior con el que comparar: una celda
+            // vacía dice eso; un 0 diría que el período anterior existió y midió cero.
+            lines.push(`kpi_anterior,${csvCell(k.label)},${k.previousValue ?? ""}`);
+        }
+
+        lines.push(`catalogo,${csvCell("total")},${data.value.totalCodes}`);
+        lines.push(`catalogo,${csvCell("dinamicos")},${data.value.dynamicCodes}`);
+        lines.push(`catalogo,${csvCell("estaticos")},${data.value.staticCodes}`);
+        lines.push(`catalogo,${csvCell("dados de baja")},${data.value.retiredCodes}`);
+        lines.push(`salud,${csvCell("con escaneos")},${data.value.codesWithScans}`);
+        lines.push(`salud,${csvCell("nunca escaneados")},${data.value.codesNeverScanned}`);
+        // Se exporta tal cual lo manda el servidor (N + S), que es lo que espera quien cruza el
+        // CSV con la KPI. Los tres segmentos excluyentes de la barra van aparte.
+        lines.push(`salud,${csvCell(`dormidos (incluye los nunca escaneados de más de ${options.value.staleDays} días)`)},${data.value.staleCodes}`);
+        lines.push(`salud,${csvCell("dormidos que alguna vez se escanearon")},${healthStaleSeen.value}`);
+        lines.push(`salud,${csvCell("con actividad reciente")},${healthOk.value}`);
+
+        push("categoria", data.value.byCategory ?? []);
+        push("creador", data.value.byCreator ?? []);
+        push("mes_creacion", data.value.codesByMonth ?? []);
+        push("dia_semana", data.value.byWeekday ?? []);
+        push("hora", data.value.byHour ?? []);
+        push("campania", data.value.byCampaign ?? []);
+
+        // BOM para que Excel en español abra bien los acentos.
+        const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `qr-reporteria-${new Date().toISOString().substring(0, 10)}.csv`;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // #endregion
+</script>

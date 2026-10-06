@@ -1,0 +1,1095 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Generador de códigos QR institucionales (módulo QR Generator).
+    Estado local en este archivo; el render del QR lo hace SIEMPRE el servidor (acción Preview),
+    así que lo que se ve en pantalla es exactamente lo que se descarga.
+    El <style> es NO-scoped a propósito: targetea .panel-block (chrome de Rock, fuera del
+    template) y re-estiliza controles Rock con selector compuesto.
+-->
+<template>
+    <Panel type="block" title="" class="qrg-panel">
+        <div class="qrgWrap">
+            <div v-if="notAuthorized" class="qrgPage">
+                <NotificationBox alertType="warning">
+                    No tenés permiso para administrar códigos QR.
+                </NotificationBox>
+            </div>
+
+            <div v-else class="qrgPage">
+                <header class="qrgHead">
+                    <h1 class="qrgTitle">{{ panelTitle }}</h1>
+                    <p class="qrgSub">{{ panelSubtitle }}</p>
+                </header>
+
+                <!-- La región viva se renderiza SIEMPRE, aunque esté vacía: un aria-live que
+                     aparece junto con su texto no se anuncia (el lector solo narra los cambios
+                     dentro de una región que ya existía). NotificationBox no trae aria-live
+                     propio: es un div con clase alert y nada más, así que va acá. -->
+                <div class="qrgLive" aria-live="polite" aria-atomic="true">
+                    <NotificationBox v-if="errorMessage" alertType="danger">{{ errorMessage }}</NotificationBox>
+                    <NotificationBox v-if="successMessage" alertType="success">{{ successMessage }}</NotificationBox>
+                </div>
+
+                <NotificationBox v-if="code.retiredDateTime" alertType="warning">
+                    Este código está dado de baja desde {{ retiredDateText }}. No se borró porque
+                    puede seguir impreso en algún lado.
+                </NotificationBox>
+
+                <!-- La pantalla se abre con permiso de solo VIEW (para que descargar no exija
+                     editar), así que hay que decirlo de entrada: sin esto el formulario parece
+                     completo y el 403 aparece recién al guardar, con el trabajo ya hecho. -->
+                <NotificationBox v-if="!canEdit" alertType="info">
+                    Estás en modo consulta: podés ver este código y descargar los archivos, pero no
+                    guardar cambios. Para editarlo hace falta permiso de edición sobre el bloque.
+                </NotificationBox>
+
+                <div class="qrgGrid">
+                    <!-- ============ Columna: los datos ============ -->
+                    <section class="qrgCol">
+                        <!-- El tipo: la decisión de la que la gente se arrepiente.
+                             La advertencia va ARRIBA de los botones. Explicar que algo es
+                             irreversible DESPUÉS de que ya lo elegiste no es una advertencia.
+                             Tampoco se pide confirmación al guardar: eso se repetiría en cada
+                             edición y entrena a hacer clic sin leer. Lo que hay que interrumpir
+                             es la elección del tipo, y es acá. -->
+                        <div v-if="canEdit && !code.isTypeLocked" class="qrgField">
+                            <span class="qrgLabel">Tipo de código</span>
+
+                            <NotificationBox alertType="warning">
+                                Elegí con cuidado: es lo único que no vas a poder cambiar después de
+                                guardar. Si dudás, elegí Dinámico. Un código estático lleva el
+                                contenido dentro del papel, así que cambiarlo en la base sería
+                                engañoso: lo que ya está impreso seguiría siendo estático.
+                            </NotificationBox>
+
+                            <!-- Es un grupo de radios, no dos botones sueltos: la selección se
+                                 comunicaba SOLO por color y borde, así que un lector de pantalla
+                                 no podía decir cuál estaba elegido. Con role=radio + aria-checked
+                                 lo dice, y con tabindex móvil el grupo entero ocupa una parada de
+                                 Tab y se recorre con flechas, que es lo que el patrón espera. -->
+                            <div class="qrgChoices" role="radiogroup" aria-label="Tipo de código">
+                                <button v-for="(choice, index) in typeChoices"
+                                        :key="choice.value"
+                                        type="button"
+                                        role="radio"
+                                        :aria-checked="code.qrType === choice.value"
+                                        :tabindex="typeTabIndex(choice, index)"
+                                        class="qrgChoice"
+                                        :class="{ qrgChoiceOn: code.qrType === choice.value, qrgChoiceOff: choice.disabled }"
+                                        :disabled="choice.disabled"
+                                        @keydown="onTypeKeydown($event, index)"
+                                        @click="code.qrType = choice.value">
+                                    <span class="qrgChoiceTitle">{{ choice.title }}</span>
+                                    <span class="qrgChoiceBody">{{ choice.body }}</span>
+                                    <!-- La recomendación va en su propio elemento: v-html está
+                                         prohibido, así que el énfasis se hace con markup, no con
+                                         un string que traiga etiquetas. -->
+                                    <span v-if="choice.bodyStrong" class="qrgChoiceStrong">{{ choice.bodyStrong }}</span>
+                                    <span v-if="choice.disabled" class="qrgChoiceWhy">{{ choice.disabledReason }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <NotificationBox v-else alertType="info">
+                            Código {{ typeLabel }}. El tipo no se puede cambiar: lo impreso ya quedó fijo.
+                        </NotificationBox>
+
+                        <NotificationBox v-if="options.shortDomainMessage"
+                                         :alertType="options.hasShortDomain ? 'warning' : 'info'">
+                            {{ options.shortDomainMessage }}
+                        </NotificationBox>
+
+                        <TextBox v-model="nameField" label="Nombre" rules="required" class="qrgInput"
+                                 :isReadOnly="isReadOnly"
+                                 help="Con esto se busca el código después. Poné algo que alguien más reconozca." />
+
+                        <TextBox v-model="descriptionField" label="Descripción" textMode="multiline" :rows="2"
+                                 class="qrgInput" :isReadOnly="isReadOnly"
+                                 help="Dónde va impreso y para qué campaña. Es lo que permite decidir si se puede retirar." />
+
+                        <DropDownList v-model="categoryValue" label="Categoría" class="qrgInput"
+                                      :items="options.categories" showBlankItem :disabled="isReadOnly" />
+
+                        <!-- ---- Dinámico ---- -->
+                        <template v-if="isDynamic">
+                            <TextBox v-if="!isTokenLocked" v-model="tokenField" label="Código corto"
+                                     class="qrgInput" :isReadOnly="isReadOnly" :help="tokenHelp" />
+
+                            <div class="qrgField">
+                                <span class="qrgLabel">URL impresa</span>
+                                <!-- Sin dominio corto configurado no se inventa uno: un
+                                     "https://ejemplo.gt/…" en un campo monoespaciado invita a
+                                     copiarlo y termina impreso. -->
+                                <p v-if="printedUrl" class="qrgMono">{{ printedUrl }}</p>
+                                <p v-else class="qrgNote">Se asigna al guardar, cuando haya un
+                                    dominio corto configurado.</p>
+                                <p v-if="isTokenLocked" class="qrgNote">
+                                    El código corto no se puede cambiar: es lo que está impreso. Lo
+                                    que sí podés cambiar, y cuantas veces quieras, es el destino de
+                                    acá abajo.
+                                </p>
+                            </div>
+
+                            <TextBox v-model="destinationField" :label="destinationLabel" rules="required"
+                                     class="qrgInput" :isReadOnly="isReadOnly" :help="destinationHelp" />
+
+                            <!-- Con destinos programados, el campo de arriba NO es a dónde lleva el
+                                 código hoy: es el destino de fondo. Mostrar solo uno de los dos
+                                 haría que el editor contradiga al escáner. -->
+                            <div v-if="code.hasSchedules" class="qrgField">
+                                <span class="qrgLabel">Destino vigente hoy</span>
+                                <p class="qrgMono">{{ code.effectiveDestination || "—" }}</p>
+                                <p class="qrgNote">
+                                    Este código tiene destinos programados por fecha: hoy redirige
+                                    acá, no necesariamente al destino base. Las fechas se editan
+                                    desde la pantalla nativa de enlaces cortos de Rock.
+                                </p>
+                            </div>
+
+                            <div v-if="code.idKey" class="qrgStats">
+                                <div class="qrgStat">
+                                    <span class="qrgStatNum">{{ code.scanCount }}</span>
+                                    <span class="qrgStatLbl">escaneos</span>
+                                </div>
+                                <div class="qrgStat">
+                                    <span class="qrgStatNum qrgStatNumSm">{{ lastScanText }}</span>
+                                    <span class="qrgStatLbl">último escaneo</span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- ---- Estático ---- -->
+                        <template v-else>
+                            <DropDownList v-model="staticTypeValue" label="Tipo de contenido" class="qrgInput"
+                                          :items="options.staticContentTypes" :showBlankItem="false"
+                                          :disabled="isReadOnly" />
+
+                            <NotificationBox v-if="isWifi" alertType="warning">
+                                La contraseña viaja dentro del código. Cualquiera que lo escanee la
+                                obtiene, y cualquiera que vea el PNG puede decodificarla. Así funciona
+                                un QR estático de wifi; no es un defecto del generador.
+                            </NotificationBox>
+
+                            <NotificationBox alertType="info">
+                                Un código estático no se puede cambiar después de impreso y no deja
+                                métricas, porque no hay redirección que registrar.
+                            </NotificationBox>
+
+                            <template v-if="isWifi">
+                                <TextBox v-model="wifi.ssid" label="Nombre de la red (SSID)" rules="required"
+                                         class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="wifi.password" label="Contraseña" class="qrgInput"
+                                         :isReadOnly="isReadOnly" />
+                                <DropDownList v-model="wifi.authentication" label="Seguridad" class="qrgInput"
+                                              :showBlankItem="false" :items="wifiAuthItems" :disabled="isReadOnly" />
+                                <!-- CheckBox no acepta deshabilitado, así que en modo consulta el
+                                     dato se muestra como texto en vez de como un control mentiroso. -->
+                                <CheckBox v-if="!isReadOnly" v-model="wifi.isHidden" label="La red no difunde su nombre" />
+                                <p v-else-if="wifi.isHidden" class="qrgNote">La red no difunde su nombre.</p>
+                            </template>
+
+                            <template v-else-if="isVCard">
+                                <TextBox v-model="vcard.firstName" label="Nombre" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.lastName" label="Apellido" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.organization" label="Organización" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.title" label="Puesto" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.phone" label="Teléfono" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.email" label="Correo" class="qrgInput" :isReadOnly="isReadOnly" />
+                                <TextBox v-model="vcard.website" label="Sitio web" class="qrgInput" :isReadOnly="isReadOnly" />
+                            </template>
+
+                            <TextBox v-else v-model="scalarContent" :label="scalarLabel" rules="required"
+                                     class="qrgInput" :isReadOnly="isReadOnly"
+                                     :textMode="isLongText ? 'multiline' : 'singleline'" :rows="3" />
+                        </template>
+                    </section>
+
+                    <!-- ============ Columna: diseño y vista previa ============ -->
+                    <section class="qrgCol">
+                        <div class="qrgPreviewCard">
+                            <img v-if="previewDataUri" class="qrgPreviewImg" :src="previewDataUri" alt="Vista previa del código QR" />
+                            <div v-else class="qrgPreviewEmpty">
+                                <span class="qrgPreviewEmptyText">{{ previewMessage }}</span>
+                            </div>
+
+                            <p v-if="design.eccLevel" class="qrgEcc">
+                                Corrección de error: {{ design.eccLevel }}{{ eccReason }}
+                            </p>
+                        </div>
+
+                        <NotificationBox v-if="design.validationMessage" alertType="danger">
+                            {{ design.validationMessage }}
+                        </NotificationBox>
+
+                        <!-- Los controles de diseño solo existen si se puede guardar: ni ColorPicker
+                             ni RangeSlider aceptan deshabilitado, y la vista previa no se puede
+                             refrescar sin permiso de edición (Preview exige EDIT en el servidor),
+                             así que editarlos dejaría el QR en pantalla desfasado de los controles. -->
+                        <template v-if="canEdit">
+                            <div class="qrgColors">
+                                <ColorPicker v-model="design.foregroundColor" label="Color del módulo" />
+                                <ColorPicker v-model="design.backgroundColor" label="Color de fondo" />
+                            </div>
+
+                            <p class="qrgContrast" :class="contrastOk ? 'qrgContrastOk' : 'qrgContrastBad'">
+                                Contraste {{ design.contrastRatio }}:1 · mínimo {{ options.minContrastRatio }}:1
+                            </p>
+                            <p class="qrgNote">El módulo tiene que ser el color oscuro. Un código invertido
+                                se ve bien en pantalla y falla en muchos lectores.</p>
+
+                            <ImageUploader v-model="code.logoBinaryFile" label="Logo al centro"
+                                           help="Opcional. Se dibuja sobre un parche del color de fondo." />
+
+                            <div v-if="code.logoBinaryFile" class="qrgField">
+                                <RangeSlider v-model="design.logoSizePercent" label="Tamaño del logo"
+                                             :min="0" :max="options.maxLogoSizePercent" :step="1" showValueBar />
+                                <p class="qrgNote">
+                                    Máximo {{ options.maxLogoSizePercent }} % del lado. Más que eso y ni la
+                                    corrección nivel H alcanza.
+                                </p>
+                            </div>
+                        </template>
+
+                        <div v-if="code.idKey" class="qrgDownloads">
+                            <h2 class="qrgH2">Descargas</h2>
+
+                            <NumberBox v-model="printSideCm" label="Tamaño de impresión (cm)" class="qrgInput"
+                                       :minimumValue="options.minPrintSideCm" :help="printHelp" />
+
+                            <p v-if="readingDistanceText" class="qrgNote">{{ readingDistanceText }}</p>
+
+                            <!-- El servidor renderiza el archivo DESDE LA BASE, no desde lo que se
+                                 ve en pantalla. Con cambios sin guardar, lo que baja es el diseño
+                                 anterior, y es el único error del módulo que llega a imprenta.
+                                 No se manda el bag en su lugar porque en un código dinámico el
+                                 token todavía no existe hasta guardar: el archivo saldría
+                                 codificando una URL que nadie va a poder resolver. -->
+                            <NotificationBox v-if="isDirty" alertType="warning">
+                                Hay cambios sin guardar. Guardá antes de descargar o el archivo va a
+                                salir con el diseño anterior.
+                            </NotificationBox>
+
+                            <div class="qrgActions">
+                                <RockButton btnType="primary" class="qrgCta" :disabled="isBusy || isDirty"
+                                            @click="onDownloadSvg">
+                                    SVG para imprenta
+                                </RockButton>
+                                <RockButton btnType="default" class="qrgBtn" :disabled="isBusy || isDirty"
+                                            @click="onDownloadPng">
+                                    PNG para pantalla
+                                </RockButton>
+                            </div>
+
+                            <p class="qrgNote">
+                                El SVG es el formato de imprenta. El PNG del navegador no declara
+                                resolución ni perfil de color; sirve para pantalla y correo.
+                            </p>
+                        </div>
+                    </section>
+                </div>
+
+                <footer class="qrgFoot">
+                    <template v-if="canEdit">
+                        <RockButton btnType="primary" class="qrgCta" :disabled="isBusy" @click="onSave">Guardar</RockButton>
+                        <RockButton btnType="link" class="qrgBtnLink" :disabled="isBusy" @click="onPreview">
+                            Actualizar vista previa
+                        </RockButton>
+                        <RockButton v-if="canRetire" btnType="link" class="qrgBtnDanger" :disabled="isBusy" @click="onRetire">
+                            Dar de baja
+                        </RockButton>
+                        <RockButton v-if="canReactivate" btnType="link" class="qrgBtnLink" :disabled="isBusy" @click="onReactivate">
+                            Reactivar
+                        </RockButton>
+                    </template>
+                    <a v-if="options.listPageUrl" class="qrgBack" :href="options.listPageUrl">Volver al catálogo</a>
+                </footer>
+            </div>
+        </div>
+    </Panel>
+</template>
+
+<style>
+/* Fuentes Brújula VR servidas desde RockWeb (no CDN). Blogger Sans es CC BY-ND: formato original. */
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Mono";
+    src: url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* Chrome del panel: solo para este bloque (no afecta otros panel-block). */
+.panel-block:has(.qrgWrap) > .panel-heading,
+.panel-block:has(.qrgWrap) > .panel-header { display: none !important; }
+.panel-block:has(.qrgWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.qrgWrap) > .panel-body { padding: 0 !important; }
+
+.qrgWrap {
+    /* Tokens Brújula VR */
+    --vr-navy: #0F334B;
+    --vr-red: #E74133;
+    --vr-steel: #A2BACA;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-soft: #5A6E7C;
+    /* #8296A6 daba 3,06:1 sobre blanco y acá se usa en texto de 11-12 px (todas las notas, la
+       copia que explica lo irreversible, las etiquetas de las métricas): no pasa AA. Este tono
+       da ~5,1:1 y sigue leyéndose secundario. */
+    --ink-faint: #5E6E7A;
+    --rule: #E1E8ED;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --ok-text: #1E7A64;
+    --bad-text: #B3352A;
+    --btn-primary: #0F334B;
+    --btn-primary-hover: #143E5A;
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --font-title: "Blogger Sans", "Century Gothic", Futura, sans-serif;
+    --font-body: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+    --font-num: "Fira Mono", "Fira Sans", Consolas, monospace;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+.qrgWrap *, .qrgWrap *::before, .qrgWrap *::after { box-sizing: border-box; }
+
+.qrgPage { margin: 0 -15px; background: var(--bg); padding: 24px 20px 32px; min-height: 50vh; }
+
+.qrgHead { margin-bottom: 20px; }
+.qrgTitle { font-family: var(--font-title); font-weight: 700; font-size: 26px; color: var(--vr-navy); margin: 0; }
+.qrgSub { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+
+.qrgGrid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+.qrgCol { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-card); }
+
+.qrgField { margin-bottom: 16px; }
+.qrgLabel { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin-bottom: 6px; }
+.qrgNote { font-size: 12px; line-height: 1.5; color: var(--ink-faint); margin: 6px 0 0; }
+.qrgMono { font-family: var(--font-num); font-size: 13px; background: var(--paper-alt); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 8px 10px; margin: 0; word-break: break-all; color: var(--vr-navy); }
+.qrgH2 { font-family: var(--font-title); font-weight: 700; font-size: 16px; color: var(--vr-navy); margin: 0 0 12px; }
+
+/* Selector de tipo */
+.qrgChoices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qrgChoice { display: flex; flex-direction: column; gap: 4px; text-align: left; background: var(--paper); border: 2px solid var(--rule-strong); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; transition: border-color .15s, background-color .15s; }
+.qrgChoice:hover:not(:disabled) { border-color: var(--action); }
+.qrgChoiceOn { border-color: var(--vr-navy); background: var(--action-soft); }
+.qrgChoiceOff { opacity: .5; cursor: not-allowed; }
+.qrgChoiceTitle { font-family: var(--font-title); font-weight: 700; font-size: 15px; color: var(--vr-navy); }
+.qrgChoiceBody { font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
+.qrgChoiceStrong { font-size: 12px; line-height: 1.45; font-weight: 600; color: var(--vr-navy); }
+.qrgChoiceWhy { font-size: 11px; font-style: italic; color: var(--vr-red); }
+
+/* Vista previa */
+.qrgPreviewCard { background: var(--paper-alt); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; text-align: center; }
+.qrgPreviewImg { max-width: 260px; width: 100%; height: auto; display: inline-block; }
+.qrgPreviewEmpty { display: flex; align-items: center; justify-content: center; min-height: 220px; }
+.qrgPreviewEmptyText { font-size: 12px; color: var(--ink-faint); max-width: 220px; line-height: 1.5; }
+.qrgEcc { font-size: 12px; color: var(--ink-soft); margin: 12px 0 0; }
+
+.qrgColors { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.qrgContrast { font-family: var(--font-num); font-size: 13px; margin: 4px 0 0; }
+.qrgContrastOk { color: var(--ok-text); }
+.qrgContrastBad { color: var(--bad-text); }
+
+/* Métricas */
+.qrgStats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.qrgStat { background: var(--paper-alt); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+.qrgStatNum { display: block; font-family: var(--font-num); font-size: 24px; font-weight: 400; color: var(--vr-navy); }
+.qrgStatNumSm { font-size: 14px; }
+.qrgStatLbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin-top: 2px; }
+
+.qrgDownloads { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.qrgActions { display: flex; flex-direction: column; gap: 8px; }
+.qrgFoot { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding: 16px 20px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }
+.qrgBack { margin-left: auto; color: var(--action); font-size: 13px; text-decoration: none; }
+.qrgBack:hover { text-decoration: underline; }
+
+/* Controles Rock: selector compuesto porque el <style> es no-scoped. */
+.qrgCta.btn { background: var(--btn-primary) !important; border-color: var(--btn-primary) !important; color: #fff !important; font-weight: 600 !important; border-radius: var(--radius-sm) !important; }
+.qrgCta.btn:hover, .qrgCta.btn:focus { background: var(--btn-primary-hover) !important; border-color: var(--btn-primary-hover) !important; }
+.qrgBtn.btn { background: var(--paper) !important; border-color: var(--rule-strong) !important; color: var(--vr-navy) !important; border-radius: var(--radius-sm) !important; }
+.qrgBtnLink.btn { color: var(--action) !important; }
+.qrgBtnDanger.btn { color: var(--vr-red) !important; }
+
+/* Foco visible: los botones de tipo son <button> propios y sin esto el teclado se pierde
+   justo en la decisión irreversible. */
+.qrgWrap a:focus-visible,
+.qrgWrap button:focus-visible,
+.qrgWrap .btn:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+}
+.qrgChoice:focus-visible { outline: 2px solid var(--vr-navy); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+    .qrgGrid { grid-template-columns: 1fr; }
+    .qrgChoices { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+    .qrgPage { margin: 0; padding: 16px 12px 24px; }
+    .qrgColors, .qrgStats { grid-template-columns: 1fr; }
+    .qrgFoot { flex-wrap: wrap; }
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, nextTick, ref, watch, WritableComputedRef } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import NumberBox from "@Obsidian/Controls/numberBox.obs";
+    import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import ColorPicker from "@Obsidian/Controls/colorPicker.obs";
+    import RangeSlider from "@Obsidian/Controls/rangeSlider.obs";
+    import ImageUploader from "@Obsidian/Controls/imageUploader.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { confirm } from "@Obsidian/Utility/dialogs";
+    import { CodeBag, DesignBag, OptionsBag, QrType, StaticType } from "./QrCodeDetail/types.partial";
+
+    const config = useConfigurationValues<{ notAuthorized: boolean; options: OptionsBag; code: CodeBag }>();
+    const invokeBlockAction = useInvokeBlockAction();
+
+    // #region Values
+
+    const notAuthorized = ref(config.notAuthorized === true);
+    const options = ref<OptionsBag>(config.options ?? ({} as OptionsBag));
+    const code = ref<CodeBag>(config.code ?? ({} as CodeBag));
+    const design = ref<DesignBag>(code.value.design ?? ({} as DesignBag));
+    const previewSvg = ref<string | null>(code.value.previewSvg ?? null);
+    const previewMessage = ref<string>("Completá el contenido para ver el código.");
+
+    const errorMessage = ref("");
+    const successMessage = ref("");
+    const isBusy = ref(false);
+    const printSideCm = ref<number | null>(null);
+
+    // El bloque se inicializa con VIEW para que descargar no exija permiso de edición, así que
+    // acá puede llegar alguien que no puede guardar. Save, Retire, Reactivate y Preview siguen
+    // exigiendo EDIT del lado del servidor: esto es UX, no seguridad.
+    const canEdit = ref(config.options?.canEdit !== false);
+
+    /**
+     * Hay cambios en pantalla que todavía no están en la base. Importa porque las descargas las
+     * renderiza el SERVIDOR desde la base: con esto en true, el archivo saldría con el diseño
+     * anterior. Un código que nunca se guardó arranca sucio por definición.
+     */
+    const isDirty = ref(!code.value.idKey);
+
+    const wifi = ref({ ssid: "", password: "", authentication: "WPA", isHidden: false });
+    const vcard = ref({ firstName: "", lastName: "", organization: "", title: "", phone: "", email: "", website: "" });
+    const scalarContent = ref("");
+
+    const wifiAuthItems: ListItemBag[] = [
+        { value: "WPA", text: "WPA/WPA2" },
+        { value: "WEP", text: "WEP" },
+        { value: "nopass", text: "Abierta" }
+    ];
+
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    let isPreviewing = false;
+
+    // Si llega una edición mientras el servidor está renderizando, la llamada NO se descarta: se
+    // reprograma. Descartarla dejaba la vista previa clavada en el valor viejo (arrastrás el
+    // slider del logo, el render con ECC H tarda ~1,5 s, el debounce dispara y se perdía).
+    let previewPending = false;
+
+    // Los cambios que vienen del servidor (carga inicial, guardado, baja) no son ediciones del
+    // usuario: sin esta bandera, reasignar el bag marcaba el formulario como sucio y borraba el
+    // mensaje de "Código guardado" que se acababa de mostrar.
+    let isApplyingServerBag = false;
+
+    // #endregion
+
+    // #region Computed
+
+    /**
+     * Puente entre los campos de texto del bag —que el servidor sí manda nulos: un código nuevo
+     * no tiene nombre, token ni destino— y los controles de Rock, cuyo modelValue es `string`.
+     * Se mantiene el tipo del wire honesto (nullable) y se normaliza acá, en vez de mentir en
+     * el types.partial.ts diciendo que nunca llega null.
+     */
+    function textField(key: "name" | "description" | "token" | "destination"): WritableComputedRef<string> {
+        return computed({
+            get: () => code.value[key] ?? "",
+            set: (value: string) => { code.value[key] = value; }
+        });
+    }
+
+    const nameField = textField("name");
+    const descriptionField = textField("description");
+    const tokenField = textField("token");
+    const destinationField = textField("destination");
+
+    const isDynamic = computed(() => code.value.qrType === QrType.Dinamico);
+    const typeLabel = computed(() => isDynamic.value ? "dinámico" : "estático");
+    const isWifi = computed(() => Number(staticTypeValue.value) === StaticType.Wifi);
+    const isVCard = computed(() => Number(staticTypeValue.value) === StaticType.VCard);
+    const isLongText = computed(() => Number(staticTypeValue.value) === StaticType.Texto);
+    const canRetire = computed(() => !!code.value.idKey && code.value.isActive);
+    const canReactivate = computed(() => !!code.value.idKey && !code.value.isActive);
+
+    /** Modo consulta: los campos se muestran, pero no se editan. */
+    const isReadOnly = computed(() => !canEdit.value);
+
+    // El token es lo que está impreso: se fija al guardar, igual que el tipo. El servidor
+    // tampoco lo actualiza (SyncShortLink solo cambia el destino), así que dejarlo editable
+    // sería un campo que acepta cambios y los descarta en silencio.
+    const isTokenLocked = computed(() => !!code.value.idKey);
+    const contrastOk = computed(() => (design.value.contrastRatio ?? 0) >= (options.value.minContrastRatio ?? 3));
+
+    const panelTitle = computed(() => code.value.idKey ? (code.value.name || "Código QR") : "Nuevo código QR");
+    const panelSubtitle = computed(() => code.value.idKey
+        ? "Editá el destino, el diseño y descargá el archivo para imprenta."
+        : "Elegí el tipo antes que nada: es lo único que no se puede cambiar después.");
+
+    // El SVG se muestra como data URI en un <img>: v-html está prohibido en este repo.
+    const previewDataUri = computed(() => {
+        if (!previewSvg.value) { return null; }
+        try { return `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(previewSvg.value)))}`; }
+        catch { return null; }
+    });
+
+    const eccReason = computed(() => (design.value.logoSizePercent ?? 0) > 0 ? " — subida a H por el logo" : "");
+
+    const categoryValue = computed({
+        get: () => code.value.category?.value ?? "",
+        set: (v: string) => {
+            code.value.category = v ? (options.value.categories.find(c => c.value === v) ?? null) : null;
+        }
+    });
+
+    const staticTypeValue = computed({
+        get: () => String(code.value.staticContentType ?? StaticType.Url),
+        set: (v: string) => { code.value.staticContentType = Number(v); }
+    });
+
+    const scalarLabel = computed(() => {
+        switch (Number(staticTypeValue.value)) {
+            case StaticType.Url: return "Enlace";
+            case StaticType.Email: return "Correo";
+            case StaticType.Telefono: return "Teléfono";
+            default: return "Texto";
+        }
+    });
+
+    const tokenHelp = computed(() =>
+        `Lo que va impreso después de ${options.value.shortDomain || "el dominio corto"}. Dejalo vacío y se genera uno.`);
+
+    const printHelp = computed(() =>
+        `Mínimo ${options.value.minPrintSideCm} cm. Para leer a distancia: lado ≈ distancia ÷ 10.`);
+
+    /**
+     * Vacío cuando todavía no hay dominio corto: antes se caía a "https://ejemplo.gt", un dominio
+     * inventado en un campo monoespaciado que invita a copiarlo — y termina impreso.
+     */
+    const printedUrl = computed(() => {
+        if (code.value.shortLinkUrl) { return code.value.shortLinkUrl; }
+
+        const domain = (options.value.shortDomain ?? "").replace(/\/+$/, "");
+        if (!domain) { return ""; }
+
+        return `${domain}/${code.value.token || "…"}`;
+    });
+
+    // Con destinos programados, este campo deja de ser "a dónde lleva hoy" y pasa a ser el destino
+    // de fondo: decirle solo "Destino" haría que el editor contradiga a la realidad del escáner.
+    const destinationLabel = computed(() => code.value.hasSchedules ? "Destino base" : "Destino");
+
+    const destinationHelp = computed(() => code.value.hasSchedules
+        ? "El destino de fondo del enlace corto. Mientras haya un destino programado vigente, ese pisa a este."
+        : "A dónde lleva el código hoy. Se puede cambiar después de impreso — esa es toda la gracia.");
+
+    const readingDistanceText = computed(() => {
+        const cm = printSideCm.value;
+        if (!cm || cm <= 0) { return ""; }
+        return `A ${cm} cm se lee cómodo desde unos ${Math.round(cm * 10)} cm.`;
+    });
+
+    const retiredDateText = computed(() => formatDate(code.value.retiredDateTime));
+    const lastScanText = computed(() => code.value.lastScanDateTime ? formatDate(code.value.lastScanDateTime) : "nunca");
+
+    // Ejemplos concretos, no definiciones: la gente no elige entre "dinámico" y "estático", elige
+    // entre "un afiche" y "el wifi de la cafetería".
+    const typeChoices = computed(() => [
+        {
+            value: QrType.Dinamico,
+            title: "Dinámico",
+            body: "Afiches, banners, pantallas: si cambia la página, cambiás el destino sin reimprimir. Además cada escaneo queda registrado.",
+            bodyStrong: "Es el que querés casi siempre.",
+            disabled: !options.value.hasShortDomain,
+            disabledReason: "Requiere el dominio corto configurado."
+        },
+        {
+            value: QrType.Estatico,
+            title: "Estático",
+            body: "Solo para lo que nunca cambia: el wifi de la cafetería, una tarjeta de contacto. Si el destino cambia, hay que reimprimir todo.",
+            bodyStrong: "",
+            disabled: false,
+            disabledReason: ""
+        }
+    ]);
+
+    // #endregion
+
+    // #region Functions
+
+    function formatDate(value: string | null | undefined): string {
+        if (!value) { return ""; }
+        try { return new Date(value).toLocaleDateString("es-GT", { year: "numeric", month: "long", day: "numeric" }); }
+        catch { return value; }
+    }
+
+    /**
+     * Tabindex móvil del radiogroup de tipo: el grupo entero es UNA parada de Tab y adentro se
+     * navega con flechas. Una opción deshabilitada nunca entra (un <button disabled> tampoco es
+     * enfocable), y si la seleccionada resultara ser la deshabilitada —código nuevo sin dominio
+     * corto— la parada se la queda la primera habilitada, para que el grupo no quede inalcanzable.
+     */
+    function typeTabIndex(choice: { value: QrType; disabled: boolean }, index: number): number {
+        if (choice.disabled) { return -1; }
+
+        const choices = typeChoices.value;
+        const selected = choices.find(c => c.value === code.value.qrType && !c.disabled);
+
+        if (selected) { return choice.value === code.value.qrType ? 0 : -1; }
+
+        return index === choices.findIndex(c => !c.disabled) ? 0 : -1;
+    }
+
+    /**
+     * Flechas dentro del radiogroup. Mueven foco Y selección juntos, que es el comportamiento del
+     * patrón: acá la elección todavía es reversible —lo irreversible ocurre al guardar— así que no
+     * hace falta el modo "solo mueve el foco". Las opciones deshabilitadas se saltan.
+     */
+    function onTypeKeydown(event: KeyboardEvent, index: number): void {
+        const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+        const backward = event.key === "ArrowLeft" || event.key === "ArrowUp";
+        if (!forward && !backward) { return; }
+
+        const choices = typeChoices.value;
+        const total = choices.length;
+        const step = forward ? 1 : -1;
+
+        let target = index;
+        for (let i = 0; i < total; i++) {
+            target = (target + step + total) % total;
+            if (!choices[target].disabled) { break; }
+        }
+
+        if (target === index || choices[target].disabled) { return; }
+
+        event.preventDefault();
+        code.value.qrType = choices[target].value;
+
+        // El botón destino sigue con tabindex -1 en este tick, pero focus() no lo necesita: un
+        // tabindex negativo excluye del recorrido de Tab, no del foco programático.
+        const group = (event.currentTarget as HTMLElement).closest(".qrgChoices");
+        group?.querySelectorAll<HTMLButtonElement>(".qrgChoice")[target]?.focus();
+    }
+
+    /** Arma el staticContent que espera el servidor: JSON para wifi y vCard, escalar para el resto. */
+    function buildStaticContent(): string {
+        if (isWifi.value) { return JSON.stringify(wifi.value); }
+        if (isVCard.value) { return JSON.stringify(vcard.value); }
+        return scalarContent.value;
+    }
+
+    /** Lee el staticContent que vino del servidor hacia los campos de edición. */
+    function loadStaticContent(): void {
+        const raw = code.value.staticContent ?? "";
+        if (!raw) { return; }
+
+        const type = Number(code.value.staticContentType ?? StaticType.Url);
+
+        if (type === StaticType.Wifi || type === StaticType.VCard) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (type === StaticType.Wifi) { wifi.value = { ...wifi.value, ...parsed }; }
+                else { vcard.value = { ...vcard.value, ...parsed }; }
+            }
+            catch {
+                // Contenido viejo o editado a mano: se trata como escalar para no perderlo.
+                scalarContent.value = raw;
+            }
+        }
+        else {
+            scalarContent.value = raw;
+        }
+    }
+
+    function currentBag(): CodeBag {
+        // El SVG de la vista previa pesa varios KB y el servidor lo REGENERA en cada llamada:
+        // reenviárselo en cada POST con debounce de 400 ms era subir el mismo archivo una y otra
+        // vez para que lo tire.
+        const { previewSvg: _previewSvg, ...rest } = code.value;
+
+        return {
+            ...rest,
+            design: design.value,
+            staticContent: isDynamic.value ? null : buildStaticContent()
+        };
+    }
+
+    /**
+     * Aplica un bag que vino del servidor sin que cuente como edición del usuario. Espera al flush
+     * de los watchers antes de bajar la bandera: los callbacks de `watch` corren en el siguiente
+     * tick, así que sin el await marcarían el formulario como sucio justo después de guardarlo.
+     */
+    async function applyBagFromServer(bag: CodeBag, takePreview: boolean): Promise<void> {
+        isApplyingServerBag = true;
+
+        try {
+            code.value = bag;
+            design.value = bag.design;
+            if (takePreview) { previewSvg.value = bag.previewSvg ?? null; }
+            loadStaticContent();
+            await nextTick();
+        }
+        finally { isApplyingServerBag = false; }
+
+        isDirty.value = false;
+    }
+
+    /**
+     * Dispara la descarga. Blob + <a download> AGREGADO AL DOM: sin agregarlo, Safari y varios
+     * WebViews ignoran el click. Nunca JPEG para un QR — un formato con pérdida mete ringing en
+     * cada borde de módulo.
+     */
+    function triggerDownload(blob: Blob, fileName: string): void {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    /**
+     * Rasteriza el SVG a PNG en el navegador. Es el único camino para un PNG CON logo: QRCoder
+     * 1.3.9 no compone logos en ningún renderer que evite GDI+.
+     */
+    function rasterizeSvgToPng(svg: string, fileName: string, targetPx: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const img = new Image();
+
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = targetPx;
+                    canvas.height = targetPx;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) { URL.revokeObjectURL(svgUrl); resolve(false); return; }
+
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0, targetPx, targetPx);
+
+                    canvas.toBlob((blob) => {
+                        URL.revokeObjectURL(svgUrl);
+                        // Bajo presión de memoria el canvas devuelve algo vacío en vez de fallar.
+                        if (!blob || blob.size < 100) { resolve(false); return; }
+                        triggerDownload(blob, fileName);
+                        resolve(true);
+                    }, "image/png");
+                }
+                catch { URL.revokeObjectURL(svgUrl); resolve(false); }
+            };
+
+            img.onerror = () => { URL.revokeObjectURL(svgUrl); resolve(false); };
+            img.src = svgUrl;
+        });
+    }
+
+    function dataUriToBlob(dataUri: string): Blob | null {
+        const match = /^data:([^;]+);base64,(.*)$/.exec(dataUri);
+        if (!match) { return null; }
+        const binary = window.atob(match[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+        return new Blob([bytes], { type: match[1] });
+    }
+
+    // #endregion
+
+    // #region Event Handlers
+
+    async function onPreview(): Promise<void> {
+        // Preview exige EDIT en el servidor: llamarlo en modo consulta devuelve 403.
+        if (!canEdit.value) { return; }
+
+        // El guard evita que la respuesta vuelva a disparar el watch que originó la llamada:
+        // onPreview escribe en `design`, y `design` es una de las fuentes observadas.
+        // Ojo: la llamada que llega mientras hay una en vuelo se REPROGRAMA, no se descarta.
+        if (isPreviewing) { previewPending = true; return; }
+        isPreviewing = true;
+
+        try {
+            const result = await invokeBlockAction<{ svg: string | null; design: DesignBag }>("Preview", { bag: currentBag() });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo generar la vista previa.";
+                return;
+            }
+
+            errorMessage.value = "";
+
+            // Solo se copian de vuelta los campos CALCULADOS por el servidor. Los tres que el
+            // usuario edita (colores y tamaño del logo) se dejan intactos: reasignarlos haría
+            // saltar el watch otra vez y, con el debounce, dejaría el bloque llamando al servidor
+            // en bucle para siempre.
+            design.value.contrastRatio = result.data.design.contrastRatio;
+            design.value.validationMessage = result.data.design.validationMessage;
+            design.value.eccLevel = result.data.design.eccLevel;
+
+            previewSvg.value = result.data.svg;
+
+            if (!result.data.svg) {
+                previewMessage.value = result.data.design.validationMessage || "Completá el contenido para ver el código.";
+            }
+        }
+        finally {
+            isPreviewing = false;
+
+            // Hubo ediciones mientras el servidor renderizaba: se rehace con los valores de ahora.
+            if (previewPending) {
+                previewPending = false;
+                void onPreview();
+            }
+        }
+    }
+
+    async function onSave(): Promise<void> {
+        errorMessage.value = "";
+        successMessage.value = "";
+        isBusy.value = true;
+
+        const wasSavedBefore = !!code.value.idKey;
+
+        try {
+            const result = await invokeBlockAction<CodeBag>("Save", { bag: currentBag() });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo guardar.";
+                return;
+            }
+
+            const wasNew = !wasSavedBefore;
+
+            await applyBagFromServer(result.data, true);
+            successMessage.value = "Código guardado.";
+
+            // Un código recién creado seguía con QrCodeId=0 en la barra de direcciones: al
+            // recargar se perdía y parecía que no se había guardado.
+            if (wasNew && result.data.idKey) {
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("QrCodeId", result.data.idKey);
+                    window.history.replaceState({}, "", url.toString());
+                }
+                catch { /* si el navegador no deja reescribir la URL, no es motivo para fallar */ }
+            }
+        }
+        finally { isBusy.value = false; }
+    }
+
+    async function onReactivate(): Promise<void> {
+        errorMessage.value = "";
+        isBusy.value = true;
+
+        try {
+            const result = await invokeBlockAction<CodeBag>("Reactivate", { idKey: code.value.idKey });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo reactivar.";
+                return;
+            }
+
+            await applyBagFromServer(result.data, false);
+            successMessage.value = "Código reactivado.";
+        }
+        finally { isBusy.value = false; }
+    }
+
+    async function onRetire(): Promise<void> {
+        const ok = await confirm("¿Dar de baja este código? No se borra — puede seguir impreso — pero deja de listarse como activo.");
+        if (!ok) { return; }
+
+        errorMessage.value = "";
+        isBusy.value = true;
+
+        try {
+            const result = await invokeBlockAction<CodeBag>("Retire", { idKey: code.value.idKey });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo dar de baja.";
+                return;
+            }
+
+            await applyBagFromServer(result.data, false);
+            successMessage.value = "Código dado de baja.";
+        }
+        finally { isBusy.value = false; }
+    }
+
+    async function onDownloadSvg(): Promise<void> {
+        errorMessage.value = "";
+        isBusy.value = true;
+
+        try {
+            const result = await invokeBlockAction<{ fileName: string; content: string }>("DownloadSvg", {
+                idKey: code.value.idKey,
+                printSideCm: printSideCm.value ?? 0
+            });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo generar el SVG.";
+                return;
+            }
+
+            triggerDownload(new Blob([result.data.content], { type: "image/svg+xml;charset=utf-8" }), result.data.fileName);
+        }
+        finally { isBusy.value = false; }
+    }
+
+    async function onDownloadPng(): Promise<void> {
+        errorMessage.value = "";
+        isBusy.value = true;
+
+        try {
+            // Con logo, el PNG del servidor no lo lleva: se rasteriza el SVG acá.
+            if ((design.value.logoSizePercent ?? 0) > 0) {
+                const svgResult = await invokeBlockAction<{ fileName: string; content: string }>("DownloadSvg", {
+                    idKey: code.value.idKey,
+                    printSideCm: 0
+                });
+
+                if (!svgResult.isSuccess || !svgResult.data) {
+                    errorMessage.value = svgResult.errorMessage || "No se pudo generar el código.";
+                    return;
+                }
+
+                const fileName = svgResult.data.fileName.replace(/\.svg$/i, ".png");
+                const ok = await rasterizeSvgToPng(svgResult.data.content, fileName, 1024);
+
+                if (!ok) {
+                    errorMessage.value = "El navegador no pudo generar el PNG con logo. Descargá el SVG, que además es el formato de imprenta.";
+                }
+
+                return;
+            }
+
+            const result = await invokeBlockAction<{ fileName: string; content: string }>("DownloadPng", {
+                idKey: code.value.idKey,
+                pixelsPerModule: 20
+            });
+
+            if (!result.isSuccess || !result.data) {
+                errorMessage.value = result.errorMessage || "No se pudo generar el PNG.";
+                return;
+            }
+
+            const blob = dataUriToBlob(result.data.content);
+            if (!blob) { errorMessage.value = "El PNG llegó malformado."; return; }
+
+            triggerDownload(blob, result.data.fileName);
+        }
+        finally { isBusy.value = false; }
+    }
+
+    // #endregion
+
+    // Se carga ANTES de registrar el watch: hacerlo después disparaba el watch con datos que
+    // acababan de llegar del servidor, marcando el formulario como sucio y pidiendo una vista
+    // previa que el bag inicial ya trae resuelta.
+    loadStaticContent();
+
+    // El servidor manda Dinámico por defecto, pero sin dominio corto esa opción está deshabilitada:
+    // el botón quedaba encendido y apagado a la vez, se renderizaban los campos dinámicos y la URL
+    // impresa mostraba un dominio inventado. Con un código nuevo y sin dominio, el único tipo que
+    // se puede crear es Estático, así que se arranca ahí.
+    if (!options.value.hasShortDomain && !code.value.idKey) {
+        code.value.qrType = QrType.Estatico;
+    }
+
+    // Al quitar el logo, el porcentaje tiene que irse con él: el servidor lo ignora igual, pero un
+    // slider con valor fantasma hace creer que sigue habiendo algo dibujado.
+    watch(() => code.value.logoBinaryFile, (file) => {
+        if (!file) { design.value.logoSizePercent = 0; }
+    });
+
+    // Vista previa en vivo: el render lo hace el servidor, así que lo que se ve es lo que baja.
+    // Se observan SOLO las entradas que edita el usuario, nunca el objeto `design` completo:
+    // onPreview escribe los campos calculados dentro de `design`, y observarlo entero convertía
+    // cada respuesta en un disparo nuevo — un bucle de llamadas cada 400 ms.
+    // En modo consulta no se registra: Preview exige EDIT y devolvería 403 en cada tecla.
+    if (canEdit.value) {
+        watch([
+            () => design.value.foregroundColor,
+            () => design.value.backgroundColor,
+            () => design.value.logoSizePercent,
+            () => code.value.qrType,
+            () => code.value.token,
+            () => code.value.destination,
+            () => code.value.staticContentType,
+            () => code.value.logoBinaryFile?.value,
+            scalarContent,
+            wifi,
+            vcard
+        ], () => {
+            // Lo que reescribe el servidor no es una edición del usuario.
+            if (isApplyingServerBag) { return; }
+
+            // Cualquier edición invalida el "guardado" anterior: dejarlo en pantalla hace creer que
+            // los cambios nuevos ya están guardados.
+            successMessage.value = "";
+
+            // Y deja la descarga desactualizada: el archivo lo arma el servidor desde la base.
+            isDirty.value = true;
+
+            if (debounce) { clearTimeout(debounce); }
+            debounce = setTimeout(() => { void onPreview(); }, 400);
+        }, { deep: true });
+    }
+</script>

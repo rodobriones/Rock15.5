@@ -1018,3 +1018,61 @@ QREVENT en `Rock.Blocks.dll` — la ventana de bienvenida de 10→30 min y el bl
 durante esa ventana viajan en el mismo assembly, no se pueden separar). Falta verificar qué
 migraciones tiene prod: si viene desde la 017 consolidada, al subir el plugin corren 018→023 de
 un saque.
+
+### §9.40 — Ajuste fino a las capturas del diseñador + prueba real con Selenium (2026-10-05)
+
+**Origen: 21 capturas** (7 de escritorio, 7 de móvil y 7 de otras pantallas) que mandó el equipo
+de diseño para mostrar cómo debía quedar el módulo después de §9.39. La primera pasada comparó
+contra el código y dio por buenas varias pantallas porque la *estructura* coincidía; el usuario
+insistió en que faltaban cambios, y los faltantes eran de detalle (orden, formato, ancho,
+márgenes, qué chip se dibuja). **Lección: comparar contra la página renderizada con datos, no
+contra el código.**
+
+**Método que funcionó**: Chrome dedicado con `--remote-debugging-port=9222` y perfil propio (el
+usuario inicia sesión una vez en esa ventana), Selenium conectado por `debugger_address`, y
+capturas por CDP (`Emulation.setDeviceMetricsOverride` al ancho de cada captura: 1000/1222/1155
+de escritorio, 420 de móvil + `Page.captureScreenshot` con `captureBeyondViewport`). Se creó un
+evento de prueba completo desde Administrar Eventos (4 sesiones, 4 tipos de boleto —uno gratis
+para cerrar el flujo sin cobrar—, portada y banner) y se recorrieron los 5 pasos. El pago se
+probó solo con una tarjeta que no pasa Luhn: el control de Epay valida en el navegador y se
+detiene ANTES del `fetch` de tokenización, así que nunca llega a la pasarela.
+
+**Bug real encontrado al probar (no era del diseño):** el traductor del sitio (VidaRealTranslator,
+botón "ES") reemplaza nodos de texto, y Vue sigue actualizando el nodo viejo. Efecto: "Pagar"
+mostraba "Procesando…" y "Continuar a pago" mostraba "Reservando… →" con el botón habilitado.
+Fix: todo texto dinámico de los botones del checkout dentro de `<span class="notranslate">`. El
+traductor además "traduce" español a español: el título "Eventos • Reportería" sale como
+"Eventos • Reportes" y la columna "Inicia" de Administración como "Iniciar" — **pendiente en el
+plugin del traductor**, no en estos bloques.
+
+**Cambios, por pantalla:**
+
+| Pantalla | Qué cambió |
+|---|---|
+| Calendario | filtros Tipo/Ministerio desde el **catálogo completo en su orden** (`typeOptions`/`ministryOptions` en `EventCalendar.cs`); solo el chip de tipo en la tarjeta; paleta medida de la captura; 3 columnas a 1000px (`minmax(280px)`); "Desde/Hasta" sin negrita; foco naranja de teclado |
+| Checkout — shell | "PASO 0N / 05" en texto (adiós a los 5 círculos); contador de reserva gris con barra azul y a todo el ancho (rojo solo en el último minuto); chips de sesión en formato corto `Sáb 22 · 15:00 – 21:00` armado en el cliente con `sessionTimes` (correos/PDF/Wallet siguen con el formato largo del servidor) y el de la sesión en curso resaltado; solo chip de tipo en el hero; título con `max-width: 640px` (parte en dos renglones); hero de alto **mínimo**, no fijo (con alto fijo el título de dos renglones recortaba el chip); texto del hero alineado con el contenido de la tarjeta; botones de paso con radio 8 y Atrás/Continuar a 30% cada uno |
+| Checkout — paso 1 | ficha y aside a partes iguales; banner 3:2; precio sin espacio (`Q175.00`); subtotal 36px; "Sáb 22 Ago 18:00 → Dom 23 Ago 20:00"; early bird "faltan N días" |
+| Checkout — pasos 2-4 | columna de 850px; "Revisa tu orden" sin la lista de asistentes por línea; "Pago" como título de panel y botón "Pagar" sin monto; formulario de tarjeta con etiquetas normales, campos de 38px, error con borde rojo + ícono, sin el resumen amarillo de `RockValidation` (repetía el error del campo); logos Visa/Mastercard y etiqueta de marca visibles, como en Dar |
+| Checkout — paso 5 | sin ícono de check, título en dos renglones, sin divisores, fecha del día sin hora, QR a la izquierda y botones lado a lado también en móvil; enlace "Regresar a mi listado de eventos" (va al calendario) |
+| Checkout — móvil | tarjeta con radio superior y traslape con el hero; margen lateral ~44px a 420px (antes 16); hero más alto con título de 38px |
+| Mis Entradas | **migración 025**: layout Blank sin título/breadcrumb; portada compacta oscura sin foto; sin botón Recargar; chip teñido con el color del tipo; línea "venue · sede"; Montserrat también en la portada (vivía fuera de `.mtWrap`); visor del QR convertido en **pase digital web** con reverso |
+| Administración | fecha "Inicia" `dd/mm/aaaa`; encabezados centrados; estado Cerrado en azul; título del panel sin el `padding: 0 24px` del tema |
+| Reportería | horas en 24h y dos dígitos (`05/10, 11:29`); montos sin espacio; mismo arreglo del título |
+| Catálogo de Preguntas | subtítulo con las opciones ("Selección (una opción) · S, M, L, XL"); la etiqueta "Selección" pasa a "Selección (una opción)" en `QuestionCatalog.cs` (también la usa `EventAdmin.cs`) |
+| Control Epay | textos en español de las capturas ("Número de tarjeta", "MM / AA", "Como aparece en la tarjeta", "El número de tarjeta no es válido. Revísalo e intenta de nuevo.") y acentos corregidos — aplica a **todos** los pagos con Epay; los ajustes visuales son solo del checkout de eventos (`.ecGateway`) |
+
+**Decisiones que se apartan de las capturas, a propósito:**
+- El contador de reserva sigue visible en los pasos 3 y 4 (la captura solo lo muestra en el 2):
+  ocultarlo deja que la reserva venza sin aviso.
+- La captura del paso 5 escribe "22 De Agosto De 2026 · Auditorio Principal" con mayúscula en cada
+  palabra; en la misma maqueta el paso 1 dice "Auditorio principal". No se replicó.
+- El botón ↑ del pase web agrega a Wallet, no "compartir": compartir el QR deja entrar a otro.
+- Los tonos de los chips de tipo en la captura difieren un poco de los sembrados en la 024; son
+  dato del catálogo, no código.
+
+**Pendiente al cerrar la sesión**: nada commiteado. Desplegar `Rock.Blocks.dll` +
+`com.vidareal.Events.dll` (corre la 025) + los bundles de `RockWeb/Obsidian/Blocks/Eventos/` + el
+`.obs.js` de Epay en `RockWeb/Plugins/EpayVisanetGateway/Obsidian/`. Ojo con `Rock.Blocks.dll`:
+arrastra el módulo QR sin commitear (ver `Plugin.VidaRealEvents/README.md`). En dev quedó el
+evento de prueba "Conferencia Vida Real 2026" (Id 2) con la orden gratuita #45. Falta probar un
+cobro real con la pasarela en sandbox.

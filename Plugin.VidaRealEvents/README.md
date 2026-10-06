@@ -61,7 +61,9 @@ SELECT MigrationNumber, MigrationName FROM [PluginMigration] WHERE PluginAssembl
 | 020 | `020_EventVisibilityAndCalendar.cs` | Columnas `Event.Visibility` (0=Público/1=Privado/2=Con contraseña) + `Event.AccessPassword`; BlockType **Event Calendar** + página pública `eventos/calendario`; cablea "Checkout Page" del calendario y "Calendar Page" del checkout (botón "Volver al inicio"). |
 | 021 | `021_EventWorkflows.cs` | Workflow launcher: columnas `RegistrationWorkflowTypeId` + `CheckinWorkflowTypeId` en `Event` Y `TicketType` (INT **sin FK** a propósito: un WorkflowType borrado solo deja de lanzarse). Inscripción = orden pagada (se lanza por ticket); check-in = ingreso Ok. El estado "Archivado" del evento es solo enum (sin SQL). |
 | 022 | `022_EventSpeakersBannerMinistry.cs` | Campos de presentación del rediseño 2026: `Event.Ministry` (área que organiza — DISTINTO de `Category`, que es el badge del hero; guarda el TEXTO para que el calendario filtre sin joins) + DefinedType **"Ministerios de Eventos"** con 6 valores; `Event.BannerBinaryFileId` (banner apaisado del paso 1, FK sin cascade; null cae a la imagen del hero); `Event.SpeakersJson` (ponentes del paso 1, mismo criterio que `SessionsJson`). Los tres opcionales: sin llenarlos, ningún evento cambia de aspecto. |
-| 023 | `023_EventLogo.cs` | `Event.LogoBinaryFileId`: logo cuadrado del ministerio, a la izquierda del badge y el título en el hero del checkout. **Tercera** imagen del evento — ver la tabla de abajo. **La próxima migración debe ser la 24+.** |
+| 023 | `023_EventLogo.cs` | `Event.LogoBinaryFileId`: logo cuadrado del ministerio, a la izquierda del badge y el título en el hero del checkout. **Tercera** imagen del evento — ver la tabla de abajo. |
+| 024 | `024_EventTypeCatalog.cs` | DefinedType **"Tipos de Evento"** (Conferencia, Concierto, Deportivo, Familiar — antes hardcodeados en `EventAdmin`) que alimenta `Event.Category` (sigue guardando el TEXTO), + atributo **`Color`** en los dos catálogos (tipos y ministerios): el color del chip pasa del CSS a dato. Los colores sembrados son los que ya usaba el CSS. |
+| 025 | `025_MyTicketsBlankLayout.cs` | Página **Mis Entradas** (`eventos/mis-entradas`) a pantalla completa como el checkout y el calendario: layout `Blank` del External Site, sin título ni breadcrumb de Rock (el bloque trae su propia portada "Mis eventos"). Si el layout Blank no existe, solo oculta título y breadcrumb. **La próxima migración debe ser la 26+.** |
 
 ### Las tres imágenes de un evento
 
@@ -106,3 +108,11 @@ pueden ir antes o después.
 
 Y respaldar la base antes: el plugin toca el esquema. Las migraciones traen `Down()`, pero
 revertir con gente comprando no es algo para improvisar.
+
+### ⚠️ `Rock.Blocks.dll` arrastra lo que haya en el árbol
+
+`Rock.Blocks.csproj` es estilo SDK: compila **todo** `.cs` bajo `Rock.Blocks/`, commiteado o no.
+Al 2026-10-05 el árbol tiene el módulo QR sin commitear (`Rock.Blocks/Qr/`, cuyos modelos viven en
+`Rock/Model/Qr/` → `Rock.dll`). Un `Rock.Blocks.dll` compilado aquí y subido SOLO, contra un
+`Rock.dll` de producción que no trae esos modelos, deja tipos que no cargan. Compilar las cuatro
+DLLs del MISMO árbol y subirlas juntas — la regla de arriba — evita el problema.

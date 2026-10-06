@@ -1,0 +1,484 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<!--
+    Catálogo de códigos QR institucionales. Es la entrega de gobernanza del módulo: qué QR
+    existen, a dónde apuntan hoy y cuánto se usan.
+    El filtrado y el orden viven en el cliente: la lista institucional es de decenas, no de miles.
+    El <style> es NO-scoped a propósito: targetea .panel-block (chrome de Rock, fuera del template).
+-->
+<template>
+    <Panel type="block" title="" class="qrl-panel">
+        <div class="qrlWrap">
+            <div v-if="notAuthorized" class="qrlPage">
+                <NotificationBox alertType="warning">No tenés permiso para ver el catálogo de QR.</NotificationBox>
+            </div>
+
+            <div v-else class="qrlPage">
+                <nav class="qrNav" aria-label="Secciones del módulo QR">
+                    <span class="qrNavOn" aria-current="page">Catálogo</span>
+                    <a v-if="options.dashboardPageUrl" :href="options.dashboardPageUrl">Reportería</a>
+                    <a v-if="options.metricsPageUrl" :href="options.metricsPageUrl">Uso</a>
+                </nav>
+
+                <header class="qrlHead">
+                    <div>
+                        <h1 class="qrlTitle">Códigos QR</h1>
+                        <p class="qrlSub">{{ summaryText }}</p>
+                    </div>
+                    <RockButton v-if="options.canEdit && options.detailPageUrl" btnType="primary" class="qrlCta"
+                                @click="onNew">
+                        Nuevo código
+                    </RockButton>
+                </header>
+
+                <!-- Los dos casos que importan, arriba y no escondidos en una tabla -->
+                <div class="qrlCards">
+                    <div class="qrlCard">
+                        <span class="qrlCardNum">{{ activeCount }}</span>
+                        <span class="qrlCardLbl">activos</span>
+                    </div>
+                    <div class="qrlCard">
+                        <span class="qrlCardNum">{{ totalScans }}</span>
+                        <span class="qrlCardLbl">escaneos acumulados</span>
+                    </div>
+                    <div class="qrlCard" :class="{ qrlCardWarn: staleCount > 0 }">
+                        <span class="qrlCardNum">{{ staleCount }}</span>
+                        <span class="qrlCardLbl">sin escaneos en {{ options.staleDays }} días</span>
+                    </div>
+                </div>
+
+                <!-- Las tarjetas miran el catálogo entero; los filtros, solo la tabla. Sin decirlo,
+                     filtrar y ver que las tarjetas no se mueven parece un error del bloque. -->
+                <p class="qrlCardsNote">Estas tres cifras son del catálogo completo. Los filtros de
+                    abajo solo afectan la tabla.</p>
+
+                <div class="qrlFilters">
+                    <TextBox v-model="search" label="Buscar" class="qrlInput"
+                             help="Por nombre, descripción o destino." />
+                    <DropDownList v-model="categoryFilter" label="Categoría" class="qrlInput"
+                                  :items="options.categories" showBlankItem />
+                    <DropDownList v-model="typeFilter" label="Tipo" class="qrlInput"
+                                  :items="typeFilterItems" showBlankItem />
+                    <DropDownList v-model="sortBy" label="Ordenar por" class="qrlInput"
+                                  :items="sortItems" :showBlankItem="false" />
+                    <CheckBox v-model="showRetired" label="Incluir dados de baja" />
+                </div>
+
+                <!-- Región viva siempre presente: un aria-live que nace junto con su texto no se
+                     anuncia, y NotificationBox no trae ninguno propio. -->
+                <div class="qrlLive" aria-live="polite" aria-atomic="true">
+                    <NotificationBox v-if="errorMessage" alertType="danger">{{ errorMessage }}</NotificationBox>
+                </div>
+
+                <div v-if="visibleRows.length === 0" class="qrlEmpty">
+                    <p class="qrlEmptyText">{{ rows.length === 0
+                        ? "Todavía no hay códigos en el catálogo."
+                        : "Ningún código coincide con el filtro." }}</p>
+                </div>
+
+                <!-- tabindex 0: la tabla desborda a lo ancho y sin foco propio no hay forma de
+                     scrollearla con el teclado. -->
+                <div v-else class="qrlTableWrap" tabindex="0" role="group"
+                     aria-label="Tabla de códigos QR, desplazable horizontalmente">
+                    <table class="qrlTable">
+                        <!-- El caption se recorta, no se oculta con display:none: eso lo sacaría
+                             del árbol de accesibilidad y la tabla volvería a quedar sin nombre.
+                             Dice lo que se ve ahora, no el catálogo entero: los filtros mandan. -->
+                        <caption class="qrlSrOnly">{{ tableCaption }}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Nombre</th>
+                                <th scope="col">Tipo</th>
+                                <th scope="col">Destino actual</th>
+                                <th scope="col" class="qrlNum">Escaneos</th>
+                                <th scope="col">Último</th>
+                                <th scope="col">Creado por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="row in visibleRows" :key="row.idKey ?? row.name ?? ''" :class="{ qrlRowOff: !row.isActive }">
+                                <td>
+                                    <a v-if="options.detailPageUrl" class="qrlLink" :href="detailUrl(row)">{{ row.name }}</a>
+                                    <span v-else class="qrlName">{{ row.name }}</span>
+                                    <span v-if="!row.isActive" class="qrlTag qrlTagOff">dado de baja</span>
+                                    <span v-if="row.categoryName" class="qrlTag">{{ row.categoryName }}</span>
+                                    <span v-if="row.description" class="qrlDesc">{{ row.description }}</span>
+                                </td>
+                                <td>
+                                    <span class="qrlTag" :class="row.qrType === QrType.Dinamico ? 'qrlTagDyn' : 'qrlTagSta'">
+                                        {{ row.qrType === QrType.Dinamico ? "dinámico" : "estático" }}
+                                    </span>
+                                    <span v-if="row.shortLinkUrl" class="qrlMono">{{ row.shortLinkUrl }}</span>
+                                </td>
+                                <td>
+                                    <span v-if="row.destination" class="qrlMono">{{ row.destination }}</span>
+                                    <span v-else class="qrlMuted">{{ row.qrType === QrType.Estatico
+                                        ? "contenido dentro del código"
+                                        : "sin enlace corto" }}</span>
+                                </td>
+                                <td class="qrlNum">
+                                    <span v-if="row.qrType === QrType.Dinamico" class="qrlCount">{{ row.scanCount }}</span>
+                                    <span v-else class="qrlMuted">—</span>
+                                </td>
+                                <td>
+                                    <span v-if="row.qrType === QrType.Estatico" class="qrlMuted">no deja métricas</span>
+                                    <span v-else-if="row.lastScanDateTime"
+                                          :class="isStale(row) ? 'qrlStale' : ''">{{ formatDate(row.lastScanDateTime) }}</span>
+                                    <span v-else class="qrlStale">nunca</span>
+                                </td>
+                                <td>
+                                    <span class="qrlWho">{{ row.createdByName || "—" }}</span>
+                                    <span v-if="row.createdDateTime" class="qrlDesc">{{ formatDate(row.createdDateTime) }}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="qrlFootNote">
+                    El destino se lee del enlace corto en cada carga, nunca de una copia: si alguien
+                    lo edita desde la pantalla nativa de Rock, esta lista sigue diciendo la verdad.
+                    Los códigos estáticos no muestran su contenido porque uno de wifi lleva la
+                    contraseña adentro.
+                </p>
+            </div>
+        </div>
+    </Panel>
+</template>
+
+<style>
+/* Fuentes Brújula VR servidas desde RockWeb (no CDN). Blogger Sans es CC BY-ND: formato original. */
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Regular.otf") format("opentype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Blogger Sans";
+    src: url("/Assets/Fonts/BrujulaVR/BloggerSans-Bold.otf") format("opentype");
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Sans";
+    src: url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraSans-SemiBold.ttf") format("truetype");
+    font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: "Fira Mono";
+    src: url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.woff2") format("woff2"), url("/Assets/Fonts/BrujulaVR/FiraMono-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* Chrome del panel: solo para este bloque (no afecta otros panel-block). */
+.panel-block:has(.qrlWrap) > .panel-heading,
+.panel-block:has(.qrlWrap) > .panel-header { display: none !important; }
+.panel-block:has(.qrlWrap) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.panel-block:has(.qrlWrap) > .panel-body { padding: 0 !important; }
+
+.qrlWrap {
+    /* Tokens Brújula VR */
+    --vr-navy: #0F334B;
+    --vr-red: #E74133;
+    --bg: #F3F5F7;
+    --paper: #FFFFFF;
+    --paper-alt: #F8FAFB;
+    --ink: #0F334B;
+    --ink-soft: #5A6E7C;
+    /* #8296A6 daba 3,06:1 sobre blanco y acá se usa en texto de 10-12 px (encabezados de la
+       tabla, descripciones, notas): no pasa AA. Este tono da ~5,1:1 y sigue siendo recesivo. */
+    --ink-faint: #5E6E7A;
+    --rule: #E1E8ED;
+    --rule-strong: #C9D4DC;
+    --action: #1E5B87;
+    --action-soft: #EAF1F6;
+    --warn-text: #8F5B0B;
+    --warn-bg: #FDF2E1;
+    --btn-primary: #0F334B;
+    --btn-primary-hover: #143E5A;
+    --shadow-card: 0 1px 2px rgba(15,51,75,.06), 0 2px 8px rgba(15,51,75,.05);
+    --radius-sm: 6px;
+    --radius: 10px;
+    --font-title: "Blogger Sans", "Century Gothic", Futura, sans-serif;
+    --font-body: "Fira Sans", "Segoe UI", system-ui, sans-serif;
+    --font-num: "Fira Mono", "Fira Sans", Consolas, monospace;
+
+    font-family: var(--font-body);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+.qrlWrap *, .qrlWrap *::before, .qrlWrap *::after { box-sizing: border-box; }
+
+.qrlPage { margin: 0 -15px; background: var(--bg); padding: 24px 20px 32px; min-height: 50vh; }
+
+
+/* Navegación entre las páginas del módulo. Hace falta porque el menú de Rock 18 solo muestra
+   dos niveles y estas páginas son nietas de Digital Tools: por el menú no se llega. */
+.qrNav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.qrNav a, .qrNav span { padding: 8px 14px; font-size: 13px; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.qrNav a { color: var(--ink-soft); }
+.qrNav a:hover { color: var(--action); }
+.qrNavOn { color: var(--vr-navy); font-weight: 600; border-bottom-color: var(--vr-navy) !important; }
+
+.qrlHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.qrlTitle { font-family: var(--font-title); font-weight: 700; font-size: 26px; color: var(--vr-navy); margin: 0; }
+.qrlSub { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+
+.qrlCards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.qrlCard { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-card); }
+.qrlCardWarn { background: var(--warn-bg); border-color: #F0DCBB; }
+.qrlCardNum { display: block; font-family: var(--font-num); font-size: 26px; color: var(--vr-navy); }
+.qrlCardWarn .qrlCardNum { color: var(--warn-text); }
+.qrlCardLbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin-top: 2px; }
+.qrlCardsNote { font-size: 11px; color: var(--ink-faint); margin: -10px 0 14px; }
+
+.qrlFilters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+
+.qrlTableWrap { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); overflow-x: auto; box-shadow: var(--shadow-card); }
+.qrlTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.qrlTable thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); font-weight: 600; padding: 12px 14px; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+.qrlTable tbody td { padding: 12px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.qrlTable tbody tr:last-child td { border-bottom: none; }
+.qrlTable tbody tr:hover { background: var(--paper-alt); }
+.qrlRowOff { opacity: .55; }
+.qrlNum { text-align: right; }
+.qrlCount { font-family: var(--font-num); font-size: 15px; color: var(--vr-navy); }
+
+.qrlLink { color: var(--action); font-weight: 600; text-decoration: none; }
+.qrlLink:hover { text-decoration: underline; }
+.qrlName { font-weight: 600; }
+.qrlDesc { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 3px; line-height: 1.4; }
+.qrlWho { font-size: 12px; }
+.qrlMono { display: block; font-family: var(--font-num); font-size: 11px; color: var(--ink-soft); margin-top: 3px; word-break: break-all; }
+.qrlMuted { color: var(--ink-faint); font-size: 12px; font-style: italic; }
+.qrlStale { color: var(--warn-text); font-weight: 500; }
+
+.qrlTag { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px; background: var(--action-soft); color: var(--action); margin-left: 6px; white-space: nowrap; }
+.qrlTagDyn { background: var(--action-soft); color: var(--action); margin-left: 0; }
+.qrlTagSta { background: #EFF3F6; color: var(--ink-soft); margin-left: 0; }
+.qrlTagOff { background: #FBE3E0; color: var(--vr-red); }
+
+.qrlEmpty { background: var(--paper); border: 1px dashed var(--rule-strong); border-radius: var(--radius); padding: 40px 20px; text-align: center; }
+.qrlEmptyText { color: var(--ink-faint); font-size: 13px; margin: 0; }
+.qrlFootNote { font-size: 11px; color: var(--ink-faint); line-height: 1.5; margin: 14px 0 0; max-width: 780px; }
+
+/* Controles Rock: selector compuesto porque el <style> es no-scoped. */
+.qrlCta.btn { background: var(--btn-primary) !important; border-color: var(--btn-primary) !important; color: #fff !important; font-weight: 600 !important; border-radius: var(--radius-sm) !important; }
+.qrlCta.btn:hover, .qrlCta.btn:focus { background: var(--btn-primary-hover) !important; border-color: var(--btn-primary-hover) !important; }
+
+/* Solo para lectores de pantalla. Recorte en vez de display:none a propósito: `display:none`
+   saca el elemento del árbol de accesibilidad y entonces tampoco existe para el lector. */
+.qrlSrOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Foco visible: sin esto no se ve dónde está el teclado. El contenedor de la tabla entra en el
+   recorrido (tabindex=0) porque es lo único scrolleable de la pantalla. */
+.qrlWrap a:focus-visible,
+.qrlWrap button:focus-visible,
+.qrlWrap .btn:focus-visible,
+.qrlWrap .qrNav a:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+}
+/* Sin border-radius acá: el contenedor ya tiene el suyo y pisarlo le cuadraría las esquinas. */
+.qrlTableWrap:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
+@media (max-width: 1100px) {
+    .qrlFilters { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 720px) {
+    .qrlPage { margin: 0; padding: 16px 12px 24px; }
+    .qrlCards { grid-template-columns: 1fr; }
+    .qrlFilters { grid-template-columns: 1fr; }
+    .qrlHead { flex-direction: column; }
+}
+</style>
+
+<script setup lang="ts">
+    import { computed, ref } from "vue";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import TextBox from "@Obsidian/Controls/textBox.obs";
+    import CheckBox from "@Obsidian/Controls/checkBox.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import RockButton from "@Obsidian/Controls/rockButton.obs";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { useConfigurationValues } from "@Obsidian/Utility/block";
+    import { QrType } from "./QrCodeDetail/types.partial";
+    import { ListOptionsBag, RowBag } from "./QrCodeList/types.partial";
+
+    const config = useConfigurationValues<{ notAuthorized: boolean; options: ListOptionsBag; rows: RowBag[] }>();
+
+    // #region Values
+
+    const notAuthorized = ref(config.notAuthorized === true);
+    const options = ref<ListOptionsBag>(config.options ?? ({} as ListOptionsBag));
+    const rows = ref<RowBag[]>(config.rows ?? []);
+
+    const errorMessage = ref("");
+    const search = ref("");
+    const categoryFilter = ref("");
+    const typeFilter = ref("");
+    const sortBy = ref("scans");
+    const showRetired = ref(false);
+
+    const typeFilterItems: ListItemBag[] = [
+        { value: "0", text: "Dinámico" },
+        { value: "1", text: "Estático" }
+    ];
+
+    const sortItems: ListItemBag[] = [
+        { value: "scans", text: "Más escaneados" },
+        { value: "stale", text: "Más dormidos" },
+        { value: "name", text: "Nombre" },
+        { value: "created", text: "Más recientes" }
+    ];
+
+    // #endregion
+
+    // #region Computed
+
+    const activeCount = computed(() => rows.value.filter(r => r.isActive).length);
+
+    const totalScans = computed(() => rows.value.reduce((sum, r) => sum + (r.scanCount ?? 0), 0));
+
+    /** Dinámicos activos sin un escaneo en el plazo configurado: el material impreso que nadie usa. */
+    const staleCount = computed(() =>
+        rows.value.filter(r => r.isActive && r.qrType === QrType.Dinamico && isStale(r)).length);
+
+    /**
+     * El subtítulo decía "12 códigos" mientras en la tabla se veían 2: quien filtra y después
+     * lee el resumen se lleva el número equivocado. Cuando lo visible no es todo, se dice.
+     */
+    const summaryText = computed(() => {
+        const total = rows.value.length;
+        if (total === 0) { return "El catálogo está vacío."; }
+
+        const visible = visibleRows.value.length;
+        const orden = `Ordenados por ${sortLabel.value.toLowerCase()}.`;
+
+        return visible === total
+            ? `${total} código(s) en el catálogo. ${orden}`
+            : `Mostrando ${visible} de ${total} códigos. ${orden}`;
+    });
+
+    const sortLabel = computed(() => sortItems.find(s => s.value === sortBy.value)?.text ?? "");
+
+    /** Nombre de la tabla para el lector de pantalla: cuántas filas hay y con qué orden. */
+    const tableCaption = computed(() =>
+        `Códigos QR del catálogo: ${visibleRows.value.length} de ${rows.value.length}. `
+        + `Ordenados por ${sortLabel.value.toLowerCase()}.`);
+
+    const visibleRows = computed(() => {
+        const term = search.value.trim().toLowerCase();
+        const cat = categoryFilter.value;
+        const type = typeFilter.value;
+
+        // Se compara por Guid, no por nombre: dos categorías pueden llamarse igual y una puede
+        // renombrarse entre la carga de la lista y la del filtro. El Guid llega con el casing de
+        // SQL, así que se normaliza.
+        const catGuid = cat.toLowerCase();
+
+        let list = rows.value.filter(r => {
+            if (!showRetired.value && !r.isActive) { return false; }
+            if (type !== "" && r.qrType !== Number(type)) { return false; }
+            if (catGuid && (r.categoryGuid ?? "").toLowerCase() !== catGuid) { return false; }
+
+            if (term) {
+                const haystack = [r.name, r.description, r.destination, r.shortLinkUrl]
+                    .filter(v => !!v).join(" ").toLowerCase();
+                if (!haystack.includes(term)) { return false; }
+            }
+
+            return true;
+        });
+
+        list = [...list];
+
+        switch (sortBy.value) {
+            case "name":
+                list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", "es"));
+                break;
+            case "created":
+                list.sort((a, b) => timeOf(b.createdDateTime) - timeOf(a.createdDateTime));
+                break;
+            case "stale":
+                // Los que nunca se escanearon primero, después por escaneo más antiguo.
+                list.sort((a, b) => timeOf(a.lastScanDateTime) - timeOf(b.lastScanDateTime));
+                break;
+            default:
+                list.sort((a, b) => (b.scanCount ?? 0) - (a.scanCount ?? 0));
+                break;
+        }
+
+        return list;
+    });
+
+    // #endregion
+
+    // #region Functions
+
+    function timeOf(value: string | null | undefined): number {
+        if (!value) { return 0; }
+        const t = new Date(value).getTime();
+        return isNaN(t) ? 0 : t;
+    }
+
+    function formatDate(value: string | null | undefined): string {
+        if (!value) { return "—"; }
+        try { return new Date(value).toLocaleDateString("es-GT", { year: "numeric", month: "short", day: "numeric" }); }
+        catch { return value; }
+    }
+
+    /** Un dinámico sin escaneos recientes. Los estáticos nunca cuentan: no dejan métricas. */
+    function isStale(row: RowBag): boolean {
+        if (row.qrType !== QrType.Dinamico) { return false; }
+
+        const staleDays = options.value.staleDays ?? 90;
+
+        // Un código nunca escaneado solo es "material que nadie usa" si ya tuvo tiempo de serlo.
+        // Antes devolvía true de entrada, así que todo código recién creado nacía en la alarma de
+        // gobernanza: el primer mes después del corte, la alarma sería puro ruido y se ignoraría
+        // justo cuando empieza a ser cierta. Mismo criterio que el servidor.
+        const reference = row.lastScanDateTime ?? row.createdDateTime;
+        if (!reference) { return false; }
+
+        return (Date.now() - timeOf(reference)) / 86400000 > staleDays;
+    }
+
+    function detailUrl(row: RowBag): string {
+        return (options.value.detailPageUrl ?? "").replace("((Key))", row.idKey ?? "");
+    }
+
+    function onNew(): void {
+        const url = (options.value.detailPageUrl ?? "").replace("((Key))", "0");
+        if (url) { window.location.href = url; }
+        else { errorMessage.value = "No hay una página de detalle configurada en el bloque."; }
+    }
+
+    // #endregion
+</script>

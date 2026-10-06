@@ -4,7 +4,7 @@
     <div class="ecNarrow">
         <h2 class="ecPaneTitle">Revisa tu orden</h2>
         <p class="ecPaneText">
-            {{ isFree ? "Confirma el detalle y a quién queda cada entrada." : "Confirma el detalle, aplica un código y elige si necesitas factura." }}
+            {{ isFree ? "Confirma el detalle de tu orden." : "Confirma el detalle, aplica un código y elige si necesitas factura." }}
         </p>
 
         <div class="ecSummary">
@@ -13,10 +13,6 @@
                     <span>{{ row.quantity }}× {{ row.name }}</span>
                     <span class="ecMono">{{ formatCurrency(row.lineTotal) }}</span>
                 </div>
-                <!-- A quién quedó cada entrada: es lo que se acaba de llenar en el paso 2. -->
-                <ul class="ecSumWho">
-                    <li v-for="(who, i) in attendeeNamesForType(row.ticketTypeId)" :key="i">{{ who }}</li>
-                </ul>
             </div>
             <!-- Un total de Q0 no lleva IVA: mostrar la línea solo confunde. -->
             <div v-if="!isFree" class="ecSumRow ecSumIva">
@@ -42,7 +38,7 @@
                    placeholder="¿Tienes un código de descuento?"
                    @keyup.enter="applyPromo" />
             <RockButton class="ecPromoBtn" btnType="primary" :disabled="promoBusy || !promoInput.trim()" @click="applyPromo">
-                {{ promoBusy ? "…" : "Aplicar" }}
+                <span class="notranslate">{{ promoBusy ? "…" : "Aplicar" }}</span>
             </RockButton>
         </div>
         <div v-else-if="!isFree" class="ecPromoApplied">
@@ -67,7 +63,7 @@
             <div class="ecNitRow">
                 <input v-model="nit" class="form-control ecInput" type="text" placeholder="NIT" maxlength="32" />
                 <RockButton class="ecPromoBtn" btnType="default" :disabled="busyNit || !nit" @click="validateNit">
-                    {{ busyNit ? "Validando…" : "Validar NIT" }}
+                    <span class="notranslate">{{ busyNit ? "Validando…" : "Validar NIT" }}</span>
                 </RockButton>
             </div>
             <p v-if="nitError" class="ecFieldError" role="alert">{{ nitError }}</p>
@@ -91,7 +87,7 @@
         <div class="ecStepActions">
             <RockButton class="ecGhost" btnType="default" @click="step = 2">← Atrás</RockButton>
             <RockButton class="ecCta ecCtaFlex" btnType="primary" :disabled="busy" @click="goToPayment">
-                {{ busy ? "Reservando…" : (isFree ? "Continuar" : "Continuar a pago") }} <span v-if="!busy" class="ecCtaArrow">→</span>
+                <span class="notranslate">{{ busy ? "Reservando…" : (isFree ? "Continuar" : "Continuar a pago") }}</span> <span v-if="!busy" class="ecCtaArrow">→</span>
             </RockButton>
         </div>
     </div>
@@ -105,7 +101,6 @@ const {
     step,
     busy,
     summaryRows,
-    attendeeNamesForType,
     formatCurrency,
     ivaIncluded,
     discount,

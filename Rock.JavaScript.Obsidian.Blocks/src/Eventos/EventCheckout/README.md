@@ -21,4 +21,16 @@ Select-String -Path ..\..\..\..\RockWeb\Obsidian\Blocks\Eventos\eventCheckout.ob
 # Sin resultados = todos los nombres del template resolvieron.
 ```
 
+⚠️ **Texto dinámico ⇒ `<span class="notranslate">`.** El traductor del sitio (VidaRealTranslator)
+reemplaza nodos de texto y Vue sigue actualizando el viejo: un `{{ busy ? "Procesando…" : "Pagar" }}`
+sin protección se queda mostrando "Procesando…" con el botón habilitado. Cualquier texto nuevo que
+dependa del estado va envuelto:
+
+```html
+<span class="notranslate">{{ busy ? "Reservando…" : "Continuar" }}</span>
+```
+
+**Moneda**: usar `formatCurrency` del estado (`Q175.00`, sin espacio); no formatear con `Intl`
+directo en un partial.
+
 Arquitectura completa del módulo: `Rock/Model/Eventos/ARCHITECTURE.md`.

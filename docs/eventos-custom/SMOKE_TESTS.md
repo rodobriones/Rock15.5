@@ -15,7 +15,7 @@ prefijo `[EventCheckout]`, `[EventsMaintenance]`, `[FelService]`) y las tablas `
    ```sql
    SELECT [MigrationNumber], [MigrationName] FROM [PluginMigration]
    WHERE [PluginAssemblyName] LIKE '%vidareal.Events%' ORDER BY [MigrationNumber];
-   -- DEV (histórica): filas 1..23.  PRODUCCIÓN (limpia): 17 / ProductionSetup + las posteriores que haya corrido.
+   -- DEV (histórica): filas 1..25.  PRODUCCIÓN (limpia): 17 / ProductionSetup + las posteriores que haya corrido.
    ```
 3. `Admin > System > Jobs`: existe **Events Maintenance** activo, cron cada 5 min. Historial sin errores.
 
@@ -168,7 +168,7 @@ En `eventos` (interno) > Administrar Eventos:
    Contraseña buena → wizard completo y compra normal end-to-end.
 4. Con las dev tools: llamar CreateHold/ProcessCheckout sin `accessPassword` en un evento con
    contraseña → 403 (el servidor no confía en el desbloqueo del cliente).
-5. "Volver al inicio" (pantalla Listo y "evento ya pasó") lleva a `eventos/calendario`.
+5. "Regresar a mi listado de eventos" (pantalla Listo) y "Volver al inicio" ("evento ya pasó") llevan a `eventos/calendario`.
 6. Event Admin: cambiar visibilidad a "Con contraseña" sin contraseña → error de validación;
    Duplicar conserva visibilidad y contraseña.
 
@@ -204,7 +204,7 @@ no en `Rock.dll`). Son CUATRO DLLs; ver `Plugin.VidaRealEvents/README.md`.
 ### 15.1 Nada cambia sin llenar los campos (lo primero a verificar)
 
 Con un evento **existente**, sin tocarle nada:
-- El checkout abre normal: hero, badge, título, stepper, "Boletos" y el aside con las entradas.
+- El checkout abre normal: hero, badge, título, "PASO 01 / 05", "Boletos" y el aside con las entradas.
 - **NO** aparece sección de ponentes, **NO** aparece logo en el hero, y el paso 1 usa la imagen
   del hero como banner.
 - El calendario **no** muestra el filtro "Ministerio" si ningún evento publicado tiene uno.
@@ -236,18 +236,63 @@ próxima. Evento de un solo bloque: sin chips.
 
 | Bloque | Qué mirar |
 |---|---|
-| Calendario | buscador + "Más filtros" (fecha / tipo / ministerio); TODOS los meses listados, separados por línea; tarjeta con cubo de fecha y badge de categoría |
-| Checkout | stepper de 5 círculos **a la izquierda, sin líneas** entre ellos; paso 1 con los tipos de entrada en el aside derecho (pegajoso al hacer scroll) |
-| Mis Entradas | portada con foto; pestañas **Próximos / Historial**; historial en escala de grises |
+| Calendario | buscador + "Más filtros" (fecha / tipo / ministerio, opciones del catálogo en su orden — §16.1); TODOS los meses listados, separados por línea; tarjeta con cubo de fecha y SOLO el chip de tipo |
+| Checkout | contador de texto **"PASO 01 / 05"** (desde 2026-10-05; antes eran 5 círculos); paso 1 con los tipos de entrada en el aside derecho (pegajoso al hacer scroll) |
+| Mis Entradas | portada oscura compacta SIN foto, a pantalla completa (migración 025); pestañas **Próximos / Historial**; historial en escala de grises; tocar una entrada abre el pase web (§16.4) |
 | Escáner | píldora de estado con punto que late; barra de acciones pegada abajo mientras se revisan resultados |
 | Administración | botones en píldora; el panel flota sobre gris con aire alrededor; toasts abajo a la derecha, visibles **con la página scrolleada** |
 | Reportería | mismo chrome re-estilado; los 5 KPIs; editor de correo en línea |
 | Catálogo de Preguntas | encabezado grande; tarjetas de 18px de radio |
 
-En móvil: el stepper envuelve, el aside del checkout deja de ser pegajoso y pasa abajo, y las
+En móvil: el aside del checkout deja de ser pegajoso y pasa abajo, y las
 entradas de Mis Entradas apilan el QR arriba.
 
 ### 15.5 Fuentes
 
 Todo el módulo en **Montserrat**. Si se ve Arial, el navegador no cargó
 `/Assets/Fonts/Montserrat/*.woff2` — verificar que la carpeta viajó al servidor.
+
+## 16. Ajuste a las capturas del diseñador (agregado 2026-10-05, requiere migración 025)
+
+Contexto y lista completa de cambios: `RESEARCH_Y_PLAN.md` §9.40. Para estas pruebas conviene un
+evento con **varias sesiones**, un tipo con **early bird**, uno **gratis**, portada y banner.
+
+### 16.1 Calendario
+1. "Más filtros" → Tipo lista Conferencia, Concierto, Deportivo, Familiar y Ministerio lista
+   General, Alabanza, Deportes, Jóvenes, Matrimonios, Niños **en ese orden** (el del catálogo, no
+   alfabético), aunque ningún evento publicado use algunos.
+2. La tarjeta lleva solo el chip de tipo (no el de ministerio). A ~1000px caben 3 por fila.
+
+### 16.2 Checkout
+1. Hero: chips de sesión cortos (`Vie 23 · 18:00 – 21:00`), el de la sesión en curso o la próxima
+   en azul; título largo en dos renglones **sin recortar** el chip de tipo de arriba.
+2. Arriba de la tarjeta: "PASO 01 / 05". Precios **sin espacio**: `Q175.00`, `Q800.00`.
+3. Pasos 2-4: contador de reserva gris con barra azul. Atrás y Continuar del mismo ancho en
+   escritorio; apilados (Atrás arriba) en móvil.
+4. **Texto de botones** — el bug del traductor: pasar de Revisión a Pago y volver. "Continuar a
+   pago" y "Pagar" deben mostrar su texto, NUNCA "Reservando…" o "Procesando…" con el botón
+   habilitado. Si aparece, falta `notranslate` en el texto dinámico.
+5. Pago con tarjeta `4242 4242 4242 4241` (no pasa Luhn) + fecha, CVV y nombre válidos → "Pagar":
+   borde rojo y "El número de tarjeta no es válido. Revísalo e intenta de nuevo." bajo el campo,
+   **sin** recuadro amarillo arriba y **sin** llamada a la pasarela (en la pestaña Red de DevTools
+   no aparece el POST de tokenización).
+6. Al escribir el número: `4…` resalta el logo Visa y la etiqueta dice VISA; `5…` resalta
+   Mastercard.
+7. Compra gratuita → paso 5: título en dos renglones, QR a la izquierda (también en móvil),
+   "Regresar a mi listado de eventos" lleva al calendario.
+
+### 16.3 Mis Entradas
+1. Sin título "Mis Entradas" ni breadcrumb de Rock; la portada llega a los bordes.
+2. No hay botón Recargar. El chip del evento usa el color del tipo; la línea de lugar dice
+   "venue · sede".
+
+### 16.4 Pase digital web
+Tocar una entrada próxima → pase con barra del color del tipo, "VidaReal.tv", pill con el tipo de
+boleto, banner, FECHA / LUGAR / ASISTENTE y QR. "i" voltea al reverso; ✕ o tocar fuera cierra. Con
+Wallet habilitada, ↑ agrega el pase.
+
+### 16.5 Administración, Reportería y Catálogo
+1. Administración: columna de fecha `dd/mm/aaaa`; Publicado verde, Borrador gris, Cerrado azul;
+   el título "Eventos • Administración" alineado con "Eventos (N de N)".
+2. Reportería: check-in y compra como `05/10, 11:29`; ingresos sin espacio (`Q56,500.00`).
+3. Catálogo: cada pregunta muestra tipo y opciones ("Selección (una opción) · S, M, L, XL").

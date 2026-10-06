@@ -218,17 +218,17 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
         var html = "<div class='epayWrap'>" +
           "<div class='epayHeader'>" +
             "<h4 class='epayTitle'>Tarjeta</h4>" +
-            "<p class='epaySubtitle'>Complete la informacion de pago segura.</p>" +
+            "<p class='epaySubtitle'>Complete la información de pago segura.</p>" +
           "</div>" +
           "<div class='epayCardPreview brand-unknown' data-el='preview'>" +
             "<div class='epayPreviewTop'><span class='epayChip'></span><span class='epayPreviewBrand' data-el='previewBrand'>Tarjeta</span></div>" +
             "<strong class='epayPreviewNumber' data-el='previewNumber'>#### #### #### ####</strong>" +
-            "<div class='epayPreviewMeta'><span data-el='previewName'>NOMBRE TITULAR</span><span data-el='previewExp'>MM/YY</span></div>" +
+            "<div class='epayPreviewMeta'><span data-el='previewName'>NOMBRE TITULAR</span><span data-el='previewExp'>MM/AA</span></div>" +
           "</div>" +
           "<div class='epayFields'>" +
             "<label class='epayField'>" +
               "<div class='epayFieldHead'>" +
-                "<span>Numero de tarjeta</span>" +
+                "<span>Número de tarjeta</span>" +
                 "<div class='epayCardBrands' role='img' aria-label='Tarjetas aceptadas'>" +
                   "<span class='epayBrandIcon' data-brand-icon='visa' title='Visa'>" + visaSvg() + "</span>" +
                   "<span class='epayBrandIcon' data-brand-icon='mastercard' title='Mastercard'>" + mastercardSvg() + "</span>" +
@@ -243,20 +243,20 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             "<div class='epayRow'>" +
               "<label class='epayField'>" +
                 "<span>Vencimiento</span>" +
-                "<div class='epayInputWrap' data-wrap='expDate'><input id='" + controlId + "-exp' class='epayInput' type='text' maxlength='5' inputmode='numeric' autocomplete='cc-exp' placeholder='MM/YY' /></div>" +
-                "<small class='epayHint'>Formato: MM/YY</small>" +
+                "<div class='epayInputWrap' data-wrap='expDate'><input id='" + controlId + "-exp' class='epayInput' type='text' maxlength='5' inputmode='numeric' autocomplete='cc-exp' placeholder='MM / AA' /></div>" +
+                "<small class='epayHint'>Formato: MM/AA</small>" +
                 "<small class='epayError' data-error='expDate'></small>" +
               "</label>" +
               "<label class='epayField'>" +
                 "<span>CVV</span>" +
-                "<div class='epayInputWrap' data-wrap='cvv'><input id='" + controlId + "-cvv' class='epayInput' type='password' maxlength='4' inputmode='numeric' autocomplete='cc-csc' placeholder='CVV (3)' /></div>" +
-                "<small class='epayHint' data-el='cvvHint'>3 digitos para Tarjeta</small>" +
+                "<div class='epayInputWrap' data-wrap='cvv'><input id='" + controlId + "-cvv' class='epayInput' type='password' maxlength='4' inputmode='numeric' autocomplete='cc-csc' placeholder='123' /></div>" +
+                "<small class='epayHint' data-el='cvvHint'>3 dígitos para Tarjeta</small>" +
                 "<small class='epayError' data-error='cvv'></small>" +
               "</label>" +
             "</div>" +
             "<label class='epayField' data-el='nameField' style='display:" + (showNameField ? "grid" : "none") + ";'>" +
-              "<span>Nombre del titular</span>" +
-              "<div class='epayInputWrap' data-wrap='cardName'><input id='" + controlId + "-name' class='epayInput' type='text' maxlength='120' autocomplete='cc-name' placeholder='Nombre como aparece en la tarjeta' /></div>" +
+              "<span>Nombre en la tarjeta</span>" +
+              "<div class='epayInputWrap' data-wrap='cardName'><input id='" + controlId + "-name' class='epayInput' type='text' maxlength='120' autocomplete='cc-name' placeholder='Como aparece en la tarjeta' /></div>" +
               "<small class='epayError' data-error='cardName'></small>" +
             "</label>";
 
@@ -360,8 +360,8 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             dom.brandTag.textContent = label;
             dom.previewBrand.textContent = label;
             dom.preview.className = 'epayCardPreview brand-' + brand;
-            dom.cvv.placeholder = 'CVV (' + expectedCvvLength() + ')';
-            dom.cvvHint.textContent = expectedCvvLength() + ' digitos para ' + label;
+            dom.cvv.placeholder = expectedCvvLength() === 4 ? '1234' : '123';
+            dom.cvvHint.textContent = expectedCvvLength() + ' dígitos para ' + label;
 
             if (dom.brandIcons && dom.brandIcons.length) {
               for (var i = 0; i < dom.brandIcons.length; i++) {
@@ -389,7 +389,7 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             dom.previewNumber.textContent = number || '#### #### #### ####';
             var cardName = (dom.cardName && dom.cardName.value ? dom.cardName.value : '').trim();
             dom.previewName.textContent = cardName ? cardName.toUpperCase() : 'NOMBRE TITULAR';
-            dom.previewExp.textContent = (dom.expDate.value || 'MM/YY');
+            dom.previewExp.textContent = (dom.expDate.value || 'MM/AA');
           };
 
           var onCardNumberInput = function () {
@@ -428,19 +428,19 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
 
             var pan = getPanDigits();
             if (!luhnCheck(pan)) {
-              var msgPan = 'Numero de tarjeta invalido.';
+              var msgPan = 'El número de tarjeta no es válido. Revísalo e intenta de nuevo.';
               setFieldError('cardNumber', msgPan);
               errors.push({ name: 'Card Number', text: msgPan });
             }
 
             var expiry = parseExpiry(dom.expDate.value);
             if (!expiry.valid) {
-              var msgExp = 'Usa el formato MM/YY.';
+              var msgExp = 'Usa el formato MM/AA.';
               setFieldError('expDate', msgExp);
               errors.push({ name: 'Expiration Date', text: msgExp });
             }
             else if (isExpired(expiry.month, expiry.year)) {
-              var msgExp2 = 'La tarjeta esta vencida.';
+              var msgExp2 = 'La tarjeta está vencida.';
               setFieldError('expDate', msgExp2);
               errors.push({ name: 'Expiration Date', text: msgExp2 });
             }
@@ -448,7 +448,7 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             var cvv = (dom.cvv.value || '').replace(/[^\d]/g, '');
             var validCvv = getBrand() === 'amex' ? cvv.length === 4 : cvv.length === 3;
             if (!validCvv) {
-              var msgCvv = 'El CVV debe tener ' + expectedCvvLength() + ' digitos.';
+              var msgCvv = 'El CVV debe tener ' + expectedCvvLength() + ' dígitos.';
               setFieldError('cvv', msgCvv);
               errors.push({ name: 'CVV', text: msgCvv });
             }
@@ -456,14 +456,14 @@ System.register(['vue', '@Obsidian/Utility/guid', '@Obsidian/Core/Controls/finan
             if (__props.settings.promptForNameOnCard !== false) {
               var cardName = (dom.cardName.value || '').trim();
               if (cardName.length < 3) {
-                var msgName = 'Ingresa el nombre del titular.';
+                var msgName = 'Escribe el nombre como aparece en la tarjeta.';
                 setFieldError('cardName', msgName);
                 errors.push({ name: 'Name on Card', text: msgName });
               }
             }
 
             if (useInstallments && installmentOpts.length > 0 && !selectedInstallmentCode) {
-              var msgInst = 'Selecciona el numero de cuotas.';
+              var msgInst = 'Selecciona el número de cuotas.';
               setFieldError('installment', msgInst);
               errors.push({ name: 'Installments', text: msgInst });
             }

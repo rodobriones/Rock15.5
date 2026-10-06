@@ -58,9 +58,7 @@
                             <div v-for="q in items" :key="q.guid" class="qcRow" :class="{ 'qcRow--inactive': !q.isActive }">
                                 <div class="qcRowMain">
                                     <span class="qcRowName">{{ q.name }}</span>
-                                    <span class="qcRowMeta">
-                                        {{ q.typeLabel }}<template v-if="q.description"> · {{ q.description }}</template>
-                                    </span>
+                                    <span class="qcRowMeta">{{ questionMeta(q) }}</span>
                                 </div>
                                 <div class="qcRowRight">
                                     <span v-if="!q.isActive" class="qcPill qcPill--muted">Inactiva</span>
@@ -198,7 +196,7 @@
     font-weight: 700; font-style: normal; font-display: swap;
 }
 
-.qcPage { background: #F3F5F7; }
+.qcPage { background: #F1F3F6; }
 
 .qcWrap {
     /* Tokens Brújula VR (tokens/colors.css del design system) */
@@ -208,13 +206,14 @@
     --bg: #F3F5F7;
     --paper: #FFFFFF;
     --paper-alt: #F8FAFB;
-    --ink: #0E364C;
-    --ink-soft: #5B7685;
+    /* Navy y gris medidos sobre la captura de diseño (08-ev). */
+    --ink: #132F42;
+    --ink-soft: #526A79;
     --ink-faint: #8297A2;
     --rule: #E0E5E8;
     --rule-strong: #CAD3D8;
     --action: #1E5B87;
-    --action-soft: #EAF1F6;
+    --action-soft: #E7EFF4;
     --ok-fill: #39B396; --ok-text: #1E7A64; --ok-bg: #E9F6F2;
     --warn-fill: #F09E30; --warn-text: #8F5B0B; --warn-bg: #FDF2E1;
     --err-fill: #E74133; --err-text: #B02E22; --err-bg: #FCEAE8;
@@ -225,7 +224,7 @@
     /* Alias de la paleta anterior, remapeados a los tokens */
     --surface-mid: var(--paper-alt);
     --surface-alt: var(--action-soft);
-    --primary-900: var(--vr-navy);
+    --primary-900: var(--ink);
     --primary-800: var(--vr-navy-800);
     --primary-500: var(--ink-soft);
     --primary-300: var(--ink-faint);
@@ -332,8 +331,8 @@
 .qcRowRight { flex: none; display: flex; align-items: center; gap: 12px; }
 
 .qcPill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
-.qcPill--muted { background: var(--surface-alt); color: var(--primary-500); }
-.qcPill--use { background: var(--action-soft); color: var(--action); }
+.qcPill--muted { background: #F2F6F9; color: var(--primary-500); }
+.qcPill--use { background: var(--action-soft); color: #214F7A; }
 
 .qcLink {
     border: none; background: none; padding: 0; color: var(--primary-500);
@@ -414,6 +413,19 @@ const typeOptions: ListItemBag[] = [
     { value: "date", text: "Fecha" },
     { value: "boolean", text: "Sí / No" }
 ];
+
+// "Selección (una opción) · S, M, L, XL" / "Párrafo · Solo si aplica".
+function questionMeta(q: CatalogItem): string {
+    const parts = [q.typeLabel];
+    if (q.isSelect && q.options?.trim()) {
+        // Rock admite "valor^texto" en los valores del atributo: se muestra el texto.
+        parts.push(q.options.split(",").map(o => (o.includes("^") ? o.split("^")[1] : o).trim()).filter(Boolean).join(", "));
+    }
+    if (q.description?.trim()) {
+        parts.push(q.description.trim());
+    }
+    return parts.filter(Boolean).join(" · ");
+}
 
 function flash(msg: string): void {
     ok.value = msg;

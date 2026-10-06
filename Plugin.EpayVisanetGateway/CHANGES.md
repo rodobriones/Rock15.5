@@ -55,6 +55,35 @@
 > servido + `.obs` fuente sincronizado (raíz y Deploy) + copiado a
 > `RockWeb/Plugins/EpayVisanetGateway/Obsidian/` (requiere hard-refresh).
 
+> **Textos en español de las capturas del diseño — 2026-10-05.**
+> Solo textos, sin cambios de lógica ni de validación (Luhn, vencimiento, CVV
+> por marca, nombre y cuotas siguen igual, y siguen deteniendo el envío ANTES
+> del `fetch` de tokenización):
+> - Etiquetas: "Número de tarjeta", "Nombre en la tarjeta" (antes "Nombre del
+>   titular").
+> - Placeholders: "MM / AA" (antes "MM/YY"), "123" — o "1234" si la marca es
+>   Amex — (antes "CVV (3)"), "Como aparece en la tarjeta".
+> - Errores: "El número de tarjeta no es válido. Revísalo e intenta de nuevo.",
+>   "Usa el formato MM/AA.", "La tarjeta está vencida.", "El CVV debe tener N
+>   dígitos.", "Escribe el nombre como aparece en la tarjeta.", "Selecciona el
+>   número de cuotas."; acentos corregidos en subtítulo y ayudas.
+>
+> **Aplica a TODOS los flujos que pagan con Epay**, no solo a Eventos. Los
+> ajustes visuales (sin cabecera ni vista previa, campos de 38px, error con
+> ícono rojo) viven en el CSS del checkout de eventos bajo `.ecGateway`, NO en
+> el control: fuera de Eventos el control se ve igual que antes. En ese CSS los
+> logos Visa/Mastercard y la etiqueta de marca **siguen visibles**, como en el
+> bloque Dar (Cybersource).
+>
+> Las tres copias quedaron sincronizadas: `ObsidianSource/` (raíz), `Deploy/`
+> (`.obs` y `.obs.js`) y la servida en `RockWeb/Plugins/EpayVisanetGateway/`.
+> La servida estaba distinta de `Deploy` solo en finales de línea (verificado
+> con `diff --strip-trailing-cr`) antes de reemplazarla.
+>
+> Sigue pendiente: Epay **acepta** American Express (CVV de 4) mientras que Dar
+> la rechaza ("El sistema no soporta American Express…"). Confirmar con el
+> comercio si VisaNet la procesa.
+
 > **Importante — el control Obsidian desplegado es hecho a mano, NO compilado.**
 > El archivo servido es `Deploy/Plugins/EpayVisanetGateway/Obsidian/epayVisanetGatewayControl.obs.js`
 > (un `System.register` escrito a mano con el CSS inline en `ensureStyleTag`).

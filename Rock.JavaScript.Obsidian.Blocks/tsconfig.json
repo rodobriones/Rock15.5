@@ -21,6 +21,7 @@
     { "path": "./src/Lms" },
     { "path": "./src/Mobile" },
     { "path": "./src/Prayer" },
+    { "path": "./src/Qr" },
     { "path": "./src/QREVENT" },
     { "path": "./src/Reporting" },
     { "path": "./src/Security" },

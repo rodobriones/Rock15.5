@@ -77,20 +77,27 @@ Se confunden fácil porque las tres son `BinaryFile` del mismo evento:
 
 ## Category ≠ Ministry
 
-Los dos son catálogos administrables (DefinedTypes) y los dos se dibujan como chip en el hero
-del checkout y en las tarjetas del calendario. `EventTagService` es la única puerta de lectura:
-lista, validación y color.
+Los dos son catálogos administrables (DefinedTypes). `EventTagService` es la única puerta de
+lectura: lista, validación y color. Desde el ajuste a las capturas del diseño (2026-10-05) **solo
+`Category` se dibuja como chip** — en el hero del checkout, en las tarjetas del calendario, en Mis
+Entradas y en el pase web; `Ministry` queda como dato y como filtro del calendario.
 
 - **`Category`** — QUÉ TIPO de evento es: Conferencia, Concierto, Deportivo, Familiar. Sale del
   DefinedType *Tipos de Evento* (migr. 024).
 - **`Ministry`** (migr. 022) — QUÉ ÁREA lo organiza: General, Alabanza, Deportes, Jóvenes… Sale del
-  DefinedType *Ministerios de Eventos*. Alimenta además el filtro "Ministerio" del calendario.
+  DefinedType *Ministerios de Eventos*. Alimenta el filtro "Ministerio" del calendario.
+
+Las opciones de los filtros "Tipo" y "Ministerio" del calendario salen del **catálogo completo, en
+su orden** (`typeOptions` / `ministryOptions` en el init bag de `EventCalendar`), no de lo que traen
+los eventos publicados — por eso "General" va primero y no en orden alfabético. Un valor que un
+evento guardó y ya no está en el catálogo se agrega al final para que siga siendo filtrable.
 
 Los dos **guardan el texto y no el id del DefinedValue** para que el calendario filtre sobre el
 init bag sin joins; como no hay FK, el servidor valida contra el catálogo al guardar. Cada
 DefinedValue lleva un atributo **`Color`** (migr. 024) que viaja en el bag y pinta el chip vía
 `:style`: agregar un tipo o un ministerio nuevo no obliga a tocar el CSS. Sin color, el chip de
-tipo cae al azul institucional y el de ministerio al estilo de contorno.
+tipo cae al azul institucional. En Mis Entradas el color del tipo (`eventCategoryColor`) tiñe el
+chip (fondo claro, texto del mismo tono) y la barra superior del pase web.
 
 Ojo: renombrar un DefinedValue no reescribe los eventos que ya guardaron el texto anterior —
 siguen mostrando su chip, pero sin color, hasta que se reasignen.
@@ -141,5 +148,18 @@ Fuera del árbol: `Rock/Jobs/EventsMaintenance.cs` (job de conciliación: holds 
   ⚠ El build de Obsidian NO typecheckea bindings de template: tras tocar un partial, verifica que
   el bundle compilado no contenga `_ctx.` ni `resolveComponent` (= nombre/componente sin resolver).
   `eventAdmin.obs` y `ticketScanner.obs` siguen siendo monolíticos (siguiente pasada).
+
+- **Textos dinámicos y el traductor del sitio**: el plugin VidaRealTranslator (botón "ES")
+  reemplaza nodos de texto del DOM. Un `{{ busy ? "Procesando…" : "Pagar" }}` queda congelado en
+  el valor viejo porque Vue actualiza un nodo que ya no está en la página. Todo texto que cambia
+  con el estado (botones busy, contadores, códigos) va dentro de `<span class="notranslate">` —
+  el traductor respeta `.notranslate` y `[data-no-translate]`.
+- **Moneda**: `Intl.NumberFormat("es-GT", GTQ)` mete un espacio (normal o duro, según el ICU del
+  navegador) entre el símbolo y el monto; el diseño no lo lleva, así que `formatCurrency` (checkout)
+  y `fmtCurrency` (reportería) le quitan los espacios → `Q175.00`.
+- **Pase digital web** (`myTickets.obs`, visor al tocar una entrada): replica el pase de Apple
+  Wallet — frente con acento del color del tipo y reverso al tocar "i". Los textos fijos del
+  reverso (Organizador, Política, Soporte) están **copiados de la plantilla de Wallet**
+  (migraciones 007 y 008 de Plugin.VidaRealWallet): si cambia la plantilla, cambiarlos aquí.
 
 Historia completa y decisiones de producto: `docs/eventos-custom/RESEARCH_Y_PLAN.md`.

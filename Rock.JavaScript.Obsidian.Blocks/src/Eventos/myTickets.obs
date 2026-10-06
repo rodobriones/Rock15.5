@@ -13,10 +13,8 @@
                 </NotificationBox>
 
                 <div v-else class="mtLogged">
-                    <!-- Portada: la foto del próximo evento del usuario; sin evento, el degradado navy. -->
-                    <div class="mtCover" :class="{ 'mtCover--noimg': !coverImageUrl }"
-                         :style="coverImageUrl ? { backgroundImage: `url('${coverImageUrl}')` } : {}">
-                        <div class="mtCoverShade"></div>
+                    <!-- Portada: degradado oscuro fijo (diseño 2026); la foto del evento va en cada card. -->
+                    <div class="mtCover">
                         <div class="mtCoverInner">
                             <h1 class="mtCoverTitle">Mis eventos</h1>
                             <div class="mtCoverMeta">
@@ -29,7 +27,7 @@
                         <NotificationBox v-if="err" alertType="danger" class="mb-3">{{ err }}</NotificationBox>
                         <NotificationBox v-if="notice" alertType="success" class="mb-3">{{ notice }}</NotificationBox>
 
-                        <div v-if="!busy && tickets.length === 0" class="mtEmpty">
+                        <div v-if="tickets.length === 0" class="mtEmpty">
                             <div class="mtEmptyIcon">🎟️</div>
                             <h3>Aún no tienes entradas</h3>
                             <p>Cuando compres entradas — o alguien de tu familia te asigne una — aparecerán aquí.</p>
@@ -51,9 +49,6 @@
                                         Historial de anteriores ({{ pastGroups.length }})
                                     </button>
                                 </div>
-                                <button type="button" class="mtReload" :disabled="busy" @click="loadTickets">
-                                    {{ busy ? "Cargando…" : "Recargar" }}
-                                </button>
                             </div>
 
                             <!-- Próximos eventos -->
@@ -73,7 +68,7 @@
                                          @keydown.enter="toggleEvent(g.eventId)">
                                         <div class="mtEventHeroShade"></div>
                                         <div class="mtEventHeroInner">
-                                            <span class="mtPill mtPill--neu mtEventTag">{{ g.category || "Evento" }}</span>
+                                            <span class="mtPill mtPill--neu mtEventTag" :style="chipStyle(g.categoryColor)">{{ g.category || "Evento" }}</span>
                                             <h2 class="mtEventName">{{ g.name }}</h2>
                                         </div>
                                     </div>
@@ -81,7 +76,7 @@
                                         <div class="mtEventMetaRow">
                                             <div class="mtEventMetaText">
                                                 <span v-if="g.startDateTime" class="mtEventMetaDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
-                                                <span v-if="g.venueName" class="mtEventMetaVenue">{{ g.venueName }}</span>
+                                                <span v-if="venueLine(g)" class="mtEventMetaVenue">{{ venueLine(g) }}</span>
                                             </div>
                                             <button type="button" class="mtEventCount" @click="toggleEvent(g.eventId)">
                                                 {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
@@ -143,7 +138,7 @@
                                         <div class="mtEventMetaRow">
                                             <div class="mtEventMetaText">
                                                 <span v-if="g.startDateTime" class="mtEventMetaDate ecCap">{{ formatEventDate(g.startDateTime) }}</span>
-                                                <span v-if="g.venueName" class="mtEventMetaVenue">{{ g.venueName }}</span>
+                                                <span v-if="venueLine(g)" class="mtEventMetaVenue">{{ venueLine(g) }}</span>
                                             </div>
                                             <button type="button" class="mtEventCount" @click="toggleEvent(g.eventId)">
                                                 {{ g.tickets.length }} {{ g.tickets.length === 1 ? "entrada" : "entradas" }}
@@ -172,17 +167,91 @@
                     </div>
                 </div>
 
-                <!-- Visor fullscreen del QR (para enseñar en la puerta) -->
-                <div v-if="shownTicket" class="mtViewer" @click.self="shownTicket = null">
-                    <div class="mtViewerCard">
-                        <button type="button" class="mtViewerClose" aria-label="Cerrar" @click="shownTicket = null">✕</button>
-                        <span class="mtViewerEvent">{{ shownEventName }}</span>
-                        <img v-if="shownTicket.qrImageUrl" :src="shownTicket.qrImageUrl" class="mtViewerQr" :alt="'QR ' + shownTicket.uniqueCode" />
-                        <span class="mtViewerCode ecMono notranslate">{{ shownTicket.uniqueCode }}</span>
-                        <span class="mtViewerMeta">
-                            {{ shownTicket.ticketTypeName }}<template v-if="shownTicket.attendeeName"> · {{ shownTicket.attendeeName }}</template>
-                        </span>
-                        <span class="mtViewerNote">Muestra este código en el ingreso del evento</span>
+                <!-- Visor fullscreen: el boleto como "Pase digital", espejo del pase de Apple Wallet
+                     (plantilla de Plugin.VidaRealWallet, migraciones 006-008): frente con QR para
+                     la puerta y reverso con la información del boleto al tocar "i". -->
+                <div v-if="shownTicket && shownGroup" class="mtViewer" @click.self="closeViewer">
+                    <div class="mtViewerStage">
+                        <button type="button" class="mtViewerClose" aria-label="Cerrar" @click="closeViewer">✕</button>
+                        <span class="mtPassEyebrow">Pase digital</span>
+
+                        <div class="mtPass" :class="{ isFlipped: passFlipped }" :style="{ '--pass-accent': passAccent }">
+                            <div class="mtPassInner">
+                                <!-- Frente -->
+                                <div class="mtPassFace mtPassFront" :aria-hidden="passFlipped ? 'true' : undefined" :inert="passFlipped || undefined">
+                                    <div class="mtPassHead">
+                                        <span class="mtPassLogo" aria-hidden="true">VR</span>
+                                        <span class="mtPassBrand">VidaReal.tv</span>
+                                        <span v-if="shownTicket.ticketTypeName" class="mtPassType">{{ shownTicket.ticketTypeName }}</span>
+                                    </div>
+                                    <img v-if="shownGroup.imageUrl" :src="shownGroup.imageUrl" :alt="shownGroup.name" class="mtPassStrip" />
+                                    <div class="mtPassBody">
+                                        <div class="mtPassTear" aria-hidden="true"></div>
+                                        <span v-if="shownGroup.category" class="mtPassChip">{{ shownGroup.category }}</span>
+                                        <span class="mtPassLabel">Evento</span>
+                                        <span class="mtPassEvent">{{ shownGroup.name }}</span>
+                                        <div class="mtPassCols">
+                                            <div class="mtPassCol">
+                                                <span class="mtPassLabel">Fecha</span>
+                                                <span class="mtPassValue">{{ passDay(shownGroup.startDateTime) }}<br />{{ passTime(shownGroup.startDateTime) }}</span>
+                                            </div>
+                                            <div class="mtPassCol">
+                                                <span class="mtPassLabel">Lugar</span>
+                                                <span class="mtPassValue">{{ shownGroup.venueName || "—" }}<template v-if="shownGroup.campusName"><br />{{ shownGroup.campusName }}</template></span>
+                                            </div>
+                                            <div class="mtPassCol">
+                                                <span class="mtPassLabel">Asistente</span>
+                                                <span class="mtPassValue">{{ shownTicket.attendeeName || "Sin asignar" }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="mtPassQrBox">
+                                            <img v-if="shownTicket.qrImageUrl" :src="shownTicket.qrImageUrl" class="mtPassQr" :alt="'QR ' + shownTicket.uniqueCode" />
+                                        </div>
+                                        <span class="mtPassCode ecMono notranslate">{{ shownTicket.uniqueCode }}</span>
+                                        <div class="mtPassFoot">
+                                            <!-- ↑ = exportar el pase a la Wallet del dispositivo (como el botón de compartir de Wallet). -->
+                                            <button v-if="appleWalletEnabled || googleWalletEnabled"
+                                                    type="button" class="mtPassRound"
+                                                    :aria-label="appleWalletEnabled ? 'Agregar a Apple Wallet' : 'Guardar en Google Wallet'"
+                                                    :disabled="walletBusyId !== null"
+                                                    @click="appleWalletEnabled ? addToAppleWallet(shownTicket) : addToGoogleWallet(shownTicket)">↑</button>
+                                            <span v-else></span>
+                                            <button type="button" class="mtPassRound mtPassRound--info" aria-label="Ver el reverso del pase" @click="passFlipped = true"><i>i</i></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Reverso: mismos campos que BackFields del pase de Apple (migración 007). -->
+                                <div class="mtPassFace mtPassBack" :aria-hidden="passFlipped ? undefined : 'true'" :inert="!passFlipped || undefined">
+                                    <div class="mtPassHead">
+                                        <span class="mtPassLogo" aria-hidden="true">VR</span>
+                                        <span class="mtPassBrand">VidaReal.tv</span>
+                                    </div>
+                                    <dl class="mtPassBackList">
+                                        <dt>Información del boleto</dt>
+                                        <dd>{{ shownGroup.name }}<template v-if="shownTicket.ticketTypeName"> - {{ shownTicket.ticketTypeName }}</template></dd>
+                                        <dt>Código</dt>
+                                        <dd class="ecMono notranslate">{{ shownTicket.uniqueCode }}</dd>
+                                        <template v-if="shownGroup.sessions.length">
+                                            <dt>Sesiones</dt>
+                                            <dd><span v-for="s in shownGroup.sessions" :key="s" class="mtPassSession">{{ s }}</span></dd>
+                                        </template>
+                                        <dt>Organizador</dt>
+                                        <dd>Vida Real</dd>
+                                        <dt>Política</dt>
+                                        <dd>Entrada no reembolsable ni transferible. Presenta este pase e identificación en el ingreso.</dd>
+                                        <dt>Soporte</dt>
+                                        <dd>soporte@vidareal.tv</dd>
+                                    </dl>
+                                    <div class="mtPassFoot">
+                                        <span></span>
+                                        <button type="button" class="mtPassRound mtPassRound--info" aria-label="Volver al frente del pase" @click="passFlipped = false">↺</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <span class="mtPassHint">Toca <i>i</i> para ver el reverso del pase</span>
                         <button v-if="appleWalletEnabled"
                                 type="button"
                                 class="mtWalletBtn"
@@ -254,30 +323,24 @@
 /* El escenario es el contexto de posicionamiento del visor de QR. */
 .mtPage {
     position: relative;
-    background: #E0E5E8;
+    background: #DDE2E5;
     margin: 0 -15px;
     padding-bottom: 48px;
     min-height: 70vh;
+    /* La portada vive fuera de .mtWrap (donde están los tokens): sin esto heredaba la fuente del tema. */
+    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
 }
 .mtGlobalNote { max-width: 860px; margin: 24px auto; }
-.mtLogged { background: #F3F5F7; }
+.mtLogged { background: transparent; }
 
-/* ---------- Portada ---------- */
+/* ---------- Portada: banda oscura compacta, sin foto ---------- */
 .mtCover {
     position: relative; width: 100%;
-    height: clamp(340px, 40vh, 620px);
-    overflow: hidden;
-    background: #1E293B center / cover no-repeat;
-}
-.mtCover--noimg { background: linear-gradient(135deg, #0F334B, #143E5A); }
-.mtCoverShade {
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(15,23,42,0.05) 0%, rgba(15,23,42,0.35) 55%, rgba(15,23,42,0.88) 100%);
+    background: linear-gradient(170deg, #1E2537 0%, #121725 100%);
 }
 .mtCoverInner {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 0 clamp(20px, 4vw, 64px) 72px;
-    display: flex; flex-direction: column; gap: 14px;
+    padding: clamp(40px, 6vw, 56px) clamp(20px, 4vw, 64px) clamp(40px, 6vw, 60px);
+    display: flex; flex-direction: column; gap: 10px;
     max-width: 1280px; margin: 0 auto;
 }
 .mtCoverTitle {
@@ -287,7 +350,7 @@
 }
 .mtCoverMeta {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    font-size: 15px; color: rgba(255,255,255,0.82);
+    font-size: 15px; color: rgba(255,255,255,0.8);
 }
 
 .mtWrap {
@@ -345,13 +408,6 @@
 .mtTab--active { color: #fff; background: var(--vr-navy); border-color: var(--vr-navy); }
 .mtTab--active:hover { filter: brightness(1.2); color: #fff; }
 
-.mtReload {
-    border: 1px solid var(--primary-200); background: #fff; color: var(--primary-800);
-    padding: 10px 20px; border-radius: 20px; font-size: 15px; font-weight: 500;
-    cursor: pointer; font-family: inherit;
-}
-.mtReload:hover:not(:disabled) { background: var(--surface-mid); }
-.mtReload:disabled { opacity: .6; cursor: default; }
 
 /* ---------- Vacío ---------- */
 .mtEmpty {
@@ -372,7 +428,7 @@
     position: relative; min-height: 136px; display: flex; align-items: flex-end;
     background-size: cover; background-position: center;
 }
-.mtEventHero--noimg { background: linear-gradient(135deg, #0F334B, #143E5A); }
+.mtEventHero--noimg { background: linear-gradient(135deg, #142B40, #17344D); }
 .mtEventHeroShade {
     position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(15,51,75,.15) 0%, rgba(15,51,75,.72) 100%);
@@ -381,8 +437,8 @@
     position: relative; padding: 26px 24px;
     display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
 }
-.mtPill--neu { background: var(--surface-alt); color: var(--primary-800); }
-.mtEventTag { align-self: flex-start; text-transform: uppercase; }
+.mtPill--neu { background: #EEF2F5; color: var(--primary-900); }
+.mtEventTag { align-self: flex-start; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
 /* En el historial el tag pierde el fondo y queda como rótulo blanco sobre el hero. */
 .mtEventTag--past {
     background: transparent; color: #fff;
@@ -451,43 +507,107 @@
 .mtEvent--past .mtEventHero--noimg { background: linear-gradient(135deg, #929393, #143E5A); }
 .mtEvent--past .mtEventHero { min-height: 108px; }
 
-/* ---------- Visor fullscreen del QR ---------- */
+/* ---------- Visor fullscreen: "Pase digital" ---------- */
+/* fixed (no absolute): el pase debe quedar a la vista aunque el usuario haya bajado por la
+   lista; el visor hace su propio scroll si el pase no cabe. */
 .mtViewer {
-    position: absolute; inset: 0; z-index: 1050;
-    background: rgba(15, 51, 75, .78); backdrop-filter: blur(3px);
-    display: flex; align-items: center; justify-content: center; padding: 20px;
+    position: fixed; inset: 0; z-index: 1050;
+    background: rgba(243, 245, 247, .97); backdrop-filter: blur(3px);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: clamp(32px, 8vh, 88px) 16px 32px; overflow-y: auto;
 }
-.mtViewerCard {
-    position: relative; background: #fff; border-radius: 24px;
-    padding: 36px 32px 28px; max-width: 380px; width: 100%;
-    display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
-    box-shadow: 0 24px 60px rgba(15, 51, 75, .4);
-    font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
-    --primary-900: #0E364C; --primary-500: #5B7685; --primary-300: #8297A2; --surface-alt: #EAF1F6;
+.mtViewerStage {
+    position: relative; width: 100%; max-width: 360px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 .mtViewerClose {
-    position: absolute; top: 12px; right: 14px; border: none; background: var(--surface-alt);
+    position: absolute; top: -6px; right: 0; border: none; background: #E3E8EC;
     color: #143E5A; width: 32px; height: 32px; border-radius: 50%;
     font-size: 14px; cursor: pointer; line-height: 1;
 }
-.mtViewerEvent { font-size: 15px; font-weight: 700; color: var(--primary-900); }
-.mtViewerQr { width: min(280px, 72vw); height: auto; aspect-ratio: 1; image-rendering: pixelated; }
-.mtViewerCode {
-    font-size: 19px; font-weight: 700; letter-spacing: 3px;
-    color: var(--primary-900); font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+.mtPassEyebrow { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #8297A2; }
+
+/* La tarjeta: barra de acento arriba (color de la categoría), cuerpo blanco. Frente y reverso
+   comparten celda de grid y se voltean en 3D. */
+.mtPass { --pass-accent: rgb(100,116,139); width: 100%; perspective: 1400px; }
+.mtPassInner {
+    display: grid; transform-style: preserve-3d;
+    transition: transform .55s ease;
 }
-.mtViewerMeta { font-size: 13px; color: var(--primary-500); }
-.mtViewerNote { font-size: 11px; color: var(--primary-300); margin-top: 4px; }
+.mtPass.isFlipped .mtPassInner { transform: rotateY(180deg); }
+.mtPassFace[inert] { pointer-events: none; }
+.mtPassFace {
+    grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    /* backface-visibility solo oculta: Safari sigue dando clics a la cara de atrás. `inert` en el
+       template quita clics y foco; pointer-events es el respaldo para navegadores sin inert. */
+    background: #fff; border-radius: 24px; overflow: hidden;
+    border-top: 6px solid var(--pass-accent);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, .14);
+    display: flex; flex-direction: column;
+}
+.mtPassBack { transform: rotateY(180deg); }
+
+.mtPassHead { display: flex; align-items: center; gap: 10px; padding: 14px 20px; }
+.mtPassLogo {
+    width: 32px; height: 32px; flex: none; border-radius: 8px;
+    background: #1C2433; color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.mtPassBrand { font-size: 17px; font-weight: 600; color: #0F172A; }
+.mtPassType {
+    margin-left: auto; padding: 5px 12px; border-radius: 999px; background: #EEF1F5;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #334155;
+    max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mtPassStrip { display: block; width: 100%; height: 128px; object-fit: cover; }
+.mtPassBody { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0 20px 16px; }
+.mtPassTear { align-self: stretch; height: 0; border-top: 2px dashed #CBD5E1; margin: 14px 0 16px; }
+.mtPassChip {
+    padding: 4px 11px; border-radius: 999px; margin-bottom: 8px;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--pass-accent); background: color-mix(in srgb, var(--pass-accent) 14%, #fff);
+}
+.mtPassLabel { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #64748B; }
+.mtPassEvent { font-size: 19px; font-weight: 700; color: #0F172A; line-height: 1.25; margin-bottom: 14px; }
+.mtPassCols { align-self: stretch; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mtPassCol { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mtPassValue { font-size: 13px; color: #0F172A; line-height: 1.35; overflow-wrap: anywhere; }
+.mtPassQrBox {
+    align-self: center; margin-top: 22px; width: 156px; height: 156px;
+    border: 1px dashed #C7CEE0; border-radius: 14px; padding: 8px; background: #fff;
+}
+.mtPassQr { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+.mtPassCode { align-self: center; margin-top: 8px; font-size: 12px; font-weight: 500; letter-spacing: 2px; color: #64748B; }
+.mtPassFoot { align-self: stretch; display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+.mtPassBack .mtPassFoot { margin-top: auto; padding: 14px 20px 16px; }
+.mtPassRound {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid #D5DBE3; background: #fff;
+    color: #475569; font-size: 15px; line-height: 1; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; font-family: Georgia, serif;
+}
+.mtPassRound:hover:not(:disabled) { background: #F1F5F9; }
+.mtPassRound:disabled { opacity: .5; cursor: default; }
+.mtPassBackList { margin: 0; padding: 4px 20px 0; display: flex; flex-direction: column; }
+.mtPassBackList dt {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--pass-accent); margin-top: 14px;
+}
+.mtPassBackList dd { margin: 4px 0 0; font-size: 13px; color: #0F172A; line-height: 1.45; padding-bottom: 12px; border-bottom: 1px solid #EEF1F5; }
+.mtPassSession { display: block; }
+.mtPassHint { font-size: 12px; color: #64748B; }
+.mtPassHint i { font-family: Georgia, serif; }
+
 .mtWalletBtn {
     display: inline-flex; align-items: center; gap: 8px;
-    margin-top: 10px; padding: 10px 18px;
+    padding: 10px 18px;
     background: #000; color: #fff; border: none; border-radius: 10px;
     font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .mtWalletBtn:hover { background: #1c1c1e; color: #fff; }
 .mtWalletBtn:disabled { opacity: .6; cursor: default; }
 .mtWalletBtn svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
-.mtWalletErr { font-size: 12px; color: #dc2626; margin-top: 6px; }
+.mtWalletErr { font-size: 12px; color: #dc2626; }
 
 @media (max-width: 720px) {
     /* Móvil a sangre, igual que el checkout: calc(50% - 50vw) cancela el padding de CUALQUIER
@@ -502,7 +622,7 @@
     .mtEventMetaRow { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .mtTab, .mtEventHero--tappable { transition: none; }
+    .mtTab, .mtEventHero--tappable, .mtPassInner { transition: none; }
 }
 </style>
 
@@ -517,11 +637,14 @@ type TicketBag = {
     eventId: number;
     eventName: string | null;
     eventCategory: string | null;
+    /** Color del catálogo "Tipos de Evento"; null = chip neutro y acento slate. */
+    eventCategoryColor?: string | null;
     eventStartDateTime: string | null;
     eventEndDateTime: string | null;
     eventSessions: string[] | null;
     eventImageUrl: string | null;
     venueName: string | null;
+    campusName?: string | null;
     ticketTypeName: string | null;
     attendeeName: string | null;
     isCurrentUser: boolean;
@@ -537,11 +660,13 @@ type EventGroup = {
     eventId: number;
     name: string;
     category: string | null;
+    categoryColor: string | null;
     startDateTime: string | null;
     endDateTime: string | null;
     sessions: string[];
     imageUrl: string | null;
     venueName: string | null;
+    campusName: string | null;
     tickets: TicketBag[];
 };
 
@@ -549,7 +674,6 @@ const config = useConfigurationValues<InitBag>();
 const invokeBlockAction = useInvokeBlockAction();
 
 const tickets = ref<TicketBag[]>(config.tickets || []);
-const busy = ref<boolean>(false);
 const resendingId = ref<number | null>(null);
 const err = ref<string>("");
 const notice = ref<string>("");
@@ -579,16 +703,32 @@ function isExpanded(g: EventGroup): boolean {
 
 // Visor fullscreen: la entrada seleccionada para enseñar el QR en la puerta.
 const shownTicket = ref<TicketBag | null>(null);
-const shownEventName = ref<string>("");
+const shownGroup = ref<EventGroup | null>(null);
+/** Reverso del pase visible (se voltea con el botón "i"). */
+const passFlipped = ref<boolean>(false);
 
 function showTicket(t: TicketBag, g: EventGroup): void {
     if (!t.qrImageUrl) {
         return;
     }
     shownTicket.value = t;
-    shownEventName.value = g.name;
+    shownGroup.value = g;
+    passFlipped.value = false;
     walletErr.value = "";
 }
+
+function closeViewer(): void {
+    shownTicket.value = null;
+    shownGroup.value = null;
+    passFlipped.value = false;
+}
+
+// Acento del pase: el color del catálogo de la categoría (barra superior y chip), como el
+// LabelColor del pase de Apple; sin color, slate.
+const passAccent = computed<string>(() => {
+    const rgb = parseColor(shownGroup.value?.categoryColor);
+    return rgb ? `rgb(${rgb.join(",")})` : "rgb(100,116,139)";
+});
 
 // Wallet: cada botón aparece si su plataforma está configurada (init bag) y el dispositivo
 // corresponde — Apple en iPhone/iPad/Mac, Google en el resto (Android). El .pkpass no abre
@@ -636,11 +776,13 @@ function groupByEvent(list: TicketBag[]): EventGroup[] {
                 eventId: t.eventId,
                 name: t.eventName || "Evento",
                 category: t.eventCategory,
+                categoryColor: t.eventCategoryColor ?? null,
                 startDateTime: t.eventStartDateTime,
                 endDateTime: t.eventEndDateTime,
                 sessions: t.eventSessions || [],
                 imageUrl: t.eventImageUrl,
                 venueName: t.venueName,
+                campusName: t.campusName ?? null,
                 tickets: []
             };
             groups.set(t.eventId, g);
@@ -681,12 +823,54 @@ const pastGroups = computed<EventGroup[]>(() =>
     groupByEvent(tickets.value).filter(g => isPast(g))
         .sort((a, b) => new Date(b.startDateTime ?? 0).getTime() - new Date(a.startDateTime ?? 0).getTime()));
 
-// Portada: la imagen del próximo evento del usuario. Sin eventos próximos, cae al más reciente
-// del historial; si tampoco hay imagen, el CSS pinta el degradado navy.
-const coverImageUrl = computed<string | null>(() =>
-    upcomingGroups.value.find(g => g.imageUrl)?.imageUrl
-    ?? pastGroups.value.find(g => g.imageUrl)?.imageUrl
-    ?? null);
+// Línea de lugar "venue · sede", igual que en el calendario.
+function venueLine(g: EventGroup): string {
+    return [g.venueName, g.campusName].filter(Boolean).join(" · ");
+}
+
+/** "#RRGGBB", "#RGB" o "rgb(r,g,b)" → [r, g, b]; null si no se reconoce. */
+function parseColor(value: string | null | undefined): [number, number, number] | null {
+    const c = (value ?? "").trim();
+    let m = /^#([0-9a-f]{6})$/i.exec(c);
+    if (m) {
+        const n = parseInt(m[1], 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(c);
+    if (m) {
+        return [parseInt(m[1] + m[1], 16), parseInt(m[2] + m[2], 16), parseInt(m[3] + m[3], 16)];
+    }
+    m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(c);
+    return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+// Chip de categoría: tinte claro del color del catálogo con el texto en el mismo tono oscurecido
+// (JÓVENES verde claro, CONFERENCIA azul claro). Sin color, manda el CSS (.mtPill--neu).
+function chipStyle(color: string | null | undefined): Record<string, string> {
+    const rgb = parseColor(color);
+    if (!rgb) {
+        return {};
+    }
+    const tint = rgb.map(v => Math.round(v * 0.16 + 255 * 0.84));
+    const ink = rgb.map(v => Math.round(v * 0.55));
+    return { background: `rgb(${tint.join(",")})`, color: `rgb(${ink.join(",")})` };
+}
+
+// Fecha del pase en dos renglones, como el campo FECHA de Wallet: "Mié 22 jul" / "03:00 p. m.".
+function passDay(value: string | null): string {
+    const d = value ? new Date(value) : null;
+    if (!d || isNaN(d.getTime())) {
+        return "—";
+    }
+    const wd = d.toLocaleDateString("es-GT", { weekday: "short" }).replace(".", "");
+    const mon = d.toLocaleDateString("es-GT", { month: "short" }).replace(".", "");
+    return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${d.getDate()} ${mon}`;
+}
+
+function passTime(value: string | null): string {
+    const d = value ? new Date(value) : null;
+    return !d || isNaN(d.getTime()) ? "" : d.toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit" });
+}
 
 function formatEventDate(value: string | null): string {
     if (!value) {
@@ -698,26 +882,6 @@ function formatEventDate(value: string | null): string {
     }
     return d.toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
         + " · " + d.toLocaleTimeString("es-GT", { hour: "numeric", minute: "2-digit" });
-}
-
-async function loadTickets(): Promise<void> {
-    busy.value = true;
-    err.value = "";
-    notice.value = "";
-    try {
-        const res = await invokeBlockAction<{ tickets: TicketBag[] }>("GetMyTickets", {});
-        if (!res.isSuccess || !res.data) {
-            err.value = res.errorMessage || "No se pudieron cargar tus entradas.";
-            return;
-        }
-        tickets.value = res.data.tickets || [];
-    }
-    catch {
-        err.value = "Error cargando tus entradas.";
-    }
-    finally {
-        busy.value = false;
-    }
 }
 
 async function resend(ticketId: number): Promise<void> {

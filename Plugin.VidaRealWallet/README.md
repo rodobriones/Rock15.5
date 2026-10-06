@@ -61,6 +61,16 @@ Tres cosas que el `.md` explica y conviene no re-descubrir a golpes:
 - **El link ES la credencial** y no caduca por sesión: el endpoint de descarga es anónimo a
   propósito (quien lo pide no tiene sesión, o es iOS). El correo es personal y no reenviable.
 
+## Vista web del pase (Mis Entradas)
+
+Desde 2026-10-05, al tocar una entrada en **Mis Entradas** (`myTickets.obs`) se abre el pase
+dibujado en web con el mismo diseño del pase de Apple Wallet: barra superior con el color del
+tipo de evento, "VidaReal.tv", tipo de boleto, banner, FECHA / LUGAR / ASISTENTE, QR y un reverso
+que se voltea con "i". No lee la `WalletTemplate`: los textos fijos del reverso (Organizador,
+Política, Soporte) están **copiados** de las migraciones 007/008. **Si se cambian en la
+plantilla, hay que cambiarlos también en `myTickets.obs`.** Los botones de Apple/Google Wallet
+del visor siguen generando el pase real con este plugin.
+
 ## Notas
 
 - El seed es consumido por guid desde `Rock.Model.WalletService.EventTicketTemplateGuid`

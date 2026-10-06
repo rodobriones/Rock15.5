@@ -183,7 +183,6 @@ function createCheckoutState() {
     // Los dos chips del hero (tipo y ministerio) se pintan con el color que trae el catálogo
     // administrable; sin color definido, cada uno cae a su estilo por defecto del CSS.
     const categoryChipStyle = computed(() => chipStyle(event.value?.categoryColor));
-    const ministryChipStyle = computed(() => chipStyle(event.value?.ministryColor));
 
     function chipStyle(color: string | null | undefined): Record<string, string> {
         const c = (color ?? "").trim();
@@ -217,7 +216,8 @@ function createCheckoutState() {
         return capFirst(d.toLocaleString("es-GT", { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" }));
     });
 
-    // Fecha + rango horario para el detalle del evento, ej: "sábado, 04 de julio de 2026 · 08:00 → 13:00".
+    // Fecha + rango para el detalle del evento, ej: "Sáb 22 Ago 18:00 → Dom 23 Ago 20:00". Si termina
+    // el mismo día, el fin lleva solo la hora: "Sáb 22 Ago 18:00 → 21:00".
     const eventDateRange = computed(() => {
         const ev = event.value;
         if (!ev?.startDateTime) {
@@ -227,17 +227,37 @@ function createCheckoutState() {
         if (isNaN(s.getTime())) {
             return "";
         }
-        const dateStr = s.toLocaleDateString("es-GT", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-        const timeOpts = { hour: "2-digit", minute: "2-digit" } as const;
-        let timeStr = s.toLocaleTimeString("es-GT", timeOpts);
-        if (ev.endDateTime) {
-            const e = new Date(ev.endDateTime);
-            if (!isNaN(e.getTime())) {
-                timeStr = `${timeStr} → ${e.toLocaleTimeString("es-GT", timeOpts)}`;
-            }
+        const startStr = `${shortDay(s)} ${hhmm(s)}`;
+        const e = ev.endDateTime ? new Date(ev.endDateTime) : null;
+        if (!e || isNaN(e.getTime())) {
+            return startStr;
         }
-        return capFirst(`${dateStr} · ${timeStr}`);
+        return s.toDateString() === e.toDateString()
+            ? `${startStr} → ${hhmm(e)}`
+            : `${startStr} → ${shortDay(e)} ${hhmm(e)}`;
     });
+
+    // Fecha sin hora para la tarjeta de confirmación, ej: "Sábado, 22 de agosto de 2026".
+    const eventDayLabel = computed(() => {
+        const ev = event.value;
+        const d = ev?.startDateTime ? new Date(ev.startDateTime) : null;
+        if (!d || isNaN(d.getTime())) {
+            return "";
+        }
+        return capFirst(d.toLocaleDateString("es-GT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
+    });
+
+    /** "Sáb 22 Ago": día y mes abreviados, cada uno con mayúscula inicial. */
+    function shortDay(d: Date): string {
+        const wd = capFirst(d.toLocaleDateString("es-GT", { weekday: "short" }).replace(".", ""));
+        const mon = capFirst(d.toLocaleDateString("es-GT", { month: "short" }).replace(".", ""));
+        return `${wd} ${d.getDate()} ${mon}`;
+    }
+
+    /** Hora en 24 h ("18:00"): es-GT con toLocaleTimeString devuelve "06:00 p. m.". */
+    function hhmm(d: Date): string {
+        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
 
     /** Solo la primera letra. es-GT devuelve los días y meses en minúscula. */
     function capFirst(text: string): string {
@@ -329,7 +349,9 @@ function createCheckoutState() {
     // #region Functions
 
     function formatCurrency(value: number): string {
-        return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(value || 0);
+        // Sin espacio entre símbolo y monto ("Q175.00"): según la versión de ICU del navegador,
+        // es-GT agrega un espacio (normal o duro) que el diseño no lleva.
+        return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(value || 0).replace(/\s/g, "");
     }
 
     // "Descargar PDF": pide al servidor el PDF real de los boletos (un boleto por página, un QR por
@@ -419,7 +441,8 @@ function createCheckoutState() {
         return isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit" });
     }
 
-    // Cuenta regresiva early-bird: "3d 5h" o "5h 20m". Vacío si ya venció o sin fecha. Reactivo vía `now`.
+    // Cuenta regresiva early-bird: "6 días" / "1 día", o "5h 20m" el último día. Vacío si ya venció
+    // o sin fecha. Reactivo vía `now`.
     function earlyBirdCountdown(tt: TicketTypeBag): string {
         if (!tt.earlyBirdUntil) {
             return "";
@@ -433,7 +456,10 @@ function createCheckoutState() {
         const d = Math.floor(mins / 1440);
         const h = Math.floor((mins % 1440) / 60);
         const m = mins % 60;
-        return d > 0 ? `${d}d ${h}h` : `${h}h ${m}m`;
+        if (d > 0) {
+            return d === 1 ? "1 día" : `${d} días`;
+        }
+        return `${h}h ${m}m`;
     }
 
     function getQty(ticketTypeId: number): number {
@@ -904,10 +930,10 @@ function createCheckoutState() {
         slimHeader,
         eventEnded,
         categoryChipStyle,
-        ministryChipStyle,
         eventSubtitle,
         eventDateLabel,
         eventDateRange,
+        eventDayLabel,
         progressPct,
 
         // Gate de contraseña (visibilidad "Con contraseña")

@@ -58,8 +58,8 @@
                                     </div>
                                 </div>
 
-                                <!-- Las opciones salen de los eventos publicados: si ninguno tiene
-                                     ministerio asignado, la sección no se dibuja. -->
+                                <!-- Opciones: el catálogo de ministerios en su orden (+ cualquier valor
+                                     suelto que traiga algún evento). Sin ninguno, no se dibuja. -->
                                 <div v-if="ministryOptions.length" class="evcFilterSection">
                                     <h3 class="evcFilterTitle">Ministerio</h3>
                                     <div class="evcCheckList">
@@ -104,9 +104,9 @@
                                                  :class="{ 'evcCardHero--noimg': !e.imageUrl }"
                                                  :style="e.imageUrl ? { backgroundImage: `url('${e.imageUrl}')` } : {}">
                                                 <div class="evcHeroShade"></div>
-                                                <div v-if="e.category || e.ministry" class="evcTagRow">
-                                                    <span v-if="e.category" class="evcBadge" :style="chipStyle(e.categoryColor)">{{ e.category }}</span>
-                                                    <span v-if="e.ministry" class="evcBadge evcBadge--ministry" :style="chipStyle(e.ministryColor)">{{ e.ministry }}</span>
+                                                <!-- Solo el chip de tipo: el ministerio se usa para filtrar, no se dibuja. -->
+                                                <div v-if="e.category" class="evcTagRow">
+                                                    <span class="evcBadge" :style="chipStyle(e.categoryColor)">{{ e.category }}</span>
                                                 </div>
                                                 <div class="evcDay">
                                                     <span class="evcDayNum">{{ dayNum(e.startDateTime) }}</span>
@@ -181,7 +181,7 @@
 
 .evcWrap {
     /* Tokens Brújula VR */
-    --vr-navy: #0E364C;
+    --vr-navy: #1A354A;
     --vr-navy-800: #21465A;
     --vr-navy-600: #3E5E70;
     --bg: #F3F5F7;
@@ -191,13 +191,19 @@
     --ink-faint: #8297A2;
     --rule: #E0E5E8;
     --rule-strong: #CAD3D8;
-    --action: #1E5B87;
+    --action: #305A84;
     --action-soft: #EAF1F6;
     --action-line: #CFE0EC;
     --ok-fill: #39B396;
     --warn-fill: #F09E30;
     --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
     --font-num: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
+    /* Degradado del hero y de las portadas sin imagen (artboard "01.Eventos - eventCalendar"). */
+    --hero-grad: linear-gradient(160deg, #2A4558 0%, #193349 100%);
+    /* Anillo de foco de teclado del design system. */
+    --focus-ring: 0 0 0 2px var(--warn-fill);
+    /* Margen lateral: 24px en escritorio, ~23px a 420px, 16px como mínimo. */
+    --gutter: clamp(16px, 5.5vw, 24px);
 
     /* Alias de la paleta anterior, remapeados a los tokens */
     --bg-main: var(--bg);
@@ -230,12 +236,12 @@
 
 /* ---------- Hero ---------- */
 .evcHero {
-    background: linear-gradient(160deg, var(--primary-800) 0%, #0F334B 100%);
+    background: var(--hero-grad);
     padding: clamp(36px, 6vh, 64px) 0 30px;
 }
 .evcHeroInner {
     max-width: 1160px; margin: 0 auto;
-    padding: 0 clamp(16px, 4vw, 24px);
+    padding: 0 var(--gutter);
 }
 .evcTitle {
     margin: 0;
@@ -246,7 +252,7 @@
 
 .evcContainer {
     max-width: 1160px; margin: 0 auto;
-    padding: 0 clamp(16px, 4vw, 24px);
+    padding: 0 var(--gutter);
 }
 
 /* ---------- Barra de búsqueda y filtros ---------- */
@@ -269,6 +275,8 @@
     font-family: inherit; cursor: pointer;
 }
 .evcSearchBtn:hover { background: var(--primary-800); border-color: var(--primary-800); }
+.evcSearchBtn:focus-visible,
+.evcFilterToggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .evcFilterToggle {
     display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -281,7 +289,7 @@
 .evcFilterChevron { display: inline-block; font-size: 11px; transition: transform .15s ease; }
 
 .evcFilterDropdown {
-    margin-top: 14px; background: var(--surface-card); border-radius: 16px;
+    margin-top: 14px; background: var(--surface-card); border-radius: 18px;
     box-shadow: 0 12px 34px rgba(15,51,75,0.18); padding: 20px;
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
 }
@@ -291,16 +299,17 @@
     color: var(--primary-300); margin: 0;
 }
 .evcDateField { display: flex; flex-direction: column; gap: 4px; }
-.evcDateField label { font-size: 12px; color: var(--primary-500); }
+/* El tema de Rock pone los <label> en negrita: aquí van en gris normal, como en el diseño. */
+.evcDateField label { font-size: 12px; font-weight: 400; color: var(--primary-500); margin: 0; }
 .evcDateField input {
     width: 100%; padding: 8px 10px; border: 1px solid var(--primary-200);
     border-radius: 8px; font-size: 13px; font-family: inherit;
     color: var(--primary-800); outline: none;
 }
 .evcDateField input:focus { border-color: var(--primary-500); }
-.evcCheckList { display: flex; flex-direction: column; gap: 8px; }
+.evcCheckList { display: flex; flex-direction: column; gap: 10px; }
 .evcCheckRow {
-    display: flex; align-items: center; gap: 9px; font-size: 13.5px;
+    display: flex; align-items: center; gap: 9px; font-size: 14px;
     font-weight: 400; color: var(--primary-800); cursor: pointer; margin: 0;
 }
 .evcCheckRow input { accent-color: var(--primary-900); width: 15px; height: 15px; flex: none; margin: 0; }
@@ -329,7 +338,7 @@
 
 .evcGrid {
     display: grid; gap: 28px; padding-bottom: 30px;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
 /* ---------- Tarjeta de evento ---------- */
@@ -345,7 +354,8 @@
     position: relative; height: 176px;
     background-size: cover; background-position: center;
 }
-.evcCardHero--noimg { background: linear-gradient(160deg, var(--primary-800) 0%, #0F334B 100%); }
+.evcCardHero--noimg { background: var(--hero-grad); }
+.evcCard:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .evcHeroShade {
     position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(15,51,75,0.08) 0%, rgba(15,51,75,0.45) 55%, rgba(15,51,75,0.85) 100%);
@@ -360,11 +370,6 @@
     color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; padding: 5px 11px; border-radius: 999px;
     background: var(--primary-700); border: 1px solid transparent;
-}
-/* Sin color propio, el ministerio va de contorno para no competir con el chip de tipo. */
-.evcBadge--ministry {
-    background: rgba(15,51,75,0.45);
-    border-color: rgba(255,255,255,0.6);
 }
 
 /* Cubo de fecha (día grande + mes) arriba a la derecha del hero */
@@ -424,7 +429,7 @@
     .evcHero { padding: 28px 0 30px; }
     .evcFilterBar { flex-direction: column; align-items: stretch; }
     .evcFilterToggle { width: 100%; align-self: stretch; }
-    .evcFilterDropdown { grid-template-columns: 1fr; padding: 16px; gap: 18px; }
+    .evcFilterDropdown { grid-template-columns: 1fr; padding: 16px; gap: 18px; border-radius: 20px; }
     .evcMonthName { flex-wrap: wrap; row-gap: 8px; margin-bottom: 16px; }
     .evcMonthName .evcCap { font-size: 18px; }
     .evcMonthCount { font-size: 12px; padding: 6px 12px; }
@@ -463,6 +468,10 @@ type CalendarEventBag = {
 };
 type InitBag = {
     events: CalendarEventBag[];
+    /** Catálogo "Tipos de Evento" en su orden (migración 024). */
+    typeOptions?: string[] | null;
+    /** Catálogo "Ministerios de Eventos" en su orden (migración 022). */
+    ministryOptions?: string[] | null;
     checkoutUrlTemplate: string;
     checkoutSlugUrlTemplate: string;
 };
@@ -480,18 +489,29 @@ const resultsEl = ref<HTMLElement | null>(null);
 
 const allEvents = computed<CalendarEventBag[]>(() => config.events || []);
 
-// Opciones de filtro derivadas de lo que realmente hay publicado: sin catálogos fijos que
-// puedan ofrecer un filtro que no devuelve nada.
-const typeOptions = computed<string[]>(() => distinct(allEvents.value.map(e => e.category)));
-const ministryOptions = computed<string[]>(() => distinct(allEvents.value.map(e => e.ministry ?? null)));
+// Opciones de filtro: el catálogo completo en su orden (como en el diseño: "General" primero)
+// y, al final, cualquier valor que traiga un evento y ya no esté en el catálogo (p. ej. un
+// DefinedValue renombrado), para que ese evento siga siendo filtrable.
+const typeOptions = computed<string[]>(() => mergeOptions(config.typeOptions, allEvents.value.map(e => e.category)));
+const ministryOptions = computed<string[]>(() => mergeOptions(config.ministryOptions, allEvents.value.map(e => e.ministry ?? null)));
 
-function distinct(values: (string | null | undefined)[]): string[] {
+function mergeOptions(catalog: string[] | null | undefined, eventValues: (string | null | undefined)[]): string[] {
+    const result: string[] = [];
     const seen = new Set<string>();
-    for (const v of values) {
+    const add = (v: string | null | undefined): void => {
         const t = (v ?? "").trim();
-        if (t) seen.add(t);
-    }
-    return Array.from(seen).sort((a, b) => a.localeCompare(b, "es"));
+        if (t && !seen.has(t.toLowerCase())) {
+            seen.add(t.toLowerCase());
+            result.push(t);
+        }
+    };
+    (catalog ?? []).forEach(add);
+    const extras = eventValues
+        .map(v => (v ?? "").trim())
+        .filter(v => v && !seen.has(v.toLowerCase()))
+        .sort((a, b) => a.localeCompare(b, "es"));
+    extras.forEach(add);
+    return result;
 }
 
 // Agrupa por mes conservando el orden (ya viene por fecha asc del servidor).
@@ -511,11 +531,18 @@ const filteredEvents = computed<CalendarEventBag[]>(() => {
         const day = dayKey(e.startDateTime);
         if (dateStart.value && day < dateStart.value) return false;
         if (dateEnd.value && day > dateEnd.value) return false;
-        if (types.length && !types.includes((e.category ?? "").trim())) return false;
-        if (ministries.length && !ministries.includes((e.ministry ?? "").trim())) return false;
+        if (types.length && !includesCi(types, e.category)) return false;
+        if (ministries.length && !includesCi(ministries, e.ministry)) return false;
         return true;
     });
 });
+
+// El catálogo y la columna del evento se comparan sin distinguir mayúsculas, igual que
+// EventTagService en el servidor.
+function includesCi(list: string[], value: string | null | undefined): boolean {
+    const v = (value ?? "").trim().toLowerCase();
+    return !!v && list.some(x => x.toLowerCase() === v);
+}
 
 const resultGroups = computed<MonthGroup[]>(() => groupByMonth(filteredEvents.value));
 

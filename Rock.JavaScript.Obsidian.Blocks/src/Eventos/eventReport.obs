@@ -212,7 +212,7 @@
 
 /* ---------- Escenario: el panel flota sobre el gris de página ---------- */
 .block-instance:has(.erWrap) {
-    background: #F3F5F7;
+    background: #F1F3F6;
     margin: 0 -15px;
     padding: 24px;
     position: relative;
@@ -221,7 +221,7 @@
 /* ---------- Panel de Rock (se conserva, se re-estiliza) ---------- */
 .panel-block:has(.erWrap) {
     background: #fff !important;
-    border: 1px solid #E1E7EC !important;
+    border: 1px solid #DDE3E9 !important;
     border-radius: 6px !important;
     box-shadow: 0 1px 2px rgba(15, 51, 75, .05) !important;
 }
@@ -229,12 +229,13 @@
 .panel-block:has(.erWrap) > .panel-header {
     padding: 12px 18px !important;
     background: #fff !important;
-    border-bottom: 1px solid #E1E7EC !important;
+    border-bottom: 1px solid #DDE3E9 !important;
 }
 .panel-block:has(.erWrap) > .panel-heading .panel-title,
 .panel-block:has(.erWrap) > .panel-header .panel-title {
     font-family: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 28px; font-weight: 600; color: #0F334B; margin: 0;
+    font-size: 28px; font-weight: 600; color: #132C41; margin: 0;
+    padding: 0 !important; /* el tema le pone 0 24px: el título quedaba más adentro que el contenido */
 }
 .panel-block:has(.erWrap) > .panel-body { padding: 18px !important; }
 
@@ -243,14 +244,17 @@
     --vr-navy: #0E364C;
     --paper: #FFFFFF;
     --paper-alt: #F8FAFB;
-    --ink: #143E5A;
-    --ink-soft: #5A6E7C;
+    /* Colores medidos sobre la captura de diseño (14-ev). */
+    --navy: #132C41;
+    --ink: #17354F;
+    --ink-soft: #516270;
     --ink-faint: #8296A2;
-    --rule: #E1E7EC;
+    --rule: #DDE3E9;
+    --th-bg: #E7EFF4;
     --rule-strong: #C9D4DC;
     --action: #1E5B87;
     --action-soft: #EAF1F6;
-    --ok-text: #1E7A64; --ok-bg: #E9F6F2; --ok-fill: #39B396;
+    --ok-text: #1C6E59; --ok-bg: #E6F4F0; --ok-fill: #39B396;
     --warn-text: #8F5B0B; --warn-bg: #FDF2E1; --warn-fill: #F09E30;
     --err-text: #B02E22; --err-bg: #FCEAE8; --err-fill: #E74133;
     --font-body: "Montserrat", "Segoe UI", Helvetica, Arial, sans-serif;
@@ -291,7 +295,7 @@
 }
 .erWrap .btn.btn-default:hover:not(:disabled) { background: var(--paper-alt) !important; }
 .erWrap .btn.btn-primary {
-    background: #0F334B !important; border-color: #0F334B !important; color: #fff !important;
+    background: var(--navy) !important; border-color: var(--navy) !important; color: #fff !important;
 }
 .erWrap .btn.btn-primary:hover:not(:disabled) { background: var(--vr-navy) !important; color: #fff !important; }
 .erWrap .btn:disabled { opacity: .55; cursor: default; }
@@ -302,7 +306,9 @@
 .erWrap .table-bordered,
 .erWrap .table-bordered th,
 .erWrap .table-bordered td { border: 1px solid var(--rule); }
-.erWrap .grid-table th { background: var(--action-soft); font-weight: 600; color: #0F334B; }
+/* Encabezados centrados salvo los numéricos (.text-right), como en el diseño. */
+.erWrap .grid-table th { background: var(--th-bg); font-weight: 600; color: var(--navy); text-align: center; }
+.erWrap .grid-table th.text-right { text-align: right; }
 .erWrap .grid-table th,
 .erWrap .grid-table td { padding: 8px 10px; vertical-align: middle; }
 .erWrap .table-striped tbody tr:nth-of-type(odd) { background: var(--paper-alt); }
@@ -313,7 +319,7 @@
     font-size: 11px; font-weight: 600;
 }
 .erWrap .label-success { background: var(--ok-bg); color: var(--ok-text); }
-.erWrap .label-default { background: var(--action-soft); color: var(--ink-soft); }
+.erWrap .label-default { background: var(--th-bg); color: var(--ink-soft); }
 
 .erWrap .alert {
     padding: 12px 16px; border-radius: 6px; font-size: 14px; border: 1px solid transparent;
@@ -322,7 +328,7 @@
 .erWrap .alert-info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
 .erWrap .alert-danger { background: var(--err-bg); border-color: var(--err-fill); color: var(--err-text); }
 
-.erWrap h5 { font-size: 15px; font-weight: 700; color: #0F334B; margin: 0 0 10px; }
+.erWrap h5 { font-size: 15px; font-weight: 700; color: var(--navy); margin: 0 0 10px; }
 .erWrap .text-muted { color: var(--ink-soft); }
 
 /* ---------- KPIs ---------- */
@@ -332,7 +338,7 @@
     background: var(--paper-alt); border: 1px solid var(--rule); border-radius: 12px;
     padding: 14px 18px; display: flex; flex-direction: column; gap: 2px;
 }
-.erStatVal { font-size: 22px; font-weight: 700; color: #0F334B; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.erStatVal { font-size: 22px; font-weight: 700; color: var(--navy); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .erStatLabel { font-size: 12px; color: var(--ink-soft); }
 
 /* ---------- Editor de correo en línea ---------- */
@@ -546,11 +552,17 @@ function fmtDateTime(value: string | null): string {
         return "";
     }
     const d = new Date(value);
-    return isNaN(d.getTime()) ? "" : d.toLocaleString("es-GT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    // "02/08, 15:42": dos dígitos y reloj de 24 h. Se arma a mano porque es-GT ignora el
+    // "2-digit" del día ("5/10") y por defecto da "03:42 p. m.".
+    if (isNaN(d.getTime())) {
+        return "";
+    }
+    const p2 = (n: number): string => String(n).padStart(2, "0");
+    return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
 
 function fmtCurrency(value: number): string {
-    return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(value || 0);
+    return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(value || 0).replace(/\s/g, ""); // "Q56,500.00", sin espacio, como el diseño
 }
 
 // Al cambiar el evento seleccionado se recarga el reporte.

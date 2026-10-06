@@ -298,13 +298,6 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
         }
     }
 
-    /** Nombres asignados a un tipo de boleto, en el orden de las entradas. Lo usa el paso 3. */
-    function attendeeNamesForType(ticketTypeId: number): string[] {
-        return attendeeUnits.value
-            .filter(u => u.ticketTypeId === ticketTypeId)
-            .map(u => attendeeDisplayName(u));
-    }
-
     function attendeeDisplayName(unit: AttendeeUnit): string {
         if (unit.selection === guestValue) {
             const full = `${unit.guestFirstName.trim()} ${unit.guestLastName.trim()}`.trim();
@@ -461,7 +454,6 @@ export function createAttendeeState(deps: AttendeeStateDeps) {
         nextUnitAfter,
         goNextUnit,
         attendeeDisplayName,
-        attendeeNamesForType,
         loadFamilyMembers,
         buildAttendeeUnits,
         buildLines
